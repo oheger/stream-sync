@@ -40,6 +40,15 @@ object SyncStageSpec {
     */
   private def createFile(uri: String, lastModified: Instant = FileTime): FsFile =
     FsFile(relativeUri = uri, size = uri.length, level = 1, lastModified = lastModified)
+
+  /**
+    * Generates a test folder element with the specified URI. (Levels are
+    * irrelevant for the sync stage; therefore an arbitrary value can be used.)
+    *
+    * @param uri the URI of the folder
+    * @return the folder element
+    */
+  private def createFolder(uri: String): FsFolder = FsFolder(uri, 1)
 }
 
 /**
@@ -154,5 +163,58 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
     val expOp = SyncOperation(fileSrc, ActionOverride)
 
     runStage(sourceOrg, sourceTarget) should contain only expOp
+  }
+
+  it should "handle deleted folders" in {
+    val elemA = createFile("a.txt")
+    val elemB = createFile("b.txt")
+    val elemC = createFolder("c")
+    val elemD = createFile("d.txt")
+    val elemE = createFile("e.txt")
+    val elemF = createFolder("f")
+    val elemCSubFile = createFile("c/file.sub")
+    val elemCSubFolder = createFolder("c/subFolder")
+    val elemCSubSubFile = createFile("c/subFolder/deep.file")
+    val elemFSubFileA = createFile("f/a.sub")
+    val elemFSubFileB = createFile("f/b.sub")
+    val sourceOrg = Source(List(elemA, elemB, elemD, elemF, elemFSubFileA, elemFSubFileB))
+    val sourceTarget = Source(List(elemA, elemC, elemE, elemCSubFile, elemCSubFolder,
+      elemCSubSubFile, elemF, elemFSubFileA))
+    val expOps = List(SyncOperation(elemB, ActionCreate), SyncOperation(elemD, ActionCreate),
+      SyncOperation(elemE, ActionRemove), SyncOperation(elemCSubFile, ActionRemove),
+      SyncOperation(elemCSubSubFile, ActionRemove), SyncOperation(elemFSubFileB, ActionCreate),
+      SyncOperation(elemCSubFolder, ActionRemove), SyncOperation(elemC, ActionRemove))
+
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsInOrderAs expOps
+  }
+
+  it should "handle a file that has been converted to a folder" in {
+    val elemOrgFile = createFile("my.dat")
+    val elemConvertedFolder = createFolder(elemOrgFile.relativeUri)
+    val elemOther = createFile("other.foo")
+    val elemSubFile = createFile(elemConvertedFolder.relativeUri + "/sub.dat")
+    val sourceOrg = Source(List(elemConvertedFolder, elemOther, elemSubFile))
+    val sourceTarget = Source(List(elemOrgFile))
+    val expOps = List(SyncOperation(elemOrgFile, ActionRemove),
+      SyncOperation(elemConvertedFolder, ActionCreate),
+      SyncOperation(elemOther, ActionCreate),
+      SyncOperation(elemSubFile, ActionCreate))
+
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsInOrderAs expOps
+  }
+
+  it should "handle a folder that has been converted to a file" in {
+    val elemOrgFolder = createFolder("my.data")
+    val elemConvertedFile = createFile(elemOrgFolder.relativeUri)
+    val elemOther = createFile("other.foo")
+    val elemSubFile = createFile(elemOrgFolder.relativeUri + "/sub.dat")
+    val sourceOrg = Source(List(elemConvertedFile, elemOther))
+    val sourceTarget = Source(List(elemOrgFolder, elemSubFile))
+    val expOps = List(SyncOperation(elemSubFile, ActionRemove),
+      SyncOperation(elemOther, ActionCreate),
+      SyncOperation(elemOrgFolder, ActionRemove),
+      SyncOperation(elemConvertedFile, ActionCreate))
+
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsInOrderAs expOps
   }
 }
