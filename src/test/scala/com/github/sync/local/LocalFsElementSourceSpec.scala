@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync
+package com.github.sync.local
 
 import java.io.IOException
 import java.nio.file.{DirectoryStream, Files, NoSuchFileException, Path}
@@ -25,6 +25,7 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.{ActorMaterializer, DelayOverflowStrategy, KillSwitches}
 import akka.testkit.TestKit
+import com.github.sync.{FileTestHelper, FsElement, FsFile, FsFolder}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.annotation.tailrec
@@ -32,11 +33,11 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 
 /**
-  * Test class for ''DirectoryStreamSource''.
+  * Test class for ''LocalFsElementSource''.
   */
-class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
+class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
   FlatSpecLike with BeforeAndAfter with BeforeAndAfterAll with Matchers with FileTestHelper {
-  def this() = this(ActorSystem("FolderStreamSourceSpec"))
+  def this() = this(ActorSystem("LocalFsElementSourceSpec"))
 
   override protected def afterAll(): Unit = {
     TestKit shutdownActorSystem system
@@ -174,9 +175,9 @@ class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     * @return a tuple with the queue and the factory
     */
   private def createStreamWrapperFactory(failOnClose: Boolean = false):
-  (BlockingQueue[DirectoryStreamWrapper], FolderStreamSource.StreamFactory) = {
+  (BlockingQueue[DirectoryStreamWrapper], LocalFsElementSource.StreamFactory) = {
     val queue = new LinkedBlockingQueue[DirectoryStreamWrapper]
-    val factory: FolderStreamSource.StreamFactory = p => {
+    val factory: LocalFsElementSource.StreamFactory = p => {
       val stream = new DirectoryStreamWrapper(Files.newDirectoryStream(p), failOnClose)
       queue offer stream
       stream
@@ -200,7 +201,7 @@ class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
 
   "A DirectoryStreamSource" should "return all elements in the scanned folder structure" in {
     val fileData = setUpDirectoryStructure()
-    val source = FolderStreamSource(testDirectory)
+    val source = LocalFsElementSource(testDirectory)
     val files = runSource(source)
 
     files should contain theSameElementsAs fileData.keys
@@ -209,7 +210,7 @@ class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
   it should "close all directory streams it creates" in {
     setUpDirectoryStructure()
     val (queue, factory) = createStreamWrapperFactory()
-    val source = FolderStreamSource(testDirectory, streamFactory = factory)
+    val source = LocalFsElementSource(testDirectory, streamFactory = factory)
 
     runSource(source)
     queue.isEmpty shouldBe false
@@ -222,7 +223,7 @@ class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     val root = FsFolder("", 0)
     (1 to Count).foreach(i => createFile(root, s"test$i.txt"))
     val (queue, factory) = createStreamWrapperFactory()
-    val source = FolderStreamSource(testDirectory, streamFactory = factory)
+    val source = LocalFsElementSource(testDirectory, streamFactory = factory)
     val srcDelay = source.delay(1.second, DelayOverflowStrategy.backpressure)
     val (killSwitch, futSrc) = srcDelay
       .viaMat(KillSwitches.single)(Keep.right)
@@ -240,7 +241,7 @@ class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
   it should "ignore exceptions when closing directory streams" in {
     setUpDirectoryStructure()
     val (queue, factory) = createStreamWrapperFactory(failOnClose = true)
-    val source = FolderStreamSource(testDirectory, streamFactory = factory)
+    val source = LocalFsElementSource(testDirectory, streamFactory = factory)
 
     runSource(source)
     queue.isEmpty shouldBe false
@@ -255,7 +256,7 @@ class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     def level(p: Path): Int = calcLevel(p, 0)
 
     val fileData = setUpDirectoryStructure()
-    val source = FolderStreamSource(testDirectory)
+    val source = LocalFsElementSource(testDirectory)
     val elems = runSource(source)
     val pathLevels = elems map (d => level(fileData(d)))
     pathLevels.foldLeft(0)((last, cur) => {
@@ -267,7 +268,7 @@ class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
   it should "output the elements of a folder in series" in {
     val fileData = setUpDirectoryStructure()
     val folderCount = fileData.keys.count(_.isInstanceOf[FsFolder])
-    val source = FolderStreamSource(testDirectory)
+    val source = LocalFsElementSource(testDirectory)
 
     val elems = runSource(source)
     val (_, dirChanges) = elems.foldLeft((testDirectory, 0)) { (s, e) =>
@@ -279,7 +280,7 @@ class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
   }
 
   it should "handle a non existing root directory in BFS mode" in {
-    val source = FolderStreamSource(createPathInDirectory("nonExisting"))
+    val source = LocalFsElementSource(createPathInDirectory("nonExisting"))
 
     intercept[NoSuchFileException] {
       runSource(source)
@@ -288,7 +289,7 @@ class FolderStreamSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
 
   it should "add a slash to the root URI if necessary" in {
     val path = createDataFile("aFile.txt")
-    val source = new FolderStreamSource(path, FolderStreamSource.createDirectoryStream)
+    val source = new LocalFsElementSource(path, LocalFsElementSource.createDirectoryStream)
 
     source.rootUri should endWith("/")
   }

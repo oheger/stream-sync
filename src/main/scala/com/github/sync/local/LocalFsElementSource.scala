@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync
+package com.github.sync.local
 
 import java.io.IOException
 import java.nio.file.{DirectoryStream, Files, Path}
@@ -23,13 +23,14 @@ import akka.NotUsed
 import akka.stream.scaladsl.Source
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
-import com.github.sync.FolderStreamSource.StreamFactory
+import com.github.sync.local.LocalFsElementSource.StreamFactory
+import com.github.sync.{FsElement, FsFile, FsFolder}
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Queue
 import scala.language.implicitConversions
 
-object FolderStreamSource {
+object LocalFsElementSource {
   /** The separator for URI path components. */
   private val UriSeparator = "/"
 
@@ -43,7 +44,7 @@ object FolderStreamSource {
     */
   def apply(root: Path, streamFactory: StreamFactory = createDirectoryStream):
   Source[FsElement, NotUsed] =
-    Source.fromGraph(new FolderStreamSource(root, streamFactory))
+    Source.fromGraph(new LocalFsElementSource(root, streamFactory))
 
   /**
     * An internally used data class for storing data about a directory
@@ -212,11 +213,11 @@ object FolderStreamSource {
   * @param root          the root directory to be scanned
   * @param streamFactory the factory for creating streams
   */
-class FolderStreamSource(val root: Path,
-                         streamFactory: StreamFactory)
+class LocalFsElementSource(val root: Path,
+                           streamFactory: StreamFactory)
   extends GraphStage[SourceShape[FsElement]] {
 
-  import FolderStreamSource._
+  import LocalFsElementSource._
 
   val out: Outlet[FsElement] = Outlet("DirectoryStreamSource")
 
