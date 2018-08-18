@@ -166,17 +166,17 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
   }
 
   it should "handle deleted folders" in {
-    val elemA = createFile("a.txt")
-    val elemB = createFile("b.txt")
-    val elemC = createFolder("c")
-    val elemD = createFile("d.txt")
-    val elemE = createFile("e.txt")
-    val elemF = createFolder("f")
-    val elemCSubFile = createFile("c/file.sub")
-    val elemCSubFolder = createFolder("c/subFolder")
-    val elemCSubSubFile = createFile("c/subFolder/deep.file")
-    val elemFSubFileA = createFile("f/a.sub")
-    val elemFSubFileB = createFile("f/b.sub")
+    val elemA = createFile("/a.txt")
+    val elemB = createFile("/b.txt")
+    val elemC = createFolder("/c")
+    val elemD = createFile("/d.txt")
+    val elemE = createFile("/e.txt")
+    val elemF = createFolder("/f")
+    val elemCSubFile = createFile("/c/file.sub")
+    val elemCSubFolder = createFolder("/c/subFolder")
+    val elemCSubSubFile = createFile("/c/subFolder/deep.file")
+    val elemFSubFileA = createFile("/f/a.sub")
+    val elemFSubFileB = createFile("/f/b.sub")
     val sourceOrg = Source(List(elemA, elemB, elemD, elemF, elemFSubFileA, elemFSubFileB))
     val sourceTarget = Source(List(elemA, elemC, elemE, elemCSubFile, elemCSubFolder,
       elemCSubSubFile, elemF, elemFSubFileA))

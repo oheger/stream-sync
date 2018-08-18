@@ -349,7 +349,7 @@ object SyncStage {
     element match {
       case folder: FsFolder =>
         val paths = if (inRemovedPath) state.removedPaths
-        else state.removedPaths + folder.relativeUri + PathSeparator
+        else state.removedPaths + (folder.relativeUri + PathSeparator)
         (Nil, state.copy(removedPaths = paths, deferredOps = op :: state.deferredOps))
       case _ =>
         (List(op), state)
