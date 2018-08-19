@@ -40,7 +40,7 @@ lazy val logDependencies = Seq(
 
 lazy val StreamSync = (project in file("."))
   .settings(
-    version := "1.0-SNAPSHOT",
+    version := "0.1",
     scalaVersion := VersionScala,
     libraryDependencies ++= akkaDependencies,
     libraryDependencies ++= testDependencies,
