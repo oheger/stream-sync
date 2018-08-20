@@ -50,9 +50,20 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
   private def createFile(path: Path): FsFile =
     FsFile(path.getFileName.toString, 1, Instant.parse("2018-08-18T19:08:41.00Z"), 42L)
 
+  /**
+    * Convenience method to create a sync operation that sets a hard-coded
+    * level. (The level is not relevant for these tests.)
+    *
+    * @param element the element
+    * @param action  the sync action
+    * @return the ''SyncOperation''
+    */
+  private def createSyncOp(element: FsElement, action: SyncAction): SyncOperation =
+    SyncOperation(element, action, 1)
+
   "A LocalSyncOperationActor" should "create a folder in the destination structure" in {
     val FolderName = "newTestFolder"
-    val op = SyncOperation(FsFolder(FolderName, 1), ActionCreate)
+    val op = createSyncOp(FsFolder(FolderName, 1), ActionCreate)
     val helper = new LocalActorTestHelper
 
     val folderPath = helper.sendOperationAndExpectResponse(op)
@@ -62,8 +73,8 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
   }
 
   it should "handle errors when creating a folder" in {
-    val op1 = SyncOperation(FsFolder("non/existing/folder/path", 1), ActionCreate)
-    val op2 = SyncOperation(FsFolder("nextAttempt", 1), ActionCreate)
+    val op1 = createSyncOp(FsFolder("non/existing/folder/path", 1), ActionCreate)
+    val op2 = createSyncOp(FsFolder("nextAttempt", 1), ActionCreate)
     val helper = new LocalActorTestHelper
 
     helper.sendOperation(op1)
@@ -72,7 +83,7 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
 
   it should "remove a folder from the destination structure" in {
     val FolderName = "toBeRemoved"
-    val op = SyncOperation(FsFolder(FolderName, 1), ActionRemove)
+    val op = createSyncOp(FsFolder(FolderName, 1), ActionRemove)
     val helper = new LocalActorTestHelper
     val path = helper.destinationPath(FolderName)
     Files createDirectory path
@@ -85,15 +96,15 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
     val helper = new LocalActorTestHelper
     val path = writeFileContent(helper.destinationPath("fileToBeRemoved.tmp"),
       FileTestHelper.TestData)
-    val op = SyncOperation(createFile(path), ActionRemove)
+    val op = createSyncOp(createFile(path), ActionRemove)
 
     helper.sendOperationAndExpectResponse(op)
     Files exists path shouldBe false
   }
 
   it should "handle errors when removing a folder" in {
-    val op1 = SyncOperation(FsFolder("nonExistingFolder", 1), ActionRemove)
-    val op2 = SyncOperation(FsFolder("anotherFolder", 1), ActionCreate)
+    val op1 = createSyncOp(FsFolder("nonExistingFolder", 1), ActionRemove)
+    val op2 = createSyncOp(FsFolder("anotherFolder", 1), ActionCreate)
     val helper = new LocalActorTestHelper
 
     helper.sendOperation(op1)
@@ -105,7 +116,7 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
     val helper = new LocalActorTestHelper
     val sourcePath = writeFileContent(helper.sourcePath(FileName), FileTestHelper.TestData)
     val file = createFile(sourcePath)
-    val op = SyncOperation(file, ActionCreate)
+    val op = createSyncOp(file, ActionCreate)
 
     val destPath = helper.sendOperationAndExpectResponse(op)
       .destinationPath(FileName)
@@ -119,7 +130,7 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
     val helper = new LocalActorTestHelper
     val sourcePath = writeFileContent(helper.sourcePath(FileName), FileTestHelper.TestData)
     val destPath = writeFileContent(helper.destinationPath(FileName), "some old data")
-    val op = SyncOperation(createFile(sourcePath), ActionCreate)
+    val op = createSyncOp(createFile(sourcePath), ActionCreate)
 
     helper.sendOperationAndExpectResponse(op)
     readDataFile(destPath) should be(FileTestHelper.TestData)
@@ -127,8 +138,8 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
 
   it should "handle errors in the source when copying a file" in {
     val sourcePath = Paths get "nonExistingFile.xxx"
-    val op1 = SyncOperation(createFile(sourcePath), ActionCreate)
-    val op2 = SyncOperation(FsFolder("afterFailedCopy", 1), ActionCreate)
+    val op1 = createSyncOp(createFile(sourcePath), ActionCreate)
+    val op2 = createSyncOp(FsFolder("afterFailedCopy", 1), ActionCreate)
     val helper = new LocalActorTestHelper
 
     helper.sendOperation(op1)
@@ -141,8 +152,8 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
     val sourcePath = helper.sourcePath(FileName)
     Files createDirectory sourcePath.getParent
     writeFileContent(sourcePath, FileTestHelper.TestData)
-    val op1 = SyncOperation(createFile(sourcePath), ActionCreate)
-    val op2 = SyncOperation(FsFolder("afterFailedSinkCopy", 1), ActionCreate)
+    val op1 = createSyncOp(createFile(sourcePath), ActionCreate)
+    val op2 = createSyncOp(FsFolder("afterFailedSinkCopy", 1), ActionCreate)
 
     helper.sendOperation(op1)
       .sendOperationAndExpectResponse(op2)

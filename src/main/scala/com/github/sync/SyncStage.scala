@@ -55,13 +55,14 @@ object SyncStage {
     * @param finishedSources the number of sources that have been finished
     * @param deferredOps     sync operations that will be pushed out at the
     *                        very end of the stream
-    * @param removedPaths    paths that have been removed in the destination
+    * @param removedPaths    root elements that have been removed in the
+    *                        destination structure
     */
   private case class SyncState(currentElem: FsElement,
                                syncFunc: SyncFunc,
                                finishedSources: Int,
                                deferredOps: List[SyncOperation],
-                               removedPaths: Set[String]) {
+                               removedPaths: Set[FsElement]) {
     /**
       * Creates a new sync state with the specified sync function and directly
       * invokes this function with the updated state and the parameters
@@ -156,7 +157,7 @@ object SyncStage {
   private def destinationFinished(state: SyncState, stage: SyncStage, portIdx: Int,
                                   element: FsElement): (EmitData, SyncState) = {
     def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
-      (EmitData(List(SyncOperation(elem, ActionCreate)), stage.PullSource), s)
+      (EmitData(List(SyncOperation(elem, ActionCreate, elem.level)), stage.PullSource), s)
 
     handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
       handleElement(state, element)
@@ -176,7 +177,7 @@ object SyncStage {
   private def sourceDirFinished(state: SyncState, stage: SyncStage, portIdx: Int,
                                 element: FsElement): (EmitData, SyncState) = {
     def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) = {
-      val (op, next) = removeElement(s, elem, inRemovedPath = false)
+      val (op, next) = removeElement(s, elem, removedPath = None)
       (EmitData(op, stage.PullDest), next)
     }
 
@@ -201,13 +202,13 @@ object SyncStage {
                                        state: SyncState, stage: SyncStage):
   Option[(EmitData, SyncState)] = {
     val isRemoved = isInRemovedPath(state, elemDest)
-    if (isRemoved || elemSource.relativeUri > elemDest.relativeUri) {
+    if (isRemoved.isDefined || elemSource.relativeUri > elemDest.relativeUri) {
       val (op, next) = removeElement(state.updateCurrentElement(elemSource),
         elemDest, isRemoved)
       Some((EmitData(op, stage.PullDest), next))
     } else if (elemSource.relativeUri < elemDest.relativeUri)
-      Some((EmitData(List(SyncOperation(elemSource, ActionCreate)), stage.PullSource),
-        state.updateCurrentElement(elemDest)))
+      Some((EmitData(List(SyncOperation(elemSource, ActionCreate, elemSource.level)),
+        stage.PullSource), state.updateCurrentElement(elemDest)))
     else None
   }
 
@@ -229,18 +230,18 @@ object SyncStage {
     (elemSource, elemDest) match {
       case (eSrc: FsFile, eDst: FsFile)
         if eSrc.lastModified != eDst.lastModified || eSrc.size != eDst.size =>
-        Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride)), state, stage))
+        Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level)), state, stage))
 
       case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
-        val ops = List(SyncOperation(fileDst, ActionRemove),
-          SyncOperation(folderSrc, ActionCreate))
+        val ops = List(SyncOperation(fileDst, ActionRemove, fileDst.level),
+          SyncOperation(folderSrc, ActionCreate, folderSrc.level))
         Some(emitAndPullBoth(ops, state, stage))
 
       case (fileSrc: FsFile, folderDst: FsFolder) => // folder converted to file
-        val defOps = SyncOperation(folderDst, ActionRemove) ::
-          SyncOperation(fileSrc, ActionCreate) :: state.deferredOps
+        val defOps = SyncOperation(folderDst, ActionRemove, fileSrc.level) ::
+          SyncOperation(fileSrc, ActionCreate, fileSrc.level) :: state.deferredOps
         val next = state.copy(deferredOps = defOps,
-          removedPaths = state.removedPaths + (folderDst.relativeUri + PathSeparator))
+          removedPaths = addRemovedFolder(state, folderDst))
         Some(emitAndPullBoth(Nil, next, stage))
 
       case _ => None
@@ -329,8 +330,10 @@ object SyncStage {
     * @param element the element to be checked
     * @return a flag whether this element is in a removed path
     */
-  private def isInRemovedPath(state: SyncState, element: FsElement): Boolean =
-    state.removedPaths exists element.relativeUri.startsWith
+  private def isInRemovedPath(state: SyncState, element: FsElement): Option[FsElement] =
+    state.removedPaths find { e =>
+      element.relativeUri.startsWith(e.relativeUri)
+    }
 
   /**
     * Generates emit data for an element to be removed. The exact actions to
@@ -338,23 +341,34 @@ object SyncStage {
     * directly, the deletion of folders is deferred. So in case of a folder,
     * the properties of the state are updated accordingly.
     *
-    * @param state         the current sync state
-    * @param element       the element to be removed
-    * @param inRemovedPath flag whether the element is in a removed path
+    * @param state       the current sync state
+    * @param element     the element to be removed
+    * @param removedPath a removed root path containing the current element
     * @return data to emit and the updated state
     */
-  private def removeElement(state: SyncState, element: FsElement, inRemovedPath: Boolean):
+  private def removeElement(state: SyncState, element: FsElement, removedPath: Option[FsElement]):
   (List[SyncOperation], SyncState) = {
-    val op = SyncOperation(element, ActionRemove)
+    val op = SyncOperation(element, ActionRemove,
+      removedPath map (_.level) getOrElse element.level)
     element match {
       case folder: FsFolder =>
-        val paths = if (inRemovedPath) state.removedPaths
-        else state.removedPaths + (folder.relativeUri + PathSeparator)
+        val paths = if (removedPath.isDefined) state.removedPaths
+        else addRemovedFolder(state, folder)
         (Nil, state.copy(removedPaths = paths, deferredOps = op :: state.deferredOps))
       case _ =>
         (List(op), state)
     }
   }
+
+  /**
+    * Adds a folder to the set of removed root paths.
+    *
+    * @param state  the current sync state
+    * @param folder the folder to be added
+    * @return the updated set with root paths
+    */
+  private def addRemovedFolder(state: SyncState, folder: FsFolder): Set[FsElement] =
+    state.removedPaths + folder.copy(relativeUri = folder.relativeUri + PathSeparator)
 }
 
 /**

@@ -44,9 +44,13 @@ case object ActionRemove extends SyncAction
   * A class that stores all information for a single sync operation.
   *
   * Subject of the operation is an element (a folder or a file), for which an
-  * action is to be executed.
+  * action is to be executed. The operation also has a level which corresponds
+  * to the level of the element in the source structure that triggered it.
+  * (Note that this does not necessarily correspond to the level of the element
+  * associated with the operation.) The level can be used in filter expressions
+  * to customize sync behavior.
   *
   * @param element the element that is subject to this operation
   * @param action  the action to be executed on this element
   */
-case class SyncOperation(element: FsElement, action: SyncAction)
+case class SyncOperation(element: FsElement, action: SyncAction, level: Int)
