@@ -298,4 +298,38 @@ class FilterManagerSpec extends FlatSpec with Matchers {
     val futParsed = FilterManager.parseFilters(args)
     expectParsingFailure(futParsed, InvalidExpression)
   }
+
+  it should "support a filter to disable specific action types" in {
+    val args = Map(FilterManager.ArgActionFilter -> List("actioncreate", "actionoverride"))
+    val acceptedOps = List(SyncOperation(Element, ActionCreate, 1),
+      SyncOperation(Element, ActionOverride, 0))
+    val rejectedOps = List(SyncOperation(Element, ActionRemove, 0))
+
+    checkParseFilterArguments(args, acceptedOps, rejectedOps)
+  }
+
+  it should "ignore case for action type filters" in {
+    val args = Map(FilterManager.ArgActionFilter -> List("actionCreate", "ActionREMOVE"))
+    val acceptedOps = List(SyncOperation(Element, ActionCreate, 1),
+      SyncOperation(Element, ActionRemove, 0))
+    val rejectedOps = List(SyncOperation(Element, ActionOverride, 0))
+
+    checkParseFilterArguments(args, acceptedOps, rejectedOps)
+  }
+
+  it should "support comma-separated action type filters" in {
+    val args = Map(FilterManager.ArgActionFilter -> List("actionCreate , ActionOverride"))
+    val acceptedOps = List(SyncOperation(Element, ActionCreate, 1),
+      SyncOperation(Element, ActionOverride, 0))
+    val rejectedOps = List(SyncOperation(Element, ActionRemove, 0))
+
+    checkParseFilterArguments(args, acceptedOps, rejectedOps)
+  }
+
+  it should "handle invalid action type names in the action type filter" in {
+    val invalidTypes = List("unknown_type", "other_unknown_type")
+    val args = Map(FilterManager.ArgActionFilter -> ("actionCreate" :: invalidTypes))
+
+    expectParsingFailure(FilterManager.parseFilters(args), invalidTypes.mkString(","))
+  }
 }

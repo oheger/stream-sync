@@ -16,6 +16,8 @@
 
 package com.github.sync.cli
 
+import java.util.Locale
+
 import com.github.sync._
 
 import scala.annotation.tailrec
@@ -50,6 +52,9 @@ object FilterManager {
   /** Command line option to define a filter for all actions. */
   val ArgCommonFilter = "--filter"
 
+  /** Command line option for the filter to disable specific sync actions. */
+  val ArgActionFilter = "--actions"
+
   /**
     * Data class defining the filtering during a sync process.
     *
@@ -68,7 +73,17 @@ object FilterManager {
 
   /** A set with the names of all parameters supported by this service. */
   private val AllFilterParameters =
-    Set(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter, ArgCommonFilter)
+    Set(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter, ArgCommonFilter, ArgActionFilter)
+
+  /**
+    * A map assigning names of action types to the corresponding type objects.
+    * This is used to deactivate specific actions based on filter options.
+    */
+  private val ActionTypeNameMapping: Map[String, SyncAction] = Map("actioncreate" -> ActionCreate,
+    "actionoverride" -> ActionOverride, "actionremove" -> ActionRemove)
+
+  /** A list with all defined action type names. */
+  private lazy val ActionTypeList = ActionTypeNameMapping.keys.toList
 
   /** Expression string to parse a numeric filter value. */
   private val DataTypeNumber =
@@ -79,6 +94,12 @@ object FilterManager {
 
   /** RegEx to parse a max level filter. */
   private val RegMaxLevel = filterExpressionRegEx("max-level", DataTypeNumber)
+
+  /** A special filter that rejects all sync operations. */
+  private val RejectFilter: SyncOperationFilter = _ => false
+
+  /** Constant for the separator used by the action type filter. */
+  private val ActionTypeSeparator = ","
 
   /**
     * Extracts filtering information from the map with command line arguments.
@@ -108,7 +129,8 @@ object FilterManager {
       parseExpressionsOfFilterOption(arguments.getOrElse(ArgCommonFilter, Nil), Nil)
     for {cleanedMap <- futCleanedMap
          commonFilters <- futCommonFilters
-         filterData <- parseActionFilters(arguments, commonFilters)
+         filterData1 <- parseFiltersPerActionType(arguments, commonFilters)
+         filterData <- parseActionFilter(arguments, filterData1)
     } yield (cleanedMap, SyncFilterData(filterData))
   }
 
@@ -177,9 +199,9 @@ object FilterManager {
     * @param ec            the execution context
     * @return a future with the parsed parameters for action filters
     */
-  private def parseActionFilters(args: Map[String, Iterable[String]],
-                                 commonFilters: List[SyncOperationFilter])
-                                (implicit ec: ExecutionContext): Future[ActionFilters] = {
+  private def parseFiltersPerActionType(args: Map[String, Iterable[String]],
+                                        commonFilters: List[SyncOperationFilter])
+                                       (implicit ec: ExecutionContext): Future[ActionFilters] = {
     Future.sequence(ActionFilterParameters map { t =>
       parseFilterOption(args.getOrElse(t._1, Nil), t._2, commonFilters)
     }) map (lst => lst.reduce(_ ++ _))
@@ -201,6 +223,47 @@ object FilterManager {
     expressions.foldLeft(commonFilters) { (filters, expr) =>
       parseExpression(expr) :: filters
     }
+  }
+
+  /**
+    * Evaluates filter options to disable/enable specific actions. For all
+    * action types that are disabled a condition is added to their list of
+    * filters that always rejects sync operations.
+    *
+    * @param args    the map with command line arguments
+    * @param filters the action filters constructed so far
+    * @return the updated map of action filters
+    */
+  private def parseActionFilter(args: Map[String, Iterable[String]],
+                                filters: ActionFilters)
+                               (implicit ec: ExecutionContext): Future[ActionFilters] = Future {
+    val enabledActionTypes = extractEnabledActionTypes(args)
+    filters.map { e =>
+      e._1 ->
+        (if (!enabledActionTypes.contains(e._1)) RejectFilter :: e._2
+        else e._2)
+    }
+  }
+
+  /**
+    * Extracts the action types that are enabled for the current sync process.
+    * A validation is performed as well; unsupported action types cause an
+    * exception (causing the caller's future to fail).
+    *
+    * @param args the map with command line arguments
+    * @return a set with all enabled action types
+    */
+  private def extractEnabledActionTypes(args: Map[String, Iterable[String]]): Set[SyncAction] = {
+    val actionTypeNames = args.getOrElse(ArgActionFilter, ActionTypeList)
+      .flatMap(_.split(ActionTypeSeparator))
+      .map(_.trim.toLowerCase(Locale.ROOT))
+    val invalidActionTypes = actionTypeNames filterNot ActionTypeNameMapping.contains
+    if (invalidActionTypes.nonEmpty) {
+      throw new IllegalArgumentException("Invalid action types: " +
+        invalidActionTypes.mkString(ActionTypeSeparator))
+    }
+    actionTypeNames.map(ActionTypeNameMapping(_))
+      .toSet
   }
 
   /**
