@@ -17,6 +17,7 @@
 package com.github.sync.cli
 
 import java.util.Locale
+import java.util.regex.Pattern
 
 import com.github.sync._
 
@@ -89,11 +90,21 @@ object FilterManager {
   private val DataTypeNumber =
     """\d+"""
 
+  /** Expression string to parse a string filter value. */
+  private val DataTypeString =
+    """.+"""
+
   /** RegEx to parse a min level filter. */
   private val RegMinLevel = filterExpressionRegEx("min-level", DataTypeNumber)
 
   /** RegEx to parse a max level filter. */
   private val RegMaxLevel = filterExpressionRegEx("max-level", DataTypeNumber)
+
+  /** RegEx to parse an exclusion filter. */
+  private val RegExclude = filterExpressionRegEx("exclude", DataTypeString)
+
+  /** RegEx to parse an inclusion filter. */
+  private val RegInclude = filterExpressionRegEx("include", DataTypeString)
 
   /** A special filter that rejects all sync operations. */
   private val RejectFilter: SyncOperationFilter = _ => false
@@ -187,8 +198,52 @@ object FilterManager {
       op => op.level >= level.toInt
     case RegMaxLevel(level) =>
       op => op.level <= level.toInt
+    case RegExclude(pattern) =>
+      exclusionFilter(pattern)
+    case RegInclude(pattern) =>
+      inclusionFilter(pattern)
     case _ => throw new IllegalArgumentException(expr)
   }
+
+  /**
+    * Generates a filter that excludes all elements that match a given regular
+    * glob expression.
+    *
+    * @param pattern the glob expression
+    * @return a filter to exclude matching elements
+    */
+  private def exclusionFilter(pattern: String): SyncOperationFilter = {
+    val regex = generateGlobRexEx(pattern)
+    op =>
+      op.element.relativeUri match {
+        case regex(_*) => false
+        case _ => true
+      }
+  }
+
+  /**
+    * Generates a filter that includes all elements that match a given regular
+    * glob expression. The idea here is that this filter is just the negation
+    * of an exclusion filter.
+    *
+    * @param pattern the glob expression
+    * @return a filter that includes matching elements
+    */
+  private def inclusionFilter(pattern: String): SyncOperationFilter = {
+    val exFilter = exclusionFilter(pattern)
+    op => !exFilter(op)
+  }
+
+  /**
+    * Generates a RegEx from a glob expression. The characters '*' and '?' are
+    * transformed to equivalent matchers of regular expressions.
+    *
+    * @param pattern the pattern to be converted
+    * @return the resulting regular expression
+    */
+  private def generateGlobRexEx(pattern: String): Regex =
+    ("(?i)" + Pattern.quote(pattern).replace("?", "\\E.\\Q")
+      .replace("*", "\\E.*\\Q")).r
 
   /**
     * Parses the filter parameters for all action types and returns a map with

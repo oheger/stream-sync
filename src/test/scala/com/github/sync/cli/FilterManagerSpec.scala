@@ -332,4 +332,52 @@ class FilterManagerSpec extends FlatSpec with Matchers {
 
     expectParsingFailure(FilterManager.parseFilters(args), invalidTypes.mkString(","))
   }
+
+  it should "parse a simple exclude filter expression" in {
+    val Expression = "exclude:/foo"
+    val opAccepted = SyncOperation(FsFolder("/bar", 0), ActionCreate, 1)
+    val opRejected = SyncOperation(FsFolder("/foo", 0), ActionCreate, 1)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "support ? characters in exclusion filters" in {
+    val Expression = "exclude:/?oo"
+    val opAccepted = SyncOperation(FsFolder("/fof", 0), ActionCreate, 1)
+    val opRejected = SyncOperation(FsFolder("/hoo", 0), ActionCreate, 1)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "support * characters in exclusion filters" in {
+    val Expression = "exclude:*/target/*"
+    val opAccepted = SyncOperation(FsFolder("/target-folder/test", 0), ActionCreate, 1)
+    val opRejected = SyncOperation(FsFolder("/test/target/sub", 0), ActionCreate, 1)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "quote regular glob patterns in filter expressions" in {
+    val Expression = "exclude:/foo(1)-(2)"
+    val opAccepted = SyncOperation(FsFolder("/foo(1)-(3)", 0), ActionCreate, 1)
+    val opRejected = SyncOperation(FsFolder("/foo(1)-(2)", 0), ActionCreate, 1)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "match exclusions case insensitive" in {
+    val Expression = "exclude:*/target/*"
+    val opAccepted = SyncOperation(FsFolder("/test/targetTest/test", 0), ActionCreate, 1)
+    val opRejected = SyncOperation(FsFolder("/test/TARGET/test", 0), ActionCreate, 1)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "support inclusion filters" in {
+    val Expression = "include:*/tar?et/*-bak"
+    val opAccepted = SyncOperation(FsFolder("/foo/TARSET/more/test-bak", 0), ActionCreate, 1)
+    val opRejected = SyncOperation(FsFolder("/hoo/targetDir/test-bak", 0), ActionCreate, 1)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
 }
