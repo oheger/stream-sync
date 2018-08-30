@@ -16,6 +16,9 @@
 
 package com.github.sync.cli
 
+import java.time.format.{DateTimeFormatter, DateTimeParseException}
+import java.time.temporal.TemporalQuery
+import java.time.{LocalDateTime, ZoneId}
 import java.util.Locale
 import java.util.regex.Pattern
 
@@ -94,6 +97,10 @@ object FilterManager {
   private val DataTypeString =
     """.+"""
 
+  /** Expression string to parse a date filter value. */
+  private val DataTypeDate =
+    """(\d{4}-\d{2}-\d{2})T?(\d{2}:\d{2}:\d{2})?"""
+
   /** RegEx to parse a min level filter. */
   private val RegMinLevel = filterExpressionRegEx("min-level", DataTypeNumber)
 
@@ -105,6 +112,12 @@ object FilterManager {
 
   /** RegEx to parse an inclusion filter. */
   private val RegInclude = filterExpressionRegEx("include", DataTypeString)
+
+  /** RegEx to parse a date-after filter. */
+  private val RegDateAfter = filterExpressionRegEx("date-after", DataTypeDate)
+
+  /** RegEx to parse a date-before filter. */
+  private val RegDateBefore = filterExpressionRegEx("date-before", DataTypeDate)
 
   /** A special filter that rejects all sync operations. */
   private val RejectFilter: SyncOperationFilter = _ => false
@@ -202,7 +215,43 @@ object FilterManager {
       exclusionFilter(pattern)
     case RegInclude(pattern) =>
       inclusionFilter(pattern)
+    case RegDateAfter(_, date, time) =>
+      dateFilter(expr, date, time)(_ <= 0)
+    case RegDateBefore(_, date, time) =>
+      dateFilter(expr, date, time)(_ > 0)
     case _ => throw new IllegalArgumentException(expr)
+  }
+
+  /**
+    * Returns a ''SyncOperationFilter'' that filters for a file's last-modified
+    * time. The given date and (optional) time components are combined and
+    * parsed as an ''Instant''. Then a filter is constructed that compares a
+    * file's time against this reference ''Instant'' using the provided
+    * comparison function.
+    *
+    * @param date the date component
+    * @param time the time component (may be '''null''')
+    * @param comp the comparison function
+    * @return a filter for a file date
+    * @throws IllegalArgumentException if the date cannot be parsed
+    */
+  private def dateFilter(expr: String, date: String, time: String)(comp: Int => Boolean):
+  SyncOperationFilter = {
+    val dtStr = date + "T" + (if (time == null) "00:00:00" else time)
+    val query: TemporalQuery[LocalDateTime] = LocalDateTime.from _
+    try {
+      val localDate = DateTimeFormatter.ISO_DATE_TIME.parse(dtStr, query)
+      val instant = localDate.atZone(ZoneId.systemDefault()).toInstant
+      op =>
+        op.element match {
+          case FsFile(_, _, modTime, _) =>
+            comp(instant.compareTo(modTime))
+          case _ => true
+        }
+    } catch {
+      case e: DateTimeParseException =>
+        throw new IllegalArgumentException("Could not parse date in filter expression: " + expr, e)
+    }
   }
 
   /**

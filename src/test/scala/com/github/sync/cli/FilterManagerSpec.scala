@@ -16,13 +16,15 @@
 
 package com.github.sync.cli
 
-import com.github.sync.cli.FilterManager.{SyncFilterData, SyncOperationFilter}
+import java.time.{Instant, LocalDateTime, ZoneId}
+
 import com.github.sync._
+import com.github.sync.cli.FilterManager.{SyncFilterData, SyncOperationFilter}
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 import scala.util.Failure
 
 object FilterManagerSpec {
@@ -35,6 +37,10 @@ object FilterManagerSpec {
     */
   private val Element = FsFolder("", 0)
 
+  /** Regular expression to parse a date time string. */
+  private val RegTime =
+    """(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})""".r
+
   /**
     * Waits for the given future to complete and returns the result.
     *
@@ -44,6 +50,30 @@ object FilterManagerSpec {
     */
   private def futureResult[A](future: Future[A]): A =
     Await.result(future, timeout)
+
+  /**
+    * Converts a string with a date-time to an Instant object.
+    *
+    * @param s the date-time string
+    * @return the ''Instant''
+    */
+  private def toInstant(s: String): Instant = {
+    s match {
+      case RegTime(year, month, day, hour, min, sec) =>
+        LocalDateTime.of(year.toInt, month.toInt, day.toInt, hour.toInt, min.toInt, sec.toInt)
+          .atZone(ZoneId.systemDefault()).toInstant
+    }
+  }
+
+  /**
+    * Generates an element with the given name and last modification time.
+    *
+    * @param name the name
+    * @param time the modification time
+    * @return the element
+    */
+  private def elementWithTime(name: String, time: Instant): FsElement =
+    FsFile(name, 0, time, 42)
 }
 
 /**
@@ -379,5 +409,74 @@ class FilterManagerSpec extends FlatSpec with Matchers {
     val opRejected = SyncOperation(FsFolder("/hoo/targetDir/test-bak", 0), ActionCreate, 1)
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "support a date-after filter with full date and time" in {
+    val timeStr = "2018-08-29T21:27:12"
+    val Expression = "date-after:" + timeStr
+    val opAccepted = SyncOperation(elementWithTime("ok", toInstant(timeStr)),
+      ActionCreate, 0)
+    val opRejected = SyncOperation(elementWithTime("fail", toInstant("2018-08-29T21:27:11")),
+      ActionCreate, 0)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "accept folders when using a date-after filter" in {
+    val timeStr = "2018-08-29T22:03:08"
+    val Expression = "date-after:" + timeStr
+    val opAccepted = SyncOperation(Element, ActionCreate, 0)
+    val opRejected = SyncOperation(elementWithTime("e", toInstant("2018-08-29T22:00:00")),
+      ActionCreate, 0)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "support a date-before filter with full date and time" in {
+    val timeStr = "2018-08-29T22:05:04"
+    val Expression = "date-before:" + timeStr
+    val opAccepted = SyncOperation(elementWithTime("ok", toInstant("2018-08-29T22:05:03")),
+      ActionCreate, 0)
+    val opRejected = SyncOperation(elementWithTime("!", toInstant(timeStr)),
+      ActionCreate, 0)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "accept folders when using a date-before filter" in {
+    val timeStr = "2018-08-29T22:09:45"
+    val Expression = "date-before:" + timeStr
+    val opAccepted = SyncOperation(Element, ActionCreate, 0)
+    val opRejected = SyncOperation(elementWithTime("e", toInstant("2018-08-29T22:10:00")),
+      ActionCreate, 0)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "support date-after filters without a time" in {
+    val Expression = "date-after=2018-08-29"
+    val opAccepted = SyncOperation(elementWithTime("ok", toInstant("2018-08-29T00:00:00")),
+      ActionOverride, 0)
+    val opRejected = SyncOperation(elementWithTime("!", toInstant("2018-08-28T23:59:59")),
+      ActionOverride, 0)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "support date-before filters without a time" in {
+    val Expression = "date-before=2018-08-30"
+    val opAccepted = SyncOperation(elementWithTime("ok", toInstant("2018-08-29T23:59:59")),
+      ActionOverride, 0)
+    val opRejected = SyncOperation(elementWithTime("!", toInstant("2018-08-30T00:00:00")),
+      ActionOverride, 0)
+
+    checkParsedFilterExpression(Expression, opAccepted, opRejected)
+  }
+
+  it should "deal with invalid dates" in {
+    val Expression = "date-before:9999-99-99T99:99:99"
+    val args = Map(FilterManager.ArgCommonFilter -> List(Expression))
+
+    expectParsingFailure(FilterManager.parseFilters(args), Expression)
   }
 }
