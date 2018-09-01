@@ -16,7 +16,12 @@
 
 package com.github.sync.cli
 
+import java.nio.file.Paths
 import java.util.Locale
+
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{FileIO, Framing, Sink}
+import akka.util.ByteString
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
@@ -43,23 +48,36 @@ object ParameterManager {
   val OptionPrefix = "--"
 
   /**
+    * Name of an option that defines a parameters file. The file is read, and
+    * its content is added to the command line options.
+    */
+  val FileOption: String = OptionPrefix + "file"
+
+  /**
+    * Type definition for an internal map type used during processing of
+    * command line arguments.
+    */
+  private type ParamMap = Map[String, List[String]]
+
+  /**
     * Parses the command line arguments and converts them into a map keyed by
     * options.
     *
     * @param args the sequence with command line arguments
     * @param ec   the execution context
+    * @param mat  an object to materialize streams for reading parameter files
     * @return a future with the parsed map of arguments
     */
-  def parseParameters(args: Seq[String])(implicit ec: ExecutionContext):
-  Future[Map[String, Iterable[String]]] = Future {
-    def appendOptionValue(argMap: Map[String, List[String]], opt: String, value: String):
-    Map[String, List[String]] = {
+  def parseParameters(args: Seq[String])(implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[Map[String, Iterable[String]]] = {
+    def appendOptionValue(argMap: ParamMap, opt: String, value: String):
+    ParamMap = {
       val optValues = argMap.getOrElse(opt, List.empty)
       argMap + (opt -> (value :: optValues))
     }
 
-    @tailrec def doParseParameters(argsList: Seq[String], argsMap: Map[String, List[String]]):
-    Map[String, List[String]] = argsList match {
+    @tailrec def doParseParameters(argsList: Seq[String], argsMap: ParamMap):
+    ParamMap = argsList match {
       case opt :: value :: tail if isOption(opt) =>
         doParseParameters(tail, appendOptionValue(argsMap, opt.toLowerCase(Locale.ROOT), value))
       case h :: t if !isOption(h) =>
@@ -70,7 +88,25 @@ object ParameterManager {
         argsMap
     }
 
-    doParseParameters(args.toList, Map.empty)
+    def parseParameterSeq(argList: Seq[String]): ParamMap =
+      doParseParameters(argList, Map.empty)
+
+    def parseParametersWithFiles(argList: Seq[String], currentParams: ParamMap,
+                                 processedFiles: Set[String]): Future[ParamMap] = Future {
+      combineParameterMaps(currentParams, parseParameterSeq(argList))
+    } flatMap { argMap =>
+      argMap get FileOption match {
+        case None =>
+          Future.successful(argMap)
+        case Some(files) =>
+          val filesToRead = files.toSet diff processedFiles
+          readAllParameterFiles(filesToRead.toList) flatMap { argList =>
+            parseParametersWithFiles(argList, argMap - FileOption, processedFiles ++ filesToRead)
+          }
+      }
+    }
+
+    parseParametersWithFiles(args.toList, Map.empty, Set.empty)
   }
 
   /**
@@ -124,4 +160,54 @@ object ParameterManager {
     * @return a flag whether this argument is an option
     */
   private def isOption(arg: String): Boolean = arg startsWith OptionPrefix
+
+  /**
+    * Creates a combined parameter map from the given source maps. The lists
+    * with the values of parameter options need to be concatenated.
+    *
+    * @param m1 the first map
+    * @param m2 the second map
+    * @return the combined map
+    */
+  private def combineParameterMaps(m1: ParamMap, m2: ParamMap): ParamMap =
+    m2.foldLeft(m1) { (resMap, e) =>
+      val values = resMap.getOrElse(e._1, List.empty)
+      resMap + (e._1 -> (e._2 ::: values))
+    }
+
+  /**
+    * Reads a file with parameters asynchronously and returns its single lines
+    * as a list of strings.
+    *
+    * @param path the path to the parameters
+    * @param mat  the ''ActorMaterializer'' for reading the file
+    * @param ec   the execution context
+    * @return a future with the result of the read operation
+    */
+  private def readParameterFile(path: String)
+                               (implicit mat: ActorMaterializer, ec: ExecutionContext):
+  Future[List[String]] = {
+    val source = FileIO.fromPath(Paths get path)
+    val sink = Sink.fold[List[String], String](List.empty)((lst, line) => line :: lst)
+    source.via(Framing.delimiter(ByteString("\n"), 1024,
+      allowTruncation = true))
+      .map(bs => bs.utf8String.trim)
+      .filter(_.length > 0)
+      .runWith(sink)
+      .map(_.reverse)
+  }
+
+  /**
+    * Reads all parameter files referenced by the provided list. The arguments
+    * they contain are combined to a single sequence of strings.
+    *
+    * @param files list with the files to be read
+    * @param mat   the ''ActorMaterializer'' for reading files
+    * @param ec    the execution context
+    * @return a future with the result of the combined read operation
+    */
+  private def readAllParameterFiles(files: List[String])
+                                   (implicit mat: ActorMaterializer, ec: ExecutionContext):
+  Future[List[String]] =
+    Future.sequence(files.map(readParameterFile)).map(_.flatten)
 }

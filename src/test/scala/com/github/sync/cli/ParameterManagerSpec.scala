@@ -16,7 +16,13 @@
 
 package com.github.sync.cli
 
-import org.scalatest.{FlatSpec, Matchers}
+import java.nio.file.Path
+
+import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
+import akka.testkit.TestKit
+import com.github.sync.FileTestHelper
+import org.scalatest._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -25,7 +31,7 @@ import scala.util.Failure
 
 object ParameterManagerSpec {
   /** Timeout when waiting for future results. */
-  private val Timeout = 1.second
+  private val Timeout = 5.second
 
   /**
     * Waits for the given future to complete and returns the result.
@@ -41,9 +47,19 @@ object ParameterManagerSpec {
 /**
   * Test class for ''ParameterManager''.
   */
-class ParameterManagerSpec extends FlatSpec with Matchers {
+class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+  with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper {
+  def this() = this(ActorSystem("ParameterManagerSpec"))
 
   import ParameterManagerSpec._
+
+  override protected def afterAll(): Unit = {
+    TestKit shutdownActorSystem system
+  }
+
+  after {
+    tearDownTestFile()
+  }
 
   /**
     * Expects a failed future from a parsing operation. It is checked whether
@@ -64,8 +80,59 @@ class ParameterManagerSpec extends FlatSpec with Matchers {
     }
   }
 
+  /**
+    * Creates a temporary file that contains the given parameter strings.
+    *
+    * @param args the parameters to store in the file
+    * @return the path to the newly created file
+    */
+  private def createParameterFile(args: String*): Path =
+    createDataFile(parameterFileContent(args: _*))
+
+  /**
+    * Generates the content of a parameters file from the given parameter
+    * strings.
+    *
+    * @param args the parameters to store in the file
+    * @return the content of the parameter file as string
+    */
+  private def parameterFileContent(args: String*): String =
+    args.mkString("\r\n")
+
+  /**
+    * Adds a parameter to read the given file to a parameter list.
+    *
+    * @param path    the path to the file to be read
+    * @param argList the original parameter list
+    * @return the parameter list with the file parameter added
+    */
+  private def appendFileParameter(path: Path, argList: List[String]): List[String] =
+    ParameterManager.FileOption :: path.toString :: argList
+
+  /**
+    * Helper method for calling the parameter manager to parse a list of
+    * parameters.
+    *
+    * @param args the list of parameters to be parsed
+    * @return the parameters map as result of the parse operation
+    */
+  private def parseParameters(args: Seq[String]): Map[String, Iterable[String]] =
+    futureResult(parseParametersFuture(args))
+
+  /**
+    * Helper method for calling the parameter manager's method to parse a list
+    * of parameters and returning the future result.
+    *
+    * @param args the list of parameters to be parsed
+    * @return the ''Future'' with the parse result
+    */
+  private def parseParametersFuture(args: Seq[String]): Future[Map[String, Iterable[String]]] = {
+    implicit val mat: ActorMaterializer = ActorMaterializer()
+    ParameterManager.parseParameters(args)
+  }
+
   "ParameterManager" should "parse an empty sequence of arguments" in {
-    val argMap = futureResult(ParameterManager.parseParameters(Nil))
+    val argMap = parseParameters(Nil)
 
     argMap should have size 0
   }
@@ -74,7 +141,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers {
     val syncUris = List("uri1", "uri2")
     val expArgMap = Map(ParameterManager.SyncUriOption -> syncUris.reverse)
 
-    val argMap = futureResult(ParameterManager.parseParameters(syncUris))
+    val argMap = parseParameters(syncUris)
     argMap should be(expArgMap)
   }
 
@@ -83,7 +150,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers {
     val expArgMap = Map("--opt1" -> List("opt1Val2", "opt1Val1"),
       "--opt2" -> List("opt2Val1"))
 
-    val argMap = futureResult(ParameterManager.parseParameters(args))
+    val argMap = parseParameters(args)
     argMap should be(expArgMap)
   }
 
@@ -91,7 +158,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers {
     val undefOption = "--undefinedOption"
     val args = List("--opt1", "optValue", undefOption)
 
-    expectFailedFuture(ParameterManager.parseParameters(args), undefOption)
+    expectFailedFuture(parseParametersFuture(args), undefOption)
   }
 
   it should "convert options to lower case" in {
@@ -100,7 +167,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers {
       "--foo" -> List("BAR"),
       ParameterManager.SyncUriOption -> List("testUri"))
 
-    val argMap = futureResult(ParameterManager.parseParameters(args))
+    val argMap = parseParameters(args)
     argMap should be(expArgMap)
   }
 
@@ -130,7 +197,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers {
   }
 
   it should "reject URI parameters if no URIs are provided" in {
-    var argsMap = Map(ParameterManager.SyncUriOption -> List.empty[String])
+    val argsMap = Map(ParameterManager.SyncUriOption -> List.empty[String])
 
     expectFailedFuture(ParameterManager.extractSyncUris(argsMap),
       "Missing URIs for source and destination")
@@ -152,5 +219,67 @@ class ParameterManagerSpec extends FlatSpec with Matchers {
 
     expectFailedFuture(ParameterManager.checkParametersConsumed(argsMap),
       "unexpected parameters: " + argsMap)
+  }
+
+  it should "add the content of parameter files to command line options" in {
+    val OptionName1 = "--foo"
+    val OptionName2 = "--test"
+    val Opt1Val1 = "bar"
+    val Opt1Val2 = "baz"
+    val Opt2Val = "true"
+    val uri1 = "testUri1"
+    val uri2 = "testUri2"
+    val args = appendFileParameter(createParameterFile(OptionName1, Opt1Val1, uri1),
+      appendFileParameter(createParameterFile(OptionName2, Opt2Val),
+        OptionName1 :: Opt1Val2 :: uri2 :: Nil))
+
+    val argsMap = parseParameters(args)
+    argsMap(OptionName1) should contain only(Opt1Val1, Opt1Val2)
+    argsMap(OptionName2) should contain only Opt2Val
+    argsMap.keys should not contain ParameterManager.FileOption
+
+    val (_, uris) = futureResult(ParameterManager.extractSyncUris(argsMap))
+    Set(uris._1, uris._2) should contain only(uri1, uri2)
+  }
+
+  it should "parse parameter files defined in another parameter file" in {
+    val OptionName1 = "--top-level"
+    val Option1Value = "onCommandLine"
+    val OptionName2 = "--level1"
+    val Option2Value = "inFirstFile"
+    val OptionName3 = "--deep"
+    val Option3Value = "inNestedFile"
+    val nestedFile = createParameterFile(OptionName3, Option3Value)
+    val args = appendFileParameter(
+      createParameterFile(ParameterManager.FileOption, nestedFile.toString,
+        OptionName2, Option2Value), OptionName1 :: Option1Value :: Nil)
+    println("Parsing arguments " + args)
+    val expArgs = Map(OptionName1 -> List(Option1Value),
+      OptionName2 -> List(Option2Value),
+      OptionName3 -> List(Option3Value))
+
+    val argsMap = parseParameters(args)
+    argsMap should be(expArgs)
+  }
+
+  it should "deal with cyclic references in parameter files" in {
+    val file1 = createFileReference()
+    val file3 = createParameterFile(ParameterManager.FileOption, file1.toString, "--op3", "v3")
+    val file2 = createParameterFile(ParameterManager.FileOption, file3.toString, "--op2", "v2")
+    writeFileContent(file1, parameterFileContent(ParameterManager.FileOption, file2.toString,
+      "--op1", "v1", ParameterManager.FileOption, file2.toString))
+    val args = appendFileParameter(file1, Nil)
+    val expArgs = Map("--op1" -> List("v1"), "--op2" -> List("v2"), "--op3" -> List("v3"))
+
+    val argsMap = parseParameters(args)
+    argsMap should be(expArgs)
+  }
+
+  it should "ignore empty lines in parameter files" in {
+    val args = appendFileParameter(createParameterFile("--foo", "bar", "", "--foo", "baz"),
+      "--test" :: "true" :: Nil)
+
+    val argsMap = parseParameters(args)
+    argsMap.keys should contain only("--foo", "--test")
   }
 }

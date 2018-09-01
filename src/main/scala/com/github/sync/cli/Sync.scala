@@ -40,6 +40,7 @@ import scala.util.{Failure, Success}
 object Sync {
   def main(args: Array[String]): Unit = {
     implicit val system: ActorSystem = ActorSystem("stream-sync")
+    implicit val materializer: ActorMaterializer = ActorMaterializer()
     implicit val ec: ExecutionContext = system.dispatcher
 
     val futSync = for {argsMap <- ParameterManager.parseParameters(args)
