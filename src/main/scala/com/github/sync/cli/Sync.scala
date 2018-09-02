@@ -25,8 +25,9 @@ import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, RunnableGraph, Sink}
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, ClosedShape, Supervision}
 import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
+import com.github.sync.impl.{FolderSortStage, SyncStage}
 import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor}
-import com.github.sync.{FolderSortStage, SyncOperation, SyncStage}
+import com.github.sync.SyncOperation
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}

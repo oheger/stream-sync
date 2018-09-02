@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package com.github.sync
+package com.github.sync.impl
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet}
+import com.github.sync._
 
 object SyncStage {
   /**

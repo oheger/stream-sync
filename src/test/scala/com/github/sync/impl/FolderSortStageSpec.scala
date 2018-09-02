@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-package com.github.sync
+package com.github.sync.impl
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
+import com.github.sync.{FsElement, FsFolder}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.Await

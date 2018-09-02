@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package com.github.sync
+package com.github.sync.impl
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
+import com.github.sync.FsElement
 
 object FolderSortStage {
 

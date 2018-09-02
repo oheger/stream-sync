@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-package com.github.sync
+package com.github.sync.impl
 
 import java.time.Instant
 
 import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, ClosedShape}
 import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
+import akka.stream.{ActorMaterializer, ClosedShape}
 import akka.testkit.TestKit
+import com.github.sync._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.Await
