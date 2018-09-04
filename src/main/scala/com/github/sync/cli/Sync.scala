@@ -26,7 +26,7 @@ import akka.stream.{ActorMaterializer, ActorMaterializerSettings, ClosedShape, S
 import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.impl.{FolderSortStage, SyncStage}
-import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor}
+import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
 import com.github.sync.SyncOperation
 
 import scala.concurrent.duration._
@@ -79,7 +79,7 @@ object Sync {
     implicit val writeTimeout: Timeout = Timeout(10.seconds)
     import system.dispatcher
     val operationActor = system.actorOf(Props(classOf[LocalSyncOperationActor],
-      srcPath, dstPath, "blocking-dispatcher"))
+      new LocalUriResolver(srcPath), dstPath, "blocking-dispatcher"))
     val srcSource = LocalFsElementSource(srcPath).via(new FolderSortStage)
     val srcDest = LocalFsElementSource(dstPath).via(new FolderSortStage)
     val writeStage = Flow[SyncOperation].mapAsync(1) { op =>

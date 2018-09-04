@@ -35,19 +35,19 @@ import scala.util.{Failure, Success}
   * as messages. The operations are executed, and - in case of success - sent
   * back to the caller.
   *
-  * @param srcPath                the path to the source structure
+  * @param sourceFileProvider     the provider for files
   * @param dstPath                the path to the destination structure
   * @param blockingDispatcherName name of a dispatcher for blocking operations
   */
-class LocalSyncOperationActor(srcPath: Path, dstPath: Path, blockingDispatcherName: String)
+class LocalSyncOperationActor(sourceFileProvider: SourceFileProvider, dstPath: Path,
+                              blockingDispatcherName: String)
   extends Actor with ActorLogging {
   /** Child actor responsible for executing sync operations. */
   private var executorActor: ActorRef = _
 
   override def preStart(): Unit = {
-    val sourceResolver = new LocalUriResolver(srcPath)
     val destinationResolver = new LocalUriResolver(dstPath)
-    executorActor = context.actorOf(Props(classOf[OperationExecutorActor], sourceResolver,
+    executorActor = context.actorOf(Props(classOf[OperationExecutorActor], sourceFileProvider,
       destinationResolver).withDispatcher(blockingDispatcherName))
   }
 
@@ -67,10 +67,10 @@ class LocalSyncOperationActor(srcPath: Path, dstPath: Path, blockingDispatcherNa
   * delegates dangerous operations to it. When an operation fails, the actor is
   * restarted (by the default supervision strategy).
   *
-  * @param sourceResolver      the resolver for the source structure
+  * @param sourceFileProvider  the provider for source files
   * @param destinationResolver the resolver for the destination structure
   */
-class OperationExecutorActor(sourceResolver: LocalUriResolver,
+class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
                              destinationResolver: LocalUriResolver) extends Actor with
   ActorLogging {
   /** The object to materialize streams. */
@@ -81,7 +81,7 @@ class OperationExecutorActor(sourceResolver: LocalUriResolver,
   override def receive: Receive = {
     case op@SyncOperation(file: FsFile, action, _)
       if action == ActionCreate || action == ActionOverride =>
-      val source = FileIO.fromPath(resolveInSource(file))
+      val source = sourceFileProvider fileSource file
       val destPath = resolveInDestination(file)
       val sink = FileIO.toPath(destPath)
       val client = sender()
@@ -102,16 +102,6 @@ class OperationExecutorActor(sourceResolver: LocalUriResolver,
       Files delete resolveInDestination(element)
       sender ! op
   }
-
-  /**
-    * Convenience method to resolve the given element in the source
-    * structure.
-    *
-    * @param element the element to be resolved
-    * @return the source path for this element
-    */
-  private def resolveInSource(element: FsElement): Path =
-    resolveElement(sourceResolver, element)
 
   /**
     * Convenience method to resolve the given element in the destination
