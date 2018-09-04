@@ -20,10 +20,12 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
-import com.github.sync.FsElement
+import akka.stream.scaladsl.{FileIO, Source}
+import akka.util.ByteString
+import com.github.sync.{FsElement, FsFile, SourceFileProvider}
 
 import scala.annotation.tailrec
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 object LocalUriResolver {
   /** The '+' character that requires a special handling. */
@@ -56,7 +58,7 @@ object LocalUriResolver {
   *
   * @param rootPath the root path of the structure
   */
-class LocalUriResolver(val rootPath: Path) {
+class LocalUriResolver(val rootPath: Path) extends SourceFileProvider {
 
   import LocalUriResolver._
 
@@ -76,6 +78,19 @@ class LocalUriResolver(val rootPath: Path) {
         s"Invalid element URI: ${element.relativeUri}! Not in root path.")
     resolvedPath
   }
+
+  /**
+    * @inheritdoc This implementation resolves the given local file path. If
+    *             successful, a source for reading this file is returned.
+    *             Otherwise, result is a source that fails immediately.
+    */
+  override def fileSource(file: FsFile): Source[ByteString, Any] =
+    resolve(file) match {
+      case Success(value) =>
+        FileIO.fromPath(value)
+      case Failure(exception) =>
+        Source.failed(exception)
+    }
 
   /**
     * Checks whether the given path is actually contained in the folder

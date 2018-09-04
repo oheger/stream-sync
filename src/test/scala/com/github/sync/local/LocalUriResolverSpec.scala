@@ -16,12 +16,20 @@
 
 package com.github.sync.local
 
-import java.nio.file.Paths
+import java.nio.file.{Files, Paths}
+import java.time.Instant
 
-import com.github.sync.{FsElement, FsFolder}
-import org.scalatest.{FlatSpec, Matchers}
+import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Sink, Source}
+import akka.testkit.TestKit
+import akka.util.ByteString
+import com.github.sync.{FileTestHelper, FsElement, FsFile, FsFolder}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
-import scala.util.Success
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
 object LocalUriResolverSpec {
   /** A test root path. */
@@ -42,9 +50,32 @@ object LocalUriResolverSpec {
 /**
   * Test class for ''LocalUriResolver''.
   */
-class LocalUriResolverSpec extends FlatSpec with Matchers {
+class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+  with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper {
+  def this() = this(ActorSystem("LocalUriResolverSpec"))
 
   import LocalUriResolverSpec._
+
+  override protected def afterAll(): Unit = {
+    TestKit shutdownActorSystem system
+  }
+
+  after {
+    tearDownTestFile()
+  }
+
+  /**
+    * Reads the content of a data file defined by the specified source.
+    *
+    * @param source the source pointing to the file
+    * @return a future with the string content of this file
+    */
+  private def readFileSource(source: Source[ByteString, Any]): Future[String] = {
+    implicit val mat: ActorMaterializer = ActorMaterializer()
+    implicit val ec: ExecutionContext = system.dispatcher
+    val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
+    source.runWith(sink) map (_.utf8String)
+  }
 
   "A LocalUriResolver" should "resolve a normal element" in {
     val SubFolderName = "sub-dir"
@@ -97,5 +128,26 @@ class LocalUriResolverSpec extends FlatSpec with Matchers {
 
     val result = resolver resolve createElement("../../up")
     result.isFailure shouldBe true
+  }
+
+  it should "return a source to a valid file URI" in {
+    val subDir = createPathInDirectory("sub")
+    Files createDirectory subDir
+    writeFileContent(subDir.resolve("data.txt"), FileTestHelper.TestData)
+    val resolver = new LocalUriResolver(testDirectory)
+    val file = FsFile("/sub/data.txt", 1, Instant.now(), 42)
+
+    val source = resolver fileSource file
+    val content = Await.result(readFileSource(source), 5.seconds)
+    content should be(FileTestHelper.TestData)
+  }
+
+  it should "return a source that fails for an invalid file" in {
+    val file = FsFile("../../up", 2, Instant.now, 111)
+    val resolver = new LocalUriResolver(testDirectory)
+
+    val source = resolver fileSource file
+    val futSource = Await.ready(readFileSource(source), 5.seconds)
+    futSource.value.get shouldBe a[Failure[_]]
   }
 }
