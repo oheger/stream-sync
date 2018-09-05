@@ -21,37 +21,19 @@ import java.nio.file.Path
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
-import com.github.sync.FileTestHelper
+import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest._
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
-import scala.util.Failure
-
-object ParameterManagerSpec {
-  /** Timeout when waiting for future results. */
-  private val Timeout = 5.second
-
-  /**
-    * Waits for the given future to complete and returns the result.
-    *
-    * @param future the future
-    * @tparam A the type of the future
-    * @return the result of the future
-    */
-  private def futureResult[A](future: Future[A]): A =
-    Await.result(future, Timeout)
-}
+import scala.concurrent.Future
 
 /**
   * Test class for ''ParameterManager''.
   */
 class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
-  with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper {
+  with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper
+  with AsyncTestHelper {
   def this() = this(ActorSystem("ParameterManagerSpec"))
-
-  import ParameterManagerSpec._
 
   override protected def afterAll(): Unit = {
     TestKit shutdownActorSystem system
@@ -70,14 +52,8 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     * @param msg    text to be expected in the exception message
     */
   private def expectFailedFuture(future: Future[_], msg: String): Unit = {
-    Await.ready(future, Timeout)
-    future.value match {
-      case Some(Failure(exception)) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(msg)
-      case r =>
-        fail("Unexpected result: " + r)
-    }
+    val exception = expectFailedFuture[IllegalArgumentException](future)
+    exception.getMessage should include(msg)
   }
 
   /**

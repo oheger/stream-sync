@@ -23,14 +23,9 @@ import com.github.sync.cli.FilterManager.{SyncFilterData, SyncOperationFilter}
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
-import scala.util.Failure
+import scala.concurrent.Future
 
 object FilterManagerSpec {
-  /** Timeout when waiting for future results. */
-  private val timeout = 1.second
-
   /**
     * Constant for an element that can be used when no element-specific checks
     * are executed.
@@ -40,16 +35,6 @@ object FilterManagerSpec {
   /** Regular expression to parse a date time string. */
   private val RegTime =
     """(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})""".r
-
-  /**
-    * Waits for the given future to complete and returns the result.
-    *
-    * @param future the future
-    * @tparam A the type of the future
-    * @return the result of the future
-    */
-  private def futureResult[A](future: Future[A]): A =
-    Await.result(future, timeout)
 
   /**
     * Converts a string with a date-time to an Instant object.
@@ -79,7 +64,7 @@ object FilterManagerSpec {
 /**
   * Test class for ''FilterManager''.
   */
-class FilterManagerSpec extends FlatSpec with Matchers {
+class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
 
   import FilterManagerSpec._
 
@@ -92,14 +77,8 @@ class FilterManagerSpec extends FlatSpec with Matchers {
     * @param msg    text to be expected in the exception message
     */
   private def expectParsingFailure(future: Future[_], msg: String): Unit = {
-    Await.ready(future, timeout)
-    future.value match {
-      case Some(Failure(exception)) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(msg)
-      case r =>
-        fail("Unexpected result: " + r)
-    }
+    val exception = expectFailedFuture[IllegalArgumentException](future)
+    exception.getMessage should include(msg)
   }
 
   /**

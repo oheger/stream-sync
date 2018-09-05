@@ -24,7 +24,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import akka.util.ByteString
-import com.github.sync.{FileTestHelper, FsElement, FsFile, FsFolder}
+import com.github.sync._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -51,7 +51,8 @@ object LocalUriResolverSpec {
   * Test class for ''LocalUriResolver''.
   */
 class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
-  with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper {
+  with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper
+  with AsyncTestHelper {
   def this() = this(ActorSystem("LocalUriResolverSpec"))
 
   import LocalUriResolverSpec._
@@ -138,7 +139,7 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val file = FsFile("/sub/data.txt", 1, Instant.now(), 42)
 
     val source = resolver fileSource file
-    val content = Await.result(readFileSource(source), 5.seconds)
+    val content = futureResult(readFileSource(source))
     content should be(FileTestHelper.TestData)
   }
 
