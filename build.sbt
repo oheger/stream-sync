@@ -15,10 +15,12 @@
  */
 
 /** Definition of versions. */
-lazy val AkkaVersion = "2.5.14"
-lazy val AkkaHttpVersion = "10.1.3"
+lazy val AkkaVersion = "2.5.16"
+lazy val AkkaHttpVersion = "10.1.4"
 lazy val VersionScala = "2.12.6"
-lazy val VersionScalaTest = "3.0.4"
+lazy val VersionScalaTest = "3.0.5"
+
+lazy val ITest = config("integrationTest") extend Test
 
 lazy val akkaDependencies = Seq(
   "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
@@ -28,9 +30,7 @@ lazy val akkaDependencies = Seq(
 )
 
 lazy val testDependencies = Seq(
-  "org.scalatest" %% "scalatest" % VersionScalaTest % "test",
-  "junit" % "junit" % "4.12" % "test",
-  "org.mockito" % "mockito-core" % "1.9.5" % "test"
+  "org.scalatest" %% "scalatest" % VersionScalaTest % "test"
 )
 
 lazy val logDependencies = Seq(
@@ -39,6 +39,8 @@ lazy val logDependencies = Seq(
 )
 
 lazy val StreamSync = (project in file("."))
+  .configs(ITest)
+  .settings(inConfig(ITest)(Defaults.testSettings): _*)
   .settings(
     version := "0.3-SNAPSHOT",
     scalaVersion := VersionScala,
