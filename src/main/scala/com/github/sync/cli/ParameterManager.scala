@@ -136,6 +136,31 @@ object ParameterManager {
   }
 
   /**
+    * Queries the value of an option that is expected to have exactly one
+    * value. It is possible to provide a default value if this option is
+    * optional. Result is the value of this option and the arguments map with
+    * the option key removed.
+    *
+    * @param argsMap  the map with arguments
+    * @param key      the key of the option in question
+    * @param defValue an optional default value
+    * @param ec       the execution context
+    * @return a future with the option's value and the updated arguments map
+    */
+  def singleOptionValue(argsMap: Map[String, Iterable[String]], key: String,
+                        defValue: => Option[String] = None)(implicit ec: ExecutionContext):
+  Future[(Map[String, Iterable[String]], String)] = Future {
+    val values = argsMap.getOrElse(key, List.empty)
+    if (values.size > 1) throw new IllegalArgumentException(key + " has multiple values!")
+    values.headOption orElse defValue match {
+      case Some(value) =>
+        (argsMap - key, value)
+      case None =>
+        throw new IllegalArgumentException("No value specified for " + key + "!")
+    }
+  }
+
+  /**
     * Checks whether all parameters in the given parameters map have been
     * consumed. This is a test to find out whether invalid parameters have been
     * specified. During parameter processing, parameters that are recognized and

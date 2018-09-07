@@ -258,4 +258,38 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val argsMap = parseParameters(args)
     argsMap.keys should contain only("--foo", "--test")
   }
+
+  it should "return the single value of an option" in {
+    val argsMap = Map("foo" -> List("bar"), "other" -> List("something"))
+    val expUpdatedMap = argsMap - "foo"
+
+    val (updatedMap, value) =
+      futureResult(ParameterManager.singleOptionValue(argsMap, "foo"))
+    value should be("bar")
+    updatedMap should be(expUpdatedMap)
+  }
+
+  it should "not return a single option value if there are multiple" in {
+    val argsMap = Map("foo" -> List("bar", "baz"))
+
+    expectFailedFuture(ParameterManager.singleOptionValue(argsMap, "foo", Some("test")),
+      "foo has multiple values")
+  }
+
+  it should "fail to query a single option value if there is none and no default" in {
+    val argsMap = Map("someOption" -> List("val1", "val2"))
+
+    expectFailedFuture(ParameterManager.singleOptionValue(argsMap, "option"),
+      "No value specified for option")
+  }
+
+  it should "return the default value as single option value if provided" in {
+    val argsMap = Map("someOption" -> List("val1", "val2"))
+    val value = "testValue"
+
+    val (updatedMap, result) =
+      futureResult(ParameterManager.singleOptionValue(argsMap, "foo", Some(value)))
+    result should be(value)
+    updatedMap should be(argsMap)
+  }
 }
