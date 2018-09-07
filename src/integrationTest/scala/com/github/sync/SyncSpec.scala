@@ -82,8 +82,8 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--filter", "exclude:*.tmp")
 
-    val (total, success) = futureResult(Sync.syncStructures(options))
-    total should be(success)
+    val result = futureResult(Sync.syncProcess(options))
+    result.totalOperations should be(result.successfulOperations)
     checkFile(dstFolder, "test1.txt")
     checkFileNotPresent(dstFolder, "toBeRemoved.txt")
     checkFileNotPresent(dstFolder, "ignored.tmp")

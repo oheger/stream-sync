@@ -39,13 +39,25 @@ import scala.util.{Failure, Success}
   * This is currently a minimum implementation to be extended stepwise.
   */
 object Sync {
+
+  /**
+    * A class representing the result of a sync process.
+    *
+    * From the properties of this class client code can learn how many sync
+    * operations have been executed during the sync process and how many have
+    * been successful.
+    * @param totalOperations the total number of sync operations
+    * @param successfulOperations the number of successful operations
+    */
+  case class SyncResult(totalOperations: Int, successfulOperations: Int)
+
   def main(args: Array[String]): Unit = {
     implicit val system: ActorSystem = ActorSystem("stream-sync")
     implicit val ec: ExecutionContext = system.dispatcher
-    val futSync = syncStructures(args)
+    val futSync = syncProcess(args)
     futSync onComplete {
-      case Success(msg) =>
-        println(processedMessage(msg._1, msg._2))
+      case Success(result) =>
+        println(processedMessage(result.totalOperations, result.successfulOperations))
       case Failure(exception) =>
         exception.printStackTrace()
         println("Sync process failed!")
@@ -61,9 +73,9 @@ object Sync {
     *
     * @param args   the array with command line arguments
     * @param system the actor system
-    * @return a future with information about the operations executed
+    * @return a future with information about the result of the process
     */
-  def syncStructures(args: Array[String])(implicit system: ActorSystem): Future[(Int, Int)] = {
+  def syncProcess(args: Array[String])(implicit system: ActorSystem): Future[SyncResult] = {
     implicit val materializer: ActorMaterializer = ActorMaterializer()
     implicit val ec: ExecutionContext = system.dispatcher
 
@@ -71,9 +83,9 @@ object Sync {
          syncUriData <- ParameterManager.extractSyncUris(argsMap)
          filterData <- FilterManager.parseFilters(syncUriData._1)
          _ <- ParameterManager.checkParametersConsumed(filterData._1)
-         msg <- runSync(Paths get syncUriData._2._1, Paths get syncUriData._2._2,
+         result <- runSync(Paths get syncUriData._2._1, Paths get syncUriData._2._2,
            createSyncFilter(filterData._2))
-    } yield msg
+    } yield result
   }
 
   /**
@@ -83,11 +95,11 @@ object Sync {
     * @param dstPath    the path to the destination structure
     * @param syncFilter a filter for sync operations
     * @param system     the actor system
-    * @return a future with information about the operations executed
+    * @return a future with information about the result of the process
     */
   private def runSync(srcPath: Path, dstPath: Path,
                       syncFilter: Flow[SyncOperation, SyncOperation, Any])
-                     (implicit system: ActorSystem): Future[(Int, Int)] = {
+                     (implicit system: ActorSystem): Future[SyncResult] = {
     val decider: Supervision.Decider = _ => Supervision.Resume
     implicit val materializer: ActorMaterializer =
       ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
@@ -118,7 +130,7 @@ object Sync {
     val (futTotal, futSuccess) = g.run()
     for {totalCount <- futTotal
          successCount <- futSuccess
-    } yield (totalCount, successCount)
+    } yield SyncResult(totalCount, successCount)
   }
 
   /**
