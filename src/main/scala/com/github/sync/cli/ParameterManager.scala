@@ -16,7 +16,7 @@
 
 package com.github.sync.cli
 
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 import java.util.Locale
 
 import akka.stream.ActorMaterializer
@@ -53,11 +53,62 @@ object ParameterManager {
     */
   val FileOption: String = OptionPrefix + "file"
 
+  /** Name of the option for the apply mode. */
+  val ApplyModeOption: String = OptionPrefix + "apply"
+
+  /**
+    * A trait representing the mode how sync operations are to be applied.
+    *
+    * Per default, sync operations are executed against the destination
+    * structure. By specifying specific options, this can be changed, e.g. to
+    * write operations only to a log file. Concrete sub classes represent such
+    * special apply modes and contain additional data.
+    */
+  sealed trait ApplyMode
+
+  /**
+    * A concrete apply mode meaning that sync operations are applied against
+    * a target structure.
+    *
+    * @param targetUri the URI of the target structure
+    */
+  case class ApplyModeTarget(targetUri: String) extends ApplyMode
+
+  /**
+    * A concrete apply mode meaning that sync operations are serialized and
+    * written to a log. (No actual changes are executed.)
+    *
+    * @param logFilePath the path to the log file to be written
+    */
+  case class ApplyModeLog(logFilePath: Path) extends ApplyMode
+
   /**
     * Type definition for an internal map type used during processing of
     * command line arguments.
     */
   private type ParamMap = Map[String, List[String]]
+
+  /** Prefix for regular expressions related to the target apply mode. */
+  private val RegApplyTargetPrefix = "(?i)TARGET"
+
+  /**
+    * Regular expression for parsing the apply mode ''Target'' with a
+    * destination URI.
+    */
+  private val RegApplyTargetUri = (RegApplyTargetPrefix + ":(.+)").r
+
+  /**
+    * Regular expression for parsing the apply mode ''Target'' without an URI.
+    * In this case, the destination URI is used as target URI.
+    */
+  private val RegApplyTargetDefault = RegApplyTargetPrefix.r
+
+  /**
+    * Regular expression for parsing the apply mode ''Log'' with the path to
+    * the log file.
+    */
+  private val RegApplyLog =
+    """(?i)LOG:(.+)""".r
 
   /**
     * Parses the command line arguments and converts them into a map keyed by
@@ -134,6 +185,35 @@ object ParameterManager {
         throw new IllegalArgumentException("Missing URIs for source and destination!")
     }
   }
+
+  /**
+    * Obtains the ''ApplyMode'' from the given map of command line arguments.
+    * The apply mode is optional; if the corresponding option is not present, a
+    * default is returned based on the passed in destination URI. Otherwise,
+    * the option is validated, and its value is converted to an [[ApplyMode]]
+    * instance. In the returned updated arguments map the apply mode option has
+    * been removed.
+    *
+    * @param argsMap the map with arguments
+    * @param destUri the URI for the destination structure
+    * @param ec      the execution context
+    * @return a future with the updated arguments map and the apply mode
+    */
+  def extractApplyMode(argsMap: Map[String, Iterable[String]], destUri: String)
+                      (implicit ec: ExecutionContext):
+  Future[(Map[String, Iterable[String]], ApplyMode)] =
+    singleOptionValue(argsMap, ApplyModeOption, Some("TARGET")) map { v =>
+      v._2 match {
+        case RegApplyTargetUri(uri) =>
+          (v._1, ApplyModeTarget(uri))
+        case RegApplyTargetDefault(_*) =>
+          (v._1, ApplyModeTarget(destUri))
+        case RegApplyLog(path) =>
+          (v._1, ApplyModeLog(Paths get path))
+        case s =>
+          throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
+      }
+    }
 
   /**
     * Queries the value of an option that is expected to have exactly one

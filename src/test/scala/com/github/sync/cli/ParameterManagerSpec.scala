@@ -16,11 +16,12 @@
 
 package com.github.sync.cli
 
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
+import com.github.sync.cli.ParameterManager.{ApplyModeLog, ApplyModeTarget}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest._
 
@@ -291,5 +292,38 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
       futureResult(ParameterManager.singleOptionValue(argsMap, "foo", Some(value)))
     result should be(value)
     updatedMap should be(argsMap)
+  }
+
+  it should "return a default apply mode" in {
+    val destUri = "/dest/structure"
+    val argsMap = Map("option" -> List("value"))
+
+    val (updatedMap, mode) = futureResult(ParameterManager.extractApplyMode(argsMap, destUri))
+    updatedMap should be(argsMap)
+    mode should be(ApplyModeTarget(destUri))
+  }
+
+  it should "return a target apply mode with the specified URI" in {
+    val applyUri = "/dest/apply/uri"
+    val argsMap = Map(ParameterManager.ApplyModeOption -> List("Target:" + applyUri))
+
+    val (_, mode) = futureResult(ParameterManager.extractApplyMode(argsMap, "otherUri"))
+    mode should be(ApplyModeTarget(applyUri))
+  }
+
+  it should "return a log apply mode with the specified path" in {
+    val LogPath = Paths.get("test", "log", "path.log").toAbsolutePath
+    val argsMap = Map(ParameterManager.ApplyModeOption -> List("Log:" + LogPath.toString))
+
+    val (_, mode) = futureResult(ParameterManager.extractApplyMode(argsMap, "someUri"))
+    mode should be(ApplyModeLog(LogPath))
+  }
+
+  it should "handle an invalid apply mode" in {
+    val Mode = "unknown:foo"
+    val argsMap = Map(ParameterManager.ApplyModeOption -> List(Mode))
+
+    expectFailedFuture(ParameterManager.extractApplyMode(argsMap, "someUri"),
+      "Invalid apply mode: '" + Mode)
   }
 }
