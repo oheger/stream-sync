@@ -21,6 +21,7 @@ import java.nio.file.{Files, Path}
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.github.sync.cli.Sync
+import com.github.sync.impl.SyncStreamFactoryImpl
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 /**
@@ -73,6 +74,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
   }
 
   "Sync" should "synchronize two directory structures" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     createTestFile(srcFolder, "test1.txt")
@@ -87,5 +89,41 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     checkFile(dstFolder, "test1.txt")
     checkFileNotPresent(dstFolder, "toBeRemoved.txt")
     checkFileNotPresent(dstFolder, "ignored.tmp")
+  }
+
+  it should "apply operations to an alternative target" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val dstFolder2 = Files.createDirectory(createPathInDirectory("dest2"))
+    createTestFile(srcFolder, "new.txt")
+    createTestFile(dstFolder, "obsolete.dat")
+    createTestFile(dstFolder2, "obsolete.dat")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--apply", "target:" + dstFolder2.toAbsolutePath.toString)
+
+    val result = futureResult(Sync.syncProcess(options))
+    checkFile(dstFolder2, "new.txt")
+    checkFile(dstFolder, "obsolete.dat")
+    checkFileNotPresent(dstFolder2, "obsolete.dat")
+  }
+
+  it should "store sync operations in a log file" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val logFile = createFileReference()
+    createTestFile(srcFolder, "create.txt")
+    createTestFile(srcFolder, "ignored.tmp")
+    createTestFile(dstFolder, "removed.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--filter", "exclude:*.tmp", "--apply", "log:" + logFile.toAbsolutePath.toString)
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.totalOperations should be(2)
+    result.successfulOperations should be(2)
+    val lines = Files.readAllLines(logFile)
+    lines.get(0) should include("CREATE 0 FILE /create.txt 0")
+    lines.get(1) should include("REMOVE 0 FILE /removed.txt 0")
   }
 }

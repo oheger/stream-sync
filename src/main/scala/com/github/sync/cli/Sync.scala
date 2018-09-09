@@ -16,18 +16,15 @@
 
 package com.github.sync.cli
 
-import java.nio.file.{Path, Paths}
-
-import akka.NotUsed
-import akka.actor.{ActorSystem, Props}
-import akka.pattern.ask
-import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, RunnableGraph, Sink}
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings, ClosedShape, Supervision}
+import akka.actor.ActorSystem
+import akka.stream._
+import akka.stream.scaladsl.{FileIO, Flow, Sink}
 import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.impl.{FolderSortStage, SyncStage}
-import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
-import com.github.sync.SyncOperation
+import com.github.sync.cli.ParameterManager.ApplyMode
+import com.github.sync.impl.SyncStreamFactoryImpl
+import com.github.sync.log.ElementSerializer
+import com.github.sync.{SyncOperation, SyncStreamFactory}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -46,7 +43,8 @@ object Sync {
     * From the properties of this class client code can learn how many sync
     * operations have been executed during the sync process and how many have
     * been successful.
-    * @param totalOperations the total number of sync operations
+    *
+    * @param totalOperations      the total number of sync operations
     * @param successfulOperations the number of successful operations
     */
   case class SyncResult(totalOperations: Int, successfulOperations: Int)
@@ -54,6 +52,7 @@ object Sync {
   def main(args: Array[String]): Unit = {
     implicit val system: ActorSystem = ActorSystem("stream-sync")
     implicit val ec: ExecutionContext = system.dispatcher
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
     val futSync = syncProcess(args)
     futSync onComplete {
       case Success(result) =>
@@ -71,20 +70,24 @@ object Sync {
     * of sync operations that have been executed; the second element is the
     * number of successful sync operations.
     *
-    * @param args   the array with command line arguments
-    * @param system the actor system
+    * @param args    the array with command line arguments
+    * @param system  the actor system
+    * @param factory the factory for the sync stream
     * @return a future with information about the result of the process
     */
-  def syncProcess(args: Array[String])(implicit system: ActorSystem): Future[SyncResult] = {
-    implicit val materializer: ActorMaterializer = ActorMaterializer()
+  def syncProcess(args: Array[String])(implicit system: ActorSystem, factory: SyncStreamFactory):
+  Future[SyncResult] = {
+    val decider: Supervision.Decider = _ => Supervision.Resume
+    implicit val materializer: ActorMaterializer =
+      ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
     implicit val ec: ExecutionContext = system.dispatcher
 
     for {argsMap <- ParameterManager.parseParameters(args)
          syncUriData <- ParameterManager.extractSyncUris(argsMap)
-         filterData <- FilterManager.parseFilters(syncUriData._1)
+         applyModeData <- ParameterManager.extractApplyMode(syncUriData._1, syncUriData._2._2)
+         filterData <- FilterManager.parseFilters(applyModeData._1)
          _ <- ParameterManager.checkParametersConsumed(filterData._1)
-         result <- runSync(Paths get syncUriData._2._1, Paths get syncUriData._2._2,
-           createSyncFilter(filterData._2))
+         result <- runSync(syncUriData._2._1, syncUriData._2._2, filterData._2, applyModeData._2)
     } yield result
   }
 
@@ -93,56 +96,68 @@ object Sync {
     *
     * @param srcPath    the path to the source structure
     * @param dstPath    the path to the destination structure
-    * @param syncFilter a filter for sync operations
+    * @param filterData data about the current filter definition
+    * @param applyMode  the apply mode
     * @param system     the actor system
+    * @param mat        the object to materialize streams
+    * @param factory    the factory for the sync stream
     * @return a future with information about the result of the process
     */
-  private def runSync(srcPath: Path, dstPath: Path,
-                      syncFilter: Flow[SyncOperation, SyncOperation, Any])
-                     (implicit system: ActorSystem): Future[SyncResult] = {
-    val decider: Supervision.Decider = _ => Supervision.Resume
-    implicit val materializer: ActorMaterializer =
-      ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
-    implicit val writeTimeout: Timeout = Timeout(10.seconds)
+  private def runSync(srcPath: String, dstPath: String,
+                      filterData: SyncFilterData,
+                      applyMode: ApplyMode)
+                     (implicit system: ActorSystem, mat: ActorMaterializer,
+                      factory: SyncStreamFactory): Future[SyncResult] = {
     import system.dispatcher
-    val operationActor = system.actorOf(Props(classOf[LocalSyncOperationActor],
-      new LocalUriResolver(srcPath), dstPath, "blocking-dispatcher"))
-    val srcSource = LocalFsElementSource(srcPath).via(new FolderSortStage)
-    val srcDest = LocalFsElementSource(dstPath).via(new FolderSortStage)
-    val writeStage = Flow[SyncOperation].mapAsync(1) { op =>
-      val futWrite = operationActor ? op
-      futWrite.mapTo[SyncOperation]
-    }
-    val sinkCount = Sink.fold[Int, Any](0) { (c, _) => c + 1 }
+    implicit val timeout: Timeout = Timeout(10.seconds)
+    val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
+    val filter = createSyncFilter(filterData)
+    applyMode match {
+      case ParameterManager.ApplyModeTarget(targetUri) =>
+        (for {
+          provider <- factory.createSourceFileProvider(srcPath)
+          stage <- factory.createApplyStage(targetUri, provider)
+          g <- factory.createSyncStream(srcPath, dstPath, sinkCount, stage, sinkCount)(filter)
+        } yield g.run()) flatMap (t => mapToSyncResult(t._1, t._2)(SyncResult))
 
-    val g = RunnableGraph.fromGraph(GraphDSL.create(sinkCount, sinkCount)((_, _)) {
-      implicit builder =>
-        (sinkTotal, sinkSuccess) =>
-          import GraphDSL.Implicits._
-          val syncStage = builder.add(new SyncStage)
-          val broadcast = builder.add(Broadcast[SyncOperation](2))
-          srcSource ~> syncStage.in0
-          srcDest ~> syncStage.in1
-          syncStage.out ~> syncFilter ~> broadcast ~> sinkTotal.in
-          broadcast ~> writeStage ~> sinkSuccess.in
-          ClosedShape
-    })
-    val (futTotal, futSuccess) = g.run()
-    for {totalCount <- futTotal
-         successCount <- futSuccess
-    } yield SyncResult(totalCount, successCount)
+      case ParameterManager.ApplyModeLog(logFilePath) =>
+        val sinkLog = FileIO.toPath(logFilePath)
+        val stage = Flow[SyncOperation].map(ElementSerializer.serializeOperation)
+        factory.createSyncStream(srcPath, dstPath, sinkCount, stage, sinkLog)(filter)
+          .map(_.run())
+          .flatMap(t => mapToSyncResult(t._1, t._2) { (c, _) => SyncResult(c, c) })
+    }
   }
 
   /**
-    * Generates a ''Flow'' that filters out undesired sync operations based on
+    * Generates a predicate that filters out undesired sync operations based on
     * the filter parameters provided in the command line.
     *
     * @param filterData data about filter conditions
-    * @return the flow to filter undesired sync operations
+    * @return the predicate to filter undesired sync operations
     */
-  private def createSyncFilter(filterData: SyncFilterData):
-  Flow[SyncOperation, SyncOperation, NotUsed] =
-    Flow[SyncOperation].filter(op => FilterManager.applyFilter(op, filterData))
+  private def createSyncFilter(filterData: SyncFilterData): SyncOperation => Boolean =
+    op => FilterManager.applyFilter(op, filterData)
+
+  /**
+    * Maps the future results from the sinks of a sync stream to a
+    * corresponding ''SyncResult'' object using the provided mapping function.
+    *
+    * @param futSink1 future result of sink 1
+    * @param futSink2 future result of sink 2
+    * @param f        the mapping function
+    * @param ec       the execution context
+    * @tparam A type of the result of sink 1
+    * @tparam B type of the result of sink 2
+    * @return a future with the resulting ''SyncResult''
+    */
+  private def mapToSyncResult[A, B](futSink1: Future[A], futSink2: Future[B])
+                                   (f: (A, B) => SyncResult)
+                                   (implicit ec: ExecutionContext): Future[SyncResult] =
+    for {
+      sink1 <- futSink1
+      sink2 <- futSink2
+    } yield f(sink1, sink2)
 
   /**
     * Generates a message about te outcome of the sync operation.
