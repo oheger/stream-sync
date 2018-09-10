@@ -21,12 +21,11 @@ import akka.stream._
 import akka.stream.scaladsl.{FileIO, Flow, Sink}
 import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterManager.ApplyMode
+import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.log.ElementSerializer
 import com.github.sync.{SyncOperation, SyncStreamFactory}
 
-import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
@@ -83,47 +82,45 @@ object Sync {
     implicit val ec: ExecutionContext = system.dispatcher
 
     for {argsMap <- ParameterManager.parseParameters(args)
-         syncUriData <- ParameterManager.extractSyncUris(argsMap)
-         applyModeData <- ParameterManager.extractApplyMode(syncUriData._1, syncUriData._2._2)
-         filterData <- FilterManager.parseFilters(applyModeData._1)
+         (argsMap1, config) <- ParameterManager.extractSyncConfig(argsMap)
+         filterData <- FilterManager.parseFilters(argsMap1)
          _ <- ParameterManager.checkParametersConsumed(filterData._1)
-         result <- runSync(syncUriData._2._1, syncUriData._2._2, filterData._2, applyModeData._2)
+         result <- runSync(config, filterData._2)
     } yield result
   }
 
   /**
     * Runs the stream that represents the sync process.
     *
-    * @param srcPath    the path to the source structure
-    * @param dstPath    the path to the destination structure
+    * @param config     the ''SyncConfig''
     * @param filterData data about the current filter definition
-    * @param applyMode  the apply mode
     * @param system     the actor system
     * @param mat        the object to materialize streams
     * @param factory    the factory for the sync stream
     * @return a future with information about the result of the process
     */
-  private def runSync(srcPath: String, dstPath: String,
-                      filterData: SyncFilterData,
-                      applyMode: ApplyMode)
+  private def runSync(config: SyncConfig,
+                      filterData: SyncFilterData)
                      (implicit system: ActorSystem, mat: ActorMaterializer,
                       factory: SyncStreamFactory): Future[SyncResult] = {
     import system.dispatcher
-    implicit val timeout: Timeout = Timeout(10.seconds)
+    implicit val timeout: Timeout = config.timeout
     val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
     val filter = createSyncFilter(filterData)
-    applyMode match {
+    config.applyMode match {
       case ParameterManager.ApplyModeTarget(targetUri) =>
         (for {
-          provider <- factory.createSourceFileProvider(srcPath)
+          provider <- factory.createSourceFileProvider(config.syncUris._1)
           stage <- factory.createApplyStage(targetUri, provider)
-          g <- factory.createSyncStream(srcPath, dstPath, sinkCount, stage, sinkCount)(filter)
+          g <- factory.createSyncStream(config.syncUris._1, config.syncUris._2, sinkCount,
+            stage, sinkCount)(filter)
         } yield g.run()) flatMap (t => mapToSyncResult(t._1, t._2)(SyncResult))
 
       case ParameterManager.ApplyModeLog(logFilePath) =>
         val sinkLog = FileIO.toPath(logFilePath)
         val stage = Flow[SyncOperation].map(ElementSerializer.serializeOperation)
-        factory.createSyncStream(srcPath, dstPath, sinkCount, stage, sinkLog)(filter)
+        factory.createSyncStream(config.syncUris._1, config.syncUris._2, sinkCount,
+          stage, sinkLog)(filter)
           .map(_.run())
           .flatMap(t => mapToSyncResult(t._1, t._2) { (c, _) => SyncResult(c, c) })
     }

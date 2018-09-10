@@ -199,8 +199,8 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     argsMap(OptionName2) should contain only Opt2Val
     argsMap.keys should not contain ParameterManager.FileOption
 
-    val (_, uris) = futureResult(ParameterManager.extractSyncUris(argsMap))
-    Set(uris._1, uris._2) should contain only(uri1, uri2)
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    Set(config.syncUris._1, config.syncUris._2) should contain only(uri1, uri2)
   }
 
   it should "parse parameter files defined in another parameter file" in {
