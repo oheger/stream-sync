@@ -21,12 +21,29 @@ import java.nio.file.{Path, Paths}
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
+import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.{ApplyModeLog, ApplyModeTarget}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.concurrent.duration._
+
+object ParameterManagerSpec {
+  /** Test source URI. */
+  private val SourceUri = "/test/source/uri"
+
+  /** Test destination URI. */
+  private val DestinationUri = "/test/destination/uri"
+
+  /** A test timeout value (in seconds). */
+  private val TimeoutValue = 44
+
+  /** A map with test parameter values. */
+  private val ArgsMap = Map(ParameterManager.SyncUriOption -> List(DestinationUri, SourceUri),
+    ParameterManager.TimeoutOption -> List(TimeoutValue.toString))
+}
 
 /**
   * Test class for ''ParameterManager''.
@@ -44,6 +61,8 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     tearDownTestFile()
   }
 
+  import ParameterManagerSpec._
+
   /**
     * Expects a failed future from a parsing operation. It is checked whether
     * the future is actually failed with an ''IllegalArgumentException'' that
@@ -51,10 +70,12 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     *
     * @param future the future to be checked
     * @param msg    text to be expected in the exception message
+    * @return the error message from the exception
     */
-  private def expectFailedFuture(future: Future[_], msg: String): Unit = {
+  private def expectFailedFuture(future: Future[_], msg: String): String = {
     val exception = expectFailedFuture[IllegalArgumentException](future)
     exception.getMessage should include(msg)
+    exception.getMessage
   }
 
   /**
@@ -148,43 +169,6 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     argMap should be(expArgMap)
   }
 
-  it should "extract URI parameters if they are present" in {
-    val SourceUri = "source"
-    val DestUri = "dest"
-    val otherOption = "--foo" -> List("bar")
-    val argsMap = Map(otherOption, ParameterManager.SyncUriOption -> List(DestUri, SourceUri))
-
-    val (map, (src, dst)) = futureResult(ParameterManager.extractSyncUris(argsMap))
-    src should be(SourceUri)
-    dst should be(DestUri)
-    map should contain only otherOption
-  }
-
-  it should "reject URI parameters if there are more than 2" in {
-    val argsMap = Map(ParameterManager.SyncUriOption -> List("u1", "u2", "u3"))
-
-    expectFailedFuture(ParameterManager.extractSyncUris(argsMap), "Too many sync URIs")
-  }
-
-  it should "reject URI parameters if no destination URI is provided" in {
-    val argsMap = Map(ParameterManager.SyncUriOption -> List("u1"))
-
-    expectFailedFuture(ParameterManager.extractSyncUris(argsMap),
-      "Missing destination URI")
-  }
-
-  it should "reject URI parameters if no URIs are provided" in {
-    val argsMap = Map(ParameterManager.SyncUriOption -> List.empty[String])
-
-    expectFailedFuture(ParameterManager.extractSyncUris(argsMap),
-      "Missing URIs for source and destination")
-  }
-
-  it should "reject URI parameters if no non-option parameters are provided" in {
-    expectFailedFuture(ParameterManager.extractSyncUris(Map.empty),
-      "Missing URIs for source and destination")
-  }
-
   it should "validate a map with all parameters consumed" in {
     val result = futureResult(ParameterManager.checkParametersConsumed(Map.empty))
 
@@ -260,70 +244,111 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     argsMap.keys should contain only("--foo", "--test")
   }
 
-  it should "return the single value of an option" in {
-    val argsMap = Map("foo" -> List("bar"), "other" -> List("something"))
-    val expUpdatedMap = argsMap - "foo"
+  it should "extract URI parameters if they are present" in {
+    val (map, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    config.syncUris._1 should be(SourceUri)
+    config.syncUris._2 should be(DestinationUri)
+    map should have size 0
+  }
 
-    val (updatedMap, value) =
-      futureResult(ParameterManager.singleOptionValue(argsMap, "foo"))
-    value should be("bar")
-    updatedMap should be(expUpdatedMap)
+  it should "reject URI parameters if there are more than 2" in {
+    val argsMap = ArgsMap + (ParameterManager.SyncUriOption -> List("u1", "u2", "u3"))
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap), "Too many sync URIs")
+  }
+
+  it should "reject URI parameters if no destination URI is provided" in {
+    val argsMap = ArgsMap + (ParameterManager.SyncUriOption -> List("u1"))
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "Missing destination URI")
+  }
+
+  it should "reject URI parameters if no URIs are provided" in {
+    val argsMap = ArgsMap + (ParameterManager.SyncUriOption -> List.empty[String])
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "Missing URIs for source and destination")
+  }
+
+  it should "reject URI parameters if no non-option parameters are provided" in {
+    val argsMap = ArgsMap - ParameterManager.SyncUriOption
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "Missing URIs for source and destination")
   }
 
   it should "not return a single option value if there are multiple" in {
-    val argsMap = Map("foo" -> List("bar", "baz"))
+    val argsMap = ArgsMap + (ParameterManager.TimeoutOption -> List("bar", "baz"))
 
-    expectFailedFuture(ParameterManager.singleOptionValue(argsMap, "foo", Some("test")),
-      "foo has multiple values")
-  }
-
-  it should "fail to query a single option value if there is none and no default" in {
-    val argsMap = Map("someOption" -> List("val1", "val2"))
-
-    expectFailedFuture(ParameterManager.singleOptionValue(argsMap, "option"),
-      "No value specified for option")
-  }
-
-  it should "return the default value as single option value if provided" in {
-    val argsMap = Map("someOption" -> List("val1", "val2"))
-    val value = "testValue"
-
-    val (updatedMap, result) =
-      futureResult(ParameterManager.singleOptionValue(argsMap, "foo", Some(value)))
-    result should be(value)
-    updatedMap should be(argsMap)
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      ParameterManager.TimeoutOption + " has multiple values")
   }
 
   it should "return a default apply mode" in {
-    val destUri = "/dest/structure"
-    val argsMap = Map("option" -> List("value"))
-
-    val (updatedMap, mode) = futureResult(ParameterManager.extractApplyMode(argsMap, destUri))
-    updatedMap should be(argsMap)
-    mode should be(ApplyModeTarget(destUri))
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    config.applyMode should be(ApplyModeTarget(DestinationUri))
   }
 
   it should "return a target apply mode with the specified URI" in {
     val applyUri = "/dest/apply/uri"
-    val argsMap = Map(ParameterManager.ApplyModeOption -> List("Target:" + applyUri))
+    val argsMap = ArgsMap + (ParameterManager.ApplyModeOption -> List("Target:" + applyUri))
 
-    val (_, mode) = futureResult(ParameterManager.extractApplyMode(argsMap, "otherUri"))
-    mode should be(ApplyModeTarget(applyUri))
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    config.applyMode should be(ApplyModeTarget(applyUri))
   }
 
   it should "return a log apply mode with the specified path" in {
     val LogPath = Paths.get("test", "log", "path.log").toAbsolutePath
-    val argsMap = Map(ParameterManager.ApplyModeOption -> List("Log:" + LogPath.toString))
+    val argsMap = ArgsMap + (ParameterManager.ApplyModeOption -> List("Log:" + LogPath.toString))
 
-    val (_, mode) = futureResult(ParameterManager.extractApplyMode(argsMap, "someUri"))
-    mode should be(ApplyModeLog(LogPath))
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    config.applyMode should be(ApplyModeLog(LogPath))
   }
 
   it should "handle an invalid apply mode" in {
     val Mode = "unknown:foo"
-    val argsMap = Map(ParameterManager.ApplyModeOption -> List(Mode))
+    val argsMap = ArgsMap + (ParameterManager.ApplyModeOption -> List(Mode))
 
-    expectFailedFuture(ParameterManager.extractApplyMode(argsMap, "someUri"),
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
       "Invalid apply mode: '" + Mode)
+  }
+
+  it should "return a default timeout if no timeout option is provided" in {
+    val argsMap = ArgsMap - ParameterManager.TimeoutOption
+
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    config.timeout should be(ParameterManager.DefaultTimeout)
+  }
+
+  it should "return the configured timeout option value" in {
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    config.timeout should be(Timeout(TimeoutValue.seconds))
+  }
+
+  it should "handle an invalid timeout value" in {
+    val timeoutStr = "invalidTimeout!"
+    val argsMap = ArgsMap + (ParameterManager.TimeoutOption -> List(timeoutStr))
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "Invalid timeout value: '" + timeoutStr)
+  }
+
+  it should "remove all options contained in the sync config" in {
+    val otherOptions = Map("foo" -> List("v1"), "bar" -> List("v2", "v3"))
+
+    val (updArgs, _) = futureResult(ParameterManager.extractSyncConfig(ArgsMap ++ otherOptions))
+    updArgs should be(otherOptions)
+  }
+
+  it should "combine multiple error messages when parsing the sync config" in {
+    val argsMap = Map(ParameterManager.SyncUriOption -> List(SourceUri),
+      ParameterManager.ApplyModeOption -> List("invalidApplyMode"),
+      ParameterManager.TimeoutOption -> List("invalidTimeout"))
+
+    val msg = expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "destination URI")
+    msg should include("apply mode")
+    msg should include("timeout value")
   }
 }

@@ -21,10 +21,12 @@ import java.util.Locale
 
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{FileIO, Framing, Sink}
-import akka.util.ByteString
+import akka.util.{ByteString, Timeout}
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
+import scala.util.{Failure, Success, Try}
 
 /**
   * A service responsible for parsing command line arguments.
@@ -56,6 +58,12 @@ object ParameterManager {
   /** Name of the option for the apply mode. */
   val ApplyModeOption: String = OptionPrefix + "apply"
 
+  /** Name of the option that defines a timeout for sync operations. */
+  val TimeoutOption: String = OptionPrefix + "timeout"
+
+  /** The default timeout for sync operations. */
+  val DefaultTimeout = Timeout(1.minute)
+
   /**
     * A trait representing the mode how sync operations are to be applied.
     *
@@ -81,6 +89,41 @@ object ParameterManager {
     * @param logFilePath the path to the log file to be written
     */
   case class ApplyModeLog(logFilePath: Path) extends ApplyMode
+
+  /**
+    * A class that holds the configuration options for a sync process.
+    *
+    * An instance of this class is created from the command line options passed
+    * to the program.
+    *
+    * @param syncUris  the URIs to be synced (source and destination)
+    * @param applyMode the apply mode
+    * @param timeout   a timeout for sync operations
+    */
+  case class SyncConfig(syncUris: (String, String),
+                        applyMode: ApplyMode,
+                        timeout: Timeout)
+
+  /**
+    * A case class representing a processor for command line options.
+    *
+    * This is a kind of state action. Such processors can be combined to
+    * extract multiple options from the command line and to remove the
+    * corresponding option keys from the map with arguments.
+    *
+    * @param run a function to obtain an option and update the arguments map
+    * @tparam A the type of the result of the processor
+    */
+  case class CliProcessor[A](run: Map[String, Iterable[String]] =>
+    (A, Map[String, Iterable[String]])) {
+    def flatMap[B](f: A => CliProcessor[B]): CliProcessor[B] = CliProcessor(map => {
+      val (a, map1) = run(map)
+      f(a).run(map1)
+    })
+
+    def map[B](f: A => B): CliProcessor[B] =
+      flatMap(a => CliProcessor(m => (f(a), m)))
+  }
 
   /**
     * Type definition for an internal map type used during processing of
@@ -161,6 +204,127 @@ object ParameterManager {
   }
 
   /**
+    * Returns a processor that extracts all values of the specified option key.
+    *
+    * @param key the key of the option
+    * @return the processor to extract the option values
+    */
+  def optionValue(key: String): CliProcessor[Iterable[String]] = CliProcessor(map => {
+    val values = map.getOrElse(key, Nil)
+    (values, map - key)
+  })
+
+  /**
+    * Returns a processor that extracts a single value of a command line
+    * option. If the option has multiple values, a failure is generated. An
+    * option with a default value can be specified.
+    *
+    * @param key      the option key
+    * @param defValue a default value
+    * @return the processor to extract the single option value
+    */
+  def singleOptionValue(key: String, defValue: => Option[String] = None):
+  CliProcessor[Try[String]] = optionValue(key) map { values =>
+    Try {
+      if (values.size > 1) throw new IllegalArgumentException(key + " has multiple values!")
+      values.headOption orElse defValue match {
+        case Some(value) =>
+          value
+        case None =>
+          throw new IllegalArgumentException("No value specified for " + key + "!")
+      }
+    }
+  }
+
+  /**
+    * Returns a processor that extracts the single value of a command line
+    * option and applies a mapping function on it. Calls
+    * ''singleOptionValue()'' and then invokes the mapping function.
+    *
+    * @param key      the option key
+    * @param defValue a default value
+    * @param f        the mapping function
+    * @tparam R the result type of the mapping function
+    * @return the processor to extract the single option value
+    */
+  def singleOptionValueMapped[R](key: String, defValue: => Option[String] = None)
+                                (f: String => Try[R]): CliProcessor[Try[R]] =
+    singleOptionValue(key, defValue) map (_.flatMap(f))
+
+  /**
+    * Returns a processor that extracts the value of the option with the URIs
+    * of the structures to be synced.
+    *
+    * @return the processor to extract the sync URIs
+    */
+  def syncUrisProcessor(): CliProcessor[Try[(String, String)]] =
+    optionValue(SyncUriOption) map { values =>
+      Try {
+        values match {
+          case uriDst :: uriSrc :: Nil =>
+            (uriSrc, uriDst)
+          case _ :: _ :: _ =>
+            throw new IllegalArgumentException("Too many sync URIs specified!")
+          case _ :: _ =>
+            throw new IllegalArgumentException("Missing destination URI!")
+          case _ =>
+            throw new IllegalArgumentException("Missing URIs for source and destination!")
+        }
+      }
+    }
+
+  /**
+    * Returns a processor that extracts the value of the option for the
+    * apply mode.
+    *
+    * @param destUri the destination URI
+    * @return the processor to extract the apply mode
+    */
+  def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
+    singleOptionValue(ApplyModeOption, Some("TARGET")) map (_.map {
+      case RegApplyTargetUri(uri) =>
+        ApplyModeTarget(uri)
+      case RegApplyTargetDefault(_*) =>
+        ApplyModeTarget(destUri)
+      case RegApplyLog(path) =>
+        ApplyModeLog(Paths get path)
+      case s =>
+        throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
+    }
+      )
+
+  /**
+    * Returns a processor that extracts the ''SyncConfig'' from the command
+    * line options.
+    *
+    * @return the processor to extract the ''SyncConfig''
+    */
+  def syncConfigProcessor(): CliProcessor[Try[SyncConfig]] = for {
+    uris <- syncUrisProcessor()
+    mode <- applyModeProcessor(uris.getOrElse(("", ""))._2)
+    timeout <- singleOptionValueMapped(TimeoutOption,
+      Some(DefaultTimeout.duration.toSeconds.toString))(mapTimeout)
+  } yield createSyncConfig(uris, mode, timeout)
+
+  /**
+    * Extracts an object with configuration options for the sync process from
+    * the map with command line arguments. This object contains all relevant
+    * options. The options are validated (the future fails if invalid arguments
+    * are detected). All options that have been consumed are removed from the
+    * updated map; that way it can be found out whether the user has provided
+    * unknown options.
+    *
+    * @param argsMap the map with arguments
+    * @param ec      the execution context
+    * @return a future with the extracted config and the updated arguments map
+    */
+  def extractSyncConfig(argsMap: Map[String, Iterable[String]])(implicit ec: ExecutionContext):
+  Future[(Map[String, Iterable[String]], SyncConfig)] = Future {
+    val (triedConfig, map) = syncConfigProcessor().run(argsMap)
+    (map, triedConfig.get)
+  }
+
+  /**
     * Validates the map with arguments whether two URIs for the sync process
     * have been provided. If successful, the two URIs are returned as tuple
     * (with the source URI in the first and the destination URI in the second
@@ -216,6 +380,23 @@ object ParameterManager {
     }
 
   /**
+    * Obtains the option for the timeout from the given map of command line
+    * arguments. If the option is missing, the default timeout value is used.
+    * Otherwise, the value is validated to be an integer number for the timeout
+    * in seconds.
+    *
+    * @param argsMap the map with arguments
+    * @param ec      the execution context
+    * @return a future with the updated arguments map and the timeout
+    */
+  def extractTimeout(argsMap: Map[String, Iterable[String]])(implicit ec: ExecutionContext):
+  Future[(Map[String, Iterable[String]], Timeout)] =
+    singleOptionValue(argsMap, TimeoutOption,
+      Some(DefaultTimeout.duration.toSeconds.toString)) map { v =>
+      (v._1, Timeout(v._2.toInt.seconds))
+    }
+
+  /**
     * Queries the value of an option that is expected to have exactly one
     * value. It is possible to provide a default value if this option is
     * optional. Result is the value of this option and the arguments map with
@@ -228,7 +409,7 @@ object ParameterManager {
     * @return a future with the option's value and the updated arguments map
     */
   def singleOptionValue(argsMap: Map[String, Iterable[String]], key: String,
-                        defValue: => Option[String] = None)(implicit ec: ExecutionContext):
+                        defValue: => Option[String])(implicit ec: ExecutionContext):
   Future[(Map[String, Iterable[String]], String)] = Future {
     val values = argsMap.getOrElse(key, List.empty)
     if (values.size > 1) throw new IllegalArgumentException(key + " has multiple values!")
@@ -315,4 +496,47 @@ object ParameterManager {
                                    (implicit mat: ActorMaterializer, ec: ExecutionContext):
   Future[List[String]] =
     Future.sequence(files.map(readParameterFile)).map(_.flatten)
+
+  /**
+    * Constructs a ''SyncConfig'' object from the passed in components. If all
+    * of the passed in components are valid, the corresponding config object is
+    * created. Otherwise, all error messages are collected and returned in a
+    * failed ''Try''.
+    *
+    * @param triedUris      the sync URIs component
+    * @param triedApplyMode the apply mode component
+    * @param triedTimeout   the timeout component
+    * @return a ''Try'' with the config
+    */
+  private def createSyncConfig(triedUris: Try[(String, String)],
+                               triedApplyMode: Try[ApplyMode],
+                               triedTimeout: Try[Timeout]): Try[SyncConfig] = {
+    def collectErrorMessages(components: Try[_]*): Iterable[String] =
+      components.foldLeft(List.empty[String]) { (lst, c) =>
+        c match {
+          case Failure(exception) => exception.getMessage :: lst
+          case _ => lst
+        }
+      }
+
+    val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout)
+    if (messages.isEmpty)
+      Success(SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get))
+    else Failure(new IllegalArgumentException(messages.mkString(", ")))
+  }
+
+  /**
+    * Converts a timeout string to the corresponding ''Timeout'' value in
+    * seconds. In case of an error, a meaningful message is constructed.
+    *
+    * @param timeoutStr the string value for the timeout
+    * @return a ''Try'' with the converted value
+    */
+  private def mapTimeout(timeoutStr: String): Try[Timeout] = Try {
+    try Timeout(timeoutStr.toInt.seconds)
+    catch {
+      case _: NumberFormatException =>
+        throw new IllegalArgumentException(s"Invalid timeout value: '$timeoutStr'!")
+    }
+  }
 }
