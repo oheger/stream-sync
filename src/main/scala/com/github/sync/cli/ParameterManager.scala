@@ -24,8 +24,8 @@ import akka.stream.scaladsl.{FileIO, Framing, Sink}
 import akka.util.{ByteString, Timeout}
 
 import scala.annotation.tailrec
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -61,6 +61,9 @@ object ParameterManager {
   /** Name of the option that defines a timeout for sync operations. */
   val TimeoutOption: String = OptionPrefix + "timeout"
 
+  /** Name of the option that defines the path to the log file. */
+  val LogFileOption: String = OptionPrefix + "log"
+
   /** The default timeout for sync operations. */
   val DefaultTimeout = Timeout(1.minute)
 
@@ -83,12 +86,10 @@ object ParameterManager {
   case class ApplyModeTarget(targetUri: String) extends ApplyMode
 
   /**
-    * A concrete apply mode meaning that sync operations are serialized and
-    * written to a log. (No actual changes are executed.)
-    *
-    * @param logFilePath the path to the log file to be written
+    * A concrete apply mode meaning that sync operations are not to be
+    * executed. This is useful for instance if only a log file is written.
     */
-  case class ApplyModeLog(logFilePath: Path) extends ApplyMode
+  case object ApplyModeNone extends ApplyMode
 
   /**
     * A class that holds the configuration options for a sync process.
@@ -96,13 +97,15 @@ object ParameterManager {
     * An instance of this class is created from the command line options passed
     * to the program.
     *
-    * @param syncUris  the URIs to be synced (source and destination)
-    * @param applyMode the apply mode
-    * @param timeout   a timeout for sync operations
+    * @param syncUris    the URIs to be synced (source and destination)
+    * @param applyMode   the apply mode
+    * @param timeout     a timeout for sync operations
+    * @param logFilePath an option with the path to the log file if defined
     */
   case class SyncConfig(syncUris: (String, String),
                         applyMode: ApplyMode,
-                        timeout: Timeout)
+                        timeout: Timeout,
+                        logFilePath: Option[Path])
 
   /**
     * A case class representing a processor for command line options.
@@ -147,11 +150,10 @@ object ParameterManager {
   private val RegApplyTargetDefault = RegApplyTargetPrefix.r
 
   /**
-    * Regular expression for parsing the apply mode ''Log'' with the path to
-    * the log file.
+    * Regular expression for parsing the apply mode ''None''.
     */
   private val RegApplyLog =
-    """(?i)LOG:(.+)""".r
+    """(?i)NONE""".r
 
   /**
     * Parses the command line arguments and converts them into a map keyed by
@@ -286,12 +288,29 @@ object ParameterManager {
         ApplyModeTarget(uri)
       case RegApplyTargetDefault(_*) =>
         ApplyModeTarget(destUri)
-      case RegApplyLog(path) =>
-        ApplyModeLog(Paths get path)
+      case RegApplyLog(_*) =>
+        ApplyModeNone
       case s =>
         throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
     }
       )
+
+  /**
+    * Returns a processor that extracts the path to a log file from the command
+    * line options.
+    *
+    * @return the processor to extract the log file
+    */
+  def logFileProcessor(): CliProcessor[Try[Option[Path]]] =
+    optionValue(LogFileOption) map { values =>
+      Try {
+        if (values.isEmpty) None
+        else if (values.size > 1)
+          throw new IllegalArgumentException(s"$LogFileOption: only a single log file is " +
+            s"supported!")
+        else Some(Paths.get(values.head))
+      }
+    }
 
   /**
     * Returns a processor that extracts the ''SyncConfig'' from the command
@@ -304,7 +323,8 @@ object ParameterManager {
     mode <- applyModeProcessor(uris.getOrElse(("", ""))._2)
     timeout <- singleOptionValueMapped(TimeoutOption,
       Some(DefaultTimeout.duration.toSeconds.toString))(mapTimeout)
-  } yield createSyncConfig(uris, mode, timeout)
+    logFile <- logFileProcessor()
+  } yield createSyncConfig(uris, mode, timeout, logFile)
 
   /**
     * Extracts an object with configuration options for the sync process from
@@ -409,11 +429,13 @@ object ParameterManager {
     * @param triedUris      the sync URIs component
     * @param triedApplyMode the apply mode component
     * @param triedTimeout   the timeout component
+    * @param triedLogFile   the log file component
     * @return a ''Try'' with the config
     */
   private def createSyncConfig(triedUris: Try[(String, String)],
                                triedApplyMode: Try[ApplyMode],
-                               triedTimeout: Try[Timeout]): Try[SyncConfig] = {
+                               triedTimeout: Try[Timeout],
+                               triedLogFile: Try[Option[Path]]): Try[SyncConfig] = {
     def collectErrorMessages(components: Try[_]*): Iterable[String] =
       components.foldLeft(List.empty[String]) { (lst, c) =>
         c match {
@@ -422,9 +444,10 @@ object ParameterManager {
         }
       }
 
-    val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout)
+    val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout, triedLogFile)
     if (messages.isEmpty)
-      Success(SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get))
+      Success(SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
+        triedLogFile.get))
     else Failure(new IllegalArgumentException(messages.mkString(", ")))
   }
 

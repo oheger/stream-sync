@@ -22,7 +22,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
-import com.github.sync.cli.ParameterManager.{ApplyModeLog, ApplyModeTarget}
+import com.github.sync.cli.ParameterManager.{ApplyModeNone, ApplyModeTarget}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest._
 
@@ -298,12 +298,11 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     config.applyMode should be(ApplyModeTarget(applyUri))
   }
 
-  it should "return a log apply mode with the specified path" in {
-    val LogPath = Paths.get("test", "log", "path.log").toAbsolutePath
-    val argsMap = ArgsMap + (ParameterManager.ApplyModeOption -> List("Log:" + LogPath.toString))
+  it should "return the apply mode NONE" in {
+    val argsMap = ArgsMap + (ParameterManager.ApplyModeOption -> List("none"))
 
     val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
-    config.applyMode should be(ApplyModeLog(LogPath))
+    config.applyMode should be(ApplyModeNone)
   }
 
   it should "handle an invalid apply mode" in {
@@ -332,6 +331,26 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
 
     expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
       "Invalid timeout value: '" + timeoutStr)
+  }
+
+  it should "have an undefined log file option if none is specified" in {
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    config.logFilePath should be(None)
+  }
+
+  it should "store the path to a log file in the sync config" in {
+    val logFile = Paths.get("var", "logs", "sync.log").toAbsolutePath
+    val argsMap = ArgsMap + (ParameterManager.LogFileOption -> List(logFile.toString))
+
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    config.logFilePath should be(Some(logFile))
+  }
+
+  it should "handle a log file option with multiple values" in {
+    val argsMap = ArgsMap + (ParameterManager.LogFileOption -> List("log1", "log2"))
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "only a single log file")
   }
 
   it should "remove all options contained in the sync config" in {

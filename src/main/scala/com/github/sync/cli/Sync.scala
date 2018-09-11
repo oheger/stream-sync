@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import akka.actor.ActorSystem
 import akka.stream._
-import akka.stream.scaladsl.{FileIO, Flow, Sink}
+import akka.stream.scaladsl.{Flow, Sink}
 import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
@@ -116,8 +116,8 @@ object Sync {
             stage, sinkCount)(filter)
         } yield g.run()) flatMap (t => mapToSyncResult(t._1, t._2)(SyncResult))
 
-      case ParameterManager.ApplyModeLog(logFilePath) =>
-        val sinkLog = FileIO.toPath(logFilePath)
+      case ParameterManager.ApplyModeNone =>
+        val sinkLog = Sink.ignore //TODO FileIO.toPath(logFilePath)
         val stage = Flow[SyncOperation].map(ElementSerializer.serializeOperation)
         factory.createSyncStream(config.syncUris._1, config.syncUris._2, sinkCount,
           stage, sinkLog)(filter)
