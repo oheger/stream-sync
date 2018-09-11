@@ -16,14 +16,14 @@
 
 package com.github.sync.cli
 
+import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream._
-import akka.stream.scaladsl.{Flow, Sink}
+import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.impl.SyncStreamFactoryImpl
-import com.github.sync.log.ElementSerializer
 import com.github.sync.{SyncOperation, SyncStreamFactory}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -104,25 +104,40 @@ object Sync {
                      (implicit system: ActorSystem, mat: ActorMaterializer,
                       factory: SyncStreamFactory): Future[SyncResult] = {
     import system.dispatcher
-    implicit val timeout: Timeout = config.timeout
-    val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
     val filter = createSyncFilter(filterData)
+    for {
+      stage <- createApplyStage(config)
+      g <- factory.createSyncStream(config.syncUris._1, config.syncUris._2, stage,
+        config.logFilePath)(filter)
+      res <- g.run()
+    } yield SyncResult(res._1, res._2)
+  }
+
+  /**
+    * Creates the flow stage that applies sync operations based on the given
+    * sync config. If the apply mode does not require any actions, a dummy flow
+    * is returned that passes all operations through.
+    *
+    * @param config  the sync configuration
+    * @param ec      the execution context
+    * @param system  the actor system
+    * @param factory the factory for the sync stream
+    * @return a future with the flow to apply sync operations
+    */
+  private def createApplyStage(config: SyncConfig)
+                              (implicit ec: ExecutionContext, system: ActorSystem,
+                               factory: SyncStreamFactory):
+  Future[Flow[SyncOperation, SyncOperation, NotUsed]] = {
+    implicit val timeout: Timeout = config.timeout
     config.applyMode match {
       case ParameterManager.ApplyModeTarget(targetUri) =>
-        (for {
+        for {
           provider <- factory.createSourceFileProvider(config.syncUris._1)
           stage <- factory.createApplyStage(targetUri, provider)
-          g <- factory.createSyncStream(config.syncUris._1, config.syncUris._2, sinkCount,
-            stage, sinkCount)(filter)
-        } yield g.run()) flatMap (t => mapToSyncResult(t._1, t._2)(SyncResult))
+        } yield stage
 
       case ParameterManager.ApplyModeNone =>
-        val sinkLog = Sink.ignore //TODO FileIO.toPath(logFilePath)
-        val stage = Flow[SyncOperation].map(ElementSerializer.serializeOperation)
-        factory.createSyncStream(config.syncUris._1, config.syncUris._2, sinkCount,
-          stage, sinkLog)(filter)
-          .map(_.run())
-          .flatMap(t => mapToSyncResult(t._1, t._2) { (c, _) => SyncResult(c, c) })
+        Future.successful(Flow[SyncOperation].map(identity))
     }
   }
 
@@ -135,26 +150,6 @@ object Sync {
     */
   private def createSyncFilter(filterData: SyncFilterData): SyncOperation => Boolean =
     op => FilterManager.applyFilter(op, filterData)
-
-  /**
-    * Maps the future results from the sinks of a sync stream to a
-    * corresponding ''SyncResult'' object using the provided mapping function.
-    *
-    * @param futSink1 future result of sink 1
-    * @param futSink2 future result of sink 2
-    * @param f        the mapping function
-    * @param ec       the execution context
-    * @tparam A type of the result of sink 1
-    * @tparam B type of the result of sink 2
-    * @return a future with the resulting ''SyncResult''
-    */
-  private def mapToSyncResult[A, B](futSink1: Future[A], futSink2: Future[B])
-                                   (f: (A, B) => SyncResult)
-                                   (implicit ec: ExecutionContext): Future[SyncResult] =
-    for {
-      sink1 <- futSink1
-      sink2 <- futSink2
-    } yield f(sink1, sink2)
 
   /**
     * Generates a message about te outcome of the sync operation.

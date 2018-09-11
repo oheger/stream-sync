@@ -16,15 +16,16 @@
 
 package com.github.sync.impl
 
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths, StandardOpenOption}
 
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.pattern.ask
 import akka.stream.ClosedShape
-import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, RunnableGraph, Sink, Source}
+import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import akka.util.Timeout
 import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
+import com.github.sync.log.ElementSerializer
 import com.github.sync.{FsElement, SourceFileProvider, SyncOperation, SyncStreamFactory}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -55,17 +56,16 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     }
   }
 
-  override def createSyncStream[RAW, PROC, RES](uriSrc: String, uriDst: String,
-                                                sinkRaw: Sink[SyncOperation, Future[RAW]],
-                                                flowProc: Flow[SyncOperation, PROC, Any],
-                                                sinkProc: Sink[PROC, Future[RES]])
-                                               (opFilter: SyncOperation => Boolean)
-                                               (implicit system: ActorSystem,
-                                                ec: ExecutionContext):
-  Future[RunnableGraph[(Future[RAW], Future[RES])]] = for {
+  override def createSyncStream(uriSrc: String, uriDst: String,
+                                flowProc: Flow[SyncOperation, SyncOperation, Any],
+                                logFile: Option[Path])
+                               (opFilter: SyncOperation => Boolean)
+                               (implicit system: ActorSystem,
+                                ec: ExecutionContext):
+  Future[RunnableGraph[Future[(Int, Int)]]] = for {
     srcSource <- createSyncInputSource(uriSrc)
     dstSource <- createSyncInputSource(uriDst)
-  } yield createSyncRunnableGraph(srcSource, dstSource, sinkRaw, flowProc, sinkProc)(opFilter)
+  } yield createSyncRunnableGraph(srcSource, dstSource, flowProc, logFile)(opFilter)
 
   /**
     * Creates a ''RunnableGraph'' representing the stream for a sync process
@@ -73,37 +73,80 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     *
     * @param srcSource the source for the source structure
     * @param dstSource the source for the destination structure
-    * @param sinkRaw   the sink for the raw result
     * @param flowProc  the flow that processes sync operations
-    * @param sinkProc  the sink for the processed operations
+    * @param logFile   an optional path to a log file to be written
     * @param opFilter  a filter on sync operations
     * @param system    the actor system
     * @param ec        the execution context
-    * @tparam RAW  type of the raw sink
-    * @tparam PROC type of processed sync operations
-    * @tparam RES  type of the result sink
     * @return the runnable graph
     */
-  private def createSyncRunnableGraph[RAW, PROC, RES](srcSource: Source[FsElement, Any],
-                                                      dstSource: Source[FsElement, Any],
-                                                      sinkRaw: Sink[SyncOperation, Future[RAW]],
-                                                      flowProc: Flow[SyncOperation, PROC, Any],
-                                                      sinkProc: Sink[PROC, Future[RES]])
-                                                     (opFilter: SyncOperation => Boolean)
-                                                     (implicit system: ActorSystem,
-                                                      ec: ExecutionContext):
-  RunnableGraph[(Future[RAW], Future[RES])] =
-    RunnableGraph.fromGraph(GraphDSL.create(sinkRaw, sinkProc)((_, _)) {
+  private def createSyncRunnableGraph(srcSource: Source[FsElement, Any],
+                                      dstSource: Source[FsElement, Any],
+                                      flowProc: Flow[SyncOperation, SyncOperation, Any],
+                                      logFile: Option[Path])
+                                     (opFilter: SyncOperation => Boolean)
+                                     (implicit system: ActorSystem,
+                                      ec: ExecutionContext):
+  RunnableGraph[Future[(Int, Int)]] = {
+    val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
+    val sinkLogFile = createLogSink(logFile)
+    RunnableGraph.fromGraph(GraphDSL.create(sinkCount, sinkCount, sinkLogFile)(combineMat) {
       implicit builder =>
-        (sinkTotal, sinkSuccess) =>
+        (sinkTotal, sinkSuccess, sinkLog) =>
           import GraphDSL.Implicits._
           val syncFilter = Flow[SyncOperation].filter(opFilter)
           val syncStage = builder.add(new SyncStage)
-          val broadcast = builder.add(Broadcast[SyncOperation](2))
+          val broadcast = builder.add(Broadcast[SyncOperation](3))
           srcSource ~> syncStage.in0
           dstSource ~> syncStage.in1
           syncStage.out ~> syncFilter ~> broadcast ~> sinkTotal.in
           broadcast ~> flowProc ~> sinkSuccess.in
+          broadcast ~> sinkLog
           ClosedShape
     })
+  }
+
+  /**
+    * Generates the sink to write sync operations to a log file if a log file
+    * path is specified. Otherwise, a dummy sink that ignores all data is
+    * returned.
+    *
+    * @param logFile the option with the path to the log file
+    * @return a sink to write a log file
+    */
+  private def createLogSink(logFile: Option[Path]): Sink[SyncOperation, Future[Any]] =
+    logFile.map(createLogFileSink).getOrElse(Sink.ignore)
+
+  /**
+    * Generates the sink to write sync operations to a log file.
+    *
+    * @param logFile the path to the log file
+    * @return the sink to write the log file
+    */
+  private def createLogFileSink(logFile: Path): Sink[SyncOperation, Future[Any]] = {
+    val sink = FileIO.toPath(logFile, options = Set(StandardOpenOption.WRITE,
+      StandardOpenOption.CREATE, StandardOpenOption.APPEND))
+    val serialize = Flow[SyncOperation].map(ElementSerializer.serializeOperation)
+    serialize.toMat(sink)(Keep.right)
+  }
+
+  /**
+    * A function to combine the materialized values of the runnable graph for
+    * the sync operation. The sinks used by the graph produce 3 future results.
+    * This function converts this to a single future for a tuple of the
+    * relevant values.
+    *
+    * @param futTotal   the future with the total number of operations
+    * @param futSuccess the future with the number of successful operations
+    * @param futLog     the future with the result of the log sink
+    * @param ec         the execution context
+    * @return a future with the results of the count sinks
+    */
+  private def combineMat(futTotal: Future[Int], futSuccess: Future[Int], futLog: Future[Any])
+                        (implicit ec: ExecutionContext):
+  Future[(Int, Int)] = for {
+    total <- futTotal
+    success <- futSuccess
+    _ <- futLog
+  } yield (total, success)
 }

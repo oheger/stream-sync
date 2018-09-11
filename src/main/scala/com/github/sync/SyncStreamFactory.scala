@@ -16,9 +16,11 @@
 
 package com.github.sync
 
+import java.nio.file.Path
+
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Flow, RunnableGraph, Sink, Source}
+import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
 import akka.util.Timeout
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -73,26 +75,26 @@ trait SyncStreamFactory {
 
   /**
     * Creates a ''RunnableGraph'' representing the stream for a sync process.
+    * The stream has three sinks that also determine the materialized values of
+    * the graph: one sink counts all sync operations that need to be executed;
+    * the second sink counts the sync operations that have been processed
+    * successfully by the processing flow; the third sink is used to write a
+    * log file (it is active only if a path to a log file is provided).
     *
     * @param uriSrc   the URI for the source structure
     * @param uriDst   the URI for the destination structure
-    * @param sinkRaw  the sink for the raw result
     * @param flowProc the flow that processes sync operations
-    * @param sinkProc the sink for the processed operations
+    * @param logFile  an optional path to a log file to write
     * @param opFilter a filter on sync operations
     * @param system   the actor system
     * @param ec       the execution context
-    * @tparam RAW  type of the raw sink
-    * @tparam PROC type of processed sync operations
-    * @tparam RES  type of the result sink
     * @return a future with the runnable graph
     */
-  def createSyncStream[RAW, PROC, RES](uriSrc: String, uriDst: String,
-                                       sinkRaw: Sink[SyncOperation, Future[RAW]],
-                                       flowProc: Flow[SyncOperation, PROC, Any],
-                                       sinkProc: Sink[PROC, Future[RES]])
-                                      (opFilter: SyncOperation => Boolean)
-                                      (implicit system: ActorSystem,
-                                       ec: ExecutionContext):
-  Future[RunnableGraph[(Future[RAW], Future[RES])]]
+  def createSyncStream(uriSrc: String, uriDst: String,
+                       flowProc: Flow[SyncOperation, SyncOperation, Any],
+                       logFile: Option[Path])
+                      (opFilter: SyncOperation => Boolean)
+                      (implicit system: ActorSystem,
+                       ec: ExecutionContext):
+  Future[RunnableGraph[Future[(Int, Int)]]]
 }

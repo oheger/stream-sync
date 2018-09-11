@@ -102,7 +102,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--apply", "target:" + dstFolder2.toAbsolutePath.toString)
 
-    val result = futureResult(Sync.syncProcess(options))
+    futureResult(Sync.syncProcess(options))
     checkFile(dstFolder2, "new.txt")
     checkFile(dstFolder, "obsolete.dat")
     checkFileNotPresent(dstFolder2, "obsolete.dat")
@@ -117,7 +117,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     createTestFile(srcFolder, "ignored.tmp")
     createTestFile(dstFolder, "removed.txt")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--filter", "exclude:*.tmp", "--apply", "log:" + logFile.toAbsolutePath.toString)
+      "--filter", "exclude:*.tmp", "--log", logFile.toAbsolutePath.toString)
 
     val result = futureResult(Sync.syncProcess(options))
     result.totalOperations should be(2)
@@ -125,5 +125,37 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     val lines = Files.readAllLines(logFile)
     lines.get(0) should include("CREATE 0 FILE /create.txt 0")
     lines.get(1) should include("REMOVE 0 FILE /removed.txt 0")
+    checkFileNotPresent(dstFolder, "removed.txt")
+  }
+
+  it should "append an existing log file" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val LogHeader = "This is my log." + System.lineSeparator()
+    val logFile = createDataFile(content = LogHeader)
+    createTestFile(srcFolder, "fileToSync.dat")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--apply", "none", "--log", logFile.toAbsolutePath.toString)
+
+    futureResult(Sync.syncProcess(options))
+    readDataFile(logFile) should startWith(LogHeader)
+  }
+
+  it should "support an apply mode 'None'" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    createTestFile(srcFolder, "file1.txt")
+    createTestFile(srcFolder, "file2.txt")
+    createTestFile(dstFolder, "removed.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--apply", "NonE")
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(3)
+    result.totalOperations should be(result.successfulOperations)
+    checkFile(dstFolder, "removed.txt")
+    checkFileNotPresent(dstFolder, "file1.txt")
   }
 }
