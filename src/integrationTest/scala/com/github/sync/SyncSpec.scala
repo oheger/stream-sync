@@ -17,12 +17,15 @@
 package com.github.sync
 
 import java.nio.file.{Files, Path}
+import java.time.Instant
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.github.sync.cli.Sync
 import com.github.sync.impl.SyncStreamFactoryImpl
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
+
+import scala.concurrent.duration._
 
 /**
   * Integration test class for sync processes.
@@ -38,6 +41,11 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
   after {
     tearDownTestFile()
   }
+
+  /**
+    * @inheritdoc Use a higher timeout because of more complex operations.
+    */
+  override val timeout: Duration = 10.seconds
 
   /**
     * Creates a test file with the given name in the directory specified. The
@@ -157,5 +165,69 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result.totalOperations should be(result.successfulOperations)
     checkFile(dstFolder, "removed.txt")
     checkFileNotPresent(dstFolder, "file1.txt")
+  }
+
+  it should "execute sync operations from a sync log file" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val NewFolderName = "newFolder"
+    val RemoveFileName = "killed.txt"
+    val lastModified = Instant.parse("2018-09-12T21:06:00.10Z")
+    createTestFile(srcFolder, "syncFile.txt")
+    createTestFile(srcFolder, "otherFile.dat")
+    createTestFile(dstFolder, RemoveFileName)
+    createTestFile(dstFolder, "remaining.txt")
+    val operations = List(s"CREATE 0 FILE /syncFile.txt 0 $lastModified 42",
+      s"CREATE 0 FOLDER /$NewFolderName 0",
+      s"REMOVE 0 FILE /$RemoveFileName 0 2018-09-12T21:12:45.00Z 10")
+    val syncLogFile = createDataFile(content = operations.mkString("\\n"))
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--sync-log", syncLogFile.toAbsolutePath.toString)
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(operations.size)
+    result.totalOperations should be(result.successfulOperations)
+    checkFile(dstFolder, "syncFile.txt")
+    checkFileNotPresent(dstFolder, "otherFile.dat")
+    checkFileNotPresent(dstFolder, RemoveFileName)
+    val newFolder = dstFolder.resolve(NewFolderName)
+    Files.isDirectory(newFolder) shouldBe true
+  }
+
+  it should "ignore invalid sync operations in the sync log file" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val SuccessFile = "successSync.txt"
+    val lastModified = Instant.parse("2018-09-12T21:35:10.10Z")
+    createTestFile(srcFolder, SuccessFile)
+    val operations = List("not a valid sync operation!?",
+      s"CREATE 0 FILE /$SuccessFile 0 $lastModified 42")
+    val syncLogFile = createDataFile(content = operations.mkString("\\n"))
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--sync-log", syncLogFile.toAbsolutePath.toString)
+
+    futureResult(Sync.syncProcess(options))
+    checkFile(dstFolder, SuccessFile)
+  }
+
+  it should "skip an operation that cannot be processed" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val SuccessFile = "successSync.txt"
+    val lastModified = Instant.parse("2018-09-13T16:39:16.10Z")
+    createTestFile(srcFolder, SuccessFile)
+    val operations = List(s"OVERRIDE 0 FILE /nonExisting.file 0 $lastModified 10",
+      s"CREATE 0 FILE /$SuccessFile 0 $lastModified 42")
+    val syncLogFile = createDataFile(content = operations.mkString("\\n"))
+    val logFile = createFileReference()
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString,
+      "--timeout", "2")
+
+    futureResult(Sync.syncProcess(options))
+    checkFile(dstFolder, SuccessFile)
   }
 }

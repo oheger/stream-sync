@@ -19,11 +19,12 @@ package com.github.sync.cli
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream._
-import akka.stream.scaladsl.Flow
-import akka.util.Timeout
+import akka.stream.scaladsl.{FileIO, Flow, Framing, Source}
+import akka.util.{ByteString, Timeout}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.impl.SyncStreamFactoryImpl
+import com.github.sync.log.ElementSerializer
 import com.github.sync.{SyncOperation, SyncStreamFactory}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -106,11 +107,34 @@ object Sync {
     import system.dispatcher
     val filter = createSyncFilter(filterData)
     for {
-      source <- factory.createSyncSource(config.syncUris._1, config.syncUris._2)
+      source <- createSyncSource(config)
       stage <- createApplyStage(config)
       g <- factory.createSyncStream(source, stage, config.logFilePath)(filter)
       res <- g.run()
     } yield SyncResult(res._1, res._2)
+  }
+
+  /**
+    * Creates the source for the sync process based on the given configuration.
+    * Per default, a source is returned that determines the delta of two folder
+    * structures. If however a sync log is provided, a source reading this file
+    * is returned.
+    *
+    * @param config  the sync configuration
+    * @param ec      the execution context
+    * @param factory the factory for the sync stream
+    * @return the source for the sync process
+    */
+  private def createSyncSource(config: SyncConfig)
+                              (implicit ec: ExecutionContext, factory: SyncStreamFactory):
+  Future[Source[SyncOperation, Any]] = config.syncLogPath match {
+    case Some(path) =>
+      Future.successful(FileIO.fromPath(path)
+        .via(Framing.delimiter(ByteString("\\n"), 8192,
+          allowTruncation = true))
+        .map(bs => ElementSerializer.deserializeOperation(bs).get))
+    case None =>
+      factory.createSyncSource(config.syncUris._1, config.syncUris._2)
   }
 
   /**
