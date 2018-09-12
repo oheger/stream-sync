@@ -64,6 +64,9 @@ object ParameterManager {
   /** Name of the option that defines the path to the log file. */
   val LogFileOption: String = OptionPrefix + "log"
 
+  /** Name of the option that defines the path to the sync log file. */
+  val SyncLogOption: String = OptionPrefix + "sync-log"
+
   /** The default timeout for sync operations. */
   val DefaultTimeout = Timeout(1.minute)
 
@@ -101,11 +104,14 @@ object ParameterManager {
     * @param applyMode   the apply mode
     * @param timeout     a timeout for sync operations
     * @param logFilePath an option with the path to the log file if defined
+    * @param syncLogPath an option with the path to a file containing sync
+    *                    operations to be executed
     */
   case class SyncConfig(syncUris: (String, String),
                         applyMode: ApplyMode,
                         timeout: Timeout,
-                        logFilePath: Option[Path])
+                        logFilePath: Option[Path],
+                        syncLogPath: Option[Path])
 
   /**
     * A case class representing a processor for command line options.
@@ -254,6 +260,25 @@ object ParameterManager {
     singleOptionValue(key, defValue) map (_.flatMap(f))
 
   /**
+    * Returns a processor that extracts a single optional value of a command
+    * line option. If the option has multiple values, an error is produced. If
+    * it has a single value only, this value is returned as an option.
+    * Otherwise, result is an undefined ''Option''.
+    *
+    * @param key the option key
+    * @return the processor to extract the optional value
+    */
+  def optionalOptionValue(key: String): CliProcessor[Try[Option[String]]] =
+    optionValue(key) map { values =>
+      Try {
+        if (values.isEmpty) None
+        else if (values.size > 1)
+          throw new IllegalArgumentException(s"$key: only a single value is supported!")
+        else Some(values.head)
+      }
+    }
+
+  /**
     * Returns a processor that extracts the value of the option with the URIs
     * of the structures to be synced.
     *
@@ -296,23 +321,6 @@ object ParameterManager {
       )
 
   /**
-    * Returns a processor that extracts the path to a log file from the command
-    * line options.
-    *
-    * @return the processor to extract the log file
-    */
-  def logFileProcessor(): CliProcessor[Try[Option[Path]]] =
-    optionValue(LogFileOption) map { values =>
-      Try {
-        if (values.isEmpty) None
-        else if (values.size > 1)
-          throw new IllegalArgumentException(s"$LogFileOption: only a single log file is " +
-            s"supported!")
-        else Some(Paths.get(values.head))
-      }
-    }
-
-  /**
     * Returns a processor that extracts the ''SyncConfig'' from the command
     * line options.
     *
@@ -323,8 +331,9 @@ object ParameterManager {
     mode <- applyModeProcessor(uris.getOrElse(("", ""))._2)
     timeout <- singleOptionValueMapped(TimeoutOption,
       Some(DefaultTimeout.duration.toSeconds.toString))(mapTimeout)
-    logFile <- logFileProcessor()
-  } yield createSyncConfig(uris, mode, timeout, logFile)
+    logFile <- optionalOptionValue(LogFileOption)
+    syncLog <- optionalOptionValue(SyncLogOption)
+  } yield createSyncConfig(uris, mode, timeout, logFile, syncLog)
 
   /**
     * Extracts an object with configuration options for the sync process from
@@ -435,7 +444,8 @@ object ParameterManager {
   private def createSyncConfig(triedUris: Try[(String, String)],
                                triedApplyMode: Try[ApplyMode],
                                triedTimeout: Try[Timeout],
-                               triedLogFile: Try[Option[Path]]): Try[SyncConfig] = {
+                               triedLogFile: Try[Option[String]],
+                               triedSyncLog: Try[Option[String]]): Try[SyncConfig] = {
     def collectErrorMessages(components: Try[_]*): Iterable[String] =
       components.foldLeft(List.empty[String]) { (lst, c) =>
         c match {
@@ -444,10 +454,11 @@ object ParameterManager {
         }
       }
 
-    val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout, triedLogFile)
+    val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout, triedLogFile,
+      triedSyncLog)
     if (messages.isEmpty)
       Success(SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
-        triedLogFile.get))
+        mapPath(triedLogFile.get), mapPath(triedSyncLog.get)))
     else Failure(new IllegalArgumentException(messages.mkString(", ")))
   }
 
@@ -465,4 +476,14 @@ object ParameterManager {
         throw new IllegalArgumentException(s"Invalid timeout value: '$timeoutStr'!")
     }
   }
+
+  /**
+    * Transforms an option of a string to an option of a path. The path is
+    * resolved.
+    *
+    * @param optPathStr the option with the path string
+    * @return the transformed option for a path
+    */
+  private def mapPath(optPathStr: Option[String]): Option[Path] =
+    optPathStr map (s => Paths get s)
 }

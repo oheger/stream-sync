@@ -350,7 +350,27 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val argsMap = ArgsMap + (ParameterManager.LogFileOption -> List("log1", "log2"))
 
     expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
-      "only a single log file")
+      ParameterManager.LogFileOption + ": only a single value")
+  }
+
+  it should "have an undefined sync log option if none is specified" in {
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    config.syncLogPath should be(None)
+  }
+
+  it should "store the path to the sync log file in the sync config" in {
+    val syncLogFile = Paths.get("data", "sync", "log", "sync.log").toAbsolutePath
+    val argsMap = ArgsMap + (ParameterManager.SyncLogOption -> List(syncLogFile.toString))
+
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    config.syncLogPath should be(Some(syncLogFile))
+  }
+
+  it should "handle a sync log option with multiple values" in {
+    val argsMap = ArgsMap + (ParameterManager.SyncLogOption -> List("log1", "log2"))
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      ParameterManager.SyncLogOption + ": only a single value")
   }
 
   it should "remove all options contained in the sync config" in {
