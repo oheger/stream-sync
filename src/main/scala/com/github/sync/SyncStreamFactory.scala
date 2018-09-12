@@ -59,6 +59,20 @@ trait SyncStreamFactory {
   Future[SourceFileProvider]
 
   /**
+    * Creates a source that produces a sequence of [[SyncOperation]] objects
+    * for the specified folder structures. This source compares the files and
+    * folders of the given structures and calculates the operations to be
+    * applied to synchronize them.
+    *
+    * @param uriSrc the URI to the source structure
+    * @param uriDst the URI to the destination structure
+    * @param ec     the execution context
+    * @return a future with the source
+    */
+  def createSyncSource(uriSrc: String, uriDst: String)(implicit ec: ExecutionContext):
+  Future[Source[SyncOperation, NotUsed]]
+
+  /**
     * Creates the flow stage that interprets sync operations and applies them
     * to the destination structure.
     *
@@ -75,26 +89,24 @@ trait SyncStreamFactory {
 
   /**
     * Creates a ''RunnableGraph'' representing the stream for a sync process.
-    * The stream has three sinks that also determine the materialized values of
-    * the graph: one sink counts all sync operations that need to be executed;
-    * the second sink counts the sync operations that have been processed
-    * successfully by the processing flow; the third sink is used to write a
-    * log file (it is active only if a path to a log file is provided).
+    * The source for the ''SyncOperation'' objects to be processed is passed
+    * in. The stream has three sinks that also determine the materialized
+    * values of the graph: one sink counts all sync operations that need to be
+    * executed; the second sink counts the sync operations that have been
+    * processed successfully by the processing flow; the third sink is used to
+    * write a log file (it is active only if a path to a log file is provided).
     *
-    * @param uriSrc   the URI for the source structure
-    * @param uriDst   the URI for the destination structure
+    * @param source   the source producing ''SyncOperation'' objects
     * @param flowProc the flow that processes sync operations
     * @param logFile  an optional path to a log file to write
     * @param opFilter a filter on sync operations
-    * @param system   the actor system
     * @param ec       the execution context
     * @return a future with the runnable graph
     */
-  def createSyncStream(uriSrc: String, uriDst: String,
+  def createSyncStream(source: Source[SyncOperation, Any],
                        flowProc: Flow[SyncOperation, SyncOperation, Any],
                        logFile: Option[Path])
                       (opFilter: SyncOperation => Boolean)
-                      (implicit system: ActorSystem,
-                       ec: ExecutionContext):
+                      (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[(Int, Int)]]]
 }

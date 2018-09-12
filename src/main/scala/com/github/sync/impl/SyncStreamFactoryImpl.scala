@@ -21,7 +21,7 @@ import java.nio.file.{Path, Paths, StandardOpenOption}
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.pattern.ask
-import akka.stream.ClosedShape
+import akka.stream.{ClosedShape, SourceShape}
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import akka.util.Timeout
 import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
@@ -56,38 +56,18 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     }
   }
 
-  override def createSyncStream(uriSrc: String, uriDst: String,
+  override def createSyncSource(uriSrc: String, uriDst: String)(implicit ec: ExecutionContext):
+  Future[Source[SyncOperation, NotUsed]] = for {
+    srcSource <- createSyncInputSource(uriSrc)
+    dstSource <- createSyncInputSource(uriDst)
+  } yield createGraphForSyncSource(srcSource, dstSource)
+
+  override def createSyncStream(source: Source[SyncOperation, Any],
                                 flowProc: Flow[SyncOperation, SyncOperation, Any],
                                 logFile: Option[Path])
                                (opFilter: SyncOperation => Boolean)
-                               (implicit system: ActorSystem,
-                                ec: ExecutionContext):
-  Future[RunnableGraph[Future[(Int, Int)]]] = for {
-    srcSource <- createSyncInputSource(uriSrc)
-    dstSource <- createSyncInputSource(uriDst)
-  } yield createSyncRunnableGraph(srcSource, dstSource, flowProc, logFile)(opFilter)
-
-  /**
-    * Creates a ''RunnableGraph'' representing the stream for a sync process
-    * based on the parameters provided.
-    *
-    * @param srcSource the source for the source structure
-    * @param dstSource the source for the destination structure
-    * @param flowProc  the flow that processes sync operations
-    * @param logFile   an optional path to a log file to be written
-    * @param opFilter  a filter on sync operations
-    * @param system    the actor system
-    * @param ec        the execution context
-    * @return the runnable graph
-    */
-  private def createSyncRunnableGraph(srcSource: Source[FsElement, Any],
-                                      dstSource: Source[FsElement, Any],
-                                      flowProc: Flow[SyncOperation, SyncOperation, Any],
-                                      logFile: Option[Path])
-                                     (opFilter: SyncOperation => Boolean)
-                                     (implicit system: ActorSystem,
-                                      ec: ExecutionContext):
-  RunnableGraph[Future[(Int, Int)]] = {
+                               (implicit ec: ExecutionContext):
+  Future[RunnableGraph[Future[(Int, Int)]]] = Future {
     val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
     val sinkLogFile = createLogSink(logFile)
     RunnableGraph.fromGraph(GraphDSL.create(sinkCount, sinkCount, sinkLogFile)(combineMat) {
@@ -95,16 +75,33 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
         (sinkTotal, sinkSuccess, sinkLog) =>
           import GraphDSL.Implicits._
           val syncFilter = Flow[SyncOperation].filter(opFilter)
-          val syncStage = builder.add(new SyncStage)
           val broadcast = builder.add(Broadcast[SyncOperation](3))
-          srcSource ~> syncStage.in0
-          dstSource ~> syncStage.in1
-          syncStage.out ~> syncFilter ~> broadcast ~> sinkTotal.in
+          source ~> syncFilter ~> broadcast ~> sinkTotal.in
           broadcast ~> flowProc ~> sinkSuccess.in
           broadcast ~> sinkLog
           ClosedShape
     })
   }
+
+  /**
+    * Creates a ''Source'' that produces ''SyncOperation'' objects to sync the
+    * input sources provided.
+    *
+    * @param srcSource the source for the source structure
+    * @param dstSource the source for the destination structure
+    * @return the sync source
+    */
+  private def createGraphForSyncSource(srcSource: Source[FsElement, Any],
+                                       dstSource: Source[FsElement, Any]):
+  Source[SyncOperation, NotUsed] =
+    Source.fromGraph(GraphDSL.create() {
+      implicit builder =>
+        import GraphDSL.Implicits._
+        val syncStage = builder.add(new SyncStage)
+        srcSource ~> syncStage.in0
+        dstSource ~> syncStage.in1
+        SourceShape(syncStage.out)
+    })
 
   /**
     * Generates the sink to write sync operations to a log file if a log file

@@ -106,9 +106,9 @@ object Sync {
     import system.dispatcher
     val filter = createSyncFilter(filterData)
     for {
+      source <- factory.createSyncSource(config.syncUris._1, config.syncUris._2)
       stage <- createApplyStage(config)
-      g <- factory.createSyncStream(config.syncUris._1, config.syncUris._2, stage,
-        config.logFilePath)(filter)
+      g <- factory.createSyncStream(source, stage, config.logFilePath)(filter)
       res <- g.run()
     } yield SyncResult(res._1, res._2)
   }
