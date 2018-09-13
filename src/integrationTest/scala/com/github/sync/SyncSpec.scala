@@ -178,12 +178,13 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     createTestFile(srcFolder, "otherFile.dat")
     createTestFile(dstFolder, RemoveFileName)
     createTestFile(dstFolder, "remaining.txt")
+    val procLog = createPathInDirectory("processed.log")
     val operations = List(s"CREATE 0 FILE /syncFile.txt 0 $lastModified 42",
       s"CREATE 0 FOLDER /$NewFolderName 0",
       s"REMOVE 0 FILE /$RemoveFileName 0 2018-09-12T21:12:45.00Z 10")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--sync-log", syncLogFile.toAbsolutePath.toString)
+      "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString)
 
     val result = futureResult(Sync.syncProcess(options))
     result.successfulOperations should be(operations.size)
@@ -229,5 +230,27 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
 
     futureResult(Sync.syncProcess(options))
     checkFile(dstFolder, SuccessFile)
+  }
+
+  it should "skip operations in the sync log that are contained in the processed log" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val ProcessedFile = "done.txt"
+    val NewFile = "copy.txt"
+    val lastModified = Instant.parse("2018-09-13T19:00:01.11Z")
+    createTestFile(srcFolder, ProcessedFile)
+    createTestFile(srcFolder, NewFile)
+    val ProcessedOp = s"CREATE 0 FILE /$ProcessedFile 0 $lastModified 2"
+    val operations = List(ProcessedOp, s"CREATE 0 FILE /$NewFile 0 $lastModified 4")
+    val syncLogFile = createDataFile(content = operations.mkString("\n"))
+    val logFile = createDataFile(content = ProcessedOp)
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString)
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(1)
+    checkFile(dstFolder, NewFile)
+    checkFileNotPresent(dstFolder, ProcessedFile)
   }
 }

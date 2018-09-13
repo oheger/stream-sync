@@ -85,4 +85,12 @@ class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSy
       sink))
     ops should contain theSameElementsInOrderAs List(op2, op1)
   }
+
+  it should "return the lines of a log file in a set" in {
+    val Content = "Line1\nLine2  \r\n  Line3\n\r\nLine4"
+    val logFile = createDataFile(Content)
+
+    val lines = futureResult(SerializerStreamHelper.readProcessedLog(logFile)(ActorMaterializer()))
+    lines should contain theSameElementsAs List("Line4", "Line3", "Line2", "Line1")
+  }
 }

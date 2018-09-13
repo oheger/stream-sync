@@ -16,6 +16,8 @@
 
 package com.github.sync.cli
 
+import java.nio.file.Path
+
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream._
@@ -122,16 +124,37 @@ object Sync {
     *
     * @param config  the sync configuration
     * @param ec      the execution context
+    * @param mat     the object to materialize streams
     * @param factory the factory for the sync stream
     * @return the source for the sync process
     */
   private def createSyncSource(config: SyncConfig)
-                              (implicit ec: ExecutionContext, factory: SyncStreamFactory):
+                              (implicit ec: ExecutionContext, mat: ActorMaterializer,
+                               factory: SyncStreamFactory):
   Future[Source[SyncOperation, Any]] = config.syncLogPath match {
     case Some(path) =>
-      Future.successful(SerializerStreamHelper.createSyncOperationSource(path))
+      createSyncSourceFromLog(config, path)
     case None =>
       factory.createSyncSource(config.syncUris._1, config.syncUris._2)
+  }
+
+  /**
+    * Creates the source for the sync process if a sync log is provided. The
+    * exact source to be used depends on the configuration of a processed log.
+    *
+    * @param config      the sync configuration
+    * @param syncLogPath the path to the sync log
+    * @param ec          the execution context
+    * @param mat         the object to materialize streams
+    * @return the source to read from a sync log file
+    */
+  private def createSyncSourceFromLog(config: SyncConfig, syncLogPath: Path)
+                                     (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[Source[SyncOperation, Any]] = config.logFilePath match {
+    case Some(processedLog) =>
+      SerializerStreamHelper.createSyncOperationSourceWithProcessedLog(syncLogPath, processedLog)
+    case None =>
+      Future.successful(SerializerStreamHelper.createSyncOperationSource(syncLogPath))
   }
 
   /**
