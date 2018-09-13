@@ -181,7 +181,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     val operations = List(s"CREATE 0 FILE /syncFile.txt 0 $lastModified 42",
       s"CREATE 0 FOLDER /$NewFolderName 0",
       s"REMOVE 0 FILE /$RemoveFileName 0 2018-09-12T21:12:45.00Z 10")
-    val syncLogFile = createDataFile(content = operations.mkString("\\n"))
+    val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString)
 
@@ -204,7 +204,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     createTestFile(srcFolder, SuccessFile)
     val operations = List("not a valid sync operation!?",
       s"CREATE 0 FILE /$SuccessFile 0 $lastModified 42")
-    val syncLogFile = createDataFile(content = operations.mkString("\\n"))
+    val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString)
 
@@ -221,7 +221,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     createTestFile(srcFolder, SuccessFile)
     val operations = List(s"OVERRIDE 0 FILE /nonExisting.file 0 $lastModified 10",
       s"CREATE 0 FILE /$SuccessFile 0 $lastModified 42")
-    val syncLogFile = createDataFile(content = operations.mkString("\\n"))
+    val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val logFile = createFileReference()
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString,

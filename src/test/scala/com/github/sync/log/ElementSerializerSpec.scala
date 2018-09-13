@@ -18,7 +18,6 @@ package com.github.sync.log
 
 import java.time.Instant
 
-import akka.util.ByteString
 import com.github.sync._
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -130,7 +129,7 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
     val operation = SyncOperation(file, action, 22)
     val opRaw = ElementSerializer serializeOperation operation
 
-    ElementSerializer.deserializeOperation(opRaw) match {
+    ElementSerializer.deserializeOperation(opRaw.utf8String) match {
       case Success(op) =>
         op should be(operation)
       case r =>
@@ -151,7 +150,7 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
   }
 
   it should "handle a deserialization of an invalid action tag" in {
-    val raw = ByteString("DELETE 13 FOLDER /foo/bar 8")
+    val raw = "DELETE 13 FOLDER /foo/bar 8"
 
     val triedOperation = ElementSerializer.deserializeOperation(raw)
     triedOperation.isSuccess shouldBe false

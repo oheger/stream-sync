@@ -19,12 +19,12 @@ package com.github.sync.cli
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream._
-import akka.stream.scaladsl.{FileIO, Flow, Framing, Source}
-import akka.util.{ByteString, Timeout}
+import akka.stream.scaladsl.{Flow, Source}
+import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.impl.SyncStreamFactoryImpl
-import com.github.sync.log.ElementSerializer
+import com.github.sync.log.SerializerStreamHelper
 import com.github.sync.{SyncOperation, SyncStreamFactory}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -129,10 +129,7 @@ object Sync {
                               (implicit ec: ExecutionContext, factory: SyncStreamFactory):
   Future[Source[SyncOperation, Any]] = config.syncLogPath match {
     case Some(path) =>
-      Future.successful(FileIO.fromPath(path)
-        .via(Framing.delimiter(ByteString("\\n"), 8192,
-          allowTruncation = true))
-        .map(bs => ElementSerializer.deserializeOperation(bs).get))
+      Future.successful(SerializerStreamHelper.createSyncOperationSource(path))
     case None =>
       factory.createSyncSource(config.syncUris._1, config.syncUris._2)
   }

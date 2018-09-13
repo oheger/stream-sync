@@ -103,10 +103,10 @@ object ElementSerializer {
   /**
     * Tries to create a ''SyncOperation'' from its serialized form.
     *
-    * @param raw the binary data with the serialized form of the operation
+    * @param raw the raw data with the serialized form of the operation
     * @return a ''Try'' with the resulting operation
     */
-  def deserializeOperation(raw: ByteString): Try[SyncOperation] = for {
+  def deserializeOperation(raw: String): Try[SyncOperation] = for {
     actionData <- deserializeAction(raw)
     elem <- deserializeElement(actionData._3)
   } yield SyncOperation(elem, actionData._1, actionData._2)
@@ -127,11 +127,11 @@ object ElementSerializer {
     * representation of a ''SyncOperation''. If successful, the return value
     * can be used to further process the serialized element.
     *
-    * @param raw the binary data with the serialized form of the operation
+    * @param raw the raw data with the serialized form of the operation
     * @return a ''Try'' with elements that could be parsed
     */
-  private def deserializeAction(raw: ByteString): Try[(SyncAction, Int, Seq[String])] = Try {
-    val parts = raw.utf8String.split("\\s")
+  private def deserializeAction(raw: String): Try[(SyncAction, Int, Seq[String])] = Try {
+    val parts = raw.split("\\s")
     (TagActionMapping(parts.head), parts(1).toInt, parts drop 2)
   }
 }
