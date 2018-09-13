@@ -126,6 +126,56 @@ The following table gives an overview over the filter criteria supported:
 | date-after | date or date-time | Allows to select only files whose last-modified date is equal or after to a given reference date. The reference date is specified in ISO format with an optional time portion. If no time is defined, it is replaced by _00:00:00_. | `date-after:2018-09-01T22:00:00` ignores all files with a modified date before this reference date. |
 | date-before | date or date-time | Analogous to _date-after_, but selects only files whose last-modified time is before a given reference date. | `date-before:2018-01-01` will only deal with files that have been modified before 2018. |
 
+### Apply modes
+Per default the sync process determines the delta between the source structure
+and the destination structure (whose URIs are specified on the command line)
+and then applies the resulting sync operations to the destination structure.
+That way the destination structure becomes a mirror of the source structure.
+
+It is possible to change this behavior by specifying the `--apply` option. The
+option can have one of the following values (case does not matter):
+
+| Apply mode | Description |
+| ---------- | ----------- |
+| TARGET | This is the default apply mode causing the behavior as described above. |
+| TARGET:URI | Works like the default _TARGET_ mode, but the sync operations are applied to the structure defined by the URI. This can be a different URI than the URI of the destination structure. This is useful for instance if a structure should be mirrored to multiple backup locations. Then the delta between the source and destination structure can be applied to alternative target structures as well. |
+| NONE | In this mode no sync operations are executed at all. This mainly makes sense when a log file is written (see below); then a sync process can be executed in a _dry-run_ mode in which no actions are performed, but the operations that would be executed can be seen in the log file. |
+
+### Sync log files
+The sync operations executed during a sync process can also be written in a 
+textual representation to a log file. This is achieved by adding the `--log`
+option whose value is the path to the log file to be written.
+
+It is also possible to use such a log file as input for another sync process.
+Then the sync operations to be executed are not calculated as the delta between
+two structures, but are directly read from the log file. This is achieved by
+specifying the `--sync-log` option whose value is the path to the log file to
+be read. Note that in this mode still the URIs for both the source and 
+destination structure need to be specified; log files contain only relative 
+URIs, and in order to resolve them correctly the root URIs of the original
+structures must be provided.
+
+If the structures to be synced are pretty complex and/or large files need to
+be transferred over a slow network connection, sync processes can take a while.
+With the support for log files this problem can be dealt with by running 
+multiple incremental sync operations. This works as follows:
+
+1. An initial sync process is run for the structures in question that has the
+   `--log` option set and specifies an apply mode of `None`. This does not
+   execute any actions, but creates a log file with the operations that need to
+   be done. 
+2. Now further sync processes can be started to process the sync log written in
+   the first step. For such operations the following options must be set:
+   * `--sync-log` is set to the path of the log file written in the first step.
+   * `--log` is set to a file keeping track on the progress of the overall 
+     operation. This file is continuously updated with the sync operations that
+     have been executed.
+   
+   The sync processes can now be interrupted at any time and resumed again
+   later. When restarted with these options the process ignores all sync
+   operations listed in the progress log and only executes those that are still
+   pending. This is further outlined in the _Examples_ section.
+
 ### Examples and use cases
 **Do not remove archived data**
 
@@ -151,6 +201,31 @@ folders for projects not available in the source structure will not be removed.
 In the existing folders, however, (which are on level 1 and greater) full sync 
 operations are applied; so all changes done on a specific project folder are
 transferred to the backup medium.
+
+**Interrupt and resume long-running sync processes**
+
+As described under _Sync log files_, with the correct options sync processes
+can be stopped at any time and resumed at a later point in time. The first
+step is to generate a so-called _sync log_, i.e. a file containing the
+operations to be executed to sync the structures in question:
+
+`Sync /path/to/source /path/to/dest --apply NONE --log /data/sync.log`
+
+This command does not change anything in the destination structure, but only
+creates a file _/data/sync.log_ with a textual description of the operations to
+execute. (Such files have a pretty straight-forward structure. Each line
+represents an operation including an action and the element affected.)
+
+Now another sync process can be started that takes this log file as input. To
+keep track on the progress that is made, a second log file has to be written -
+the _progress log_:
+
+`Sync /path/to/source /path/to/dest --sync-log /data/sync.log --log /data/progress.log`
+
+This process can be interrupted and later started again with the same command
+line. It will execute the operations listed in the sync log, but ignore the 
+ones contained in the progress log. Therefore, the whole sync process can be
+split in a number of incremental sync processes.
 
 ## Architecture
 The Stream Sync tool makes use of [Reactive streams](http://www.reactive-streams.org/)
