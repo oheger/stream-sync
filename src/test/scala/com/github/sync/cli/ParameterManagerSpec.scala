@@ -23,7 +23,7 @@ import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.{ApplyModeNone, ApplyModeTarget}
-import com.github.sync.{AsyncTestHelper, FileTestHelper}
+import com.github.sync.{AsyncTestHelper, FileTestHelper, SupportedArgument}
 import org.scalatest._
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -389,5 +389,56 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
       "destination URI")
     msg should include("apply mode")
     msg should include("timeout value")
+  }
+
+  it should "extract optional supported arguments" in {
+    val argsMap = Map("--foo" -> List("bar"), "other" -> List("v1", "v2"))
+    val expUpdMap = argsMap - "--foo"
+    val supportedArgs = List(SupportedArgument("--foo", mandatory = false),
+      SupportedArgument("--notAvailable", mandatory = false))
+
+    val (updArgs, args) =
+      futureResult(ParameterManager.extractSupportedArguments(argsMap, supportedArgs))
+    updArgs should be(expUpdMap)
+    args("--foo") should be("bar")
+    args should have size 1
+  }
+
+  it should "handle failures when accessing optional supported arguments" in {
+    val argsMap = Map("--foo" -> List("v1", "v2"), "--bar" -> List("ok"),
+      "--baz" -> List("v3", "v4"))
+    val supportedArgs = List(SupportedArgument("--foo", mandatory = false),
+      SupportedArgument("--bar", mandatory = false),
+      SupportedArgument("--baz", mandatory = false))
+
+    val msg = expectFailedFuture(ParameterManager.extractSupportedArguments(argsMap,
+      supportedArgs), "--foo")
+    msg should include("--baz")
+    msg should not include "--bar"
+  }
+
+  it should "extract mandatory supported arguments" in {
+    val argsMap = Map("--foo" -> List("bar"), "other" -> List("v1", "v2"))
+    val expUpdMap = argsMap - "--foo"
+    val supportedArgs = List(SupportedArgument("--foo", mandatory = true),
+      SupportedArgument("--bar", mandatory = true, defaultValue = Some("test")))
+    val expResult = Map("--foo" -> "bar", "--bar" -> "test")
+
+    val (updArgs, args) =
+      futureResult(ParameterManager.extractSupportedArguments(argsMap, supportedArgs))
+    updArgs should be(expUpdMap)
+    args should be(expResult)
+  }
+
+  it should "handle failures when accessing mandatory supported arguments" in {
+    val argsMap = Map("--foo" -> List("v1", "v2"), "--bar" -> List("ok"))
+    val supportedArgs = List(SupportedArgument("--foo", mandatory = true),
+      SupportedArgument("--bar", mandatory = true),
+      SupportedArgument("--baz", mandatory = true))
+
+    val msg = expectFailedFuture(ParameterManager.extractSupportedArguments(argsMap,
+      supportedArgs), "--foo")
+    msg should include("--baz")
+    msg should not include "--bar"
   }
 }
