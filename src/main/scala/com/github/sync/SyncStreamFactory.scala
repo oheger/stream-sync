@@ -20,6 +20,7 @@ import java.nio.file.Path
 
 import akka.NotUsed
 import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
 import akka.util.Timeout
 
@@ -36,27 +37,67 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 trait SyncStreamFactory {
   /**
-    * Creates a source for a sync stream based on the URI specified. The
-    * concrete source implementation returned by an implementation depends on
-    * the URI provided, as different protocols are supported.
-    *
-    * @param uri the URI for the sync source in question
-    * @param ec  the execution context
-    * @return a future with the newly created sync source
+    * Type definition for a map with additional arguments that are required for
+    * by a sync structure.
     */
-  def createSyncInputSource(uri: String)(implicit ec: ExecutionContext):
-  Future[Source[FsElement, Any]]
+  type StructureArgs = Map[String, String]
+
+  /**
+    * Type definition for a function that returns a ''Future'' result when
+    * provided a map with arguments.
+    *
+    * Some functions of this service create objects that may require additional
+    * arguments to access certain target structures. Such arguments have to be
+    * injected at creation time. This is represented by this type.
+    */
+  type ArgsFunc[A] = StructureArgs => Future[A]
+
+  /**
+    * Determines additional arguments supported by the structure specified. For
+    * some types of structures additional arguments are required/supported, for
+    * instance user credentials to access files on a WebDav server. This
+    * function returns a list with information about such arguments based on
+    * the passed in URI.
+    *
+    * @param uri           the URI to the structure
+    * @param structureType the type of the structure
+    * @param ec            the execution context
+    * @return a future with additional arguments supported by the structure
+    */
+  def additionalArguments(uri: String, structureType: StructureType)
+                         (implicit ec: ExecutionContext): Future[Iterable[SupportedArgument]]
+
+  /**
+    * Creates a source for a sync stream based on the URI and arguments
+    * specified. The concrete source returned by an implementation depends on
+    * the URI provided, as different protocols are supported. As additional
+    * arguments may be required, result is actually a function that expects
+    * a map with arguments and returns a future with the source.
+    *
+    * @param uri           the URI for the sync source in question
+    * @param structureType the type of the structure the source is for
+    * @param ec            the execution context
+    * @param system        the actor system
+    * @param mat           the object to materialize streams
+    * @return a function to create the sync source
+    */
+  def createSyncInputSource(uri: String, structureType: StructureType)
+                           (implicit ec: ExecutionContext, system: ActorSystem,
+                            mat: ActorMaterializer): ArgsFunc[Source[FsElement, Any]]
 
   /**
     * Creates a ''SourceFileProvider'' based on the URI provided. This is
     * needed to apply sync operations against destination structures.
     *
-    * @param uri the URI of the source structure
-    * @param ec  the execution context
-    * @return a future with the ''SourceFileProvider''
+    * @param uri    the URI of the source structure
+    * @param ec     the execution context
+    * @param system the actor system
+    * @param mat    the object to materialize streams
+    * @return a function to create the ''SourceFileProvider''
     */
-  def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext):
-  Future[SourceFileProvider]
+  def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext, system: ActorSystem,
+                                            mat: ActorMaterializer):
+  ArgsFunc[SourceFileProvider]
 
   /**
     * Creates a source that produces a sequence of [[SyncOperation]] objects
@@ -64,13 +105,17 @@ trait SyncStreamFactory {
     * folders of the given structures and calculates the operations to be
     * applied to synchronize them.
     *
-    * @param uriSrc the URI to the source structure
-    * @param uriDst the URI to the destination structure
-    * @param ec     the execution context
+    * @param uriSrc         the URI to the source structure
+    * @param uriDst         the URI to the destination structure
+    * @param additionalArgs a map with additional arguments for structures
+    * @param ec             the execution context
+    * @param system         the actor system
+    * @param mat            the object to materialize streams
     * @return a future with the source
     */
-  def createSyncSource(uriSrc: String, uriDst: String)(implicit ec: ExecutionContext):
-  Future[Source[SyncOperation, NotUsed]]
+  def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs)
+                      (implicit ec: ExecutionContext, system: ActorSystem,
+                       mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]]
 
   /**
     * Creates the flow stage that interprets sync operations and applies them
@@ -81,11 +126,11 @@ trait SyncStreamFactory {
     * @param system       the actor system
     * @param ec           the execution context
     * @param timeout      a timeout when applying a sync operation
-    * @return a future with the stage to process sync operations
+    * @return a function to create the stage to process sync operations
     */
   def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
                       (implicit system: ActorSystem, ec: ExecutionContext, timeout: Timeout):
-  Future[Flow[SyncOperation, SyncOperation, NotUsed]]
+  ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]]
 
   /**
     * Creates a ''RunnableGraph'' representing the stream for a sync process.

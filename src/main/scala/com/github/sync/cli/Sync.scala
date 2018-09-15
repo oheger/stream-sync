@@ -129,13 +129,13 @@ object Sync {
     * @return the source for the sync process
     */
   private def createSyncSource(config: SyncConfig)
-                              (implicit ec: ExecutionContext, mat: ActorMaterializer,
-                               factory: SyncStreamFactory):
+                              (implicit ec: ExecutionContext, system: ActorSystem,
+                               mat: ActorMaterializer, factory: SyncStreamFactory):
   Future[Source[SyncOperation, Any]] = config.syncLogPath match {
     case Some(path) =>
       createSyncSourceFromLog(config, path)
     case None =>
-      factory.createSyncSource(config.syncUris._1, config.syncUris._2)
+      factory.createSyncSource(config.syncUris._1, config.syncUris._2, Map.empty)
   }
 
   /**
@@ -170,14 +170,15 @@ object Sync {
     */
   private def createApplyStage(config: SyncConfig)
                               (implicit ec: ExecutionContext, system: ActorSystem,
-                               factory: SyncStreamFactory):
+                               mat: ActorMaterializer, factory: SyncStreamFactory):
   Future[Flow[SyncOperation, SyncOperation, NotUsed]] = {
     implicit val timeout: Timeout = config.timeout
+    val additionalArgs = Map.empty[String, String]
     config.applyMode match {
       case ParameterManager.ApplyModeTarget(targetUri) =>
         for {
-          provider <- factory.createSourceFileProvider(config.syncUris._1)
-          stage <- factory.createApplyStage(targetUri, provider)
+          provider <- factory.createSourceFileProvider(config.syncUris._1).apply(additionalArgs)
+          stage <- factory.createApplyStage(targetUri, provider).apply(additionalArgs)
         } yield stage
 
       case ParameterManager.ApplyModeNone =>

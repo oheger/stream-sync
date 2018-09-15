@@ -21,12 +21,12 @@ import java.nio.file.{Path, Paths, StandardOpenOption}
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.pattern.ask
-import akka.stream.{ClosedShape, SourceShape}
+import akka.stream.{ActorMaterializer, ClosedShape, SourceShape}
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import akka.util.Timeout
 import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
 import com.github.sync.log.ElementSerializer
-import com.github.sync.{FsElement, SourceFileProvider, SyncOperation, SyncStreamFactory}
+import com.github.sync._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -34,32 +34,45 @@ import scala.concurrent.{ExecutionContext, Future}
   * Implementation of the ''SyncStreamFactory'' trait.
   */
 object SyncStreamFactoryImpl extends SyncStreamFactory {
-  override def createSyncInputSource(uri: String)(implicit ec: ExecutionContext):
-  Future[Source[FsElement, Any]] = Future {
+  /** The name of the blocking dispatcher. */
+  private val BlockingDispatcherName = "blocking-dispatcher"
+
+  override def additionalArguments(uri: String, structureType: StructureType)
+                                  (implicit ec: ExecutionContext):
+  Future[Iterable[SupportedArgument]] = Future.successful(List.empty)
+
+  override def createSyncInputSource(uri: String, structureType: StructureType)
+                                    (implicit ec: ExecutionContext, system: ActorSystem,
+                                     mat: ActorMaterializer):
+  ArgsFunc[Source[FsElement, Any]] = _ => Future {
     LocalFsElementSource(Paths get uri).via(new FolderSortStage)
   }
 
-  override def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext):
-  Future[SourceFileProvider] = Future {
+  override def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext,
+                                                     system: ActorSystem,
+                                                     mat: ActorMaterializer):
+  ArgsFunc[SourceFileProvider] = _ => Future {
     new LocalUriResolver(Paths get uri)
   }
 
   override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
                                (implicit system: ActorSystem, ec: ExecutionContext,
                                 timeout: Timeout):
-  Future[Flow[SyncOperation, SyncOperation, NotUsed]] = Future {
+  ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]] = _ => Future {
     val operationActor = system.actorOf(Props(classOf[LocalSyncOperationActor],
-      fileProvider, Paths get uriDst, "blocking-dispatcher"))
+      fileProvider, Paths get uriDst, BlockingDispatcherName))
     Flow[SyncOperation].mapAsync(1) { op =>
       val futWrite = operationActor ? op
       futWrite.mapTo[SyncOperation]
     }
   }
 
-  override def createSyncSource(uriSrc: String, uriDst: String)(implicit ec: ExecutionContext):
+  override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs)
+                               (implicit ec: ExecutionContext, system: ActorSystem,
+                                mat: ActorMaterializer):
   Future[Source[SyncOperation, NotUsed]] = for {
-    srcSource <- createSyncInputSource(uriSrc)
-    dstSource <- createSyncInputSource(uriDst)
+    srcSource <- createSyncInputSource(uriSrc, SourceStructureType).apply(additionalArgs)
+    dstSource <- createSyncInputSource(uriDst, DestinationStructureType).apply(additionalArgs)
   } yield createGraphForSyncSource(srcSource, dstSource)
 
   override def createSyncStream(source: Source[SyncOperation, Any],
