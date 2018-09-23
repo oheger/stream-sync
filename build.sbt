@@ -16,9 +16,11 @@
 
 /** Definition of versions. */
 lazy val AkkaVersion = "2.5.16"
-lazy val AkkaHttpVersion = "10.1.4"
+lazy val AkkaHttpVersion = "10.1.5"
 lazy val VersionScala = "2.12.6"
+lazy val VersionScalaXml = "1.1.0"
 lazy val VersionScalaTest = "3.0.5"
+lazy val VersionWireMock = "2.18.0"
 
 lazy val ITest = config("integrationTest") extend Test
 
@@ -26,11 +28,13 @@ lazy val akkaDependencies = Seq(
   "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
   "com.typesafe.akka" %% "akka-testkit" % AkkaVersion,
   "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
   "org.scala-lang" % "scala-reflect" % VersionScala
 )
 
 lazy val testDependencies = Seq(
-  "org.scalatest" %% "scalatest" % VersionScalaTest % "test"
+  "org.scalatest" %% "scalatest" % VersionScalaTest % "test",
+  "com.github.tomakehurst" % "wiremock" % VersionWireMock % "test"
 )
 
 lazy val logDependencies = Seq(
@@ -45,6 +49,7 @@ lazy val StreamSync = (project in file("."))
     version := "0.4-SNAPSHOT",
     scalaVersion := VersionScala,
     libraryDependencies ++= akkaDependencies,
+    libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
     libraryDependencies ++= testDependencies,
     name := "stream-sync"
   )
