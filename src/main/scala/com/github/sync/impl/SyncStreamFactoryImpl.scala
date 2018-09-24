@@ -27,6 +27,7 @@ import akka.util.Timeout
 import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
 import com.github.sync.log.ElementSerializer
 import com.github.sync._
+import com.github.sync.webdav.DavConfig
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -34,12 +35,24 @@ import scala.concurrent.{ExecutionContext, Future}
   * Implementation of the ''SyncStreamFactory'' trait.
   */
 object SyncStreamFactoryImpl extends SyncStreamFactory {
+  /** URI prefix indicating a WebDav structure. */
+  val PrefixWebDav = "dav:"
+
+  /** Regular expression for parsing a WebDav URI. */
+  private val RegDavUri = (PrefixWebDav + "(.+)").r
+
   /** The name of the blocking dispatcher. */
   private val BlockingDispatcherName = "blocking-dispatcher"
 
   override def additionalArguments(uri: String, structureType: StructureType)
                                   (implicit ec: ExecutionContext):
-  Future[Iterable[SupportedArgument]] = Future.successful(List.empty)
+  Future[Iterable[SupportedArgument]] = {
+    val args = uri match {
+      case RegDavUri(_*) => DavConfig.supportedArgumentsFor(structureType)
+      case _ => List.empty
+    }
+    Future.successful(args)
+  }
 
   override def createSyncInputSource(uri: String, structureType: StructureType)
                                     (implicit ec: ExecutionContext, system: ActorSystem,
