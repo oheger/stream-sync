@@ -27,7 +27,7 @@ import akka.util.Timeout
 import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
 import com.github.sync.log.ElementSerializer
 import com.github.sync._
-import com.github.sync.webdav.DavConfig
+import com.github.sync.webdav.{DavConfig, DavFsElementSource}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -57,8 +57,12 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   override def createSyncInputSource(uri: String, structureType: StructureType)
                                     (implicit ec: ExecutionContext, system: ActorSystem,
                                      mat: ActorMaterializer):
-  ArgsFunc[Source[FsElement, Any]] = _ => Future {
-    LocalFsElementSource(Paths get uri).via(new FolderSortStage)
+  ArgsFunc[Source[FsElement, Any]] = uri match {
+    case RegDavUri(davUri) =>
+      args =>
+        DavConfig(structureType, davUri, args) map (conf => DavFsElementSource(conf))
+    case _ =>
+      _ => Future.successful(LocalFsElementSource(Paths get uri).via(new FolderSortStage))
   }
 
   override def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext,
