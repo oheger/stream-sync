@@ -27,7 +27,10 @@ import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.log.SerializerStreamHelper
-import com.github.sync.{SyncOperation, SyncStreamFactory}
+import com.github.sync.{
+  DestinationStructureType, SourceStructureType, SyncOperation,
+  SyncStreamFactory
+}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -86,30 +89,35 @@ object Sync {
 
     for {argsMap <- ParameterManager.parseParameters(args)
          (argsMap1, config) <- ParameterManager.extractSyncConfig(argsMap)
-         filterData <- FilterManager.parseFilters(argsMap1)
-         _ <- ParameterManager.checkParametersConsumed(filterData._1)
-         result <- runSync(config, filterData._2)
+         (argsMap2, filterData) <- FilterManager.parseFilters(argsMap1)
+         srcArgs <- factory.additionalArguments(config.syncUris._1, SourceStructureType)
+         dstArgs <- factory.additionalArguments(config.syncUris._2, DestinationStructureType)
+         (argsMap3, addArgs) <- ParameterManager.extractSupportedArguments(argsMap2,
+           srcArgs ++ dstArgs)
+         _ <- ParameterManager.checkParametersConsumed(argsMap3)
+         result <- runSync(config, filterData, addArgs)
     } yield result
   }
 
   /**
     * Runs the stream that represents the sync process.
     *
-    * @param config     the ''SyncConfig''
-    * @param filterData data about the current filter definition
-    * @param system     the actor system
-    * @param mat        the object to materialize streams
-    * @param factory    the factory for the sync stream
+    * @param config         the ''SyncConfig''
+    * @param filterData     data about the current filter definition
+    * @param additionalArgs a map with additional arguments
+    * @param system         the actor system
+    * @param mat            the object to materialize streams
+    * @param factory        the factory for the sync stream
     * @return a future with information about the result of the process
     */
-  private def runSync(config: SyncConfig,
-                      filterData: SyncFilterData)
+  private def runSync(config: SyncConfig, filterData: SyncFilterData,
+                      additionalArgs: Map[String, String])
                      (implicit system: ActorSystem, mat: ActorMaterializer,
                       factory: SyncStreamFactory): Future[SyncResult] = {
     import system.dispatcher
     val filter = createSyncFilter(filterData)
     for {
-      source <- createSyncSource(config)
+      source <- createSyncSource(config, additionalArgs)
       stage <- createApplyStage(config)
       g <- factory.createSyncStream(source, stage, config.logFilePath)(filter)
       res <- g.run()
@@ -122,20 +130,21 @@ object Sync {
     * structures. If however a sync log is provided, a source reading this file
     * is returned.
     *
-    * @param config  the sync configuration
-    * @param ec      the execution context
-    * @param mat     the object to materialize streams
-    * @param factory the factory for the sync stream
+    * @param config         the sync configuration
+    * @param additionalArgs the map with additional arguments
+    * @param ec             the execution context
+    * @param mat            the object to materialize streams
+    * @param factory        the factory for the sync stream
     * @return the source for the sync process
     */
-  private def createSyncSource(config: SyncConfig)
+  private def createSyncSource(config: SyncConfig, additionalArgs: Map[String, String])
                               (implicit ec: ExecutionContext, system: ActorSystem,
                                mat: ActorMaterializer, factory: SyncStreamFactory):
   Future[Source[SyncOperation, Any]] = config.syncLogPath match {
     case Some(path) =>
       createSyncSourceFromLog(config, path)
     case None =>
-      factory.createSyncSource(config.syncUris._1, config.syncUris._2, Map.empty)
+      factory.createSyncSource(config.syncUris._1, config.syncUris._2, additionalArgs)
   }
 
   /**

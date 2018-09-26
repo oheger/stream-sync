@@ -16,6 +16,8 @@
 
 package com.github.sync
 
+import WireMockSupport._
+
 import java.nio.file.{Files, Path}
 import java.time.Instant
 
@@ -23,7 +25,7 @@ import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.github.sync.cli.Sync
 import com.github.sync.impl.SyncStreamFactoryImpl
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest._
 
 import scala.concurrent.duration._
 
@@ -31,15 +33,17 @@ import scala.concurrent.duration._
   * Integration test class for sync processes.
   */
 class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with
-  BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper with AsyncTestHelper {
+  BeforeAndAfterAll with BeforeAndAfterEach with Matchers with FileTestHelper with
+  AsyncTestHelper with WireMockSupport {
   def this() = this(ActorSystem("SyncSpec"))
 
   override protected def afterAll(): Unit = {
     TestKit shutdownActorSystem system
   }
 
-  after {
+  override protected def afterEach(): Unit = {
     tearDownTestFile()
+    super.afterEach()
   }
 
   /**
@@ -252,5 +256,39 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result.successfulOperations should be(1)
     checkFile(dstFolder, NewFile)
     checkFileNotPresent(dstFolder, ProcessedFile)
+  }
+
+  it should "support a WebDav URI for the source structure" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val WebDavPath = "/test/folder2/folder3"
+    stubFolderRequest(WebDavPath, "folder3.xml")
+    val logFile = createFileReference()
+    val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
+      "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--src-user", UserId,
+      "--src-password", Password)
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(1)
+    val lines = Files.readAllLines(logFile)
+    lines.size() should be(1)
+    lines.get(0) should be("CREATE 0 FILE /file5.mp3 0 2018-09-19T20:14:00Z 500")
+  }
+
+  it should "support a WebDav URI for the destination structure" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val WebDavPath = "/test/folder2/folder3"
+    stubFolderRequest(WebDavPath, "folder3_full.xml")
+    val logFile = createFileReference()
+    val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--dst-user", UserId,
+      "--dst-password", Password, "--dst-modifiedProperty", "Win32LastModifiedTime")
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(1)
+    val lines = Files.readAllLines(logFile)
+    lines.size() should be(1)
+    lines.get(0) should be("REMOVE 0 FILE /file5.mp3 0 2018-09-19T20:14:00Z 500")
   }
 }
