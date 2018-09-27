@@ -34,7 +34,8 @@ lazy val akkaDependencies = Seq(
 
 lazy val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % VersionScalaTest % "test",
-  "com.github.tomakehurst" % "wiremock" % VersionWireMock % "test"
+  "com.github.tomakehurst" % "wiremock" % VersionWireMock % "test",
+  "org.mockito" % "mockito-core" % "1.9.5" % "test"
 )
 
 lazy val logDependencies = Seq(

@@ -19,11 +19,11 @@ package com.github.sync.webdav
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
-import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
+import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.{ActorMaterializer, OverflowStrategy, QueueOfferResult}
 
 import scala.concurrent.{Future, Promise}
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 /**
   * A helper class to manage a flow for sending requests to the WebDav server.
@@ -43,7 +43,7 @@ private class RequestQueue(uri: Uri)(implicit system: ActorSystem, mat: ActorMat
   private val QueueSize = 2
 
   /** The flow for generating HTTP requests. */
-  val poolClientFlow = createPoolClientFlow()
+  val poolClientFlow = createPoolClientFlow[Promise[HttpResponse]](uri, Http())
 
   import system.dispatcher
 
@@ -85,14 +85,4 @@ private class RequestQueue(uri: Uri)(implicit system: ActorSystem, mat: ActorMat
   def shutdown(): Unit = {
     queue.complete()
   }
-
-  /**
-    * Creates the flow for sending HTTP requests.
-    *
-    * @return the flow
-    */
-  private def createPoolClientFlow(): Flow[(HttpRequest, Promise[HttpResponse]),
-    (Try[HttpResponse], Promise[HttpResponse]), Http.HostConnectionPool] =
-    Http().cachedHostConnectionPool[Promise[HttpResponse]](uri.authority.host.toString(),
-      uri.authority.port)
 }
