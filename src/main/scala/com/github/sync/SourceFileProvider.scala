@@ -39,4 +39,10 @@ trait SourceFileProvider {
     * @return a ''Source'' for reading this file
     */
   def fileSource(file: FsFile): Source[ByteString, Any]
+
+  /**
+    * A method that should be called by clients when this object is no longer
+    * needed. Here clean-up logic can be implemented.
+    */
+  def shutdown(): Unit = {}
 }
