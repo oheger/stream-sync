@@ -81,7 +81,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     Flow[SyncOperation].mapAsync(1) { op =>
       val futWrite = operationActor ? op
       futWrite.mapTo[SyncOperation]
-    }
+    } via new CleanupStage[SyncOperation](() => fileProvider.shutdown())
   }
 
   override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs)

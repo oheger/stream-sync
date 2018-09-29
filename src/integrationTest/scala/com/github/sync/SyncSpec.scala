@@ -17,16 +17,19 @@
 package com.github.sync
 
 import WireMockSupport._
-
 import java.nio.file.{Files, Path}
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import com.github.sync.cli.Sync
 import com.github.sync.impl.SyncStreamFactoryImpl
+import com.github.sync.local.LocalUriResolver
 import org.scalatest._
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
 /**
@@ -290,5 +293,28 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
     lines.get(0) should be("REMOVE 0 FILE /file5.mp3 0 2018-09-19T20:14:00Z 500")
+  }
+
+  it should "make sure that an element source for local files is shutdown" in {
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val shutdownCount = new AtomicInteger
+    val provider = new LocalUriResolver(srcFolder) {
+      override def shutdown(): Unit = {
+        shutdownCount.incrementAndGet() // records this invocation
+        super.shutdown()
+      }
+    }
+    implicit val factory: SyncStreamFactory = new DelegateSyncStreamFactory {
+      override def createSourceFileProvider(uri: String)
+                                           (implicit ec: ExecutionContext, system: ActorSystem,
+                                            mat: ActorMaterializer):
+      ArgsFunc[SourceFileProvider] = _ => Future.successful(provider)
+    }
+    createTestFile(srcFolder, "test.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString)
+
+    futureResult(Sync.syncProcess(options))
+    shutdownCount.get() should be(1)
   }
 }
