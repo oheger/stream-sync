@@ -22,6 +22,8 @@ lazy val VersionScalaXml = "1.1.0"
 lazy val VersionScalaTest = "3.0.5"
 lazy val VersionWireMock = "2.18.0"
 
+scalacOptions ++= Seq("-deprecation", "-feature")
+
 lazy val ITest = config("integrationTest") extend Test
 
 lazy val akkaDependencies = Seq(
