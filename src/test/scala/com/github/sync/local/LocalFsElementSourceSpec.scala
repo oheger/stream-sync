@@ -110,8 +110,8 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val rootFolder = FsFolder("", -1)
     val rootFiles = List(createFile(rootFolder, "test.txt"),
       createFile(rootFolder, "noMedium1.mp3"))
-    val dir1 = createDir(rootFolder, "medium1")
-    val dir2 = createDir(rootFolder, "medium2")
+    val dir1 = createDir(rootFolder, "Medium1")
+    val dir2 = createDir(rootFolder, "Medium2")
     val dir1Files = List(
       createFile(dir1._1, "noMedium2.mp3"),
       createFile(dir1._1, "README.TXT"),
@@ -292,6 +292,27 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val source = new LocalFsElementSource(path, LocalFsElementSource.createDirectoryStream)
 
     source.rootUri should endWith("/")
+  }
+
+  it should "iterate over sub folders in alphabetical order" in {
+    def rootUri(elem: FsElement): String = {
+      val pos = elem.relativeUri.indexOf('/', 1)
+      if (pos < 0) "" else elem.relativeUri.substring(0, pos)
+    }
+
+    setUpDirectoryStructure()
+    val (otherMedium, _) = createDir(FsFolder("", -1), "anotherDir")
+    createFile(otherMedium, "data1.txt")
+    createFile(otherMedium, "data2.txt")
+    val source = LocalFsElementSource(testDirectory)
+
+    val files = runSource(source)
+    val folderIteration = files.foldLeft(List.empty[String]) { (lst, e) =>
+      val parent = rootUri(e)
+      if (!lst.contains(parent)) parent :: lst
+      else lst
+    }
+    folderIteration should be(List("/anotherDir", "/Medium2", "/Medium1", ""))
   }
 }
 

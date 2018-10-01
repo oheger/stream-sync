@@ -27,7 +27,7 @@ import com.github.sync.local.LocalFsElementSource.StreamFactory
 import com.github.sync.{FsElement, FsFile, FsFolder}
 
 import scala.annotation.tailrec
-import scala.collection.immutable.Queue
+import scala.collection.SortedSet
 import scala.language.implicitConversions
 
 object LocalFsElementSource {
@@ -72,10 +72,22 @@ object LocalFsElementSource {
     * A simple data class that stores relevant information about a folder that
     * is pending to be processed.
     *
+    * Note that this class defines an order, so instances can be stored in a
+    * sorted collection. This guarantees that sub folders are processed in
+    * correct alphabetical order.
+    *
     * @param folder the path to the folder
-    * @param level  the level
+    * @param uri    the URI of the folder element
+    * @param level  the level of this folder
     */
-  private case class FolderData(folder: Path, level: Int)
+  private case class FolderData(folder: Path, uri: String, level: Int)
+    extends Ordered[FolderData] {
+    override def compare(that: FolderData): Int = {
+      val deltaLevel = level - that.level
+      if (deltaLevel != 0) deltaLevel
+      else uri.compareTo(that.uri)
+    }
+  }
 
   /**
     * Case class representing the state of a BFS iteration.
@@ -85,7 +97,7 @@ object LocalFsElementSource {
     * @param level            the current level in the iteration
     */
   private case class BFSState(optCurrentStream: Option[DirectoryStreamRef],
-                              dirsToProcess: Queue[FolderData],
+                              dirsToProcess: SortedSet[FolderData],
                               level: Int)
 
   /**
@@ -124,8 +136,8 @@ object LocalFsElementSource {
           val path = ref.iterator.next()
           val isDir = Files isDirectory path
           val elem = createElement(rootUri, path, state.level, isDir)
-          if (isDir) (state.copy(dirsToProcess =
-            state.dirsToProcess.enqueue(FolderData(path, state.level + 1))), Some(elem))
+          if (isDir) (state.copy(dirsToProcess = state.dirsToProcess +
+            FolderData(path, elem.relativeUri, state.level + 1)), Some(elem))
           else (state, Some(elem))
         } else {
           ref.close()
@@ -133,14 +145,12 @@ object LocalFsElementSource {
         }
 
       case None =>
-        state.dirsToProcess.dequeueOption match {
-          case Some((p, q)) =>
-            iterateBFS(rootUri, streamFactory,
-              BFSState(optCurrentStream = Some(createStreamRef(p.folder, streamFactory)),
-                level = p.level, dirsToProcess = q))
-          case _ =>
-            (BFSState(None, Queue(), 0), None)
-        }
+        if (state.dirsToProcess.nonEmpty) {
+          val data = state.dirsToProcess.firstKey
+          iterateBFS(rootUri, streamFactory,
+            BFSState(optCurrentStream = Some(createStreamRef(data.folder, streamFactory)),
+              level = data.level, dirsToProcess = state.dirsToProcess - data))
+        } else (BFSState(None, SortedSet.empty, 0), None)
     }
   }
 
@@ -230,7 +240,7 @@ class LocalFsElementSource(val root: Path,
     new GraphStageLogic(shape) {
 
       /** The current state of the iteration. */
-      private var currentState = BFSState(None, Queue(FolderData(root, 0)), 0)
+      private var currentState = BFSState(None, SortedSet(FolderData(root, "", 0)), 0)
 
       setHandler(out, new OutHandler {
         override def onPull(): Unit = {
