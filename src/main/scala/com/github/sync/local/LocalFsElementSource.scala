@@ -24,16 +24,13 @@ import akka.stream.scaladsl.Source
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
 import com.github.sync.local.LocalFsElementSource.StreamFactory
-import com.github.sync.{FsElement, FsFile, FsFolder}
+import com.github.sync.{FsElement, FsFile, FsFolder, UriEncodingHelper}
 
 import scala.annotation.tailrec
 import scala.collection.SortedSet
 import scala.language.implicitConversions
 
 object LocalFsElementSource {
-  /** The separator for URI path components. */
-  private val UriSeparator = "/"
-
   /**
     * Returns a new source for iterating over the files in the specified root
     * folder.
@@ -177,13 +174,10 @@ object LocalFsElementSource {
     * @param path    the path of the element
     * @return the URI for this element
     */
-  private def generateElementUri(rootUri: String, path: Path): String = {
-    @tailrec def removeTrailingSlash(s: String): String =
-      if (s.endsWith(UriSeparator)) removeTrailingSlash(s dropRight 1)
-      else s
-
-    removeTrailingSlash(path.toUri.toString.substring(rootUri.length - 1))
-  }
+  private def generateElementUri(rootUri: String, path: Path): String =
+    UriEncodingHelper.removeTrailing(
+      UriEncodingHelper.pathToUri(path).substring(rootUri.length - 1),
+      UriEncodingHelper.UriSeparator)
 
   /**
     * Uses the specified ''StreamFactory'' to create a ''DirectoryStreamRef''
@@ -204,10 +198,8 @@ object LocalFsElementSource {
     * @param root the root path to be iterated
     * @return the root URI
     */
-  private def extractRootUri(root: Path): String = {
-    val uri = root.toUri.toString
-    if (uri.endsWith(UriSeparator)) uri else uri + UriSeparator
-  }
+  private def extractRootUri(root: Path): String =
+    UriEncodingHelper.withTrailingSeparator(UriEncodingHelper.pathToUri(root))
 }
 
 /**

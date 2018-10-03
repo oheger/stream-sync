@@ -207,6 +207,15 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     files should contain theSameElementsAs fileData.keys
   }
 
+  it should "correctly encode file URIs" in {
+    Files.createDirectory(createPathInDirectory("(1) testFolder"))
+    writeFileContent(createPathInDirectory("{2} test.txt"), "test")
+    val source = LocalFsElementSource(testDirectory)
+    val files = runSource(source) map (_.relativeUri)
+
+    files should contain only("/%281%29%20testFolder", "/%7B2%7D%20test.txt")
+  }
+
   it should "close all directory streams it creates" in {
     setUpDirectoryStructure()
     val (queue, factory) = createStreamWrapperFactory()
