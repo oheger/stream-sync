@@ -36,7 +36,8 @@ object LocalUriResolverSpec {
   private val RootPath = Paths get "testRootPath"
 
   /** String representation of the root path. */
-  private val RootUri = RootPath.toUri.toString + "/"
+  private val RootUri =
+    UriEncodingHelper.withTrailingSeparator(UriEncodingHelper.pathToUri(RootPath))
 
   /**
     * Convenience function to create an element with a specific URI.
@@ -114,7 +115,7 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
   it should "resolve an element with special characters in its URI" in {
     val relPath = Paths.get("my work", "in+out", "new document.txt")
     val path = RootPath resolve relPath
-    val element = createElement(path.toUri.toString.substring(RootUri.length - 1))
+    val element = createElement(UriEncodingHelper.pathToUri(path).substring(RootUri.length - 1))
     val resolver = new LocalUriResolver(RootPath)
 
     resolver resolve element match {

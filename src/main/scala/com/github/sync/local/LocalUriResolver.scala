@@ -16,38 +16,14 @@
 
 package com.github.sync.local
 
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
 import akka.stream.scaladsl.{FileIO, Source}
 import akka.util.ByteString
-import com.github.sync.{FsElement, FsFile, SourceFileProvider}
+import com.github.sync.{FsElement, FsFile, SourceFileProvider, UriEncodingHelper}
 
 import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
-
-object LocalUriResolver {
-  /** The '+' character that requires a special handling. */
-  private val CharPlus = "+"
-
-  /** The replacement for the '+' character. */
-  private val ReplPlus = "%2b"
-
-  /**
-    * URL-decodes the specified string.
-    *
-    * There seems to be some incompatibilities between the encoding done by the
-    * URI class and the decoding performed by ''URLDecoder''. The former does
-    * not encode '+' characters, but the latter transforms them to space. So a
-    * special treatment is necessary here.
-    *
-    * @param s the string to be dcoded
-    * @return the decoded string
-    */
-  private def decode(s: String): String =
-    URLDecoder.decode(s.replace(CharPlus, ReplPlus), StandardCharsets.UTF_8.name())
-}
 
 /**
   * A class that is able to resolve ''FsElement'' objects in a local file
@@ -60,8 +36,6 @@ object LocalUriResolver {
   */
 class LocalUriResolver(val rootPath: Path) extends SourceFileProvider {
 
-  import LocalUriResolver._
-
   /**
     * Resolves the given ''FsElement'' relatively to the root path set for
     * this object. If the element's URI is invalid this may fail. The function
@@ -71,8 +45,8 @@ class LocalUriResolver(val rootPath: Path) extends SourceFileProvider {
     * @return a ''Try'' with the resolved path
     */
   def resolve(element: FsElement): Try[Path] = Try {
-    val resolvedPath =
-      rootPath.resolve(decode(element.relativeUri.dropWhile(_ == '/'))).normalize()
+    val decodedUri = UriEncodingHelper.decode(element.relativeUri).dropWhile(_ == '/')
+    val resolvedPath = rootPath.resolve(decodedUri).normalize()
     if (!verifyInRootPath(resolvedPath))
       throw new IllegalArgumentException(
         s"Invalid element URI: ${element.relativeUri}! Not in root path.")
