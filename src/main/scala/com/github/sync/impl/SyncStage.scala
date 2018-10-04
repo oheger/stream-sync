@@ -101,9 +101,6 @@ object SyncStage {
   /** The index for the inlet with the destination structure. */
   private val IdxDest = 1
 
-  /** The separator character for path elements in a URI. */
-  private val PathSeparator = "/"
-
   /**
     * A sync function to wait until elements from both sources are received.
     * This function is set initially. It switches to another function when for
@@ -202,12 +199,14 @@ object SyncStage {
   private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement,
                                        state: SyncState, stage: SyncStage):
   Option[(EmitData, SyncState)] = {
+    val srcUri = UriEncodingHelper decode elemSource.relativeUri
+    val dstUri = UriEncodingHelper decode elemDest.relativeUri
     val isRemoved = isInRemovedPath(state, elemDest)
-    if (isRemoved.isDefined || elemSource.relativeUri > elemDest.relativeUri) {
+    if (isRemoved.isDefined || srcUri > dstUri) {
       val (op, next) = removeElement(state.updateCurrentElement(elemSource),
         elemDest, isRemoved)
       Some((EmitData(op, stage.PullDest), next))
-    } else if (elemSource.relativeUri < elemDest.relativeUri)
+    } else if (srcUri < dstUri)
       Some((EmitData(List(SyncOperation(elemSource, ActionCreate, elemSource.level)),
         stage.PullSource), state.updateCurrentElement(elemDest)))
     else None
@@ -369,7 +368,8 @@ object SyncStage {
     * @return the updated set with root paths
     */
   private def addRemovedFolder(state: SyncState, folder: FsFolder): Set[FsElement] =
-    state.removedPaths + folder.copy(relativeUri = folder.relativeUri + PathSeparator)
+    state.removedPaths + folder.copy(relativeUri = folder.relativeUri +
+      UriEncodingHelper.UriSeparator)
 }
 
 /**

@@ -242,4 +242,17 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
 
     runStage(sourceOrg, sourceTarget) should contain only expOp
   }
+
+  it should "normalize relative element URIs before comparing them" in {
+    val elements1 = List(createFile("/test%7b1%7d.txt"), createFile("/test%A2.tst"),
+      createFolder("/test%Cc"), createFolder("/lost+found"),
+      createFolder("/try%2Berror"))
+    val elements2 = List(createFile("/test%7B1%7D.txt"), createFile("/test%a2.tst"),
+      createFolder("/test%cC"), createFolder("/lost%2bfound"),
+      createFolder("/try+error"))
+    val sourceOrg = Source(elements1)
+    val sourceTarget = Source(elements2)
+
+    runStage(sourceOrg, sourceTarget) should have size 0
+  }
 }
