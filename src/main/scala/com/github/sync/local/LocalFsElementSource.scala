@@ -24,10 +24,10 @@ import akka.stream.scaladsl.Source
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
 import com.github.sync.local.LocalFsElementSource.StreamFactory
+import com.github.sync.util.{SyncFolderData, SyncFolderQueue}
 import com.github.sync.{FsElement, FsFile, FsFolder, UriEncodingHelper}
 
 import scala.annotation.tailrec
-import scala.collection.SortedSet
 import scala.language.implicitConversions
 
 object LocalFsElementSource {
@@ -69,21 +69,13 @@ object LocalFsElementSource {
     * A simple data class that stores relevant information about a folder that
     * is pending to be processed.
     *
-    * Note that this class defines an order, so instances can be stored in a
-    * sorted collection. This guarantees that sub folders are processed in
-    * correct alphabetical order.
-    *
-    * @param folder the path to the folder
-    * @param uri    the URI of the folder element
-    * @param level  the level of this folder
+    * @param folderPath the path to the folder
+    * @param folder     the associated folder element
     */
-  private case class FolderData(folder: Path, uri: String, level: Int)
-    extends Ordered[FolderData] {
-    override def compare(that: FolderData): Int = {
-      val deltaLevel = level - that.level
-      if (deltaLevel != 0) deltaLevel
-      else uri.compareTo(that.uri)
-    }
+  private case class FolderData(folderPath: Path, folder: FsElement) extends SyncFolderData {
+    override def uri: String = folder.relativeUri
+
+    override def level: Int = folder.level
   }
 
   /**
@@ -91,11 +83,11 @@ object LocalFsElementSource {
     *
     * @param optCurrentStream option for the currently active stream
     * @param dirsToProcess    a list with directories to be processed
-    * @param level            the current level in the iteration
+    * @param currentFolder    the current folder whose elements are iterated
     */
   private case class BFSState(optCurrentStream: Option[DirectoryStreamRef],
-                              dirsToProcess: SortedSet[FolderData],
-                              level: Int)
+                              dirsToProcess: SyncFolderQueue[FolderData],
+                              currentFolder: FsElement)
 
   /**
     * Definition of a function serving as stream factory. Such a function can
@@ -119,65 +111,62 @@ object LocalFsElementSource {
     * directories on the current level first before sub directories are
     * iterated over.
     *
-    * @param rootUri       the Uri of the root path of this source
     * @param streamFactory the function for creating directory streams
     * @param state         the current state of the iteration
     * @return a tuple with the new current directory stream, the new list of
     *         pending directories, and the next element to emit
     */
-  @tailrec private def iterateBFS(rootUri: String, streamFactory: StreamFactory, state: BFSState):
+  @tailrec private def iterateBFS(streamFactory: StreamFactory, state: BFSState):
   (BFSState, Option[FsElement]) = {
     state.optCurrentStream match {
       case Some(ref) =>
         if (ref.iterator.hasNext) {
           val path = ref.iterator.next()
           val isDir = Files isDirectory path
-          val elem = createElement(rootUri, path, state.level, isDir)
+          val elem = createElement(path, state.currentFolder, isDir = isDir)
           if (isDir) (state.copy(dirsToProcess = state.dirsToProcess +
-            FolderData(path, elem.relativeUri, state.level + 1)), Some(elem))
+            FolderData(path, elem)), Some(elem))
           else (state, Some(elem))
         } else {
           ref.close()
-          iterateBFS(rootUri, streamFactory, state.copy(optCurrentStream = None))
+          iterateBFS(streamFactory, state.copy(optCurrentStream = None))
         }
 
       case None =>
         if (state.dirsToProcess.nonEmpty) {
-          val data = state.dirsToProcess.firstKey
-          iterateBFS(rootUri, streamFactory,
-            BFSState(optCurrentStream = Some(createStreamRef(data.folder, streamFactory)),
-              level = data.level, dirsToProcess = state.dirsToProcess - data))
-        } else (BFSState(None, SortedSet.empty, 0), None)
+          val (data, queue) = state.dirsToProcess.dequeue()
+          iterateBFS(streamFactory, BFSState(optCurrentStream = Some(createStreamRef(data
+            .folderPath, streamFactory)),
+            currentFolder = data.folder, dirsToProcess = queue))
+        } else (BFSState(None, state.dirsToProcess, null), None)
     }
   }
 
   /**
     * Creates an ''FsElement'' for the given path.
     *
-    * @param rootUri the URI of the root directory of this source
-    * @param path    the path
-    * @param level   the level
-    * @param isDir   flag whether this is a directory
+    * @param path   the path
+    * @param parent the parent folder
+    * @param isDir  flag whether this is a directory
     * @return the ''FsElement'' representing the path
     */
-  private def createElement(rootUri: String, path: Path, level: Int, isDir: Boolean): FsElement = {
-    val uri = generateElementUri(rootUri, path)
-    if (isDir) FsFolder(uri, level)
-    else FsFile(uri, level, Files.getLastModifiedTime(path).toInstant,
+  private def createElement(path: Path, parent: FsElement, isDir: Boolean):
+  FsElement = {
+    val uri = generateElementUri(parent, path)
+    if (isDir) FsFolder(uri, parent.level + 1)
+    else FsFile(uri, parent.level + 1, Files.getLastModifiedTime(path).toInstant,
       Files.size(path))
   }
 
   /**
-    * Generates the Uri for an element which is relative to the root URI.
+    * Generates the Uri for an element in the current iteration.
     *
-    * @param rootUri the root URI
-    * @param path    the path of the element
+    * @param parent the parent folder
+    * @param path   the path of the element
     * @return the URI for this element
     */
-  private def generateElementUri(rootUri: String, path: Path): String =
-    UriEncodingHelper.removeTrailing(
-      UriEncodingHelper.pathToUri(path).substring(rootUri.length - 1),
-      UriEncodingHelper.UriSeparator)
+  private def generateElementUri(parent: FsElement, path: Path): String =
+    parent.relativeUri + UriEncodingHelper.UriSeparator + path.getFileName.toString
 
   /**
     * Uses the specified ''StreamFactory'' to create a ''DirectoryStreamRef''
@@ -191,15 +180,6 @@ object LocalFsElementSource {
     val stream = factory(p)
     DirectoryStreamRef(stream, stream.iterator())
   }
-
-  /**
-    * Extracts the URI from the given root path.
-    *
-    * @param root the root path to be iterated
-    * @return the root URI
-    */
-  private def extractRootUri(root: Path): String =
-    UriEncodingHelper.withTrailingSeparator(UriEncodingHelper.pathToUri(root))
 }
 
 /**
@@ -223,20 +203,20 @@ class LocalFsElementSource(val root: Path,
 
   val out: Outlet[FsElement] = Outlet("DirectoryStreamSource")
 
-  /** Stores the URI of the root path to be iterated. */
-  val rootUri: String = extractRootUri(root)
-
   override def shape: SourceShape[FsElement] = SourceShape(out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) {
 
+      import SyncFolderQueue._
+
       /** The current state of the iteration. */
-      private var currentState = BFSState(None, SortedSet(FolderData(root, "", 0)), 0)
+      private var currentState = BFSState(None,
+        SyncFolderQueue(FolderData(root, FsFolder("", -1))), null)
 
       setHandler(out, new OutHandler {
         override def onPull(): Unit = {
-          val (nextState, optElem) = iterateBFS(rootUri, streamFactory, currentState)
+          val (nextState, optElem) = iterateBFS(streamFactory, currentState)
           optElem match {
             case Some(e) =>
               push(out, e)

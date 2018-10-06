@@ -125,11 +125,11 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val sub2 = createDir(dir1._1, "anotherSub")
     val sub2Files = List(createFile(sub2._1, "song.mp3"))
     val dir2Files = List(
-      createFile(dir2._1, "medium2Song1.mp3"),
-      createFile(dir2._1, "medium2Song2.mp3")
+      createFile(dir2._1, "medium2Song(1).mp3"),
+      createFile(dir2._1, "medium2Song(2).mp3")
     )
     val sub3 = createDir(dir2._1, "medium2Sub")
-    val sub3Files = List(createFile(sub3._1, "medium2Song3.mp3"))
+    val sub3Files = List(createFile(sub3._1, "medium2 Song3.mp3"))
 
     val dirs = List(dir1, dir2, sub1, sub2, sub1Sub, sub3)
     List(dirs, rootFiles, dir1Files, sub1Files, sub1SubFiles, sub2Files,
@@ -205,15 +205,6 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val files = runSource(source)
 
     files should contain theSameElementsAs fileData.keys
-  }
-
-  it should "correctly encode file URIs" in {
-    Files.createDirectory(createPathInDirectory("(1) testFolder"))
-    writeFileContent(createPathInDirectory("{2} test.txt"), "test")
-    val source = LocalFsElementSource(testDirectory)
-    val files = runSource(source) map (_.relativeUri)
-
-    files should contain only("/%281%29%20testFolder", "/%7B2%7D%20test.txt")
   }
 
   it should "close all directory streams it creates" in {
@@ -294,13 +285,6 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     intercept[NoSuchFileException] {
       runSource(source)
     }
-  }
-
-  it should "add a slash to the root URI if necessary" in {
-    val path = createDataFile("aFile.txt")
-    val source = new LocalFsElementSource(path, LocalFsElementSource.createDirectoryStream)
-
-    source.rootUri should endWith("/")
   }
 
   it should "iterate over sub folders in alphabetical order" in {
