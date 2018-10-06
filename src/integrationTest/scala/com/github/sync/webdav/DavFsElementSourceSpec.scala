@@ -21,7 +21,7 @@ import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.HttpRequest
+import akka.http.scaladsl.model.{HttpRequest, Uri}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
@@ -36,11 +36,15 @@ object DavFsElementSourceSpec {
   /** The prefix for folder names. */
   private val FolderName = "folder"
 
+  /** Regular expression to parse the index from a folder name. */
+  private val RegFolderIndex =
+    """.*folder\s\((\d+)\)""".r
+
   /** Reference date to calculate modified dates for files. */
   private val RefDate = Instant.parse("2018-09-19T20:10:00.000Z")
 
   /** The root path for the sync process on the WebDav server. */
-  private val RootPath = "/test"
+  private val RootPath = "/test%20data"
 
   /** Element for the root folder. */
   private val RootFolder = FsFolder("/", -1)
@@ -57,7 +61,7 @@ object DavFsElementSourceSpec {
     * @param idx the index
     * @return the name of the test file with this index
     */
-  private def fileName(idx: Int): String = s"file$idx.mp3"
+  private def fileName(idx: Int): String = s"file ($idx).mp3"
 
   /**
     * Generates the name of a child element of a folder.
@@ -72,6 +76,14 @@ object DavFsElementSourceSpec {
   }
 
   /**
+    * Generates the name of a folder based on the given index.
+    *
+    * @param idx the index of the test folder
+    * @return the name of this folder
+    */
+  private def folderName(idx: Int): String = FolderName + s" ($idx)"
+
+  /**
     * Generates an element representing a sub folder of the given folder.
     *
     * @param parent the parent folder
@@ -79,7 +91,34 @@ object DavFsElementSourceSpec {
     * @return the resulting element for the sub folder
     */
   private def createSubFolder(parent: FsFolder, idx: Int): FsFolder =
-    FsFolder(childName(parent, FolderName + idx), parent.level + 1)
+    FsFolder(childName(parent, folderName(idx)), parent.level + 1)
+
+  /**
+    * Generates the encoded URI for a folder. Requests to the server for this
+    * folder must use this URI while the relative folder URI is not encoded.
+    *
+    * @param relUri the relative element URI of the folder
+    * @return the encoded folder URI
+    */
+  private def encodedFolderUri(relUri: String): String = {
+    val components = relUri split "/"
+    components.map(UriEncodingHelper.encode)
+      .mkString("/")
+  }
+
+  /**
+    * Generates the name of a file defining the content of a folder based on
+    * the folder's relative URI.
+    *
+    * @param relativeUri the relative URI of the folder
+    * @param suffix      the suffix to append to the file name
+    * @return
+    */
+  private def folderFileName(relativeUri: String, suffix: String): String =
+    relativeUri match {
+      case RegFolderIndex(idx) =>
+        FolderName + idx + suffix + ".xml"
+    }
 
   /**
     * Calculates the last modified time of a test file.
@@ -145,9 +184,9 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     stubFolderRequest(RootPath, "root" + suffix + ".xml")
     ExpectedElements foreach {
       case FsFolder(relativeUri, _) =>
-        val posFileName = relativeUri lastIndexOf '/'
-        val fileName = relativeUri.substring(posFileName + 1) + suffix + ".xml"
-        stubFolderRequest(RootPath + relativeUri, fileName)
+        val fileName = folderFileName(relativeUri, suffix)
+        val httpUri = Uri(RootPath + encodedFolderUri(relativeUri))
+        stubFolderRequest(httpUri.toString(), fileName)
       case _ => // ignore other elements
     }
   }

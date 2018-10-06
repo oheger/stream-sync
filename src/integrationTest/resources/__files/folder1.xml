@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <D:multistatus xmlns:D="DAV:">
   <D:response>
-    <D:href>/test/folder1/</D:href>
+    <D:href>/test%20data/folder1/</D:href>
     <D:propstat>
       <D:prop>
         <D:creationdate>2018-08-28T19:38:46Z</D:creationdate>
@@ -20,7 +20,7 @@
     </D:propstat>
   </D:response>
   <D:response>
-    <D:href>/test/folder1/file1.mp3</D:href>
+    <D:href>/test%20data/folder%20%281%29/file%20%281%29.mp3</D:href>
     <D:propstat>
       <D:prop>
         <D:creationdate>2018-09-19T20:08:00Z</D:creationdate>
@@ -37,7 +37,7 @@
     </D:propstat>
   </D:response>
   <D:response>
-    <D:href>/test/folder1/file2.mp3</D:href>
+    <D:href>/test%20data/folder%20%281%29/file%20%282%29.mp3</D:href>
     <D:propstat>
       <D:prop>
         <D:creationdate>2018-09-19T20:08:00Z</D:creationdate>
@@ -54,7 +54,7 @@
     </D:propstat>
   </D:response>
   <D:response>
-    <D:href>/test/folder1/file3.mp3</D:href>
+    <D:href>/test%20data/folder%20%281%29/file%20%283%29.mp3</D:href>
     <D:propstat>
       <D:prop>
         <D:creationdate>2018-09-19T20:08:00Z</D:creationdate>

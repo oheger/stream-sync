@@ -264,7 +264,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
   it should "support a WebDav URI for the source structure" in {
     implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test/folder2/folder3"
+    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3.xml")
     val logFile = createFileReference()
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
@@ -275,13 +275,13 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0 FILE /file5.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("CREATE 0 FILE /file (5).mp3 0 2018-09-19T20:14:00Z 500")
   }
 
   it should "support a WebDav URI for the destination structure" in {
     implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
-    val WebDavPath = "/test/folder2/folder3"
+    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3_full.xml")
     val logFile = createFileReference()
     val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
@@ -292,7 +292,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("REMOVE 0 FILE /file5.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("REMOVE 0 FILE /file (5).mp3 0 2018-09-19T20:14:00Z 500")
   }
 
   it should "make sure that an element source for local files is shutdown" in {

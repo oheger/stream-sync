@@ -31,7 +31,7 @@
     </D:propstat>
   </D:response>
   <D:response>
-    <D:href>/test/folder2/folder3/file5.mp3</D:href>
+    <D:href>/test%20data/folder%20%282%29/folder%20%283%29/file%20%285%29.mp3</D:href>
     <D:propstat>
       <D:prop>
         <D:creationdate>2018-08-30T20:07:40Z</D:creationdate>

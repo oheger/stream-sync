@@ -29,10 +29,11 @@ import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import akka.util.ByteString
-import com.github.sync.{FsElement, FsFile, FsFolder}
+import com.github.sync.util.SyncFolderQueue._
+import com.github.sync.util.{SyncFolderData, SyncFolderQueue}
+import com.github.sync.{FsElement, FsFile, FsFolder, UriEncodingHelper}
 
 import scala.annotation.tailrec
-import scala.collection.immutable.Queue
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 import scala.xml.{Elem, Node, NodeSeq, XML}
@@ -43,20 +44,22 @@ object DavFsElementSource {
     * Data class storing information about a folder that is to be fetched from
     * the WebDav server.
     *
+    * @param ref    the URI to reference the folder on the server
     * @param folder the folder element
     */
-  case class FolderData(folder: FsFolder) extends Ordered[FolderData] {
-    /**
-      * @inheritdoc Instances are compared based on their level and name. This
-      *             ensures that folders on the same level are processed in
-      *             alphabetical order.
-      */
-    override def compare(that: FolderData): Int = {
-      val deltaLevel = folder.level - that.folder.level
-      if (deltaLevel != 0) deltaLevel
-      else folder.relativeUri.compareTo(that.folder.relativeUri)
-    }
+  case class FolderData(ref: String, folder: FsFolder) extends SyncFolderData {
+    override def uri: String = folder.relativeUri
+
+    override def level: Int = folder.level
   }
+
+  /**
+    * A data class holding information about an element that is processed.
+    *
+    * @param ref  the reference URI for this element
+    * @param elem the element itself
+    */
+  case class ElemData(ref: String, elem: FsElement)
 
   /** Media type of the data that is expected from the server. */
   private val MediaXML = MediaRange(MediaType.text("xml"))
@@ -87,9 +90,6 @@ object DavFsElementSource {
 
   /** Name of the XML is collection element. */
   private val ElemCollection = "iscollection"
-
-  /** URI path component separator character. */
-  private val UriSeparator = "/"
 
   /**
     * Creates a ''Source'' based on this class using the specified
@@ -124,9 +124,8 @@ object DavFsElementSource {
     * @param s the string to process
     * @return the string with trailing slashes removed
     */
-  @tailrec private def removeTrailingSlash(s: String): String =
-    if (s.endsWith(UriSeparator)) removeTrailingSlash(s dropRight 1)
-    else s
+  private def removeTrailingSlash(s: String): String =
+    UriEncodingHelper.removeTrailing(s, UriEncodingHelper.UriSeparator)
 
   /**
     * Extracts the text of a sub element of the given XML node. Handles line
@@ -206,7 +205,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
   private val rootUriPrefix = removeTrailingSlash(uri.path.toString())
 
   /** The length of the root URI prefix. */
-  private val rootUriPrefixLen = rootUriPrefix.length
+  private val decodedRootUriPrefixLen = calcDecodedRootUriLength()
 
   /** The queue for sending HTTP requests. */
   private[webdav] val requestQueue = new RequestQueue(uri)
@@ -219,7 +218,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) with StageLogging {
       // A set with folders to be processed in BFS order
-      var folders = Queue(FolderData(FsFolder("", -1)))
+      var folders = SyncFolderQueue(FolderData(uri.toString(), FsFolder("", -1)))
 
       setHandler(out, new OutHandler {
         override def onPull(): Unit = {
@@ -240,8 +239,8 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
       private def processNextFolder(): Unit = {
         if (folders.isEmpty) complete(out)
         else {
-          val callback = getAsyncCallback[Try[List[FsElement]]](processFolderResult)
-          val (nextFolder, queue) = folders.dequeue
+          val callback = getAsyncCallback[Try[List[ElemData]]](processFolderResult)
+          val (nextFolder, queue) = folders.dequeue()
           folders = queue
           loadFolder(nextFolder) onComplete callback.invoke
         }
@@ -254,7 +253,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         * @param folderData the data of the folder to be loaded
         * @return a future with the parsed content of the folder
         */
-      private def loadFolder(folderData: FolderData): Future[List[FsElement]] = {
+      private def loadFolder(folderData: FolderData): Future[List[ElemData]] = {
         val request = createFolderRequest(folderData)
         log.info("Sending request {}.", request.uri)
         requestQueue.queueRequest(request) flatMap parseFolderResponse(folderData.folder)
@@ -270,7 +269,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         * @return a ''Future'' with the elements that have been extracted
         */
       private def parseFolderResponse(folder: FsFolder)(response: HttpResponse):
-      Future[List[FsElement]] = {
+      Future[List[ElemData]] = {
         if (response.status.isSuccess())
           readResponse(response).map(elem => extractFolderElements(elem, folder.level + 1))
         else Future.failed(new IOException(errorResponse(response, folder)))
@@ -299,7 +298,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         * @param level the level of the elements to extract
         * @return a list with elements that have been extracted
         */
-      private def extractFolderElements(elem: Elem, level: Int): List[FsElement] =
+      private def extractFolderElements(elem: Elem, level: Int): List[ElemData] =
         (elem \ ElemResponse).drop(1) // first element is the folder itself
           .map(node => extractFolderElement(node, level)).toList
 
@@ -310,16 +309,17 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         * @param level the level for this element
         * @return the element that was extracted
         */
-      private def extractFolderElement(node: Node, level: Int): FsElement = {
-        val uri = removeTrailingSlash(elemText(node, ElemHref)) drop rootUriPrefixLen
+      private def extractFolderElement(node: Node, level: Int): ElemData = {
+        val ref = removeTrailingSlash(elemText(node, ElemHref))
+        val uri = extractElementUri(ref)
         val propNode = node \ ElemPropStat \ ElemProp
         val isFolder = java.lang.Boolean.valueOf(elemText(propNode, ElemCollection))
-        if (isFolder) FsFolder(uri, level)
+        if (isFolder) ElemData(ref, FsFolder(uri, level))
         else {
           val strDate = elemText(propNode, config.lastModifiedProperty)
           val modifiedTime = parseModifiedTime(strDate)
           val fileSize = elemText(propNode, ElemContentLength).toLong
-          FsFile(uri, level, modifiedTime, fileSize)
+          ElemData(ref, FsFile(uri, level, modifiedTime, fileSize))
         }
       }
 
@@ -331,15 +331,15 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         *
         * @param triedElements a list of elements contained in the folder
         */
-      private def processFolderResult(triedElements: Try[List[FsElement]]): Unit =
+      private def processFolderResult(triedElements: Try[List[ElemData]]): Unit =
         triedElements match {
           case Success(elements) =>
             if (elements.nonEmpty) {
-              val elemsSorted = elements.sortWith(_.relativeUri < _.relativeUri)
-              emitMultiple(out, elemsSorted)
+              val elemsSorted = elements.sortWith(_.elem.relativeUri < _.elem.relativeUri)
+              emitMultiple(out, elemsSorted map (_.elem))
               folders = elemsSorted.foldLeft(folders) { (q, e) =>
-                e match {
-                  case f: FsFolder => q enqueue FolderData(f)
+                e.elem match {
+                  case f: FsFolder => q + FolderData(e.ref, f)
                   case _ => q
                 }
               }
@@ -359,10 +359,27 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         * @return the request to query the content of this folder
         */
       private def createFolderRequest(folderData: FolderData): HttpRequest =
-        HttpRequest(method = MethodPropFind,
-          uri = rootUriPrefix + folderData.folder.relativeUri,
+        HttpRequest(method = MethodPropFind, uri = folderData.ref,
           headers = List(HeaderAuth, HeaderAccept, HeaderDepth))
     }
+
+  /**
+    * Obtains the URI of an element based on the reference URI from the server.
+    *
+    * @param ref the reference URI of the element
+    * @return the extracted element URI
+    */
+  private def extractElementUri(ref: String): String =
+    UriEncodingHelper.decode(ref) drop decodedRootUriPrefixLen
+
+  /**
+    * Determines the length of the decoded root URI. This is needed to
+    * correctly generate relative element URIs.
+    *
+    * @return the length of the decoded root URI
+    */
+  private def calcDecodedRootUriLength(): Int =
+    UriEncodingHelper.decode(rootUriPrefix).length
 
   /**
     * Generates an error message for a failed request to a folder.
