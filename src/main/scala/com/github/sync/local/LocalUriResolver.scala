@@ -45,8 +45,8 @@ class LocalUriResolver(val rootPath: Path) extends SourceFileProvider {
     * @return a ''Try'' with the resolved path
     */
   def resolve(element: FsElement): Try[Path] = Try {
-    val decodedUri = UriEncodingHelper.decode(element.relativeUri).dropWhile(_ == '/')
-    val resolvedPath = rootPath.resolve(decodedUri).normalize()
+    val relativeUri = element.relativeUri.dropWhile(_ == UriEncodingHelper.UriSeparator.charAt(0))
+    val resolvedPath = rootPath.resolve(relativeUri).normalize()
     if (!verifyInRootPath(resolvedPath))
       throw new IllegalArgumentException(
         s"Invalid element URI: ${element.relativeUri}! Not in root path.")
