@@ -138,8 +138,8 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result.totalOperations should be(2)
     result.successfulOperations should be(2)
     val lines = Files.readAllLines(logFile)
-    lines.get(0) should include("CREATE 0 FILE /create.txt 0")
-    lines.get(1) should include("REMOVE 0 FILE /removed.txt 0")
+    lines.get(0) should include("CREATE 0 FILE %2Fcreate.txt 0")
+    lines.get(1) should include("REMOVE 0 FILE %2Fremoved.txt 0")
     checkFileNotPresent(dstFolder, "removed.txt")
   }
 
@@ -275,7 +275,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0 FILE /file (5).mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("CREATE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
   }
 
   it should "support a WebDav URI for the destination structure" in {
@@ -292,7 +292,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("REMOVE 0 FILE /file (5).mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("REMOVE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
   }
 
   it should "make sure that an element source for local files is shutdown" in {

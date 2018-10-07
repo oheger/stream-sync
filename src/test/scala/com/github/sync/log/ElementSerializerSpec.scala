@@ -35,7 +35,7 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
   private def lineEnd: String = System.lineSeparator()
 
   "ElementSerializer" should "serialize a folder" in {
-    val folder = FsFolder("test/folder", 11)
+    val folder = FsFolder("test_folder", 11)
 
     val s = ElementSerializer.serializeElement(folder).utf8String
     s should be(s"FOLDER ${folder.relativeUri} ${folder.level}")
@@ -43,10 +43,17 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
 
   it should "serialize a file" in {
     val fileTime = "2018-09-06T17:25:28.103Z"
-    val file = FsFile("test/data.txt", 21, Instant.parse(fileTime), 123456)
+    val file = FsFile("test_data.txt", 21, Instant.parse(fileTime), 123456)
 
     val s = ElementSerializer.serializeElement(file).utf8String
     s should be(s"FILE ${file.relativeUri} ${file.level} $fileTime ${file.size}")
+  }
+
+  it should "encode element URIs on serialization" in {
+    val folder = FsFolder("/my data/sub/cool stuff (42)", 10)
+
+    val s = ElementSerializer.serializeElement(folder).utf8String
+    s should be(s"FOLDER %2Fmy%20data%2Fsub%2Fcool%20stuff%20%2842%29 ${folder.level}")
   }
 
   /**
@@ -57,7 +64,7 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
     * @param strAction the string representation of this action
     */
   private def checkSerializedOperation(action: SyncAction, strAction: String): Unit = {
-    val elem = FsFolder("my/folder", 8)
+    val elem = FsFolder("my_folder", 8)
     val op = SyncOperation(elem, action, 4)
 
     val s = ElementSerializer.serializeOperation(op).utf8String
@@ -124,7 +131,7 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
     * @param action the action
     */
   private def checkDeserializeOperation(action: SyncAction): Unit = {
-    val file = FsFile("my/test/file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
+    val file = FsFile("my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
       20180906193152L)
     val operation = SyncOperation(file, action, 22)
     val opRaw = ElementSerializer serializeOperation operation

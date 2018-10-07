@@ -20,6 +20,7 @@ import java.time.Instant
 
 import akka.util.ByteString
 import com.github.sync._
+import com.github.sync.util.UriEncodingHelper
 
 import scala.util.Try
 
@@ -90,11 +91,12 @@ object ElementSerializer {
     * @return a ''Try'' with the resulting element
     */
   def deserializeElement(parts: Seq[String]): Try[FsElement] = Try {
+    lazy val elemUri = UriEncodingHelper decode parts(1)
     parts.head match {
       case TagFolder =>
-        FsFolder(parts(1), parts(2).toInt)
+        FsFolder(elemUri, parts(2).toInt)
       case TagFile =>
-        FsFile(parts(1), parts(2).toInt, Instant.parse(parts(3)), parts(4).toLong)
+        FsFile(elemUri, parts(2).toInt, Instant.parse(parts(3)), parts(4).toLong)
       case tag =>
         throw new IllegalArgumentException("Unknown element tag: " + tag)
     }
@@ -114,13 +116,15 @@ object ElementSerializer {
   /**
     * Generates a string representation for the given element with the given
     * tag (indicating the element type) and the element's basic properties.
+    * Note that the element's URI needs to be encoded; otherwise, it may
+    * contain space characters which would break deserialization.
     *
     * @param tag  the tag
     * @param elem the element
     * @return the basic string representation for this element
     */
   private def serializeBaseProperties(tag: String, elem: FsElement): String =
-    s"$tag ${elem.relativeUri} ${elem.level}"
+    s"$tag ${UriEncodingHelper encode elem.relativeUri} ${elem.level}"
 
   /**
     * Extracts the properties of a ''SyncAction'' from the serialized
