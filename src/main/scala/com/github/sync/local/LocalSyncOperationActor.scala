@@ -81,11 +81,11 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
   override def receive: Receive = {
     case op@SyncOperation(file: FsFile, action, _)
       if action == ActionCreate || action == ActionOverride =>
-      val source = sourceFileProvider fileSource file
+      val futSource = sourceFileProvider fileSource file
       val destPath = resolveInDestination(file)
       val sink = FileIO.toPath(destPath)
       val client = sender()
-      source.runWith(sink) map { _ =>
+      futSource.flatMap(_.runWith(sink)) map { _ =>
         Files.setLastModifiedTime(destPath, FileTime from file.lastModified)
       } onComplete {
         case Success(_) =>

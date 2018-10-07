@@ -24,7 +24,8 @@ import com.github.sync.util.UriEncodingHelper
 import com.github.sync.{FsElement, FsFile, SourceFileProvider}
 
 import scala.annotation.tailrec
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.Future
+import scala.util.Try
 
 /**
   * A class that is able to resolve ''FsElement'' objects in a local file
@@ -59,13 +60,8 @@ class LocalUriResolver(val rootPath: Path) extends SourceFileProvider {
     *             successful, a source for reading this file is returned.
     *             Otherwise, result is a source that fails immediately.
     */
-  override def fileSource(file: FsFile): Source[ByteString, Any] =
-    resolve(file) match {
-      case Success(value) =>
-        FileIO.fromPath(value)
-      case Failure(exception) =>
-        Source.failed(exception)
-    }
+  override def fileSource(file: FsFile): Future[Source[ByteString, Any]] =
+    Future.fromTry(resolve(file).map(path => FileIO.fromPath(path)))
 
   /**
     * Checks whether the given path is actually contained in the folder

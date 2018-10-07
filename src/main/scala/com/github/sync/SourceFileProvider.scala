@@ -19,6 +19,8 @@ package com.github.sync
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 
+import scala.concurrent.Future
+
 /**
   * A trait that provides access to the content of a specific file.
   *
@@ -32,13 +34,15 @@ import akka.util.ByteString
   */
 trait SourceFileProvider {
   /**
-    * Returns a ''Source'' for reading the content of the specified file from
-    * the source structure.
+    * Returns a future for a ''Source'' for reading the content of the
+    * specified file from the source structure. The source may be obtained
+    * using an asynchronous operation which may also fail; therefore, a
+    * ''Future'' is a proper return value.
     *
     * @param file the file in question
-    * @return a ''Source'' for reading this file
+    * @return a ''Future'' with a ''Source'' for reading this file
     */
-  def fileSource(file: FsFile): Source[ByteString, Any]
+  def fileSource(file: FsFile): Future[Source[ByteString, Any]]
 
   /**
     * A method that should be called by clients when this object is no longer

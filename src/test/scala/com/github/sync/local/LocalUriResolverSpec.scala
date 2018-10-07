@@ -27,9 +27,8 @@ import akka.util.ByteString
 import com.github.sync._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.concurrent.duration._
-import scala.util.{Failure, Success}
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Success
 
 object LocalUriResolverSpec {
   /** A test root path. */
@@ -136,17 +135,15 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val resolver = new LocalUriResolver(testDirectory)
     val file = FsFile("/sub/data.txt", 1, Instant.now(), 42)
 
-    val source = resolver fileSource file
+    val source = futureResult(resolver fileSource file)
     val content = futureResult(readFileSource(source))
     content should be(FileTestHelper.TestData)
   }
 
-  it should "return a source that fails for an invalid file" in {
+  it should "return a future source that fails for an invalid file" in {
     val file = FsFile("../../up", 2, Instant.now, 111)
     val resolver = new LocalUriResolver(testDirectory)
 
-    val source = resolver fileSource file
-    val futSource = Await.ready(readFileSource(source), 5.seconds)
-    futSource.value.get shouldBe a[Failure[_]]
+    expectFailedFuture[IllegalArgumentException](resolver fileSource file)
   }
 }
