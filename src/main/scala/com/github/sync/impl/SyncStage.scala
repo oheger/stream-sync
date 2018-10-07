@@ -199,17 +199,33 @@ object SyncStage {
   private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement,
                                        state: SyncState, stage: SyncStage):
   Option[(EmitData, SyncState)] = {
-    val srcUri = UriEncodingHelper decode elemSource.relativeUri
-    val dstUri = UriEncodingHelper decode elemDest.relativeUri
+    lazy val delta = compareElements(elemSource, elemDest)
     val isRemoved = isInRemovedPath(state, elemDest)
-    if (isRemoved.isDefined || srcUri > dstUri) {
+    if (isRemoved.isDefined || delta > 0) {
       val (op, next) = removeElement(state.updateCurrentElement(elemSource),
         elemDest, isRemoved)
       Some((EmitData(op, stage.PullDest), next))
-    } else if (srcUri < dstUri)
+    } else if (delta < 0)
       Some((EmitData(List(SyncOperation(elemSource, ActionCreate, elemSource.level)),
         stage.PullSource), state.updateCurrentElement(elemDest)))
     else None
+  }
+
+  /**
+    * Compares the given elements and returns an integer value determining
+    * which one is before the other: a value less than zero means that the
+    * source element is before the destination element; a value greater than
+    * zero means that the destination element is before the source element; the
+    * value 0 means that elements are equivalent.
+    *
+    * @param elemSource the source element
+    * @param elemDest   the destination element
+    * @return the result of the comparison
+    */
+  private def compareElements(elemSource: FsElement, elemDest: FsElement): Int = {
+    val deltaLevel = elemSource.level - elemDest.level
+    if (deltaLevel != 0) deltaLevel
+    else elemSource.relativeUri.compareTo(elemDest.relativeUri)
   }
 
   /**
