@@ -24,8 +24,8 @@ import akka.stream.scaladsl.Source
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
 import com.github.sync.local.LocalFsElementSource.StreamFactory
-import com.github.sync.util.{SyncFolderData, SyncFolderQueue}
-import com.github.sync.{FsElement, FsFile, FsFolder, UriEncodingHelper}
+import com.github.sync.util.{SyncFolderData, SyncFolderQueue, UriEncodingHelper}
+import com.github.sync.{FsElement, FsFile, FsFolder}
 
 import scala.annotation.tailrec
 import scala.language.implicitConversions

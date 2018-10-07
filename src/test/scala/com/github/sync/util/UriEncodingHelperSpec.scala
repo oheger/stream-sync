@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync
-
-import java.nio.file.Paths
+package com.github.sync.util
 
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -42,13 +40,6 @@ class UriEncodingHelperSpec extends FlatSpec with Matchers {
     val PlainUri = "noNeedToDecode"
 
     UriEncodingHelper.decode(PlainUri) should be theSameInstanceAs PlainUri
-  }
-
-  it should "transform a path to an URI" in {
-    val path = Paths.get("C:", "my tests", "(check)", "test.txt")
-    val expected = "file:///C%3A/my%20tests/%28check%29/test.txt"
-
-    UriEncodingHelper.pathToUri(path) should be(expected)
   }
 
   it should "remove trailing characters from a string" in {
