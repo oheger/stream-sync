@@ -195,20 +195,17 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
   import DavFsElementSource._
   import system.dispatcher
 
-  /** The root URI of the structure to sync on the server. */
-  private val uri = Uri(config.rootUri)
-
   /**
     * The common prefix of all URIs in the structure to be processed. The URIs
     * generated for ''FsElement'' objects must be relative to this URI.
     */
-  private val rootUriPrefix = removeTrailingSlash(uri.path.toString())
+  private val rootUriPrefix = removeTrailingSlash(config.rootUri.path.toString())
 
   /** The length of the root URI prefix. */
   private val decodedRootUriPrefixLen = calcDecodedRootUriLength()
 
   /** The queue for sending HTTP requests. */
-  private[webdav] val requestQueue = new RequestQueue(uri)
+  private[webdav] val requestQueue = new RequestQueue(config.rootUri)
 
   /** The authorization header to be used for all requests. */
   private val HeaderAuth = Authorization(BasicHttpCredentials(config.user, config.password))
@@ -218,7 +215,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) with StageLogging {
       // A set with folders to be processed in BFS order
-      var folders = SyncFolderQueue(FolderData(uri.toString(), FsFolder("", -1)))
+      var folders = SyncFolderQueue(FolderData(config.rootUri.toString(), FsFolder("", -1)))
 
       setHandler(out, new OutHandler {
         override def onPull(): Unit = {

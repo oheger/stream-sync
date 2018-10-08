@@ -16,8 +16,10 @@
 
 package com.github.sync.webdav
 
+import akka.http.scaladsl.model.IllegalUriException
 import com.github.sync._
 import org.scalatest.{FlatSpec, Matchers}
+
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -76,5 +78,15 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
 
     val config = futureResult(DavConfig(DestinationStructureType, "root", args))
     config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
+  }
+
+  it should "return a failed future for an invalid URI" in {
+    val args = Map(SourceStructureType.name + DavConfig.PropUser -> "user",
+      SourceStructureType.name + DavConfig.PropPassword -> "pwd",
+      SourceStructureType.name + DavConfig.PropModifiedProperty -> "mod")
+
+    expectFailedFuture[IllegalUriException] {
+      DavConfig(SourceStructureType, "https://this is not! a valid URI??", args)
+    }
   }
 }

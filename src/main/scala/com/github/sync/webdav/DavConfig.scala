@@ -16,6 +16,7 @@
 
 package com.github.sync.webdav
 
+import akka.http.scaladsl.model.Uri
 import com.github.sync.{StructureType, SupportedArgument}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -100,5 +101,5 @@ object DavConfig {
   * @param password             the password
   * @param lastModifiedProperty name for the ''lastModified'' property
   */
-case class DavConfig(rootUri: String, user: String, password: String,
+case class DavConfig(rootUri: Uri, user: String, password: String,
                      lastModifiedProperty: String)
