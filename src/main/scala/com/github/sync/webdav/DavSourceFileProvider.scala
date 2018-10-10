@@ -16,17 +16,14 @@
 
 package com.github.sync.webdav
 
-import java.io.IOException
-
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
-import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
+import akka.http.scaladsl.model.HttpRequest
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.github.sync.{FsFile, SourceFileProvider}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 
 object DavSourceFileProvider {
   /**
@@ -40,25 +37,6 @@ object DavSourceFileProvider {
     */
   def apply(config: DavConfig)(implicit system: ActorSystem, mat: ActorMaterializer):
   DavSourceFileProvider = new DavSourceFileProvider(config, new RequestQueue(config.rootUri))
-
-  /**
-    * Checks the status of response and causes the future to fail if it was not
-    * successful. In this case, an IOException is thrown, and the passed in
-    * error mapper function is called to generate the error message.
-    *
-    * @param futResponse the future with the ''HttpResponse''
-    * @param errMapper   the error mapping function
-    * @param ec          the execution context
-    * @return a ''Future'' with the same response if it is successful; a failed
-    *         ''Future'' otherwise
-    */
-  private def checkResponseStatus(futResponse: Future[HttpResponse])
-                                 (errMapper: => HttpResponse => String)
-                                 (implicit ec: ExecutionContext): Future[HttpResponse] =
-    futResponse.map { resp =>
-      if (resp.status.isSuccess()) resp
-      else throw new IOException(errMapper(resp))
-    }
 }
 
 /**
@@ -78,23 +56,17 @@ class DavSourceFileProvider private[webdav](config: DavConfig, requestQueue: Req
   private val uriResolver = ElementUriResolver(config.rootUri)
 
   /** The authorization header to be used for all requests. */
-  private val HeaderAuth = Authorization(BasicHttpCredentials(config.user, config.password))
+  private val HeaderAuth = authHeader(config)
 
   import system.dispatcher
-  import DavSourceFileProvider._
 
   /**
     * @inheritdoc This implementation requests the file from the configured
     *             WebDav server. The future fails if the request was not
     *             successful.
     */
-  override def fileSource(file: FsFile): Future[Source[ByteString, Any]] = {
-    val request = createFileRequest(file)
-    checkResponseStatus(requestQueue.queueRequest(request)) { response =>
-      s"Failed request for '${request.uri}': ${response.status.intValue()} " +
-        s"${response.status.defaultMessage()}."
-    } map (_.entity.dataBytes)
-  }
+  override def fileSource(file: FsFile): Future[Source[ByteString, Any]] =
+    sendAndProcess(requestQueue, createFileRequest(file))(_.entity.dataBytes)
 
   /**
     * @inheritdoc This implementation frees the resources used for HTTP

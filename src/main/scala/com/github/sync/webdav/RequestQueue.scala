@@ -19,11 +19,11 @@ package com.github.sync.webdav
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
-import akka.stream.scaladsl.{Keep, Sink, Source}
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source, SourceQueueWithComplete}
 import akka.stream.{ActorMaterializer, OverflowStrategy, QueueOfferResult}
 
 import scala.concurrent.{Future, Promise}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 /**
   * A helper class to manage a flow for sending requests to the WebDav server.
@@ -35,7 +35,7 @@ import scala.util.{Failure, Success}
   * @param system the actor system
   * @param mat    the object to materialize streams
   */
-private class RequestQueue(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer) {
+class RequestQueue(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer) {
   /**
     * Size of the request queue. Currently, requests are sent one after
     * another; so there is no need to do much buffering.
@@ -43,12 +43,14 @@ private class RequestQueue(uri: Uri)(implicit system: ActorSystem, mat: ActorMat
   private val QueueSize = 2
 
   /** The flow for generating HTTP requests. */
-  val poolClientFlow = createPoolClientFlow[Promise[HttpResponse]](uri, Http())
+  val poolClientFlow: Flow[(HttpRequest, Promise[HttpResponse]),
+    (Try[HttpResponse], Promise[HttpResponse]), Http.HostConnectionPool] =
+    createPoolClientFlow[Promise[HttpResponse]](uri, Http())
 
   import system.dispatcher
 
   /** The queue acting as source for the stream of requests and a kill switch. */
-  val queue =
+  val queue: SourceQueueWithComplete[(HttpRequest, Promise[HttpResponse])] =
     Source.queue[(HttpRequest, Promise[HttpResponse])](QueueSize, OverflowStrategy.dropNew)
       .via(poolClientFlow)
       .toMat(Sink.foreach({

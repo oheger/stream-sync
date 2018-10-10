@@ -16,7 +16,7 @@
 
 package com.github.sync.webdav
 
-import java.io.{ByteArrayInputStream, IOException}
+import java.io.ByteArrayInputStream
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalQuery
@@ -208,7 +208,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
   private[webdav] val requestQueue = new RequestQueue(config.rootUri)
 
   /** The authorization header to be used for all requests. */
-  private val HeaderAuth = Authorization(BasicHttpCredentials(config.user, config.password))
+  private val HeaderAuth = authHeader(config)
 
   override val shape: SourceShape[FsElement] = SourceShape(out)
 
@@ -253,7 +253,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
       private def loadFolder(folderData: FolderData): Future[List[ElemData]] = {
         val request = createFolderRequest(folderData)
         log.info("Sending request {}.", request.uri)
-        requestQueue.queueRequest(request) flatMap parseFolderResponse(folderData.folder)
+        sendAndProcess(requestQueue, request)(parseFolderResponse(folderData.folder)).flatten
       }
 
       /**
@@ -266,11 +266,8 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         * @return a ''Future'' with the elements that have been extracted
         */
       private def parseFolderResponse(folder: FsFolder)(response: HttpResponse):
-      Future[List[ElemData]] = {
-        if (response.status.isSuccess())
-          readResponse(response).map(elem => extractFolderElements(elem, folder.level + 1))
-        else Future.failed(new IOException(errorResponse(response, folder)))
-      }
+      Future[List[ElemData]] =
+        readResponse(response).map(elem => extractFolderElements(elem, folder.level + 1))
 
       /**
         * Reads the entity of the given response of a folder request and
