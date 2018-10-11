@@ -16,21 +16,23 @@
 
 package com.github.sync
 
-import WireMockSupport._
 import java.nio.file.{Files, Path}
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.StatusCodes
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
+import com.github.sync.WireMockSupport._
 import com.github.sync.cli.Sync
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.local.LocalUriResolver
+import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, get, stubFor, urlPathEqualTo}
 import org.scalatest._
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Integration test class for sync processes.
@@ -66,6 +68,18 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     writeFileContent(dir.resolve(name), name)
 
   /**
+    * Reads the content of a file that is located in the given directory.
+    *
+    * @param dir  the directory
+    * @param name the name of the file
+    * @return the content of this file as string
+    */
+  private def readFileInPath(dir: Path, name: String): String = {
+    val file = dir.resolve(name)
+    readDataFile(file)
+  }
+
+  /**
     * Checks whether a file with the given name exists in the directory
     * provided. The content of the file is checked as well.
     *
@@ -73,8 +87,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     * @param name the name of the file
     */
   private def checkFile(dir: Path, name: String): Unit = {
-    val file = dir.resolve(name)
-    readDataFile(file) should be(name)
+    readFileInPath(dir, name) should be(name)
   }
 
   /**
@@ -316,5 +329,22 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
 
     futureResult(Sync.syncProcess(options))
     shutdownCount.get() should be(1)
+  }
+
+  it should "create a correct SourceFileProvider for a WebDav source" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
+    stubFolderRequest(WebDavPath, "folder3.xml")
+    stubFor(authorized(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
+        .withBodyFile("response.txt")))
+    val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
+      "--src-user", UserId, "--src-password", Password)
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(1)
+    val fileContent = readFileInPath(dstFolder, "file (5).mp3")
+    fileContent should startWith(FileTestHelper.TestData take 50)
   }
 }

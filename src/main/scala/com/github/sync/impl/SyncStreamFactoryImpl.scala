@@ -27,7 +27,7 @@ import akka.util.Timeout
 import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
 import com.github.sync.log.ElementSerializer
 import com.github.sync._
-import com.github.sync.webdav.{DavConfig, DavFsElementSource}
+import com.github.sync.webdav.{DavConfig, DavFsElementSource, DavSourceFileProvider}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -68,8 +68,12 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   override def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext,
                                                      system: ActorSystem,
                                                      mat: ActorMaterializer):
-  ArgsFunc[SourceFileProvider] = _ => Future {
-    new LocalUriResolver(Paths get uri)
+  ArgsFunc[SourceFileProvider] = uri match {
+    case RegDavUri(davUri) =>
+      args =>
+        DavConfig(SourceStructureType, davUri, args) map (conf => DavSourceFileProvider(conf))
+    case _ =>
+      _ => Future.successful(new LocalUriResolver(Paths get uri))
   }
 
   override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)

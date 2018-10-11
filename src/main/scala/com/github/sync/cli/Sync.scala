@@ -118,7 +118,7 @@ object Sync {
     val filter = createSyncFilter(filterData)
     for {
       source <- createSyncSource(config, additionalArgs)
-      stage <- createApplyStage(config)
+      stage <- createApplyStage(config, additionalArgs)
       g <- factory.createSyncStream(source, stage, config.logFilePath)(filter)
       res <- g.run()
     } yield SyncResult(res._1, res._2)
@@ -171,18 +171,18 @@ object Sync {
     * sync config. If the apply mode does not require any actions, a dummy flow
     * is returned that passes all operations through.
     *
-    * @param config  the sync configuration
-    * @param ec      the execution context
-    * @param system  the actor system
-    * @param factory the factory for the sync stream
+    * @param config         the sync configuration
+    * @param additionalArgs the map with additional arguments
+    * @param ec             the execution context
+    * @param system         the actor system
+    * @param factory        the factory for the sync stream
     * @return a future with the flow to apply sync operations
     */
-  private def createApplyStage(config: SyncConfig)
+  private def createApplyStage(config: SyncConfig, additionalArgs: Map[String, String])
                               (implicit ec: ExecutionContext, system: ActorSystem,
                                mat: ActorMaterializer, factory: SyncStreamFactory):
   Future[Flow[SyncOperation, SyncOperation, NotUsed]] = {
     implicit val timeout: Timeout = config.timeout
-    val additionalArgs = Map.empty[String, String]
     config.applyMode match {
       case ParameterManager.ApplyModeTarget(targetUri) =>
         for {
