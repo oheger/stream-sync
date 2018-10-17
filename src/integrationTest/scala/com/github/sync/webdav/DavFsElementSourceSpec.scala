@@ -244,7 +244,7 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     */
   private def createTestSourceShape(modifiedProperty: String): DavFsElementSource = {
     implicit val mat: ActorMaterializer = ActorMaterializer()
-    val config = DavConfig(serverUri(RootPath), UserId, Password, modifiedProperty)
+    val config = DavConfig(serverUri(RootPath), UserId, Password, modifiedProperty, None)
     new DavFsElementSource(config)
   }
 

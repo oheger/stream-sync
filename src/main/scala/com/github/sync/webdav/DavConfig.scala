@@ -39,7 +39,16 @@ object DavConfig {
     * time of an element. This is optional; if unspecified, the default WebDav
     * property for the last modified time is used.
     */
-  val PropModifiedProperty = "modifiedproperty"
+  val PropModifiedProperty = "modified-property"
+
+  /**
+    * Property for the name of the WebDav property that defines a namespace for
+    * the property with the last modified time. If this property is defined, in
+    * patch requests to the WebDav server to update the modified time of a file
+    * this namespace will be used. Note that this property has an effect only
+    * if a custom modified property is set.
+    */
+  val PropModifiedNamespace = "modified-namespace"
 
   /**
     * Default name of the WebDav property storing the last modified time of an
@@ -65,7 +74,8 @@ object DavConfig {
   Future[DavConfig] = Future {
     DavConfig(rootUri, properties(propName(structType, PropUser)),
       properties(propName(structType, PropPassword)),
-      properties.getOrElse(propName(structType, PropModifiedProperty), DefaultModifiedProperty))
+      properties.getOrElse(propName(structType, PropModifiedProperty), DefaultModifiedProperty),
+      properties get propName(structType, PropModifiedNamespace))
   }
 
   /**
@@ -79,7 +89,8 @@ object DavConfig {
   def supportedArgumentsFor(structType: StructureType): Iterable[SupportedArgument] =
     List(SupportedArgument(propName(structType, PropUser), mandatory = true),
       SupportedArgument(propName(structType, PropPassword), mandatory = true),
-      SupportedArgument(propName(structType, PropModifiedProperty), mandatory = false))
+      SupportedArgument(propName(structType, PropModifiedProperty), mandatory = false),
+      SupportedArgument(propName(structType, PropModifiedNamespace), mandatory = false))
 
   /**
     * Generates a property name based on the given structure type.
@@ -96,10 +107,12 @@ object DavConfig {
   * A data class collecting all configuration settings required to access a
   * WebDav resource in a sync process.
   *
-  * @param rootUri              the root URI to be synced
-  * @param user                 the user name
-  * @param password             the password
-  * @param lastModifiedProperty name for the ''lastModified'' property
+  * @param rootUri               the root URI to be synced
+  * @param user                  the user name
+  * @param password              the password
+  * @param lastModifiedProperty  name for the ''lastModified'' property
+  * @param lastModifiedNamespace namespace to use for the last modified
+  *                              property
   */
 case class DavConfig(rootUri: Uri, user: String, password: String,
-                     lastModifiedProperty: String)
+                     lastModifiedProperty: String, lastModifiedNamespace: Option[String])

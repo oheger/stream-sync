@@ -299,7 +299,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     val logFile = createFileReference()
     val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
       "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--dst-user", UserId,
-      "--dst-password", Password, "--dst-modifiedProperty", "Win32LastModifiedTime")
+      "--dst-password", Password, "--dst-modified-Property", "Win32LastModifiedTime")
 
     val result = futureResult(Sync.syncProcess(options))
     result.successfulOperations should be(1)

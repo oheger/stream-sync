@@ -36,7 +36,8 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val prefix = "--" + structType.name
     val expArguments = List(SupportedArgument(prefix + DavConfig.PropUser, mandatory = true),
       SupportedArgument(prefix + DavConfig.PropPassword, mandatory = true),
-      SupportedArgument(prefix + DavConfig.PropModifiedProperty, mandatory = false))
+      SupportedArgument(prefix + DavConfig.PropModifiedProperty, mandatory = false),
+      SupportedArgument(prefix + DavConfig.PropModifiedNamespace, mandatory = false))
 
     DavConfig.supportedArgumentsFor(structType) should contain only (expArguments: _*)
   }
@@ -54,11 +55,13 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val user = "scott"
     val password = "tiger"
     val modifiedProp = "myModifiedTime"
+    val modifiedNamespace = "urn:schemas-test-org:"
     val args = Map("--" + SourceStructureType.name + DavConfig.PropUser -> user,
       "--" + SourceStructureType.name + DavConfig.PropPassword -> password,
       "--" + SourceStructureType.name + DavConfig.PropModifiedProperty -> modifiedProp,
+      "--" + SourceStructureType.name + DavConfig.PropModifiedNamespace -> modifiedNamespace,
       "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
-    val expConfig = DavConfig(uri, user, password, modifiedProp)
+    val expConfig = DavConfig(uri, user, password, modifiedProp, Some(modifiedNamespace))
 
     val config = futureResult(DavConfig(SourceStructureType, uri, args))
     config should be(expConfig)
@@ -78,6 +81,14 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
 
     val config = futureResult(DavConfig(DestinationStructureType, "root", args))
     config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
+  }
+
+  it should "set an undefined namespace if this property is not set" in {
+    val args = Map("--" + DestinationStructureType.name + DavConfig.PropUser -> "user",
+      "--" + DestinationStructureType.name + DavConfig.PropPassword -> "pwd")
+
+    val config = futureResult(DavConfig(DestinationStructureType, "root", args))
+    config.lastModifiedNamespace shouldBe 'empty
   }
 
   it should "return a failed future for an invalid URI" in {
