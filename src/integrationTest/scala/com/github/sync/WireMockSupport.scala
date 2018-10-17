@@ -30,6 +30,15 @@ object WireMockSupport {
   /** Test password for user credentials. */
   val Password = "tiger"
 
+  /**
+    * Priority for default stubs. These stubs act as catch-all for requests
+    * for which no specific stub has been defined.
+    */
+  val PriorityDefault = 10
+
+  /** Priority for stubs for specific resources. */
+  val PrioritySpecific = 1
+
   /** The path to the directory where resource files are located. */
   private val ResourceDir = "src/integrationTest/resources"
 }
@@ -58,6 +67,7 @@ trait WireMockSupport extends BeforeAndAfterEach {
     super.beforeEach()
     wireMockServer.start()
     configureFor(wireMockServer.port())
+    resetAllRequests()
   }
 
   override protected def afterEach(): Unit = {
@@ -101,5 +111,15 @@ trait WireMockSupport extends BeforeAndAfterEach {
       .willReturn(aResponse()
         .withStatus(status)
         .withBodyFile(responseFile))))
+  }
+
+  /**
+    * Adds a wildcard stubbing that accepts all requests with the proper
+    * authorization header and returns a success response.
+    */
+  protected def stubSuccess(): Unit = {
+    stubFor(authorized(any(anyUrl()).atPriority(PriorityDefault))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
+        .withBody("<status>OK</status>")))
   }
 }
