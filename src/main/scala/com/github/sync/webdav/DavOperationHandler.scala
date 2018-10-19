@@ -16,9 +16,6 @@
 
 package com.github.sync.webdav
 
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -45,10 +42,6 @@ object DavOperationHandler {
   /** The WebDav HTTP method for setting attributes of an element. */
   private val MethodPropPatch = HttpMethod.custom("PROPPATCH")
 
-  /** The formatter for the last modified time of files. */
-  private val FileTimeFormatter =
-    DateTimeFormatter.RFC_1123_DATE_TIME.withZone(ZoneId.of("Z"))
-
   /**
     * Returns a ''Flow'' to apply [[SyncOperation]] objects against a WebDav
     * server. The flow executes the operations from upstream and passes all
@@ -65,6 +58,7 @@ object DavOperationHandler {
   Flow[SyncOperation, SyncOperation, NotUsed] = {
     val uriResolver = ElementUriResolver(config.rootUri)
     val headers = List(authHeader(config))
+    val modifiedTimeTemplate = ModifiedTimeRequestFactory.requestTemplate(config)
     import system.dispatcher
 
     // Creates a flow that consumes the entities of HTTP responses and filters
@@ -119,16 +113,9 @@ object DavOperationHandler {
 
     // Creates a request to update the modified date of an uploaded file
     def createPatchRequest(op: SyncOperation): HttpRequest = {
-      val modifiedDate = FileTimeFormatter.format(op.element.asInstanceOf[FsFile].lastModified)
-      val content =
-        s"""<?xml version="1.0" encoding="utf-8" ?>
-<D:propertyupdate xmlns:D="DAV:">
-  <D:set>
-    <D:prop>
-      <getlastmodified>$modifiedDate</getlastmodified>
-    </D:prop>
-  </D:set>
-</D:propertyupdate>"""
+      val modifiedTime = op.element.asInstanceOf[FsFile].lastModified
+      val content = ModifiedTimeRequestFactory
+        .createModifiedTimeRequest(modifiedTimeTemplate, modifiedTime)
       HttpRequest(method = MethodPropPatch, headers = headers,
         uri = uriResolver.resolveElementUri(op.element.relativeUri),
         entity = HttpEntity(ContentTypes.`text/xml(UTF-8)`, content))

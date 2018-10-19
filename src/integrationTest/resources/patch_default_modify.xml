@@ -2,7 +2,7 @@
 <D:propertyupdate xmlns:D="DAV:">
   <D:set>
     <D:prop>
-      <getlastmodified>Sun, 14 Oct 2018 15:02:50 GMT</getlastmodified>
+      <D:getlastmodified>Sun, 14 Oct 2018 15:02:50 GMT</D:getlastmodified>
     </D:prop>
   </D:set>
 </D:propertyupdate>
