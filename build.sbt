@@ -15,7 +15,7 @@
  */
 
 /** Definition of versions. */
-lazy val AkkaVersion = "2.5.16"
+lazy val AkkaVersion = "2.5.17"
 lazy val AkkaHttpVersion = "10.1.5"
 lazy val VersionScala = "2.12.6"
 lazy val VersionScalaXml = "1.1.0"
@@ -54,5 +54,6 @@ lazy val StreamSync = (project in file("."))
     libraryDependencies ++= akkaDependencies,
     libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
     libraryDependencies ++= testDependencies,
-    name := "stream-sync"
+    name := "stream-sync",
+    IntegrationTest / parallelExecution := false
   )
