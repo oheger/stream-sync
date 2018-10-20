@@ -21,6 +21,7 @@ import java.io.IOException
 import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.http.scaladsl.{Http, HttpExt}
+import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Flow
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -90,31 +91,36 @@ package object webdav {
     * @param request      the request to be executed
     * @param f            the processing function
     * @param ec           the execution context
+    * @param mat          the object to materialize streams
     * @tparam T the type of the result of the processing function
     * @return a ''Future'' with the processing result
     */
   def sendAndProcess[T](requestQueue: RequestQueue, request: HttpRequest)
-                       (f: HttpResponse => T)(implicit ec: ExecutionContext): Future[T] =
+                       (f: HttpResponse => T)
+                       (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[T] =
     checkResponseStatus(requestQueue.queueRequest(request))(standardErrorMapper(
       request.uri.toString())) map f
 
   /**
     * Checks the status of a response and causes the future to fail if it was
     * not successful. In this case, an IOException is thrown, and the passed in
-    * error mapper function is called to generate the error message.
+    * error mapper function is called to generate the error message. Also, the
+    * response entity is consumed.
     *
     * @param futResponse the future with the ''HttpResponse''
     * @param errMapper   the error mapping function
     * @param ec          the execution context
+    * @param mat         the object to materialize streams
     * @return a ''Future'' with the same response if it is successful; a failed
     *         ''Future'' otherwise
     */
   def checkResponseStatus(futResponse: Future[HttpResponse])
                          (errMapper: => HttpResponse => String)
-                         (implicit ec: ExecutionContext): Future[HttpResponse] =
-    futResponse.map { resp =>
-      if (resp.status.isSuccess()) resp
-      else throw new IOException(errMapper(resp))
+                         (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[HttpResponse] =
+    futResponse flatMap { resp =>
+      if (resp.status.isSuccess()) Future.successful(resp)
+      else resp.entity.discardBytes().future() map (_ => throw new IOException(errMapper(resp)))
     }
 
   /**

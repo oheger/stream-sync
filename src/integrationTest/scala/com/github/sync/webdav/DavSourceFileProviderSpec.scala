@@ -20,6 +20,7 @@ import java.io.IOException
 import java.time.Instant
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
@@ -31,6 +32,8 @@ import com.github.tomakehurst.wiremock.client.WireMock._
 import org.mockito.Mockito
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+
+import scala.concurrent.Future
 
 object DavSourceFileProviderSpec {
   /** The root path of the simulated sync operation. */
@@ -46,6 +49,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
   def this() = this(ActorSystem("DavSourceFileProviderSpec"))
 
   override protected def afterAll(): Unit = {
+    futureResult(Http().shutdownAllConnectionPools())
     TestKit shutdownActorSystem system
   }
 
@@ -86,6 +90,28 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     val ex = expectFailedFuture[IOException](provider fileSource file)
     ex.getMessage should include("500")
     ex.getMessage should include(RootPath + elemUri)
+  }
+
+  it should "consume the response entity also in case of an error" in {
+    val fileUri = "/data.txt"
+    stubFor(get(anyUrl()).atPriority(PriorityDefault)
+      .willReturn(aResponse().withStatus(StatusCodes.NotFound.intValue)
+        .withBody("The file you are looking for was not found!")))
+    stubFor(authorized(get(urlPathEqualTo(RootPath + fileUri)).atPriority(PrioritySpecific))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
+        .withBodyFile("response.txt")))
+    val file = FsFile(fileUri, 1, Instant.now(), 100)
+    val provider = DavSourceFileProvider(createConfig())
+
+    val testFuture = Future {
+      (1 to 32).map(i => FsFile(s"/test$i.txt", 1, Instant.now(), 13))
+        .foreach { f =>
+          expectFailedFuture[IOException](provider fileSource f)
+          val source = futureResult(provider fileSource file)
+          futureResult(source.runWith(Sink.ignore))
+        }
+    }
+    futureResult(testFuture)
   }
 
   it should "shutdown the request queue when it is shutdown" in {
