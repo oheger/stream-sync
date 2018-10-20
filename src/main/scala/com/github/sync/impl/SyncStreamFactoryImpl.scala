@@ -27,7 +27,8 @@ import akka.util.Timeout
 import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
 import com.github.sync.log.ElementSerializer
 import com.github.sync._
-import com.github.sync.webdav.{DavConfig, DavFsElementSource, DavSourceFileProvider}
+import com.github.sync.webdav.{DavConfig, DavFsElementSource, DavOperationHandler,
+  DavSourceFileProvider}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -77,15 +78,17 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   }
 
   override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
-                               (implicit system: ActorSystem, ec: ExecutionContext,
-                                timeout: Timeout):
-  ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]] = _ => Future {
-    val operationActor = system.actorOf(Props(classOf[LocalSyncOperationActor],
-      fileProvider, Paths get uriDst, BlockingDispatcherName))
-    Flow[SyncOperation].mapAsync(1) { op =>
-      val futWrite = operationActor ? op
-      futWrite.mapTo[SyncOperation]
-    } via new CleanupStage[SyncOperation](() => fileProvider.shutdown())
+                               (implicit system: ActorSystem, mat: ActorMaterializer,
+                                ec: ExecutionContext, timeout: Timeout):
+  ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]] = uriDst match {
+    case RegDavUri(davUri) =>
+      args =>
+        DavConfig(DestinationStructureType, davUri, args) map { conf =>
+          cleanUpFileProvider(DavOperationHandler.webDavProcessingFlow(conf, fileProvider),
+            fileProvider)
+        }
+    case _ =>
+      _ => Future.successful(createLocalFsApplyStage(uriDst, fileProvider))
   }
 
   override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs)
@@ -116,6 +119,39 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
           ClosedShape
     })
   }
+
+  /**
+    * Creates the apply stage to change a local file system.
+    *
+    * @param uriDst       the URI to apply changes to
+    * @param fileProvider the ''SourceFileProvider''
+    * @param system       the actor system
+    * @param timeout      a timeout
+    * @return the apply stage for a local file system
+    */
+  private def createLocalFsApplyStage(uriDst: String, fileProvider: SourceFileProvider)
+                                     (implicit system: ActorSystem, timeout: Timeout):
+  Flow[SyncOperation, SyncOperation, NotUsed] = {
+    val operationActor = system.actorOf(Props(classOf[LocalSyncOperationActor],
+      fileProvider, Paths get uriDst, BlockingDispatcherName))
+    cleanUpFileProvider(Flow[SyncOperation].mapAsync(1) { op =>
+      val futWrite = operationActor ? op
+      futWrite.mapTo[SyncOperation]
+    }, fileProvider)
+  }
+
+  /**
+    * Appends a clean-up stage to the given stage to make sure that the file
+    * provider specified is always gracefully shutdown.
+    *
+    * @param stage        the stage to be extended
+    * @param fileProvider the ''SourceFileProvider'' to shutdown
+    * @return the enhanced stage
+    */
+  private def cleanUpFileProvider(stage: Flow[SyncOperation, SyncOperation, NotUsed],
+                                  fileProvider: SourceFileProvider):
+  Flow[SyncOperation, SyncOperation, NotUsed] =
+    stage via new CleanupStage[SyncOperation](() => fileProvider.shutdown())
 
   /**
     * Creates a ''Source'' that produces ''SyncOperation'' objects to sync the

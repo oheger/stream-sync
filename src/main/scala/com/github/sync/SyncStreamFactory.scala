@@ -124,12 +124,14 @@ trait SyncStreamFactory {
     * @param uriDst       the URI to the destination structure
     * @param fileProvider the provider for files from the source structure
     * @param system       the actor system
+    * @param mat          the object to materialize streams
     * @param ec           the execution context
     * @param timeout      a timeout when applying a sync operation
     * @return a function to create the stage to process sync operations
     */
   def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
-                      (implicit system: ActorSystem, ec: ExecutionContext, timeout: Timeout):
+                      (implicit system: ActorSystem, mat: ActorMaterializer,
+                       ec: ExecutionContext, timeout: Timeout):
   ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]]
 
   /**

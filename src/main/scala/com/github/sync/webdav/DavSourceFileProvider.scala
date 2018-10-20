@@ -49,8 +49,8 @@ object DavSourceFileProvider {
   * @param config       the ''DavConfig'' for the WebDav server
   * @param requestQueue the queue for sending requests
   */
-class DavSourceFileProvider private[webdav](config: DavConfig, requestQueue: RequestQueue)
-                                           (implicit system: ActorSystem)
+class DavSourceFileProvider(config: DavConfig, requestQueue: RequestQueue)
+                           (implicit system: ActorSystem)
   extends SourceFileProvider {
   /** The object to resolve element URIs. */
   private val uriResolver = ElementUriResolver(config.rootUri)

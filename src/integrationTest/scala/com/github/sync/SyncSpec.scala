@@ -28,7 +28,8 @@ import com.github.sync.WireMockSupport._
 import com.github.sync.cli.Sync
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.local.LocalUriResolver
-import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, get, stubFor, urlPathEqualTo}
+import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, RequestQueue}
+import com.github.tomakehurst.wiremock.client.WireMock._
 import org.scalatest._
 
 import scala.concurrent.duration._
@@ -99,6 +100,21 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
   private def checkFileNotPresent(dir: Path, name: String): Unit = {
     val file = dir.resolve(name)
     Files.exists(file) shouldBe false
+  }
+
+  /**
+    * Returns a ''SyncStreamFactory'' that always returns the given
+    * ''SourceFileProvider''.
+    *
+    * @param provider the ''SourceFileProvider'' to be returned
+    * @return the factory
+    */
+  private def factoryWithMockSourceProvider(provider: SourceFileProvider):
+  DelegateSyncStreamFactory = new DelegateSyncStreamFactory {
+    override def createSourceFileProvider(uri: String)
+                                         (implicit ec: ExecutionContext, system: ActorSystem,
+                                          mat: ActorMaterializer):
+    ArgsFunc[SourceFileProvider] = _ => Future.successful(provider)
   }
 
   "Sync" should "synchronize two directory structures" in {
@@ -318,12 +334,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
         super.shutdown()
       }
     }
-    implicit val factory: SyncStreamFactory = new DelegateSyncStreamFactory {
-      override def createSourceFileProvider(uri: String)
-                                           (implicit ec: ExecutionContext, system: ActorSystem,
-                                            mat: ActorMaterializer):
-      ArgsFunc[SourceFileProvider] = _ => Future.successful(provider)
-    }
+    implicit val factory: SyncStreamFactory = factoryWithMockSourceProvider(provider)
     createTestFile(srcFolder, "test.txt")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString)
 
@@ -346,5 +357,53 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result.successfulOperations should be(1)
     val fileContent = readFileInPath(dstFolder, "file (5).mp3")
     fileContent should startWith(FileTestHelper.TestData take 50)
+  }
+
+  it should "support sync operations targetting a WebDav server" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val WebDavPath = "/destination"
+    val FileName = "testDataFile.dat"
+    val ModifiedProperty = "Win32LastModifiedTime"
+    val ModifiedNamespace = "modified-urn:"
+    createTestFile(srcFolder, FileName)
+    stubFolderRequest(WebDavPath, "empty_folder.xml")
+    stubFor(authorized(put(urlPathEqualTo(WebDavPath + "/" + FileName)))
+      .withRequestBody(equalTo(FileName))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
+    stubFor(request("PROPPATCH", urlPathEqualTo(WebDavPath + "/" + FileName))
+      .withRequestBody(matching(".*xmlns:ssync=\"" + ModifiedNamespace + ".*"))
+      .withRequestBody(matching(s".*<ssync:$ModifiedProperty>.*"))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
+    val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "--dst-user", UserId, "--dst-password", Password,
+      "--dst-modified-property", ModifiedProperty, "--dst-modified-namespace", ModifiedNamespace)
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(1)
+    getAllServeEvents should have size 3
+  }
+
+  it should "make sure that an element source for WebDav operations is shutdown" in {
+    val WebDavPath = "/destination"
+    implicit val mat: ActorMaterializer = ActorMaterializer()
+    val davConfig = DavConfig(serverUri(WebDavPath), UserId, Password,
+      DavConfig.DefaultModifiedProperty, None)
+    val shutdownCount = new AtomicInteger
+    val provider = new DavSourceFileProvider(davConfig, new RequestQueue(davConfig.rootUri)) {
+      override def shutdown(): Unit = {
+        shutdownCount.incrementAndGet() // records this invocation
+        super.shutdown()
+      }
+    }
+    implicit val factory: SyncStreamFactory = factoryWithMockSourceProvider(provider)
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    stubFolderRequest(WebDavPath, "empty_folder.xml")
+    stubSuccess()
+    val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + davConfig.rootUri,
+      "--dst-user", UserId, "--dst-password", Password)
+
+    futureResult(Sync.syncProcess(options))
+    shutdownCount.get() should be(1)
   }
 }

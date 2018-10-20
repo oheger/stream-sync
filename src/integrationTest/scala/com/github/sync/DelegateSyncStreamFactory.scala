@@ -59,8 +59,8 @@ class DelegateSyncStreamFactory(delegate: SyncStreamFactory = SyncStreamFactoryI
     delegate.createSyncSource(uriSrc, uriDst, additionalArgs)
 
   override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
-                               (implicit system: ActorSystem, ec: ExecutionContext,
-                                timeout: Timeout):
+                               (implicit system: ActorSystem, mat: ActorMaterializer,
+                                ec: ExecutionContext, timeout: Timeout):
   ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]] =
     delegate.createApplyStage(uriDst, fileProvider)
 
