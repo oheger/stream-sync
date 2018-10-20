@@ -18,14 +18,16 @@ package com.github.sync.webdav
 
 import akka.NotUsed
 import akka.actor.ActorSystem
+import akka.event.LoggingAdapter
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge}
 import akka.stream.{ActorMaterializer, FlowShape}
 import com.github.sync._
+import com.github.sync.util.LoggingStage
 
 import scala.concurrent.Future
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 /**
   * A module implementing functionality to execute ''SyncOperation'' objects
@@ -66,7 +68,8 @@ object DavOperationHandler {
     // passed through
     def createSyncOperationRequestFlow():
     Flow[(HttpRequest, SyncOperation), SyncOperation, Any] = {
-      val requestFlow = createPoolClientFlow[SyncOperation](config.rootUri, Http())
+      val requestFlow = LoggingStage.withLogging(
+        createPoolClientFlow[SyncOperation](config.rootUri, Http()))(logResponse)
       val mapFlow = Flow[(Try[HttpResponse], SyncOperation)]
         .mapAsync[SyncOperation](1)(processResponse)
       requestFlow.via(mapFlow)
@@ -127,10 +130,10 @@ object DavOperationHandler {
 
     Flow.fromGraph(GraphDSL.create() { implicit builder =>
       import GraphDSL.Implicits._
-      val requestMapper = builder.add(
-        Flow[SyncOperation].mapAsync(1)(createRequestTuple))
-      val requestPatchMapper = builder.add(
-        Flow[SyncOperation].map { op => (createPatchRequest(op), op) })
+      val requestMapper = Flow[SyncOperation].mapAsync(1)(createRequestTuple)
+      val requestFlow = builder.add(LoggingStage.withLogging(requestMapper)(logRequest))
+      val requestPatchMapper = Flow[SyncOperation].map { op => (createPatchRequest(op), op) }
+      val requestPatchFlow = builder.add(LoggingStage.withLogging(requestPatchMapper)(logRequest))
       val requestFlowOp = createSyncOperationRequestFlow()
       val requestFlowPatch = createSyncOperationRequestFlow()
       val broadcast = builder.add(Broadcast[SyncOperation](2))
@@ -138,10 +141,10 @@ object DavOperationHandler {
       val filterUpload = Flow[SyncOperation].filter(isUpload)
       val filterNoUpload = Flow[SyncOperation].filterNot(isUpload)
 
-      requestMapper ~> requestFlowOp ~> broadcast
-      broadcast ~> filterUpload ~> requestPatchMapper ~> requestFlowPatch ~> merge
+      requestFlow ~> requestFlowOp ~> broadcast
+      broadcast ~> filterUpload ~> requestPatchFlow ~> requestFlowPatch ~> merge
       broadcast ~> filterNoUpload ~> merge
-      FlowShape(requestMapper.in, merge.out)
+      FlowShape(requestFlow.in, merge.out)
     })
   }
 
@@ -158,4 +161,32 @@ object DavOperationHandler {
       case SyncOperation(FsFile(_, _, _, _), ActionCreate, _) => true
       case _ => false
     }
+
+  /**
+    * Logs a request before it is sent to the WebDav server.
+    *
+    * @param elem the stream element to be logged
+    * @param log  the logging adapter
+    */
+  private def logRequest(elem: (HttpRequest, SyncOperation), log: LoggingAdapter): Unit = {
+    val request = elem._1
+    log.info("{} {}", request.method.value, request.uri)
+  }
+
+  /**
+    * Logs the response of a request. This function only logs failed responses.
+    *
+    * @param elem the stream element to be logged
+    * @param log  the logging adapter
+    */
+  private def logResponse(elem: (Try[HttpResponse], SyncOperation), log: LoggingAdapter): Unit = {
+    elem._1 match {
+      case Success(response) =>
+        if (!response.status.isSuccess()) {
+          log.error("{} {}", response.status.intValue(), response.status.reason())
+        }
+      case Failure(exception) =>
+        log.error(exception, "Failed request!")
+    }
+  }
 }
