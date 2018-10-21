@@ -20,6 +20,7 @@ import java.nio.file.Path
 
 import akka.NotUsed
 import akka.actor.ActorSystem
+import akka.http.scaladsl.Http
 import akka.stream._
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
@@ -27,13 +28,11 @@ import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.log.SerializerStreamHelper
-import com.github.sync.{
-  DestinationStructureType, SourceStructureType, SyncOperation,
-  SyncStreamFactory
-}
+import com.github.sync.{DestinationStructureType, SourceStructureType, SyncOperation,
+  SyncStreamFactory}
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration._
 
 /**
   * Main object to start the sync process.
@@ -58,15 +57,14 @@ object Sync {
     implicit val system: ActorSystem = ActorSystem("stream-sync")
     implicit val ec: ExecutionContext = system.dispatcher
     implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
-    val futSync = syncProcess(args)
-    futSync onComplete {
-      case Success(result) =>
-        println(processedMessage(result.totalOperations, result.successfulOperations))
-      case Failure(exception) =>
-        exception.printStackTrace()
-        println("Sync process failed!")
-    }
-    futSync onComplete (_ => system.terminate())
+    val futResult = for {
+      msg <- syncWithResultMessage(args)
+      _ <- Http().shutdownAllConnectionPools()
+      _ <- system.terminate()
+    } yield msg
+
+    val resultMsg = Await.result(futResult, 365.days)
+    println(resultMsg)
   }
 
   /**
@@ -217,4 +215,34 @@ object Sync {
       s"Successfully completed all ($totalCount) sync operations."
     else
       s"$successCount operations from $totalCount were successful."
+
+  /**
+    * Returns an error message from the given exception.
+    *
+    * @param ex the exception
+    * @return the error message derived from this exception
+    */
+  private def errorMessage(ex: Throwable): String =
+    s"[${ex.getClass.getSimpleName}]: ${ex.getMessage}"
+
+  /**
+    * Starts a sync process with the given parameters and returns a message
+    * about the result in a ''Future''. Note that the ''Future'' returned by
+    * this function never fails; if the sync process fails, it is completed
+    * with a corresponding error message.
+    *
+    * @param args    the array with command line arguments
+    * @param system  the actor system
+    * @param factory the factory for creating stream components
+    * @param ec      the execution context
+    * @return a ''Future'' with a result message
+    */
+  private def syncWithResultMessage(args: Array[String])
+                                   (implicit system: ActorSystem, factory: SyncStreamFactory,
+                                    ec: ExecutionContext): Future[String] =
+    syncProcess(args)
+      .map(res => processedMessage(res.totalOperations, res.successfulOperations))
+      .recover {
+        case ex => errorMessage(ex)
+      }
 }
