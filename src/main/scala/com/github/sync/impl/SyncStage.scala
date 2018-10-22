@@ -246,7 +246,7 @@ object SyncStage {
   Option[(EmitData, SyncState)] =
     (elemSource, elemDest) match {
       case (eSrc: FsFile, eDst: FsFile)
-        if eSrc.lastModified != eDst.lastModified || eSrc.size != eDst.size =>
+        if extractTime(eSrc) != extractTime(eDst) || eSrc.size != eDst.size =>
         Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level)), state, stage))
 
       case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
@@ -387,6 +387,16 @@ object SyncStage {
   private def addRemovedFolder(state: SyncState, folder: FsFolder): Set[FsElement] =
     state.removedPaths + folder.copy(relativeUri = folder.relativeUri +
       UriEncodingHelper.UriSeparator)
+
+  /**
+    * Extracts the time of a file that needs to be compared to detect modified
+    * files. This method ignores milliseconds as some structures that can be
+    * synced do not support file modification times with this granularity.
+    *
+    * @param file a file
+    * @return the modified time to be compared during a sync operations
+    */
+  private def extractTime(file: FsFile): Long = file.lastModified.getEpochSecond
 }
 
 /**

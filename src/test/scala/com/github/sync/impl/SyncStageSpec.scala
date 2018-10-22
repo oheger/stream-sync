@@ -170,6 +170,17 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
     runStage(sourceOrg, sourceTarget) should contain only expOp
   }
 
+  it should "ignore differences in the file time's milliseconds" in {
+    val FileUri = "/equalFile.dat"
+    val fileSrc = createFile(FileUri)
+    val fileDest = createFile(FileUri,
+      lastModified = FileTime.plusMillis(999))
+    val sourceOrg = Source.single(fileSrc)
+    val sourceTarget = Source.single(fileDest)
+
+    runStage(sourceOrg, sourceTarget) should have size 0
+  }
+
   it should "sync files with a different size" in {
     val fileSrc = createFile("test.txt")
     val fileDest = fileSrc.copy(size = fileSrc.size - 1)
