@@ -10,12 +10,63 @@ the destination structure, but not in the source structure are removed.
 The tool offers a command line interface (CLI) that is invoked using the
 following general syntax:
 
-``Sync [options] <sourceDirectory> <destinationDirectory>``
+``Sync [options] <sourceStructure> <destinationStructure>``
 
-where _sourceDirectory_ points to the source structure and 
-_destinationDirectory_ refers to the destination structure. After a successful
-execution, changes have been applied to _destinationDirectory_ , so that it is
-now a copy of the source structure.
+where _sourceStructure_ points to the structure serving as the source of the
+sync process, and _destinationDirectory_ refers to the destination structure. 
+After a successful execution, changes have been applied to 
+_destinationDirectory_ , so that it is now a copy of the source structure.
+
+### Structures
+The generic term _structure_ has been used to refer to the source and the
+destination of a sync process. The reason for this is that Stream Sync can
+handle different types of structures. In the most basic case, the structures
+are paths on a local file system (or a network share that can be accessed in 
+the same way as a local directory). In this case, the paths can be specified
+directly.
+
+To reference a different type of structure, specific prefixes need to be used.
+The meaning of the part after this prefix is then specific to the structure
+type; it can be for instance a URL pointing to a server on the internet.
+
+Currently, only a single prefix is supported: _dav:_. This prefix indicates
+that the structure is hosted on a WebDav server. The root URL to the directory
+on the server to be synced must be specified after the prefix. The following
+example shows how to sync a path on the local file system with a directory on a
+WebDav server:
+
+``Sync [options] /data/local/music dav:https://my.cloud-space.com/data/music``
+
+Some structures need additional parameters to be accessed correctly. For 
+instance, a WebDav server typically requires correct user credentials. Such
+parameters are passed as additional options in the command line; they are
+allowed only if a corresponding structure takes part in the sync process. A
+structure requiring additional parameters can be both the source and the
+destination of the sync process; therefore, when providing additional options
+it must be clear to which structure they apply. This is achieved by using
+special prefixes: ``src-`` for options to be applied to the source structure,
+and ``dst-`` for options referring to the destination structure. In the example
+above the WebDav structure is the destination; therefore, the user name and
+password options must be specified using the ``dst-`` prefix:
+
+```
+Sync --dst-user myWebDavUserName --dst-password myWebDavPwd \
+   /data/local/music dav:https://my.cloud-space.com/data/music
+```
+
+If both structures were WebDav directories, one would also have to specify the
+corresponding options with the ``src-`` prefix, as in
+
+```
+Sync dav:https://server1.online.com/source \ 
+  --src-user usrIDSrc --src-password pwdSrc \
+  dav:https://server2.online.com/dest \
+  --dst-user usrIDDst --dst-password pwdDst
+```
+
+This convention makes it clear, which option applies to which structure. The
+structure types supported are described in more detail later in this document.
+It is then listed for each structure type which additional options it supports.
 
 ### Option syntax
 A number of options is supported to customize a sync process. Options are
@@ -176,6 +227,62 @@ multiple incremental sync operations. This works as follows:
    operations listed in the progress log and only executes those that are still
    pending. This is further outlined in the _Examples_ section.
 
+### Structure types
+This section lists the different types of structures that are supported for
+sync processes. If not mentioned otherwise, all types can act as source and as
+destination structure of a sync process. The additional parameters supported by
+a structure type are described as well.
+
+#### Local directories
+This is the most basic and "natural" structure type. It can be used for 
+instance to mirror a directory structure on the local hard disk to an external
+hard disk or a network share.
+
+To specify such a structure, just pass the (OS-specific) path to the root
+directory without any prefix. For local directories no additional options are
+supported.
+
+#### WebDav directories
+It is possible to sync from or to a directory hosted on a WebDav server. To do
+this, the full URL to the root directory on the server has to be specified with
+the prefix ``dav:`` defining the structure type. The following table lists the
+additional options supported for WebDav structures. (Remember that these
+options need to be prefixed with either ``src-`` or ``dst-`` to assign them to
+the source or destination structure.)
+
+| Option | Description | Mandatory |
+| ------ | ----------- | --------- |
+| user | The user ID to log into the server. | Yes |
+| password | The password to log into the server. | Yes |
+| modified-property | The name of the property that holds the last-modified time of files on the server (see below). | No |
+| modified-namespace | Defines a namespace to be used together with the last-modified property (see below). | No |
+
+**Notes**
+Using WebDav in sync operations can be problematic as the standard does not
+define an official way to update a file's last-modified time. Files have a
+_getlastmodified_ property, but this is typically set by the server to the
+time when the file has been uploaded. For sync processes it is, however, 
+crucial to have a correct modification time; otherwise, the file on the server
+would be considered as changed in the next sync process because its timestamp
+does not match the one of the file it is compared against.
+
+Concrete WebDav servers provide different options to work around this problem.
+Stream Sync supports servers that store the modification time of files in a
+custom property that can be updated. The name of this property can be defined
+using the ``modified-property`` option. As WebDav requests and responses are
+based on XML, the custom property may use a different namespace than the 
+namespace used for the core WebDav properties. In this case, the
+``modified-namespace`` option can be set.
+
+When using a WebDav directory as source structure Stream Sync will read the
+modification times of files from the configured ``modified-property`` property;
+if this is undefined, the standard property _getlastmodified_ is used instead.
+
+When a WebDav directory acts as destination structure, after each file upload
+another request is sent to update the file's modification time to match the one
+of the source structure. Here again the configured property (with the optional
+namespace) is used or the standard property if unspecified.
+
 ### Examples and use cases
 **Do not remove archived data**
 
@@ -226,6 +333,26 @@ This process can be interrupted and later started again with the same command
 line. It will execute the operations listed in the sync log, but ignore the 
 ones contained in the progress log. Therefore, the whole sync process can be
 split in a number of incremental sync processes.
+
+**Sync from a local directory to a WebDav directory**
+The following command can be used to mirror a local directory structure to an
+online storage:
+
+```
+Sync C:\data\work dav:https://sd2dav.1und1.de/backup/work \
+--log C:\Temp\sync.log \
+--dst-user my.account --dst-password s3c3t_PASsword \
+--dst-modified-property Win32LastModifiedTime \
+--dst-modified-namespace urn:schemas-microsoft-com: \
+--filter exclude:*.bak
+```
+
+Here all options supported by the WebDav structure type are configured. The
+server (which really exists) does not allow modifications of the standard
+WebDav _getlastmodified_ property, but uses a custom property named
+_Win32LastModifiedTime_ with the namespace _urn:schemas-microsoft-com:_ to
+hold a modified time different from the upload time. This property will be set
+correctly for each file that is uploaded during a sync process. 
 
 ## Architecture
 The Stream Sync tool makes use of [Reactive streams](http://www.reactive-streams.org/)
