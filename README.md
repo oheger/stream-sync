@@ -6,6 +6,18 @@ there. Files that have been modified in the source structure override their
 counterparts in the destination structure. Files or directories that exist in
 the destination structure, but not in the source structure are removed.
 
+## Building
+Stream Sync uses [sbt](https://www.scala-sbt.org/) as its build tool. After the
+project has been checked out, you can cd into the project directory and enter 
+the sbt console by typing `sbt`. Then the following commands are of interest:
+* `test` compiles everything and executes the unit tests
+* `integrationTest:test` compiles everything and executes the integration tests
+* `assembly` as the build makes use of the
+  [sbt-assembly plugin](https://github.com/sbt/sbt-assembly), with this command
+  a so-called fat jar can be built that is executable and contains all the
+  dependencies of Stream Sync. This makes it easy to run the tool from the
+  command line without having to bother with a large class path.
+
 ## Usage
 The tool offers a command line interface (CLI) that is invoked using the
 following general syntax:
@@ -16,6 +28,17 @@ where _sourceStructure_ points to the structure serving as the source of the
 sync process, and _destinationDirectory_ refers to the destination structure. 
 After a successful execution, changes have been applied to 
 _destinationDirectory_ , so that it is now a copy of the source structure.
+
+_Note:_ Being written in Scala, Stream Sync requires a Java Virtual Machine to
+run. So the full command to be executed has to launch Java and specify the full
+class path and the main class (which is _com.github.sync.cli.Sync_). When a fat
+jar has been built as described in the _Building_ section the command can be
+abbreviated to
+
+``java -jar stream-sync-assembly-<version>.jar [options] <source> <destination>``
+
+In all examples in this document the short form ``Sync`` is used as a 
+placeholder for the complete command.
 
 ### Structures
 The generic term _structure_ has been used to refer to the source and the
