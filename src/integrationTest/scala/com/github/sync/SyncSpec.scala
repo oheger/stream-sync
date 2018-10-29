@@ -259,13 +259,33 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     val operations = List(s"OVERRIDE 0 FILE /nonExisting.file 0 $lastModified 10",
       s"CREATE 0 FILE /$SuccessFile 0 $lastModified 42")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--sync-log", syncLogFile.toAbsolutePath.toString, "--timeout", "2")
+
+    futureResult(Sync.syncProcess(options))
+    checkFile(dstFolder, SuccessFile)
+  }
+
+  it should "log only successfully executed sync operations" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val SuccessFile = "successSync.txt"
+    val FailedFile = "nonExisting.file"
+    val lastModified = Instant.parse("2018-10-29T20:26:49.11Z")
+    createTestFile(srcFolder, SuccessFile)
+    val operations = List(s"OVERRIDE 0 FILE /$FailedFile 0 $lastModified 10",
+      s"CREATE 0 FILE /$SuccessFile 0 $lastModified 42")
+    val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val logFile = createFileReference()
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString,
       "--timeout", "2")
 
     futureResult(Sync.syncProcess(options))
-    checkFile(dstFolder, SuccessFile)
+    val lines = Files.readAllLines(logFile)
+    lines should have size 1
+    lines.get(0) should include(SuccessFile)
   }
 
   it should "skip operations in the sync log that are contained in the processed log" in {

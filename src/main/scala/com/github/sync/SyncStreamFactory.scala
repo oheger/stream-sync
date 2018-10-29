@@ -141,7 +141,8 @@ trait SyncStreamFactory {
     * values of the graph: one sink counts all sync operations that need to be
     * executed; the second sink counts the sync operations that have been
     * processed successfully by the processing flow; the third sink is used to
-    * write a log file (it is active only if a path to a log file is provided).
+    * write a log file, which contains all successfully executed sync
+    * operations (it is active only if a path to a log file is provided).
     *
     * @param source   the source producing ''SyncOperation'' objects
     * @param flowProc the flow that processes sync operations

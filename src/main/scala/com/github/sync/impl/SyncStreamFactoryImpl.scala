@@ -21,14 +21,13 @@ import java.nio.file.{Path, Paths, StandardOpenOption}
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.pattern.ask
-import akka.stream.{ActorMaterializer, ClosedShape, SourceShape}
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
+import akka.stream.{ActorMaterializer, ClosedShape, SourceShape}
 import akka.util.Timeout
+import com.github.sync._
 import com.github.sync.local.{LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
 import com.github.sync.log.ElementSerializer
-import com.github.sync._
-import com.github.sync.webdav.{DavConfig, DavFsElementSource, DavOperationHandler,
-  DavSourceFileProvider}
+import com.github.sync.webdav.{DavConfig, DavFsElementSource, DavOperationHandler, DavSourceFileProvider}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -112,10 +111,11 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
         (sinkTotal, sinkSuccess, sinkLog) =>
           import GraphDSL.Implicits._
           val syncFilter = Flow[SyncOperation].filter(opFilter)
-          val broadcast = builder.add(Broadcast[SyncOperation](3))
-          source ~> syncFilter ~> broadcast ~> sinkTotal.in
-          broadcast ~> flowProc ~> sinkSuccess.in
-          broadcast ~> sinkLog
+          val broadcastSink = builder.add(Broadcast[SyncOperation](2))
+          val broadcastSuccess = builder.add(Broadcast[SyncOperation](2))
+          source ~> syncFilter ~> broadcastSink ~> sinkTotal.in
+          broadcastSink ~> flowProc ~> broadcastSuccess ~> sinkSuccess.in
+          broadcastSuccess ~> sinkLog
           ClosedShape
     })
   }
