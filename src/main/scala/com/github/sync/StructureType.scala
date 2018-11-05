@@ -36,6 +36,17 @@ sealed trait StructureType {
     * @return the name property
     */
   def name: String
+
+  /**
+    * Determines the name of a configuration property with the given name for
+    * this ''StructureType''. The full property name is determined by prefixing
+    * it with the name of this type. In addition, the parameter prefix is
+    * prepended.
+    *
+    * @param property the property name
+    * @return the full property name for this source type
+    */
+  def configPropertyName(property: String): String = s"--$name$property"
 }
 
 /**

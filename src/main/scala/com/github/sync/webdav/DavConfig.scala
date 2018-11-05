@@ -100,7 +100,7 @@ object DavConfig {
     * @return the resulting qualified property name
     */
   private def propName(structType: StructureType, prop: String): String =
-    "--" + structType.name + prop
+    structType.configPropertyName(prop)
 }
 
 /**
