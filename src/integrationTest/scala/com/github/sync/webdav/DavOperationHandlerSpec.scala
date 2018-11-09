@@ -32,7 +32,7 @@ import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.matching.UrlPathPattern
 import org.mockito.Mockito
 import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FlatSpecLike, Matchers}
 
 import scala.concurrent.Future
 
@@ -69,13 +69,18 @@ object DavOperationHandlerSpec {
   * Test class for ''DavOperationHandler''.
   */
 class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
-  FlatSpecLike with BeforeAndAfterAll with Matchers with WireMockSupport with AsyncTestHelper
+  FlatSpecLike with BeforeAndAfterAll with BeforeAndAfterEach with Matchers with WireMockSupport
+  with AsyncTestHelper
   with MockitoSugar with FileTestHelper {
   def this() = this(ActorSystem("DavOperationHandlerSpec"))
 
   override protected def afterAll(): Unit = {
-    futureResult(Http().shutdownAllConnectionPools())
     TestKit shutdownActorSystem system
+  }
+
+  override protected def afterEach(): Unit = {
+    futureResult(Http().shutdownAllConnectionPools())
+    super.afterEach()
   }
 
   import DavOperationHandlerSpec._
