@@ -35,13 +35,13 @@ object LocalFsElementSource {
     * Returns a new source for iterating over the files in the specified root
     * folder.
     *
-    * @param root          the root folder
+    * @param config        the configuration of the new source
     * @param streamFactory an optional stream factory
     * @return the new source
     */
-  def apply(root: Path, streamFactory: StreamFactory = createDirectoryStream):
+  def apply(config: LocalFsConfig, streamFactory: StreamFactory = createDirectoryStream):
   Source[FsElement, NotUsed] =
-    Source.fromGraph(new LocalFsElementSource(root, streamFactory))
+    Source.fromGraph(new LocalFsElementSource(config, streamFactory))
 
   /**
     * An internally used data class for storing data about a directory
@@ -111,31 +111,32 @@ object LocalFsElementSource {
     * directories on the current level first before sub directories are
     * iterated over.
     *
+    * @param config        the configuration for this source
     * @param streamFactory the function for creating directory streams
     * @param state         the current state of the iteration
     * @return a tuple with the new current directory stream, the new list of
     *         pending directories, and the next element to emit
     */
-  @tailrec private def iterateBFS(streamFactory: StreamFactory, state: BFSState):
-  (BFSState, Option[FsElement]) = {
+  @tailrec private def iterateBFS(config: LocalFsConfig, streamFactory: StreamFactory,
+                                  state: BFSState): (BFSState, Option[FsElement]) = {
     state.optCurrentStream match {
       case Some(ref) =>
         if (ref.iterator.hasNext) {
           val path = ref.iterator.next()
           val isDir = Files isDirectory path
-          val elem = createElement(path, state.currentFolder, isDir = isDir)
+          val elem = createElement(config, path, state.currentFolder, isDir = isDir)
           if (isDir) (state.copy(dirsToProcess = state.dirsToProcess +
             FolderData(path, elem)), Some(elem))
           else (state, Some(elem))
         } else {
           ref.close()
-          iterateBFS(streamFactory, state.copy(optCurrentStream = None))
+          iterateBFS(config, streamFactory, state.copy(optCurrentStream = None))
         }
 
       case None =>
         if (state.dirsToProcess.nonEmpty) {
           val (data, queue) = state.dirsToProcess.dequeue()
-          iterateBFS(streamFactory, BFSState(optCurrentStream = Some(createStreamRef(data
+          iterateBFS(config, streamFactory, BFSState(optCurrentStream = Some(createStreamRef(data
             .folderPath, streamFactory)),
             currentFolder = data.folder, dirsToProcess = queue))
         } else (BFSState(None, state.dirsToProcess, null), None)
@@ -145,16 +146,18 @@ object LocalFsElementSource {
   /**
     * Creates an ''FsElement'' for the given path.
     *
+    * @param config the configuration for this source
     * @param path   the path
     * @param parent the parent folder
     * @param isDir  flag whether this is a directory
     * @return the ''FsElement'' representing the path
     */
-  private def createElement(path: Path, parent: FsElement, isDir: Boolean):
+  private def createElement(config: LocalFsConfig, path: Path, parent: FsElement, isDir: Boolean):
   FsElement = {
     val uri = generateElementUri(parent, path)
     if (isDir) FsFolder(uri, parent.level + 1)
-    else FsFile(uri, parent.level + 1, Files.getLastModifiedTime(path).toInstant,
+    else FsFile(uri, parent.level + 1,
+      FileTimeUtils.getLastModifiedTimeInTimeZone(path, config.optTimeZone),
       Files.size(path))
   }
 
@@ -192,10 +195,10 @@ object LocalFsElementSource {
   * This source makes use of the ''DirectoryStream'' API from Java nio. It
   * thus uses blocking operations.
   *
-  * @param root          the root directory to be scanned
+  * @param config        the configuration for this source
   * @param streamFactory the factory for creating streams
   */
-class LocalFsElementSource(val root: Path,
+class LocalFsElementSource(val config: LocalFsConfig,
                            streamFactory: StreamFactory)
   extends GraphStage[SourceShape[FsElement]] {
 
@@ -212,11 +215,11 @@ class LocalFsElementSource(val root: Path,
 
       /** The current state of the iteration. */
       private var currentState = BFSState(None,
-        SyncFolderQueue(FolderData(root, FsFolder("", -1))), null)
+        SyncFolderQueue(FolderData(config.rootPath, FsFolder("", -1))), null)
 
       setHandler(out, new OutHandler {
         override def onPull(): Unit = {
-          val (nextState, optElem) = iterateBFS(streamFactory, currentState)
+          val (nextState, optElem) = iterateBFS(config, streamFactory, currentState)
           optElem match {
             case Some(e) =>
               push(out, e)

@@ -16,6 +16,7 @@
 
 package com.github.sync.impl
 
+import com.github.sync.local.LocalFsConfig
 import com.github.sync.webdav.DavConfig
 import com.github.sync.{AsyncTestHelper, DestinationStructureType, SourceStructureType,
   StructureType}
@@ -28,11 +29,25 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * functionality. Advanced features are tested by integration test classes.
   */
 class SyncStreamFactoryImplSpec extends FlatSpec with Matchers with AsyncTestHelper {
-  "SyncStreamFactoryImpl" should "return additional arguments for a local path" in {
-    val args = futureResult(SyncStreamFactoryImpl.additionalArguments(
-      "/local/path", SourceStructureType))
+  /**
+    * Helper method for checking whether correct additional arguments for a
+    * local FS structure is returned.
+    *
+    * @param structType the structure type
+    */
+  private def checkLocalFsArguments(structType: StructureType): Unit = {
+    val uri = "/some/path"
 
-    args should have size 0
+    val args = futureResult(SyncStreamFactoryImpl.additionalArguments(uri, structType))
+    args should contain theSameElementsAs LocalFsConfig.supportedArgumentsFor(structType)
+  }
+
+  "SyncStreamFactoryImpl" should "return additional arguments for a local source structure" in {
+    checkLocalFsArguments(SourceStructureType)
+  }
+
+  it should "return additional arguments for a local destination structure" in {
+    checkLocalFsArguments(DestinationStructureType)
   }
 
   /**

@@ -199,9 +199,16 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     }
   }
 
+  /**
+    * Returns a configuration for the source to be tested.
+    *
+    * @return the test configuration
+    */
+  private def sourceConfig(): LocalFsConfig = LocalFsConfig(testDirectory, None)
+
   "A DirectoryStreamSource" should "return all elements in the scanned folder structure" in {
     val fileData = setUpDirectoryStructure()
-    val source = LocalFsElementSource(testDirectory)
+    val source = LocalFsElementSource(sourceConfig())
     val files = runSource(source)
 
     files should contain theSameElementsAs fileData.keys
@@ -210,7 +217,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "close all directory streams it creates" in {
     setUpDirectoryStructure()
     val (queue, factory) = createStreamWrapperFactory()
-    val source = LocalFsElementSource(testDirectory, streamFactory = factory)
+    val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)
 
     runSource(source)
     queue.isEmpty shouldBe false
@@ -223,7 +230,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val root = FsFolder("", 0)
     (1 to Count).foreach(i => createFile(root, s"test$i.txt"))
     val (queue, factory) = createStreamWrapperFactory()
-    val source = LocalFsElementSource(testDirectory, streamFactory = factory)
+    val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)
     val srcDelay = source.delay(1.second, DelayOverflowStrategy.backpressure)
     val (killSwitch, futSrc) = srcDelay
       .viaMat(KillSwitches.single)(Keep.right)
@@ -241,7 +248,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "ignore exceptions when closing directory streams" in {
     setUpDirectoryStructure()
     val (queue, factory) = createStreamWrapperFactory(failOnClose = true)
-    val source = LocalFsElementSource(testDirectory, streamFactory = factory)
+    val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)
 
     runSource(source)
     queue.isEmpty shouldBe false
@@ -256,7 +263,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     def level(p: Path): Int = calcLevel(p, 0)
 
     val fileData = setUpDirectoryStructure()
-    val source = LocalFsElementSource(testDirectory)
+    val source = LocalFsElementSource(sourceConfig())
     val elems = runSource(source)
     val pathLevels = elems map (d => level(fileData(d)))
     pathLevels.foldLeft(0)((last, cur) => {
@@ -268,7 +275,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "output the elements of a folder in series" in {
     val fileData = setUpDirectoryStructure()
     val folderCount = fileData.keys.count(_.isInstanceOf[FsFolder])
-    val source = LocalFsElementSource(testDirectory)
+    val source = LocalFsElementSource(sourceConfig())
 
     val elems = runSource(source)
     val (_, dirChanges) = elems.foldLeft((testDirectory, 0)) { (s, e) =>
@@ -280,7 +287,8 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "handle a non existing root directory in BFS mode" in {
-    val source = LocalFsElementSource(createPathInDirectory("nonExisting"))
+    val config = LocalFsConfig(createPathInDirectory("nonExisting"), None)
+    val source = LocalFsElementSource(config)
 
     intercept[NoSuchFileException] {
       runSource(source)
@@ -297,7 +305,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val (otherMedium, _) = createDir(FsFolder("", -1), "anotherDir")
     createFile(otherMedium, "data1.txt")
     createFile(otherMedium, "data2.txt")
-    val source = LocalFsElementSource(testDirectory)
+    val source = LocalFsElementSource(sourceConfig())
 
     val files = runSource(source)
     val folderIteration = files.foldLeft(List.empty[String]) { (lst, e) =>
