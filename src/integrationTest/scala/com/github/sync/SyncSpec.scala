@@ -16,8 +16,10 @@
 
 package com.github.sync
 
+import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
@@ -61,12 +63,18 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     * Creates a test file with the given name in the directory specified. The
     * content of the file is the name in plain text.
     *
-    * @param dir  the parent directory
-    * @param name the name of the file
+    * @param dir      the parent directory
+    * @param name     the name of the file
+    * @param fileTime an optional timestamp for the file
     * @return the path to the newly created file
     */
-  private def createTestFile(dir: Path, name: String): Path =
-    writeFileContent(dir.resolve(name), name)
+  private def createTestFile(dir: Path, name: String, fileTime: Option[Instant] = None): Path = {
+    val path = writeFileContent(dir.resolve(name), name)
+    fileTime foreach { time =>
+      Files.setLastModifiedTime(path, FileTime.from(time))
+    }
+    path
+  }
 
   /**
     * Reads the content of a file that is located in the given directory.
@@ -360,6 +368,32 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
 
     futureResult(Sync.syncProcess(options))
     shutdownCount.get() should be(1)
+  }
+
+  it should "take the time zone of a local files source into account" in {
+    val DeltaHours = 2
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val UnchangedFile = "notChanged.txt"
+    val ChangedFile = "modifiedTime.txt"
+    val Time1 = Instant.parse("2018-11-08T20:45:00.01Z")
+    val Time2 = Instant.parse("2018-11-08T20:47:26.14Z")
+    createTestFile(srcFolder, UnchangedFile, fileTime = Some(Time1))
+    createTestFile(dstFolder, UnchangedFile,
+      fileTime = Some(Time1.minus(DeltaHours, ChronoUnit.HOURS)))
+    createTestFile(srcFolder, ChangedFile, fileTime = Some(Time2))
+    val changedPath = createTestFile(dstFolder, ChangedFile, fileTime = Some(Time2))
+    val logFile = createFileReference()
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--log", logFile.toAbsolutePath.toString, "--dst-time-zone", s"UTC+0$DeltaHours:00")
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(1)
+    val operations = Files.readAllLines(logFile)
+    operations.get(0) should include(ChangedFile)
+    val updatedTime = Files.getLastModifiedTime(changedPath).toInstant
+    updatedTime should be(Time2.minus(DeltaHours, ChronoUnit.HOURS))
   }
 
   it should "create a correct SourceFileProvider for a WebDav source" in {

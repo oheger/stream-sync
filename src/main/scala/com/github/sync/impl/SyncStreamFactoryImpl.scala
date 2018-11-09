@@ -25,11 +25,15 @@ import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGr
 import akka.stream.{ActorMaterializer, ClosedShape, SourceShape}
 import akka.util.Timeout
 import com.github.sync._
-import com.github.sync.local.{LocalFsConfig, LocalFsElementSource, LocalSyncOperationActor,
-  LocalUriResolver}
+import com.github.sync.local.{
+  LocalFsConfig, LocalFsElementSource, LocalSyncOperationActor,
+  LocalUriResolver
+}
 import com.github.sync.log.ElementSerializer
-import com.github.sync.webdav.{DavConfig, DavFsElementSource, DavOperationHandler,
-  DavSourceFileProvider}
+import com.github.sync.webdav.{
+  DavConfig, DavFsElementSource, DavOperationHandler,
+  DavSourceFileProvider
+}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -92,7 +96,10 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
             fileProvider)
         }
     case _ =>
-      _ => Future.successful(createLocalFsApplyStage(uriDst, fileProvider))
+      args =>
+        LocalFsConfig(DestinationStructureType, uriDst, args) map { conf =>
+          createLocalFsApplyStage(conf, fileProvider)
+        }
   }
 
   override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs)
@@ -128,17 +135,17 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   /**
     * Creates the apply stage to change a local file system.
     *
-    * @param uriDst       the URI to apply changes to
+    * @param config       the configuration for the local FS stage
     * @param fileProvider the ''SourceFileProvider''
     * @param system       the actor system
     * @param timeout      a timeout
     * @return the apply stage for a local file system
     */
-  private def createLocalFsApplyStage(uriDst: String, fileProvider: SourceFileProvider)
+  private def createLocalFsApplyStage(config: LocalFsConfig, fileProvider: SourceFileProvider)
                                      (implicit system: ActorSystem, timeout: Timeout):
   Flow[SyncOperation, SyncOperation, NotUsed] = {
     val operationActor = system.actorOf(Props(classOf[LocalSyncOperationActor],
-      fileProvider, Paths get uriDst, BlockingDispatcherName))
+      fileProvider, config, BlockingDispatcherName))
     cleanUpFileProvider(Flow[SyncOperation].mapAsync(1) { op =>
       val futWrite = operationActor ? op
       futWrite.mapTo[SyncOperation]

@@ -225,7 +225,7 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
       */
     private def createSyncActor(): ActorRef =
       system.actorOf(Props(classOf[SupervisorActor], new LocalUriResolver(sourcePath),
-        destinationPath, "blocking-dispatcher"))
+        LocalFsConfig(destinationPath, None), "blocking-dispatcher"))
 
     /**
       * Creates a directory in the temporary folder with a unique name.
@@ -259,11 +259,11 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
   * actor creates a [[LocalSyncOperationActor]] as child and sets a supervision
   * strategy the stops this child actor for all exceptions.
   *
-  * @param srcProvider the provider for source files
-  * @param dstPath                the destination path
+  * @param srcProvider            the provider for source files
+  * @param config                 the configuration of the actor
   * @param blockingDispatcherName name of the blocking dispatcher
   */
-class SupervisorActor(srcProvider: SourceFileProvider, dstPath: Path,
+class SupervisorActor(srcProvider: SourceFileProvider, config: LocalFsConfig,
                       blockingDispatcherName: String) extends Actor {
   /** Reference to the test instance. */
   private var syncActor: ActorRef = _
@@ -273,7 +273,7 @@ class SupervisorActor(srcProvider: SourceFileProvider, dstPath: Path,
   }
 
   override def preStart(): Unit = {
-    syncActor = context.actorOf(Props(classOf[LocalSyncOperationActor], srcProvider, dstPath,
+    syncActor = context.actorOf(Props(classOf[LocalSyncOperationActor], srcProvider, config,
       blockingDispatcherName))
   }
 

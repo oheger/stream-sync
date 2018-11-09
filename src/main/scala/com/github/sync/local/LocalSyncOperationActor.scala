@@ -16,8 +16,8 @@
 
 package com.github.sync.local
 
-import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}
+import java.time.ZoneId
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.stream.ActorMaterializer
@@ -36,19 +36,19 @@ import scala.util.{Failure, Success}
   * back to the caller.
   *
   * @param sourceFileProvider     the provider for files
-  * @param dstPath                the path to the destination structure
+  * @param config                 the configuration for this actor
   * @param blockingDispatcherName name of a dispatcher for blocking operations
   */
-class LocalSyncOperationActor(sourceFileProvider: SourceFileProvider, dstPath: Path,
+class LocalSyncOperationActor(sourceFileProvider: SourceFileProvider, config: LocalFsConfig,
                               blockingDispatcherName: String)
   extends Actor with ActorLogging {
   /** Child actor responsible for executing sync operations. */
   private var executorActor: ActorRef = _
 
   override def preStart(): Unit = {
-    val destinationResolver = new LocalUriResolver(dstPath)
+    val destinationResolver = new LocalUriResolver(config.rootPath)
     executorActor = context.actorOf(Props(classOf[OperationExecutorActor], sourceFileProvider,
-      destinationResolver).withDispatcher(blockingDispatcherName))
+      destinationResolver, config.optTimeZone).withDispatcher(blockingDispatcherName))
   }
 
   override def receive: Receive = {
@@ -69,9 +69,11 @@ class LocalSyncOperationActor(sourceFileProvider: SourceFileProvider, dstPath: P
   *
   * @param sourceFileProvider  the provider for source files
   * @param destinationResolver the resolver for the destination structure
+  * @param optTimeZone         an optional time zone to be applied to file timestamps
   */
 class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
-                             destinationResolver: LocalUriResolver) extends Actor with
+                             destinationResolver: LocalUriResolver,
+                             optTimeZone: Option[ZoneId]) extends Actor with
   ActorLogging {
   /** The object to materialize streams. */
   private implicit val materializer: ActorMaterializer = ActorMaterializer()
@@ -86,7 +88,7 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
       val sink = FileIO.toPath(destPath)
       val client = sender()
       futSource.flatMap(_.runWith(sink)) map { _ =>
-        Files.setLastModifiedTime(destPath, FileTime from file.lastModified)
+        FileTimeUtils.setLastModifiedTimeInTimeZone(destPath, file.lastModified, optTimeZone)
       } onComplete {
         case Success(_) =>
           client ! op
