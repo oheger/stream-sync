@@ -262,8 +262,14 @@ instance to mirror a directory structure on the local hard disk to an external
 hard disk or a network share.
 
 To specify such a structure, just pass the (OS-specific) path to the root
-directory without any prefix. For local directories no additional options are
-supported.
+directory without any prefix. The table below lists the additional options 
+that are supported. (Remember that these options need to be prefixed with
+either ``src-`` or ``dst-`` to assign them to the source or destination
+structure.)
+
+| Option | Description | Mandatory |
+| ------ | ----------- | --------- |
+| time-zone | There are file systems that store last-modified timestamps for files in the system's local time without proper time zone information. This causes the last-modify time to change together with the local time zone, e.g. when the daylight saving time starts or ends. In such cases, Stream Sync would consider the files on this file system as changed because their last-modified time is now different. One prominent example of such a file system is FAT32 which is still frequently used, for instance on external hard disks, because of its broad support by different operation systems. To work around this problem, with the _time-zone_ option it is possible to define a time zone in which the timestamps of files in a specific structure have to be interpreted. The last-modified time reported by the file system is then calculated according to this time zone before comparison. Analogously, when setting the last-modified time of a synced file the timestamp is adjusted. As value of the option, any string can be provided that is accepted by the [ZoneId.of()](https://docs.oracle.com/javase/8/docs/api/java/time/ZoneId.html#of-java.lang.String-) method of the _ZoneId_ JDK class. | No |
 
 #### WebDav directories
 It is possible to sync from or to a directory hosted on a WebDav server. To do
@@ -307,6 +313,19 @@ of the source structure. Here again the configured property (with the optional
 namespace) is used or the standard property if unspecified.
 
 ### Examples and use cases
+**Sync a local directory to an external USB hard disk**
+
+This should be a frequent use case, in which some local work is saved on an
+external hard disk. The command line is pretty straight-forward, as the target
+drive can be accessed like a local drive; e.g. under Windows it is assigned a
+drive letter. The only problem is that if the file system on the external drive
+is FAT32, it may be necessary to explicitly specify a time zone in which
+last-modified timestamps are interpreted (refer to the description of local
+directories for more information). For this purpose, the _time-zone_ option 
+needs to be provided:
+
+`Sync C:\data\work D:\backup\work --dst-time-zone UTC+02:00`
+
 **Do not remove archived data**
 
 Consider the case that a directory structure stores the data of different
