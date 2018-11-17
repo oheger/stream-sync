@@ -139,7 +139,8 @@ object SyncStage {
     handleNullElementDuringSync(state, stage, portIdx, element) orElse {
       val (elemSource, elemDest) = extractSyncPair(state, portIdx, element)
       syncOperationForElements(elemSource, elemDest, state, stage) orElse
-        syncOperationForFileFolderDiff(elemSource, elemDest, state, stage)
+        syncOperationForFileFolderDiff(elemSource, elemDest, state, stage,
+          stage.ignoreTimeDeltaSec)
     } getOrElse emitAndPullBoth(Nil, state, stage)
 
   /**
@@ -235,18 +236,20 @@ object SyncStage {
     * file in the source structure corresponds to a folder in the destination
     * structure and vice versa.
     *
-    * @param elemSource the element from the source inlet
-    * @param elemDest   the element from the destination inlet
-    * @param state      the current sync state
-    * @param stage      the stage
+    * @param elemSource      the element from the source inlet
+    * @param elemDest        the element from the destination inlet
+    * @param state           the current sync state
+    * @param stage           the stage
+    * @param ignoreTimeDelta the delta in file times to be ignored
     * @return an ''Option'' with data how to handle these elements
     */
   private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement,
-                                             state: SyncState, stage: SyncStage):
+                                             state: SyncState, stage: SyncStage,
+                                             ignoreTimeDelta: Int):
   Option[(EmitData, SyncState)] =
     (elemSource, elemDest) match {
       case (eSrc: FsFile, eDst: FsFile)
-        if extractTime(eSrc) != extractTime(eDst) || eSrc.size != eDst.size =>
+        if differentFileTimes(eSrc, eDst, ignoreTimeDelta) || eSrc.size != eDst.size =>
         Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level)), state, stage))
 
       case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
@@ -389,6 +392,18 @@ object SyncStage {
       UriEncodingHelper.UriSeparator)
 
   /**
+    * Checks whether the timestamps of the given files are different, taking
+    * the configured threshold for the time delta into account.
+    *
+    * @param eSrc            the source file
+    * @param eDst            the destination file
+    * @param ignoreTimeDelta the delta in file times to be ignored
+    * @return a flag whether these files have a different timestamp
+    */
+  private def differentFileTimes(eSrc: FsFile, eDst: FsFile, ignoreTimeDelta: Int): Boolean =
+    math.abs(extractTime(eSrc) - extractTime(eDst)) > ignoreTimeDelta
+
+  /**
     * Extracts the time of a file that needs to be compared to detect modified
     * files. This method ignores milliseconds as some structures that can be
     * synced do not support file modification times with this granularity.
@@ -412,8 +427,12 @@ object SyncStage {
   * instance, if a ''SyncOperation'' is emitted to delete a folder, it is
   * guaranteed that all operations that remove the content of this folder have
   * been pushed before.
+  *
+  * @param ignoreTimeDeltaSec a time difference in seconds that is to be
+  *                           ignored when comparing two files
   */
-class SyncStage extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]] {
+class SyncStage(val ignoreTimeDeltaSec: Int = 0)
+  extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]] {
 
   import SyncStage._
 

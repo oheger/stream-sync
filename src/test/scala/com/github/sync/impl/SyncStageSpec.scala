@@ -17,6 +17,7 @@
 package com.github.sync.impl
 
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
@@ -83,12 +84,13 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
     * Runs the sync stage with the sources specified and returns the resulting
     * sequence of sync operations.
     *
-    * @param source1 source 1 to sync
-    * @param source2 source 2 to sync
+    * @param source1         source 1 to sync
+    * @param source2         source 2 to sync
+    * @param ignoreTimeDelta a time delta in files to be ignored
     * @return the sequence with sync operations
     */
-  private def runStage(source1: Source[FsElement, Any], source2: Source[FsElement, Any]):
-  Seq[SyncOperation] = {
+  private def runStage(source1: Source[FsElement, Any], source2: Source[FsElement, Any],
+                       ignoreTimeDelta: Int = 0): Seq[SyncOperation] = {
     implicit val mat: ActorMaterializer = ActorMaterializer()
     val foldSink =
       Sink.fold[List[SyncOperation], SyncOperation](List.empty[SyncOperation]) { (lst, e) =>
@@ -97,7 +99,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
     val g = RunnableGraph.fromGraph(GraphDSL.create(foldSink) { implicit builder =>
       sink =>
         import GraphDSL.Implicits._
-        val syncStage = builder.add(new SyncStage)
+        val syncStage = builder.add(new SyncStage(ignoreTimeDelta))
         source1 ~> syncStage.in0
         source2 ~> syncStage.in1
         syncStage.out ~> sink
@@ -170,15 +172,16 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
     runStage(sourceOrg, sourceTarget) should contain only expOp
   }
 
-  it should "ignore differences in the file time's milliseconds" in {
+  it should "ignore time differences below the configured threshold" in {
+    val TimeDelta = 5
     val FileUri = "/equalFile.dat"
     val fileSrc = createFile(FileUri)
     val fileDest = createFile(FileUri,
-      lastModified = FileTime.plusMillis(999))
+      lastModified = FileTime.plus(TimeDelta - 1, ChronoUnit.SECONDS).plusMillis(999))
     val sourceOrg = Source.single(fileSrc)
     val sourceTarget = Source.single(fileDest)
 
-    runStage(sourceOrg, sourceTarget) should have size 0
+    runStage(sourceOrg, sourceTarget, TimeDelta) should have size 0
   }
 
   it should "sync files with a different size" in {
