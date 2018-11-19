@@ -373,10 +373,34 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
       ParameterManager.SyncLogOption + ": only a single value")
   }
 
+  it should "handle an undefined option for the file times threshold" in {
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+
+    config.ignoreTimeDelta should be(None)
+  }
+
+  it should "evaluate the threshold for file time deltas" in {
+    val Delta = 28
+    val argsMap = ArgsMap + (ParameterManager.IgnoreTimeDeltaOption -> List(Delta.toString))
+
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    config.ignoreTimeDelta should be(Some(Delta))
+  }
+
+  it should "handle an invalid threshold for file time deltas" in {
+    val InvalidValue = "not a threshold for a time delta!"
+    val argsMap = ArgsMap + (ParameterManager.IgnoreTimeDeltaOption -> List(InvalidValue))
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "Invalid threshold for file time deltas: '" + InvalidValue)
+  }
+
   it should "remove all options contained in the sync config" in {
     val otherOptions = Map("foo" -> List("v1"), "bar" -> List("v2", "v3"))
+    val argsMap = ArgsMap ++ otherOptions +
+      (ParameterManager.IgnoreTimeDeltaOption -> List("1"))
 
-    val (updArgs, _) = futureResult(ParameterManager.extractSyncConfig(ArgsMap ++ otherOptions))
+    val (updArgs, _) = futureResult(ParameterManager.extractSyncConfig(argsMap))
     updArgs should be(otherOptions)
   }
 

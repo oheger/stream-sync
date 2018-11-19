@@ -68,6 +68,14 @@ object ParameterManager {
   /** Name of the option that defines the path to the sync log file. */
   val SyncLogOption: String = OptionPrefix + "sync-log"
 
+  /**
+    * Name of the option that defines the threshold for time deltas to be
+    * ignored. When comparing the timestamps of two files the files are
+    * considered different only if the difference of their timestamps is
+    * greater than this value (in seconds).
+    */
+  val IgnoreTimeDeltaOption: String = OptionPrefix + "ignore-time-delta"
+
   /** The default timeout for sync operations. */
   val DefaultTimeout = Timeout(1.minute)
 
@@ -101,18 +109,21 @@ object ParameterManager {
     * An instance of this class is created from the command line options passed
     * to the program.
     *
-    * @param syncUris    the URIs to be synced (source and destination)
-    * @param applyMode   the apply mode
-    * @param timeout     a timeout for sync operations
-    * @param logFilePath an option with the path to the log file if defined
-    * @param syncLogPath an option with the path to a file containing sync
-    *                    operations to be executed
+    * @param syncUris        the URIs to be synced (source and destination)
+    * @param applyMode       the apply mode
+    * @param timeout         a timeout for sync operations
+    * @param logFilePath     an option with the path to the log file if defined
+    * @param syncLogPath     an option with the path to a file containing sync
+    *                        operations to be executed
+    * @param ignoreTimeDelta optional threshold for a time difference between
+    *                        two files that should be ignored
     */
   case class SyncConfig(syncUris: (String, String),
                         applyMode: ApplyMode,
                         timeout: Timeout,
                         logFilePath: Option[Path],
-                        syncLogPath: Option[Path])
+                        syncLogPath: Option[Path],
+                        ignoreTimeDelta: Option[Int])
 
   /**
     * A case class representing a processor for command line options.
@@ -334,7 +345,8 @@ object ParameterManager {
       Some(DefaultTimeout.duration.toSeconds.toString))(mapTimeout)
     logFile <- optionalOptionValue(LogFileOption)
     syncLog <- optionalOptionValue(SyncLogOption)
-  } yield createSyncConfig(uris, mode, timeout, logFile, syncLog)
+    timeDelta <- ignoreTimeDeltaOption()
+  } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta)
 
   /**
     * Extracts an object with configuration options for the sync process from
@@ -493,13 +505,16 @@ object ParameterManager {
     * @param triedApplyMode the apply mode component
     * @param triedTimeout   the timeout component
     * @param triedLogFile   the log file component
+    * @param triedSyncLog   the sync log component
+    * @param triedTimeDelta the ignore file time delta component
     * @return a ''Try'' with the config
     */
   private def createSyncConfig(triedUris: Try[(String, String)],
                                triedApplyMode: Try[ApplyMode],
                                triedTimeout: Try[Timeout],
                                triedLogFile: Try[Option[String]],
-                               triedSyncLog: Try[Option[String]]): Try[SyncConfig] = {
+                               triedSyncLog: Try[Option[String]],
+                               triedTimeDelta: Try[Option[Int]]): Try[SyncConfig] = {
     def collectErrorMessages(components: Try[_]*): Iterable[String] =
       components.foldLeft(List.empty[String]) { (lst, c) =>
         c match {
@@ -509,10 +524,10 @@ object ParameterManager {
       }
 
     val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout, triedLogFile,
-      triedSyncLog)
+      triedSyncLog, triedTimeDelta)
     if (messages.isEmpty)
       Success(SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
-        mapPath(triedLogFile.get), mapPath(triedSyncLog.get)))
+        mapPath(triedLogFile.get), mapPath(triedSyncLog.get), triedTimeDelta.get))
     else Failure(new IllegalArgumentException(messages.mkString(", ")))
   }
 
@@ -524,12 +539,37 @@ object ParameterManager {
     * @return a ''Try'' with the converted value
     */
   private def mapTimeout(timeoutStr: String): Try[Timeout] = Try {
-    try Timeout(timeoutStr.toInt.seconds)
-    catch {
-      case _: NumberFormatException =>
-        throw new IllegalArgumentException(s"Invalid timeout value: '$timeoutStr'!")
-    }
+    Timeout(toInt("timeout value")(timeoutStr).seconds)
   }
+
+  /**
+    * Returns a processor that extracts the value of the option for ignoring
+    * file time deltas. This processor is based on the processor for an
+    * optional parameter, but the result has to be mapped to an integer.
+    *
+    * @return the processor for the ignore time delta option
+    */
+  private def ignoreTimeDeltaOption(): CliProcessor[Try[Option[Int]]] =
+    optionalOptionValue(IgnoreTimeDeltaOption) map { strRes =>
+      strRes.map(_.map(toInt("threshold for file time deltas")))
+    }
+
+  /**
+    * A mapping function to convert a string to an integer. If this fails due
+    * to a ''NumberFormatException'', an ''IllegalArgumentException'' is thrown
+    * with a message generated from the passed tag and the original string
+    * value.
+    *
+    * @param tag a tag for generating an error message
+    * @param str the string to be converted
+    * @return the resulting integer value
+    */
+  private def toInt(tag: String)(str: String): Int =
+    try str.toInt
+    catch {
+      case e: NumberFormatException =>
+        throw new IllegalArgumentException(s"Invalid $tag: '$str'!", e)
+    }
 
   /**
     * Transforms an option of a string to an option of a path. The path is
