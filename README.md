@@ -249,6 +249,29 @@ multiple incremental sync operations. This works as follows:
    later. When restarted with these options the process ignores all sync
    operations listed in the progress log and only executes those that are still
    pending. This is further outlined in the _Examples_ section.
+   
+### Adjust granularity of timestamps
+In order to decide whether a file needs to be copied to the destination
+structure, StreamSync compares the last-modified timestamps of the files
+involved. After a file has been copied, the timestamp in the destination
+structure is updated to match the one in the source structure; so if there are
+no changes on the file in the source structure, another sync process will 
+ignore this file - at least in theory.
+
+In practice there can be some surprises when syncing between different types of
+file systems or structures. The differences can also impact the comparison of
+last-modified timestamps. For instance, some structures may store such
+timestamps with a granularity of nanoseconds, while others only use seconds.
+This may lead to false positives when StreamSync decides which files to copy.
+
+To deal with problems like that, the `--ignore-time-delta` option can be
+specified. The option expects a numeric value which is interpreted as a
+threshold in seconds for an acceptable time difference. So if the difference
+between the timestamps of two files is below this threshold, the timestamps 
+will be considered to be equal. Setting this option to a value of 1 or 2
+should solve all issues related to the granularity of file timestamps. An
+example using this option can be found in the _Examples and use cases_
+section.
 
 ### Structure types
 This section lists the different types of structures that are supported for
@@ -321,10 +344,12 @@ drive can be accessed like a local drive; e.g. under Windows it is assigned a
 drive letter. The only problem is that if the file system on the external drive
 is FAT32, it may be necessary to explicitly specify a time zone in which
 last-modified timestamps are interpreted (refer to the description of local
-directories for more information). For this purpose, the _time-zone_ option 
-needs to be provided:
+directories for more information). For this purpose, the `time-zone` option 
+needs to be provided. In addition, the `ignore-time-delta` option is set to a
+value of 2 seconds to make sure that small differences in timestamps with a
+granularity below seconds do not cause unnecessary copy operations.
 
-`Sync C:\data\work D:\backup\work --dst-time-zone UTC+02:00`
+`Sync C:\data\work D:\backup\work --dst-time-zone UTC+02:00 --ignore-time-delta 2`
 
 **Do not remove archived data**
 
