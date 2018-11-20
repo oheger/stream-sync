@@ -105,15 +105,17 @@ trait SyncStreamFactory {
     * folders of the given structures and calculates the operations to be
     * applied to synchronize them.
     *
-    * @param uriSrc         the URI to the source structure
-    * @param uriDst         the URI to the destination structure
-    * @param additionalArgs a map with additional arguments for structures
-    * @param ec             the execution context
-    * @param system         the actor system
-    * @param mat            the object to materialize streams
+    * @param uriSrc          the URI to the source structure
+    * @param uriDst          the URI to the destination structure
+    * @param additionalArgs  a map with additional arguments for structures
+    * @param ignoreTimeDelta the time difference between two files to ignore
+    * @param ec              the execution context
+    * @param system          the actor system
+    * @param mat             the object to materialize streams
     * @return a future with the source
     */
-  def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs)
+  def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs,
+                       ignoreTimeDelta: Int)
                       (implicit ec: ExecutionContext, system: ActorSystem,
                        mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]]
 

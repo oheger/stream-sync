@@ -396,6 +396,27 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     updatedTime should be(Time2.minus(DeltaHours, ChronoUnit.HOURS))
   }
 
+  it should "ignore a time difference below the configured threshold" in {
+    val TimeDeltaThreshold = 10
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val Time1 = Instant.parse("2018-11-19T21:18:04.34Z")
+    val Time2 = Time1.plus(TimeDeltaThreshold - 1, ChronoUnit.SECONDS)
+    val Time3 = Time1.minus(TimeDeltaThreshold - 1, ChronoUnit.SECONDS)
+    val Name1 = "f1.dat"
+    val Name2 = "f2.dat"
+    createTestFile(srcFolder, Name1, fileTime = Some(Time1))
+    createTestFile(srcFolder, Name2, fileTime = Some(Time1))
+    createTestFile(dstFolder, Name1, fileTime = Some(Time2))
+    createTestFile(dstFolder, Name2, fileTime = Some(Time3))
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--ignore-time-delta", TimeDeltaThreshold.toString)
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.totalOperations should be(0)
+  }
+
   it should "create a correct SourceFileProvider for a WebDav source" in {
     implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -413,7 +434,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     fileContent should startWith(FileTestHelper.TestData take 50)
   }
 
-  it should "support sync operations targetting a WebDav server" in {
+  it should "support sync operations targeting a WebDav server" in {
     implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val WebDavPath = "/destination"

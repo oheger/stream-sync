@@ -53,10 +53,11 @@ class DelegateSyncStreamFactory(delegate: SyncStreamFactory = SyncStreamFactoryI
   : ArgsFunc[SourceFileProvider] =
     delegate.createSourceFileProvider(uri)
 
-  override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs)
+  override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs,
+                                ignoreTimeDelta: Int)
                                (implicit ec: ExecutionContext, system: ActorSystem,
                                 mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]] =
-    delegate.createSyncSource(uriSrc, uriDst, additionalArgs)
+    delegate.createSyncSource(uriSrc, uriDst, additionalArgs, ignoreTimeDelta)
 
   override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
                                (implicit system: ActorSystem, mat: ActorMaterializer,

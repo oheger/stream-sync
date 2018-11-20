@@ -28,8 +28,10 @@ import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.log.SerializerStreamHelper
-import com.github.sync.{DestinationStructureType, SourceStructureType, SyncOperation,
-  SyncStreamFactory}
+import com.github.sync.{
+  DestinationStructureType, SourceStructureType, SyncOperation,
+  SyncStreamFactory
+}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -142,7 +144,8 @@ object Sync {
     case Some(path) =>
       createSyncSourceFromLog(config, path)
     case None =>
-      factory.createSyncSource(config.syncUris._1, config.syncUris._2, additionalArgs)
+      factory.createSyncSource(config.syncUris._1, config.syncUris._2, additionalArgs,
+        config.ignoreTimeDelta getOrElse 1)
   }
 
   /**

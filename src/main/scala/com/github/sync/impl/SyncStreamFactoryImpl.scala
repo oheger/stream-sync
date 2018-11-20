@@ -102,13 +102,14 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
         }
   }
 
-  override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs)
+  override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs,
+                                ignoreTimeDelta: Int)
                                (implicit ec: ExecutionContext, system: ActorSystem,
                                 mat: ActorMaterializer):
   Future[Source[SyncOperation, NotUsed]] = for {
     srcSource <- createSyncInputSource(uriSrc, SourceStructureType).apply(additionalArgs)
     dstSource <- createSyncInputSource(uriDst, DestinationStructureType).apply(additionalArgs)
-  } yield createGraphForSyncSource(srcSource, dstSource)
+  } yield createGraphForSyncSource(srcSource, dstSource, ignoreTimeDelta)
 
   override def createSyncStream(source: Source[SyncOperation, Any],
                                 flowProc: Flow[SyncOperation, SyncOperation, Any],
@@ -169,17 +170,18 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     * Creates a ''Source'' that produces ''SyncOperation'' objects to sync the
     * input sources provided.
     *
-    * @param srcSource the source for the source structure
-    * @param dstSource the source for the destination structure
+    * @param srcSource       the source for the source structure
+    * @param dstSource       the source for the destination structure
+    * @param ignoreTimeDelta the time delta between two files to ignore
     * @return the sync source
     */
   private def createGraphForSyncSource(srcSource: Source[FsElement, Any],
-                                       dstSource: Source[FsElement, Any]):
-  Source[SyncOperation, NotUsed] =
+                                       dstSource: Source[FsElement, Any],
+                                       ignoreTimeDelta: Int): Source[SyncOperation, NotUsed] =
     Source.fromGraph(GraphDSL.create() {
       implicit builder =>
         import GraphDSL.Implicits._
-        val syncStage = builder.add(new SyncStage)
+        val syncStage = builder.add(new SyncStage(ignoreTimeDelta))
         srcSource ~> syncStage.in0
         dstSource ~> syncStage.in1
         SourceShape(syncStage.out)
