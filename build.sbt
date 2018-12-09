@@ -15,7 +15,7 @@
  */
 
 /** Definition of versions. */
-lazy val AkkaVersion = "2.5.17"
+lazy val AkkaVersion = "2.5.19"
 lazy val AkkaHttpVersion = "10.1.5"
 lazy val VersionScala = "2.12.6"
 lazy val VersionScalaXml = "1.1.0"
@@ -35,14 +35,10 @@ lazy val akkaDependencies = Seq(
 )
 
 lazy val testDependencies = Seq(
-  "org.scalatest" %% "scalatest" % VersionScalaTest % "test",
-  "com.github.tomakehurst" % "wiremock" % VersionWireMock % "test",
-  "org.mockito" % "mockito-core" % "1.9.5" % "test"
-)
-
-lazy val logDependencies = Seq(
-  "org.slf4j" % "slf4j-api" % "1.7.10",
-  "org.slf4j" % "slf4j-simple" % "1.7.10" % "test"
+  "org.scalatest" %% "scalatest" % VersionScalaTest % Test,
+  "com.github.tomakehurst" % "wiremock" % VersionWireMock % Test,
+  "org.mockito" % "mockito-core" % "1.9.5" % Test,
+  "org.slf4j" % "slf4j-simple" % "1.7.25" % Test
 )
 
 lazy val StreamSync = (project in file("."))
