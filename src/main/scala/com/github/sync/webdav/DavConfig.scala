@@ -51,10 +51,23 @@ object DavConfig {
   val PropModifiedNamespace = "modified-namespace"
 
   /**
+    * Property to determine whether a file to be overridden should be deleted
+    * before it is uploaded. This may be necessary for some servers to have a
+    * reliable behavior. The value of the property is a string that is
+    * interpreted as a boolean value (in terms of ''Boolean.parseBoolean()'').
+    */
+  val PropDeleteBeforeOverride = "delete-before-override"
+
+  /**
     * Default name of the WebDav property storing the last modified time of an
     * element.
     */
   val DefaultModifiedProperty = "getlastmodified"
+
+  /**
+    * Default value for the ''delete-before-override'' property.
+    */
+  val DefaultDeleteBeforeOverride = "false"
 
   /**
     * Creates a ''Future'' with a new ''DavConfig'' from the specified
@@ -75,7 +88,8 @@ object DavConfig {
     DavConfig(rootUri, properties(propName(structType, PropUser)),
       properties(propName(structType, PropPassword)),
       properties.getOrElse(propName(structType, PropModifiedProperty), DefaultModifiedProperty),
-      properties get propName(structType, PropModifiedNamespace))
+      properties get propName(structType, PropModifiedNamespace),
+      java.lang.Boolean.parseBoolean(properties(propName(structType, PropDeleteBeforeOverride))))
   }
 
   /**
@@ -90,7 +104,9 @@ object DavConfig {
     List(SupportedArgument(propName(structType, PropUser), mandatory = true),
       SupportedArgument(propName(structType, PropPassword), mandatory = true),
       SupportedArgument(propName(structType, PropModifiedProperty), mandatory = false),
-      SupportedArgument(propName(structType, PropModifiedNamespace), mandatory = false))
+      SupportedArgument(propName(structType, PropModifiedNamespace), mandatory = false),
+      SupportedArgument(propName(structType, PropDeleteBeforeOverride), mandatory = true,
+        defaultValue = Some(DefaultDeleteBeforeOverride)))
 
   /**
     * Generates a property name based on the given structure type.
@@ -113,6 +129,9 @@ object DavConfig {
   * @param lastModifiedProperty  name for the ''lastModified'' property
   * @param lastModifiedNamespace namespace to use for the last modified
   *                              property
+  * @param deleteBeforeOverride  flag whether a delete operation should be
+  *                              issued before a file override
   */
 case class DavConfig(rootUri: Uri, user: String, password: String,
-                     lastModifiedProperty: String, lastModifiedNamespace: Option[String])
+                     lastModifiedProperty: String, lastModifiedNamespace: Option[String],
+                     deleteBeforeOverride: Boolean)

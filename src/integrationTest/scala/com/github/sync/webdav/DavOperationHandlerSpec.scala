@@ -91,7 +91,8 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     * @return the test WebDav server configuration
     */
   private def createDavConfig(): DavConfig =
-    DavConfig(serverUri(RootPath), UserId, Password, DavConfig.DefaultModifiedProperty, None)
+    DavConfig(serverUri(RootPath), UserId, Password, DavConfig.DefaultModifiedProperty, None,
+      deleteBeforeOverride = false)
 
   /**
     * Convenience function to define the URI of a stub or verification based on

@@ -37,10 +37,23 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val expArguments = List(SupportedArgument(prefix + DavConfig.PropUser, mandatory = true),
       SupportedArgument(prefix + DavConfig.PropPassword, mandatory = true),
       SupportedArgument(prefix + DavConfig.PropModifiedProperty, mandatory = false),
-      SupportedArgument(prefix + DavConfig.PropModifiedNamespace, mandatory = false))
+      SupportedArgument(prefix + DavConfig.PropModifiedNamespace, mandatory = false),
+      SupportedArgument(prefix + DavConfig.PropDeleteBeforeOverride, mandatory = true,
+        defaultValue = Some(DavConfig.DefaultDeleteBeforeOverride)))
 
     DavConfig.supportedArgumentsFor(structType) should contain only (expArguments: _*)
   }
+
+  /**
+    * Returns a minimum valid map with parameters. This map contains all
+    * mandatory parameters.
+    *
+    * @return the minimum valid map with parameters
+    */
+  private def minimumParametersMap(): Map[String, String] =
+    Map("--" + DestinationStructureType.name + DavConfig.PropUser -> "user",
+      "--" + DestinationStructureType.name + DavConfig.PropPassword -> "pwd",
+      "--" + DestinationStructureType.name + DavConfig.PropDeleteBeforeOverride -> "false")
 
   "DavConfig" should "return supported arguments for the source structure" in {
     checkSupportedArguments(SourceStructureType)
@@ -60,8 +73,10 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
       "--" + SourceStructureType.name + DavConfig.PropPassword -> password,
       "--" + SourceStructureType.name + DavConfig.PropModifiedProperty -> modifiedProp,
       "--" + SourceStructureType.name + DavConfig.PropModifiedNamespace -> modifiedNamespace,
+      "--" + SourceStructureType.name + DavConfig.PropDeleteBeforeOverride -> "true",
       "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
-    val expConfig = DavConfig(uri, user, password, modifiedProp, Some(modifiedNamespace))
+    val expConfig = DavConfig(uri, user, password, modifiedProp, Some(modifiedNamespace),
+      deleteBeforeOverride = true)
 
     val config = futureResult(DavConfig(SourceStructureType, uri, args))
     config should be(expConfig)
@@ -76,19 +91,24 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
   }
 
   it should "set the default last modified property if undefined" in {
-    val args = Map("--" + DestinationStructureType.name + DavConfig.PropUser -> "user",
-      "--" + DestinationStructureType.name + DavConfig.PropPassword -> "pwd")
+    val args = minimumParametersMap()
 
     val config = futureResult(DavConfig(DestinationStructureType, "root", args))
     config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
   }
 
   it should "set an undefined namespace if this property is not set" in {
-    val args = Map("--" + DestinationStructureType.name + DavConfig.PropUser -> "user",
-      "--" + DestinationStructureType.name + DavConfig.PropPassword -> "pwd")
+    val args = minimumParametersMap()
 
     val config = futureResult(DavConfig(DestinationStructureType, "root", args))
     config.lastModifiedNamespace shouldBe 'empty
+  }
+
+  it should "interpret an arbitrary value for the delete-before-override property" in {
+    val args = minimumParametersMap() + (DavConfig.PropDeleteBeforeOverride -> "unknown")
+
+    val config = futureResult(DavConfig(DestinationStructureType, "root", args))
+    config.deleteBeforeOverride shouldBe false
   }
 
   it should "return a failed future for an invalid URI" in {

@@ -41,7 +41,8 @@ object ModifiedTimeRequestFactorySpec {
   private def createConfig(property: String = DavConfig.DefaultModifiedProperty,
                            namespace: Option[String] = None): DavConfig =
     DavConfig(rootUri = "https://test.dav.org", user = "testUser", password = "S3cr3T",
-      lastModifiedProperty = property, lastModifiedNamespace = namespace)
+      lastModifiedProperty = property, lastModifiedNamespace = namespace,
+      deleteBeforeOverride = false)
 
   /**
     * Parses the given template string into an XML element.

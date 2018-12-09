@@ -463,7 +463,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     val WebDavPath = "/destination"
     implicit val mat: ActorMaterializer = ActorMaterializer()
     val davConfig = DavConfig(serverUri(WebDavPath), UserId, Password,
-      DavConfig.DefaultModifiedProperty, None)
+      DavConfig.DefaultModifiedProperty, None, deleteBeforeOverride = false)
     val shutdownCount = new AtomicInteger
     val provider = new DavSourceFileProvider(davConfig, new RequestQueue(davConfig.rootUri)) {
       override def shutdown(): Unit = {
