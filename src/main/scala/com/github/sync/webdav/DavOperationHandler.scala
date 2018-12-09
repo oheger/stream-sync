@@ -137,9 +137,16 @@ object DavOperationHandler {
           simpleRequest(op, HttpRequest(method = HttpMethods.DELETE, uri = uri, headers = headers))
         case SyncOperation(FsFolder(_, _), ActionCreate, _) =>
           simpleRequest(op, HttpRequest(method = MethodMkCol, uri = uri, headers = headers))
-        case SyncOperation(file@FsFile(_, _, _, _), _, _) =>
-          createUploadRequest(file) map (req =>
-            SyncOpRequestData(op, List(req, createPatchRequest(op))))
+        case SyncOperation(file@FsFile(_, _, _, _), action, _) =>
+          createUploadRequest(file) map { req =>
+            val needDelete = config.deleteBeforeOverride && action == ActionOverride
+            val standardRequests = List(req, createPatchRequest(op))
+            val requests = if (needDelete)
+              HttpRequest(method = HttpMethods.DELETE, uri = uri,
+                headers = headers) :: standardRequests
+            else standardRequests
+            SyncOpRequestData(op, requests)
+          }
         case _ =>
           Future.failed(new IllegalStateException("Invalid SyncOperation: " + op))
       }
@@ -173,11 +180,13 @@ object DavOperationHandler {
       import GraphDSL.Implicits._
       val requestDataMapper =
         builder.add(Flow[SyncOperation].mapAsync(1)(createRequestData))
+      // need executor stages for the maximum number of requests per action
       val reqExec1 = createOptionalRequestExecutionFlow(0)
       val reqExec2 = createOptionalRequestExecutionFlow(1)
+      val reqExec3 = createOptionalRequestExecutionFlow(2)
       val resultOpMapper = builder.add(Flow[SyncOpRequestData].map(_.op))
 
-      requestDataMapper ~> reqExec1 ~> reqExec2 ~> resultOpMapper
+      requestDataMapper ~> reqExec1 ~> reqExec2 ~> reqExec3 ~> resultOpMapper
       FlowShape(requestDataMapper.in, resultOpMapper.out)
     })
   }

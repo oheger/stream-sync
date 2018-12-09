@@ -124,10 +124,12 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     *
     * @param operations   the sync operations to be executed
     * @param fileProvider the source file provider
+    * @param config       the DAV configuration
     * @return the resulting list of sync operations
     */
   private def runSync(operations: List[SyncOperation],
-                      fileProvider: SourceFileProvider = mock[SourceFileProvider]):
+                      fileProvider: SourceFileProvider = mock[SourceFileProvider],
+                      config: DavConfig = createDavConfig()):
   List[SyncOperation] = {
     val decider: Supervision.Decider = ex => {
       ex.printStackTrace()
@@ -140,7 +142,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
       op :: lst
     }
     val futResult = source
-      .via(DavOperationHandler.webDavProcessingFlow(createDavConfig(), fileProvider))
+      .via(DavOperationHandler.webDavProcessingFlow(config, fileProvider))
       .runWith(sink)
     futureResult(futResult).reverse
   }
@@ -224,6 +226,24 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     checkUploadFile(ActionOverride)
   }
 
+  it should "handle a file override action if deleteBeforeOverride is set" in {
+    val fileContent = FileTestHelper.testBytes()
+    val file = createFile(createFolder("/upload"), "/upload.txt",
+      Instant.now(), Some(fileContent.length))
+    val fileProvider = createFileProvider(file, fileContent)
+    val operations = List(SyncOperation(file, ActionOverride, 2))
+    val config = createDavConfig().copy(deleteBeforeOverride = true)
+    stubFor(delete(elemUri(file))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
+    stubFor(put(elemUri(file))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
+    stubFor(request("PROPPATCH", elemUri(file))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
+
+    runSync(operations, fileProvider, config) should contain theSameElementsAs operations
+    verify(deleteRequestedFor(elemUri(file)))
+  }
+
   it should "not send a PROPPATCH request for a failed upload operation" in {
     val file = createFile(createFolder("/failedUpload"), "/failure.txt")
     val fileProvider = createFileProvider(file, file.relativeUri.getBytes)
@@ -246,6 +266,19 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
         .withBody("Rejected!")))
 
     runSync(operations, fileProvider) should have size 0
+  }
+
+  it should "handle a failed delete operation before an override" in {
+    val file = createFile(createFolder("/failedDelete"), "/override.txt")
+    val fileProvider = createFileProvider(file, file.relativeUri.getBytes)
+    val operations = List(SyncOperation(file, ActionOverride, 2))
+    val config = createDavConfig().copy(deleteBeforeOverride = true)
+    stubFor(delete(elemUri(file))
+      .willReturn(aResponse().withStatus(StatusCodes.InternalServerError.intValue)
+        .withBody("Not deleted!")))
+
+    runSync(operations, fileProvider, config) should have size 0
+    getAllServeEvents should have size 1
   }
 
   it should "handle an invalid sync operation" in {
