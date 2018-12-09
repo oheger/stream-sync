@@ -45,6 +45,19 @@ object DavOperationHandler {
   private val MethodPropPatch = HttpMethod.custom("PROPPATCH")
 
   /**
+    * A data class storing the requests to be executed for a single sync
+    * operation.
+    *
+    * For some operations multiple requests are to be executed. They are held
+    * in a list. The processing flow processes an instance in a cycle until all
+    * requests are handled.
+    *
+    * @param op       the sync operation
+    * @param requests the list with requests for this operation
+    */
+  private case class SyncOpRequestData(op: SyncOperation, requests: List[HttpRequest])
+
+  /**
     * Returns a ''Flow'' to apply [[SyncOperation]] objects against a WebDav
     * server. The flow executes the operations from upstream and passes all
     * that were successful to downstream.
@@ -67,42 +80,74 @@ object DavOperationHandler {
     // out failed responses; only sync operations processed successfully are
     // passed through
     def createSyncOperationRequestFlow():
-    Flow[(HttpRequest, SyncOperation), SyncOperation, Any] = {
+    Flow[(HttpRequest, SyncOpRequestData), SyncOpRequestData, Any] = {
       val requestFlow = LoggingStage.withLogging(
-        createPoolClientFlow[SyncOperation](config.rootUri, Http()))(logResponse)
-      val mapFlow = Flow[(Try[HttpResponse], SyncOperation)]
-        .mapAsync[SyncOperation](1)(processResponse)
+        createPoolClientFlow[SyncOpRequestData](config.rootUri, Http()))(logResponse)
+      val mapFlow = Flow[(Try[HttpResponse], SyncOpRequestData)]
+        .mapAsync[SyncOpRequestData](1)(processResponse)
       requestFlow.via(mapFlow)
     }
 
     // Processes a response by checking whether it was successful and always
     // consuming its entity
-    def processResponse(triedResult: (Try[HttpResponse], SyncOperation)):
-    Future[SyncOperation] =
+    def processResponse(triedResult: (Try[HttpResponse], SyncOpRequestData)):
+    Future[SyncOpRequestData] =
       Future.fromTry(triedResult._1)
         .flatMap(resp => consumeEntity(resp, triedResult._2))
         .filter(_._1.status.isSuccess())
         .map(_._2)
 
     // Makes sure that the entity of a response is consumed
-    def consumeEntity(response: HttpResponse, op: SyncOperation):
-    Future[(HttpResponse, SyncOperation)] =
+    def consumeEntity(response: HttpResponse, op: SyncOpRequestData):
+    Future[(HttpResponse, SyncOpRequestData)] =
       response.entity.discardBytes().future().map(_ => (response, op))
 
-    // Transforms a sync operation into an HTTP request
-    def createRequest(op: SyncOperation): Future[HttpRequest] = {
+    // Creates a tuple with the request data and the next request to execute
+    def createRequestTuple(data: SyncOpRequestData, reqNo: Int):
+    (HttpRequest, SyncOpRequestData) = (data.requests(reqNo), data)
+
+    // Creates a flow that executes one specific request from a
+    // SyncOpRequestData object if it is defined. Otherwise, the data object is
+    // just passed through. The resulting flow is a building block for
+    // processing sync operations that can require multiple requests.
+    def createOptionalRequestExecutionFlow(reqNo: Int):
+    Flow[SyncOpRequestData, SyncOpRequestData, Any] = {
+      val hasRequest: SyncOpRequestData => Boolean = _.requests.size >= reqNo + 1
+      Flow.fromGraph(GraphDSL.create() { implicit builder =>
+        import GraphDSL.Implicits._
+        val filterHasRequest = Flow[SyncOpRequestData].filter(hasRequest)
+        val filterSkip = Flow[SyncOpRequestData].filterNot(hasRequest)
+        val selectRequestFlow = Flow[SyncOpRequestData].map(createRequestTuple(_, reqNo))
+        val requestFlow = builder.add(LoggingStage.withLogging(selectRequestFlow)(logRequest))
+        val requestFlowOp = createSyncOperationRequestFlow()
+        val broadcast = builder.add(Broadcast[SyncOpRequestData](2))
+        val merge = builder.add(Merge[SyncOpRequestData](2))
+
+        broadcast ~> filterHasRequest ~> requestFlow ~> requestFlowOp ~> merge
+        broadcast ~> filterSkip ~> merge
+        FlowShape(broadcast.in, merge.out)
+      })
+    }
+
+    // Creates the object with requests for a single sync operation
+    def createRequestData(op: SyncOperation): Future[SyncOpRequestData] = {
       val uri = uriResolver.resolveElementUri(op.element.relativeUri)
       op match {
         case SyncOperation(_, ActionRemove, _) =>
-          Future.successful(HttpRequest(method = HttpMethods.DELETE, uri = uri, headers = headers))
+          simpleRequest(op, HttpRequest(method = HttpMethods.DELETE, uri = uri, headers = headers))
         case SyncOperation(FsFolder(_, _), ActionCreate, _) =>
-          Future.successful(HttpRequest(method = MethodMkCol, uri = uri, headers = headers))
+          simpleRequest(op, HttpRequest(method = MethodMkCol, uri = uri, headers = headers))
         case SyncOperation(file@FsFile(_, _, _, _), _, _) =>
-          createUploadRequest(file)
+          createUploadRequest(file) map (req =>
+            SyncOpRequestData(op, List(req, createPatchRequest(op))))
         case _ =>
           Future.failed(new IllegalStateException("Invalid SyncOperation: " + op))
       }
     }
+
+    // Creates a SyncOpRequestData future object for a simple request
+    def simpleRequest(op: SyncOperation, request: HttpRequest): Future[SyncOpRequestData] =
+      Future.successful(SyncOpRequestData(op, List(request)))
 
     // Creates a request to upload a file
     def createUploadRequest(file: FsFile): Future[HttpRequest] = {
@@ -124,43 +169,18 @@ object DavOperationHandler {
         entity = HttpEntity(ContentTypes.`text/xml(UTF-8)`, content))
     }
 
-    // Creates a Future with the data that goes into the request flow
-    def createRequestTuple(op: SyncOperation): Future[(HttpRequest, SyncOperation)] =
-      createRequest(op) map ((_, op))
-
     Flow.fromGraph(GraphDSL.create() { implicit builder =>
       import GraphDSL.Implicits._
-      val requestMapper = Flow[SyncOperation].mapAsync(1)(createRequestTuple)
-      val requestFlow = builder.add(LoggingStage.withLogging(requestMapper)(logRequest))
-      val requestPatchMapper = Flow[SyncOperation].map { op => (createPatchRequest(op), op) }
-      val requestPatchFlow = builder.add(LoggingStage.withLogging(requestPatchMapper)(logRequest))
-      val requestFlowOp = createSyncOperationRequestFlow()
-      val requestFlowPatch = createSyncOperationRequestFlow()
-      val broadcast = builder.add(Broadcast[SyncOperation](2))
-      val merge = builder.add(Merge[SyncOperation](2))
-      val filterUpload = Flow[SyncOperation].filter(isUpload)
-      val filterNoUpload = Flow[SyncOperation].filterNot(isUpload)
+      val requestDataMapper =
+        builder.add(Flow[SyncOperation].mapAsync(1)(createRequestData))
+      val reqExec1 = createOptionalRequestExecutionFlow(0)
+      val reqExec2 = createOptionalRequestExecutionFlow(1)
+      val resultOpMapper = builder.add(Flow[SyncOpRequestData].map(_.op))
 
-      requestFlow ~> requestFlowOp ~> broadcast
-      broadcast ~> filterUpload ~> requestPatchFlow ~> requestFlowPatch ~> merge
-      broadcast ~> filterNoUpload ~> merge
-      FlowShape(requestFlow.in, merge.out)
+      requestDataMapper ~> reqExec1 ~> reqExec2 ~> resultOpMapper
+      FlowShape(requestDataMapper.in, resultOpMapper.out)
     })
   }
-
-  /**
-    * Checks whether the specified operation requires a file upload.
-    *
-    * @param op the operation to be checked
-    * @return '''true''' if this operation requires a file upload; '''false'''
-    *         otherwise
-    */
-  private def isUpload(op: SyncOperation): Boolean =
-    op match {
-      case SyncOperation(_, ActionOverride, _) => true
-      case SyncOperation(FsFile(_, _, _, _), ActionCreate, _) => true
-      case _ => false
-    }
 
   /**
     * Logs a request before it is sent to the WebDav server.
@@ -168,7 +188,7 @@ object DavOperationHandler {
     * @param elem the stream element to be logged
     * @param log  the logging adapter
     */
-  private def logRequest(elem: (HttpRequest, SyncOperation), log: LoggingAdapter): Unit = {
+  private def logRequest(elem: (HttpRequest, SyncOpRequestData), log: LoggingAdapter): Unit = {
     val request = elem._1
     log.info("{} {}", request.method.value, request.uri)
   }
@@ -179,7 +199,8 @@ object DavOperationHandler {
     * @param elem the stream element to be logged
     * @param log  the logging adapter
     */
-  private def logResponse(elem: (Try[HttpResponse], SyncOperation), log: LoggingAdapter): Unit = {
+  private def logResponse(elem: (Try[HttpResponse], SyncOpRequestData),
+                          log: LoggingAdapter): Unit = {
     elem._1 match {
       case Success(response) =>
         if (!response.status.isSuccess()) {
