@@ -308,6 +308,7 @@ the source or destination structure.)
 | password | The password to log into the server. | Yes |
 | modified-property | The name of the property that holds the last-modified time of files on the server (see below). | No |
 | modified-namespace | Defines a namespace to be used together with the last-modified property (see below). | No |
+| delete-before-override | Determines whether a file to be overridden on the WebDav server is deleted first. Experiments have shown that for some WebDav servers override operations are not reliable; in some cases, the old file stays on the server although a success status is returned. For such servers this property can be set to *true*. StreamSync will then send a DELETE request for this file before it is uploaded again. All other values disable this mode. | No |
 
 **Notes**
 Using WebDav in sync operations can be problematic as the standard does not
