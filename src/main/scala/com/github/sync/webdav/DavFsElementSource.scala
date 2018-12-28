@@ -88,8 +88,11 @@ object DavFsElementSource {
   /** Name of the XML content length element. */
   private val ElemContentLength = "getcontentlength"
 
+  /** Name of the XML resource type element. */
+  private val ElemResourceType = "resourcetype"
+
   /** Name of the XML is collection element. */
-  private val ElemCollection = "iscollection"
+  private val ElemCollection = "collection"
 
   /**
     * Creates a ''Source'' based on this class using the specified
@@ -164,6 +167,18 @@ object DavFsElementSource {
       val s2 = s.substring(pos).dropWhile(_ == ' ')
       trimMultipleSpaces(s1 + s2)
     }
+  }
+
+  /**
+    * Checks whether an element is a collection. In this case the element
+    * represents a folder rather than a single file.
+    *
+    * @param propNode the top-level node for the current element
+    * @return a flag whether this element is a collection
+    */
+  private def isCollection(propNode: NodeSeq): Boolean = {
+    val elemCollection = propNode \ ElemResourceType \ ElemCollection
+    elemCollection.nonEmpty
   }
 }
 
@@ -307,7 +322,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         val ref = removeTrailingSlash(elemText(node, ElemHref))
         val uri = extractElementUri(ref)
         val propNode = node \ ElemPropStat \ ElemProp
-        val isFolder = java.lang.Boolean.valueOf(elemText(propNode, ElemCollection))
+        val isFolder = isCollection(propNode)
         if (isFolder) ElemData(ref, FsFolder(uri, level))
         else {
           val strDate = elemText(propNode, config.lastModifiedProperty)
@@ -374,17 +389,6 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
     */
   private def calcDecodedRootUriLength(): Int =
     UriEncodingHelper.decode(rootUriPrefix).length
-
-  /**
-    * Generates an error message for a failed request to a folder.
-    *
-    * @param response the failed response
-    * @param folder   the folder that was requested
-    * @return the error message
-    */
-  private def errorResponse(response: HttpResponse, folder: FsFolder): String =
-    s"Failed request for '$rootUriPrefix${folder.relativeUri}': ${response.status.intValue()} " +
-      s"${response.status.defaultMessage()}."
 }
 
 /**
