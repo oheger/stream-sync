@@ -29,6 +29,7 @@ import com.github.sync._
 import com.github.sync.util.UriEncodingHelper
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.xml.sax.SAXException
 
 import scala.concurrent.Future
 import scala.xml.SAXParseException
@@ -262,6 +263,12 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     runAndVerifySource(createTestSource("Win32LastModifiedTime"))
   }
 
+  it should "handle an absent modified time property" in {
+    stubTestFolders("")
+
+    runAndVerifySource(createTestSource("Win32LastModifiedTime"))
+  }
+
   it should "fail processing when receiving a non XML response" in {
     stubFolderRequest(RootPath, "invalidResponse.txt")
 
@@ -285,5 +292,11 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
 
     val ex = expectFailedFuture[IOException](runSource(createTestSource()))
     ex.getMessage should include(RootFolder.relativeUri)
+  }
+
+  it should "fail processing if no modified time can be obtained" in {
+    stubFolderRequest(RootPath, "folder_no_timestamp.xml")
+
+    expectFailedFuture[SAXException](runSource(createTestSource()))
   }
 }

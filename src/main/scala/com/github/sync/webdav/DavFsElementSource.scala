@@ -36,7 +36,7 @@ import com.github.sync.{FsElement, FsFile, FsFolder}
 import scala.annotation.tailrec
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
-import scala.xml.{Elem, Node, NodeSeq, XML}
+import scala.xml._
 
 object DavFsElementSource {
 
@@ -117,6 +117,28 @@ object DavFsElementSource {
   private def parseModifiedTime(strDate: String): Instant = {
     val query: TemporalQuery[Instant] = Instant.from _
     DateTimeFormatter.RFC_1123_DATE_TIME.parse(strDate, query)
+  }
+
+  /**
+    * Extracts the last-modified time from the XML node representing a file.
+    * The method checks all properties listed in the config until a match is
+    * found.
+    *
+    * @param nodeSeq the node representing the file
+    * @param config  the config
+    * @return the last-modified time of this file
+    */
+  private def obtainModifiedTime(nodeSeq: NodeSeq, config: DavConfig): Instant = {
+    def obtainModifiedTimeFromProperty(properties: List[String]): Instant =
+      properties match {
+        case p :: t =>
+          val strTime = elemText(nodeSeq, p)
+          if (strTime.length > 0) parseModifiedTime(strTime)
+          else obtainModifiedTimeFromProperty(t)
+        case _ => throw new SAXException("Could not obtain last-modified time")
+      }
+
+    obtainModifiedTimeFromProperty(config.modifiedProperties)
   }
 
   /**
@@ -325,8 +347,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         val isFolder = isCollection(propNode)
         if (isFolder) ElemData(ref, FsFolder(uri, level))
         else {
-          val strDate = elemText(propNode, config.lastModifiedProperty)
-          val modifiedTime = parseModifiedTime(strDate)
+          val modifiedTime = obtainModifiedTime(propNode, config)
           val fileSize = elemText(propNode, ElemContentLength).toLong
           ElemData(ref, FsFile(uri, level, modifiedTime, fileSize))
         }
