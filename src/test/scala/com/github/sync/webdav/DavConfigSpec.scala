@@ -76,10 +76,33 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
       "--" + SourceStructureType.name + DavConfig.PropDeleteBeforeOverride -> "true",
       "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
     val expConfig = DavConfig(uri, user, password, modifiedProp, Some(modifiedNamespace),
-      deleteBeforeOverride = true)
+      deleteBeforeOverride = true,
+      modifiedProperties = List(modifiedProp, DavConfig.DefaultModifiedProperty))
 
     val config = futureResult(DavConfig(SourceStructureType, uri, args))
     config should be(expConfig)
+  }
+
+  it should "fill the list of modified properties correctly" in {
+    val args = Map("--" + SourceStructureType.name + DavConfig.PropUser -> "user",
+      "--" + SourceStructureType.name + DavConfig.PropPassword -> "password",
+      "--" + SourceStructureType.name + DavConfig.PropDeleteBeforeOverride -> "true",
+      "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
+
+    val config = futureResult(DavConfig(SourceStructureType, "someUri", args))
+    config.modifiedProperties should contain only DavConfig.DefaultModifiedProperty
+  }
+
+  it should "eliminate duplicates in the list of modified properties" in {
+    val args = Map("--" + SourceStructureType.name + DavConfig.PropUser -> "user",
+      "--" + SourceStructureType.name + DavConfig.PropPassword -> "password",
+      "--" + SourceStructureType.name + DavConfig.PropModifiedProperty ->
+        DavConfig.DefaultModifiedProperty,
+      "--" + SourceStructureType.name + DavConfig.PropDeleteBeforeOverride -> "true",
+      "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
+
+    val config = futureResult(DavConfig(SourceStructureType, "someUri", args))
+    config.modifiedProperties should contain only DavConfig.DefaultModifiedProperty
   }
 
   it should "return a failed future if a mandatory property is missing" in {

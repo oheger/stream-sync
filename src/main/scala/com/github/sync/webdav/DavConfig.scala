@@ -85,11 +85,13 @@ object DavConfig {
   def apply(structType: StructureType, rootUri: String,
             properties: Map[String, String])(implicit ec: ExecutionContext):
   Future[DavConfig] = Future {
+    val optPropModified = properties get propName(structType, PropModifiedProperty)
     DavConfig(rootUri, properties(propName(structType, PropUser)),
       properties(propName(structType, PropPassword)),
-      properties.getOrElse(propName(structType, PropModifiedProperty), DefaultModifiedProperty),
+      optPropModified getOrElse DefaultModifiedProperty,
       properties get propName(structType, PropModifiedNamespace),
-      java.lang.Boolean.parseBoolean(properties(propName(structType, PropDeleteBeforeOverride))))
+      java.lang.Boolean.parseBoolean(properties(propName(structType, PropDeleteBeforeOverride))),
+      createModifiedProperties(optPropModified))
   }
 
   /**
@@ -117,6 +119,25 @@ object DavConfig {
     */
   private def propName(structType: StructureType, prop: String): String =
     structType.configPropertyName(prop)
+
+  /**
+    * Generates the list of modified properties. If a custom modified property
+    * has been specified, the list consists of this property and the default
+    * one. (Because both are checked to obtain the last-modified timestamp of a
+    * file.) If there is no custom property, the list contains only the default
+    * property.
+    *
+    * @param optPropModified an option with the custom modified property name
+    * @return a list with all modified properties to check
+    */
+  private def createModifiedProperties(optPropModified: Option[String]): List[String] = {
+    val props = List(DefaultModifiedProperty)
+    optPropModified match {
+      case Some(prop) if prop != DefaultModifiedProperty =>
+        prop :: props
+      case _ => props
+    }
+  }
 }
 
 /**
@@ -131,7 +152,9 @@ object DavConfig {
   *                              property
   * @param deleteBeforeOverride  flag whether a delete operation should be
   *                              issued before a file override
+  * @param modifiedProperties    a list with properties to be checked to fetch
+  *                              the last-modified timestamp
   */
 case class DavConfig(rootUri: Uri, user: String, password: String,
                      lastModifiedProperty: String, lastModifiedNamespace: Option[String],
-                     deleteBeforeOverride: Boolean)
+                     deleteBeforeOverride: Boolean, modifiedProperties: List[String])

@@ -92,7 +92,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     */
   private def createDavConfig(): DavConfig =
     DavConfig(serverUri(RootPath), UserId, Password, DavConfig.DefaultModifiedProperty, None,
-      deleteBeforeOverride = false)
+      deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty))
 
   /**
     * Convenience function to define the URI of a stub or verification based on

@@ -42,7 +42,8 @@ object ModifiedTimeRequestFactorySpec {
                            namespace: Option[String] = None): DavConfig =
     DavConfig(rootUri = "https://test.dav.org", user = "testUser", password = "S3cr3T",
       lastModifiedProperty = property, lastModifiedNamespace = namespace,
-      deleteBeforeOverride = false)
+      deleteBeforeOverride = false,
+      modifiedProperties = List(property, DavConfig.DefaultModifiedProperty))
 
   /**
     * Parses the given template string into an XML element.

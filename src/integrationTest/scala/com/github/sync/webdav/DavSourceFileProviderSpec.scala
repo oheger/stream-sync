@@ -66,7 +66,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     */
   private def createConfig(): DavConfig =
     DavConfig(serverUri(RootPath), UserId, Password, DavConfig.DefaultModifiedProperty, None,
-      deleteBeforeOverride = false)
+      deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty))
 
   "A DavSourceFileProvider" should "provide a source for a requested existing file" in {
     stubFor(authorized(get(urlPathEqualTo(RootPath + "/my%20data/request.txt")))
