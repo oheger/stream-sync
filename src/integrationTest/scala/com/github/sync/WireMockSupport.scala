@@ -105,7 +105,8 @@ trait WireMockSupport extends BeforeAndAfterEach {
     */
   protected def stubFolderRequest(uri: String, responseFile: String,
                                   status: Int = StatusCodes.OK.intValue): Unit = {
-    stubFor(authorized(request("PROPFIND", urlPathEqualTo(uri))
+    val reqUri = if(uri.endsWith("/")) uri else uri + "/"
+    stubFor(authorized(request("PROPFIND", urlPathEqualTo(reqUri))
       .withHeader("Accept", equalTo("text/xml"))
       .withHeader("Depth", equalTo("1"))
       .willReturn(aResponse()

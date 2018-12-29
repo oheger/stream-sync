@@ -39,6 +39,8 @@ import scala.util.{Failure, Success, Try}
 import scala.xml._
 
 object DavFsElementSource {
+  /** Constant for the slash terminating the URI to a folder. */
+  private val Slash = "/"
 
   /**
     * Data class storing information about a folder that is to be fetched from
@@ -48,6 +50,12 @@ object DavFsElementSource {
     * @param folder the folder element
     */
   case class FolderData(ref: String, folder: FsFolder) extends SyncFolderData {
+    /**
+      * The normalized URI to reference the folder on the server. This URI
+      * always ends on a slash which is required by some Dav servers.
+      */
+    val normalizedRef: String = if(ref endsWith Slash) ref else ref + Slash
+
     override def uri: String = folder.relativeUri
 
     override def level: Int = folder.level
@@ -389,7 +397,7 @@ class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: A
         * @return the request to query the content of this folder
         */
       private def createFolderRequest(folderData: FolderData): HttpRequest =
-        HttpRequest(method = MethodPropFind, uri = folderData.ref,
+        HttpRequest(method = MethodPropFind, uri = folderData.normalizedRef,
           headers = List(HeaderAuth, HeaderAccept, HeaderDepth))
     }
 

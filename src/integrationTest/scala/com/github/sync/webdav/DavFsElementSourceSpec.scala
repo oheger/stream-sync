@@ -285,7 +285,7 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
   }
 
   it should "evaluate the status code from a response" in {
-    stubFor(request("PROPFIND", urlPathEqualTo(RootPath))
+    stubFor(request("PROPFIND", urlPathEqualTo(RootPath + "/"))
       .willReturn(aResponse()
         .withStatus(401)
         .withBodyFile("folder3.xml")))
