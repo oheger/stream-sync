@@ -45,6 +45,16 @@ object FileTestHelper {
   /** The suffix for temporary files created by this trait. */
   val TempFileSuffix = ".tmp"
 
+  /** Constant for the line separator string. */
+  val NL: String = System.getProperty("line.separator")
+
+  /**
+    * A string with test data that does not contain line feeds. Line feeds are
+    * sometimes problematic, e.g. when reading or writing files over different
+    * operating systems.
+    */
+  lazy val TestDataSingleLine: String = TestData.replace(NL, " ")
+
   /**
     * Helper method for converting a string to a byte array.
     *
@@ -142,7 +152,7 @@ trait FileTestHelper {
     */
   def readDataFile(path: Path): String = {
     val source = Source.fromFile(path.toFile)
-    val result = source.getLines().mkString("\r\n")
+    val result = source.getLines().mkString(NL)
     source.close()
     result
   }

@@ -77,7 +77,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
 
     val response = futureResult(provider.fileSource(file).flatMap { src => src.runWith(sink) })
-    val expected = FileTestHelper.TestData.replace("\r\n", " ")
+    val expected = FileTestHelper.TestDataSingleLine
     response.utf8String should be(expected)
   }
 
