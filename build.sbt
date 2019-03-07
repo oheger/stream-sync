@@ -15,9 +15,9 @@
  */
 
 /** Definition of versions. */
-lazy val AkkaVersion = "2.5.19"
-lazy val AkkaHttpVersion = "10.1.5"
-lazy val VersionScala = "2.12.6"
+lazy val AkkaVersion = "2.5.21"
+lazy val AkkaHttpVersion = "10.1.7"
+lazy val VersionScala = "2.12.8"
 lazy val VersionScalaXml = "1.1.0"
 lazy val VersionScalaTest = "3.0.5"
 lazy val VersionWireMock = "2.18.0"
