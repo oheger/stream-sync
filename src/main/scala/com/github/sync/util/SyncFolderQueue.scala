@@ -16,6 +16,8 @@
 
 package com.github.sync.util
 
+import com.github.sync.FsFolder
+
 import scala.collection.SortedSet
 
 /**
@@ -28,18 +30,25 @@ import scala.collection.SortedSet
   */
 trait SyncFolderData {
   /**
+    * Returns the represented ''FsFolder'' object.
+    *
+    * @return the folder
+    */
+  def folder: FsFolder
+
+  /**
     * Returns the URI of the represented folder.
     *
     * @return the folder URI
     */
-  def uri: String
+  def uri: String = folder.relativeUri
 
   /**
     * Returns the level of the represented folder.
     *
     * @return the level of the folder
     */
-  def level: Int
+  def level: Int = folder.level
 }
 
 object SyncFolderQueue {

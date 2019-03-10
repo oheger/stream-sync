@@ -72,11 +72,7 @@ object LocalFsElementSource {
     * @param folderPath the path to the folder
     * @param folder     the associated folder element
     */
-  private case class FolderData(folderPath: Path, folder: FsElement) extends SyncFolderData {
-    override def uri: String = folder.relativeUri
-
-    override def level: Int = folder.level
-  }
+  private case class FolderData(folderPath: Path, override val folder: FsFolder) extends SyncFolderData
 
   /**
     * Case class representing the state of a BFS iteration.
@@ -126,7 +122,7 @@ object LocalFsElementSource {
           val isDir = Files isDirectory path
           val elem = createElement(config, path, state.currentFolder, isDir = isDir)
           if (isDir) (state.copy(dirsToProcess = state.dirsToProcess +
-            FolderData(path, elem)), Some(elem))
+            FolderData(path, elem.asInstanceOf[FsFolder])), Some(elem))
           else (state, Some(elem))
         } else {
           ref.close()

@@ -49,16 +49,12 @@ object DavFsElementSource {
     * @param ref    the URI to reference the folder on the server
     * @param folder the folder element
     */
-  case class FolderData(ref: String, folder: FsFolder) extends SyncFolderData {
+  case class FolderData(ref: String, override val folder: FsFolder) extends SyncFolderData {
     /**
       * The normalized URI to reference the folder on the server. This URI
       * always ends on a slash which is required by some Dav servers.
       */
     val normalizedRef: String = if(ref endsWith Slash) ref else ref + Slash
-
-    override def uri: String = folder.relativeUri
-
-    override def level: Int = folder.level
   }
 
   /**

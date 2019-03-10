@@ -16,15 +16,10 @@
 
 package com.github.sync.util
 
+import com.github.sync.FsFolder
 import org.scalatest.{FlatSpec, Matchers}
 
 object SyncFolderQueueSpec {
-
-  /**
-    * The implementation class of the folder data structure.
-    */
-  case class SyncFolderDataImpl(override val uri: String, override val level: Int)
-    extends SyncFolderData
 
   /**
     * Reads all elements stored in the given queue and returns them ordered in
@@ -33,8 +28,8 @@ object SyncFolderQueueSpec {
     * @param queue the queue to be read
     * @return a list with the elements extracted from the queue
     */
-  private def readQueue(queue: SyncFolderQueue[SyncFolderDataImpl]): List[SyncFolderData] = {
-    def dequeueElement(q: SyncFolderQueue[SyncFolderDataImpl],
+  private def readQueue(queue: SyncFolderQueue[SyncFolderData]): List[SyncFolderData] = {
+    def dequeueElement(q: SyncFolderQueue[SyncFolderData],
                        resultList: List[SyncFolderData]): List[SyncFolderData] =
       if (q.isEmpty) resultList.reverse
       else {
@@ -43,6 +38,21 @@ object SyncFolderQueueSpec {
       }
 
     dequeueElement(queue, Nil)
+  }
+
+  /**
+    * Convenience function to create a folder data object with the given
+    * properties.
+    *
+    * @param uri   the folder URI
+    * @param level the folder level
+    * @return the resulting ''SyncFolderData''
+    */
+  private def folderData(uri: String, level: Int): SyncFolderData = {
+    val theFolder = FsFolder(uri, level)
+    new SyncFolderData {
+      override val folder: FsFolder = theFolder
+    }
   }
 }
 
@@ -55,10 +65,10 @@ class SyncFolderQueueSpec extends FlatSpec with Matchers {
   import SyncFolderQueueSpec._
 
   "A SyncFolderQueue" should "order elements by their URI" in {
-    val elemA = SyncFolderDataImpl("A", 0)
-    val elemB = SyncFolderDataImpl("B", 0)
-    val elemC = SyncFolderDataImpl("C", 0)
-    val elemD = SyncFolderDataImpl("D", 0)
+    val elemA = folderData("A", 0)
+    val elemB = folderData("B", 0)
+    val elemC = folderData("C", 0)
+    val elemD = folderData("D", 0)
     val q1 = SyncFolderQueue(elemB)
     val q2 = q1 + elemC
     val q3 = q2 ++ List(elemA, elemD)
@@ -67,10 +77,10 @@ class SyncFolderQueueSpec extends FlatSpec with Matchers {
   }
 
   it should "order elements by level first" in {
-    val elem1 = SyncFolderDataImpl("top", 0)
-    val elem2 = SyncFolderDataImpl("level_1_1", 1)
-    val elem3 = SyncFolderDataImpl("level_1_2", 1)
-    val elem4 = SyncFolderDataImpl("bottom", 2)
+    val elem1 = folderData("top", 0)
+    val elem2 = folderData("level_1_1", 1)
+    val elem3 = folderData("level_1_2", 1)
+    val elem4 = folderData("bottom", 2)
     val q1 = SyncFolderQueue(elem1)
     val q2 = q1 ++ List(elem3, elem4, elem2)
 
@@ -78,7 +88,7 @@ class SyncFolderQueueSpec extends FlatSpec with Matchers {
   }
 
   it should "implement nonEmpty correctly" in {
-    val queueFull = SyncFolderQueue(SyncFolderDataImpl("test", 42))
+    val queueFull = SyncFolderQueue(folderData("test", 42))
     queueFull.nonEmpty shouldBe true
 
     val (_, queueEmpty) = queueFull.dequeue()
