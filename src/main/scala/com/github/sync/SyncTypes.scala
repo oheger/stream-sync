@@ -18,6 +18,8 @@ package com.github.sync
 
 import java.time.Instant
 
+import scala.concurrent.Future
+
 /**
   * A module that collects some central data classes and type definitions that
   * are used in multiple places.
@@ -228,5 +230,43 @@ object SyncTypes {
     if (deltaLevel != 0) deltaLevel
     else x.uri.compareTo(y.uri)
   }
+
+  /**
+    * A class describing a result of a read function.
+    *
+    * The read function is invoked continuously during iteration over the
+    * folder structure. It returns newly detected elements and an updated
+    * iteration state.
+    *
+    * @param currentFolder the current folder this result is for
+    * @param files         a list with detected files in this folder
+    * @param folders       a list with detected sub folders of this folder
+    * @param nextState     the updated iteration state
+    * @tparam F the type used for folder elements
+    * @tparam S the state type
+    */
+  case class ReadResult[F <: SyncFolderData, S](currentFolder: FsFolder,
+                                                files: List[FsFile],
+                                                folders: List[F],
+                                                nextState: S)
+
+  /**
+    * Type definition of a function that returns the next folder that is
+    * pending in the current iteration. This function is called by the
+    * iteration function (see below) when it completed the iteration of a
+    * folder; it then has to start with the next folder pending. If there are
+    * no more pending folders, result is ''None''.
+    */
+  type NextFolderFunc[F <: SyncFolderData] = () => Option[F]
+
+  /**
+    * Type definition of a function that is invoked when iterating over a
+    * folder structure. The function takes the current iteration state and
+    * tries to find new elements. The newly detected elements and the updated
+    * state are returned. This can happen asynchronously; therefore, the
+    * function returns a ''Future''. If the end of the iteration is reached,
+    * the future contains an empty option.
+    */
+  type IterateFunc[F <: SyncFolderData, S] = (S, NextFolderFunc[F]) => Future[Option[ReadResult[F, S]]]
 
 }

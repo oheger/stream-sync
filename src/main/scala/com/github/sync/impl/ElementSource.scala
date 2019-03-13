@@ -18,52 +18,13 @@ package com.github.sync.impl
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncFolderData}
-import com.github.sync.impl.ElementSource.{IterateFunc, NextFolderFunc, ReadResult}
+import com.github.sync.SyncTypes.{FsElement, IterateFunc, NextFolderFunc, ReadResult, SyncFolderData}
 import com.github.sync.util.SyncFolderQueue
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
 
 object ElementSource {
-
-  /**
-    * A class describing a result of a read function.
-    *
-    * The read function is invoked continuously during iteration over the
-    * folder structure. It returns newly detected elements and an updated
-    * iteration state.
-    *
-    * @param currentFolder the current folder this result is for
-    * @param files         a list with detected files in this folder
-    * @param folders       a list with detected sub folders of this folder
-    * @param nextState     the updated iteration state
-    * @tparam F the type used for folder elements
-    * @tparam S the state type
-    */
-  case class ReadResult[F <: SyncFolderData, S](currentFolder: FsFolder,
-                                                files: List[FsFile],
-                                                folders: List[F],
-                                                nextState: S)
-
-  /**
-    * Type definition of a function that returns the next folder that is
-    * pending in the current iteration. This function is called by the
-    * iteration function (see below) when it completed the iteration of a
-    * folder; it then has to start with the next folder pending. If there are
-    * no more pending folders, result is ''None''.
-    */
-  type NextFolderFunc[F <: SyncFolderData] = () => Option[F]
-
-  /**
-    * Type definition of a function that is invoked when iterating over a
-    * folder structure. The function takes the current iteration state and
-    * tries to find new elements. The newly detected elements and the updated
-    * state are returned. This can happen asynchronously; therefore, the
-    * function returns a ''Future''. If the end of the iteration is reached,
-    * the future contains an empty option.
-    */
-  type IterateFunc[F <: SyncFolderData, S] = (S, NextFolderFunc[F]) => Future[Option[ReadResult[F, S]]]
 }
 
 /**
