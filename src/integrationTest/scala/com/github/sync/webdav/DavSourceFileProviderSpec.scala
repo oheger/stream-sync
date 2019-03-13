@@ -26,8 +26,9 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.testkit.TestKit
 import akka.util.ByteString
-import com.github.sync.{AsyncTestHelper, FileTestHelper, FsFile, WireMockSupport}
+import com.github.sync.SyncTypes.FsFile
 import com.github.sync.WireMockSupport._
+import com.github.sync.{AsyncTestHelper, FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.mockito.Mockito
 import org.scalatest.mockito.MockitoSugar

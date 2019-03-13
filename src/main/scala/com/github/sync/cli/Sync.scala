@@ -24,17 +24,15 @@ import akka.http.scaladsl.Http
 import akka.stream._
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
+import com.github.sync.SyncStreamFactory
+import com.github.sync.SyncTypes.{DestinationStructureType, SourceStructureType, SyncOperation}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.log.SerializerStreamHelper
-import com.github.sync.{
-  DestinationStructureType, SourceStructureType, SyncOperation,
-  SyncStreamFactory
-}
 
-import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 /**
   * Main object to start the sync process.

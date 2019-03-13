@@ -16,7 +16,7 @@
 
 package com.github.sync.util
 
-import com.github.sync.FsFolder
+import com.github.sync.SyncTypes.FsFolder
 
 import scala.collection.SortedSet
 

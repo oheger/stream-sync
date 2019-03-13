@@ -19,7 +19,7 @@ package com.github.sync.local
 import java.nio.file.{Path, Paths}
 import java.time.ZoneId
 
-import com.github.sync.{StructureType, SupportedArgument}
+import com.github.sync.SyncTypes.{StructureType, SupportedArgument}
 
 import scala.concurrent.{ExecutionContext, Future}
 

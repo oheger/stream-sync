@@ -19,6 +19,7 @@ package com.github.sync.local
 import java.nio.file.Paths
 import java.time.{DateTimeException, ZoneId}
 
+import com.github.sync.SyncTypes.{DestinationStructureType, SourceStructureType, StructureType, SupportedArgument}
 import com.github.sync._
 import org.scalatest.{FlatSpec, Matchers}
 

@@ -18,7 +18,7 @@ package com.github.sync.log
 
 import java.time.Instant
 
-import com.github.sync._
+import com.github.sync.SyncTypes._
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.util.{Failure, Success}

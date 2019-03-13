@@ -18,7 +18,7 @@ package com.github.sync.impl
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
-import com.github.sync.FsElement
+import com.github.sync.SyncTypes.FsElement
 
 object FolderSortStage {
 

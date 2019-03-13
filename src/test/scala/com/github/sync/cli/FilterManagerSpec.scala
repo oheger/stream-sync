@@ -18,6 +18,7 @@ package com.github.sync.cli
 
 import java.time.{Instant, LocalDateTime, ZoneId}
 
+import com.github.sync.SyncTypes._
 import com.github.sync._
 import com.github.sync.cli.FilterManager.{SyncFilterData, SyncOperationFilter}
 import org.scalatest.{FlatSpec, Matchers}

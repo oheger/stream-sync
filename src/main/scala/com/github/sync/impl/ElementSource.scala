@@ -18,9 +18,9 @@ package com.github.sync.impl
 
 import akka.stream.{Attributes, Outlet, SourceShape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
 import com.github.sync.impl.ElementSource.{IterateFunc, NextFolderFunc, ReadResult}
 import com.github.sync.util.{SyncFolderData, SyncFolderQueue}
-import com.github.sync.{FsElement, FsFile, FsFolder}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}

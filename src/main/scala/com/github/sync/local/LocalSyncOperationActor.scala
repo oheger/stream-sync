@@ -22,6 +22,7 @@ import java.time.ZoneId
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
+import com.github.sync.SyncTypes._
 import com.github.sync._
 
 import scala.util.{Failure, Success}

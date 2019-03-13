@@ -22,8 +22,9 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
+import com.github.sync.SyncTypes.SupportedArgument
 import com.github.sync.cli.ParameterManager.{ApplyModeNone, ApplyModeTarget}
-import com.github.sync.{AsyncTestHelper, FileTestHelper, SupportedArgument}
+import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest._
 
 import scala.concurrent.ExecutionContext.Implicits.global

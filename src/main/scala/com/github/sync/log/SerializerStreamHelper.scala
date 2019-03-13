@@ -21,7 +21,7 @@ import java.nio.file.Path
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{FileIO, Framing, Sink, Source}
 import akka.util.ByteString
-import com.github.sync.SyncOperation
+import com.github.sync.SyncTypes.SyncOperation
 
 import scala.concurrent.{ExecutionContext, Future}
 

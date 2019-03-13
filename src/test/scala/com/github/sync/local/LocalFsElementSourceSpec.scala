@@ -25,7 +25,8 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.{ActorMaterializer, DelayOverflowStrategy, KillSwitches}
 import akka.testkit.TestKit
-import com.github.sync.{FileTestHelper, FsElement, FsFile, FsFolder}
+import com.github.sync.FileTestHelper
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.annotation.tailrec

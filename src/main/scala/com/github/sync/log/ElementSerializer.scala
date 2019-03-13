@@ -19,7 +19,7 @@ package com.github.sync.log
 import java.time.Instant
 
 import akka.util.ByteString
-import com.github.sync._
+import com.github.sync.SyncTypes._
 import com.github.sync.util.UriEncodingHelper
 
 import scala.util.Try

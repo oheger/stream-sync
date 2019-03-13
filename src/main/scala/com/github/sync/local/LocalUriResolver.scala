@@ -20,8 +20,9 @@ import java.nio.file.Path
 
 import akka.stream.scaladsl.{FileIO, Source}
 import akka.util.ByteString
+import com.github.sync.SourceFileProvider
+import com.github.sync.SyncTypes.{FsElement, FsFile}
 import com.github.sync.util.UriEncodingHelper
-import com.github.sync.{FsElement, FsFile, SourceFileProvider}
 
 import scala.annotation.tailrec
 import scala.concurrent.Future

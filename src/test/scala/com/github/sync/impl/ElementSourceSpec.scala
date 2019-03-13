@@ -23,9 +23,10 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
+import com.github.sync.AsyncTestHelper
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
 import com.github.sync.impl.ElementSource.{IterateFunc, NextFolderFunc, ReadResult}
 import com.github.sync.util.SyncFolderData
-import com.github.sync.{AsyncTestHelper, FsElement, FsFile, FsFolder}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.Future

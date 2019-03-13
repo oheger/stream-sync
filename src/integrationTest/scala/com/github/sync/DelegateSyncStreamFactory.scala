@@ -23,6 +23,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
 import akka.util.Timeout
+import com.github.sync.SyncTypes.{FsElement, StructureType, SupportedArgument, SyncOperation}
 import com.github.sync.impl.SyncStreamFactoryImpl
 
 import scala.concurrent.{ExecutionContext, Future}

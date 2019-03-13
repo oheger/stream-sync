@@ -18,6 +18,7 @@ package com.github.sync
 
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
+import com.github.sync.SyncTypes.FsFile
 
 import scala.concurrent.Future
 

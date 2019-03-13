@@ -23,6 +23,7 @@ import java.time.Instant
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor.{Actor, ActorRef, ActorSystem, OneForOneStrategy, Props, SupervisorStrategy}
 import akka.testkit.{ImplicitSender, TestKit}
+import com.github.sync.SyncTypes._
 import com.github.sync._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 

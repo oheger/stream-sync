@@ -17,6 +17,7 @@
 package com.github.sync.webdav
 
 import akka.http.scaladsl.model.IllegalUriException
+import com.github.sync.SyncTypes.{DestinationStructureType, SourceStructureType, StructureType, SupportedArgument}
 import com.github.sync._
 import org.scalatest.{FlatSpec, Matchers}
 

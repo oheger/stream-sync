@@ -23,7 +23,7 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
 import akka.stream.{ActorMaterializer, ClosedShape}
 import akka.testkit.TestKit
-import com.github.sync._
+import com.github.sync.SyncTypes._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.Await

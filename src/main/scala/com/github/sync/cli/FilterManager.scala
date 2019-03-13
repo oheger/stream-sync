@@ -22,7 +22,7 @@ import java.time.{LocalDateTime, ZoneId}
 import java.util.Locale
 import java.util.regex.Pattern
 
-import com.github.sync._
+import com.github.sync.SyncTypes._
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}

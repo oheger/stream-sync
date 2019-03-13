@@ -26,6 +26,7 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import akka.testkit.TestKit
 import akka.util.ByteString
+import com.github.sync.SyncTypes._
 import com.github.sync.WireMockSupport.{Password, PriorityDefault, PrioritySpecific, UserId}
 import com.github.sync._
 import com.github.tomakehurst.wiremock.client.WireMock._

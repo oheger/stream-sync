@@ -23,6 +23,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge}
 import akka.stream.{ActorMaterializer, FlowShape}
+import com.github.sync.SyncTypes._
 import com.github.sync._
 import com.github.sync.util.LoggingStage
 

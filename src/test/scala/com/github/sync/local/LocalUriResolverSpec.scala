@@ -24,6 +24,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import akka.util.ByteString
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
 import com.github.sync._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 

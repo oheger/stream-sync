@@ -24,16 +24,11 @@ import akka.pattern.ask
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import akka.stream.{ActorMaterializer, ClosedShape, SourceShape}
 import akka.util.Timeout
+import com.github.sync.SyncTypes._
 import com.github.sync._
-import com.github.sync.local.{
-  LocalFsConfig, LocalFsElementSource, LocalSyncOperationActor,
-  LocalUriResolver
-}
+import com.github.sync.local.{LocalFsConfig, LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
 import com.github.sync.log.ElementSerializer
-import com.github.sync.webdav.{
-  DavConfig, DavFsElementSource, DavOperationHandler,
-  DavSourceFileProvider
-}
+import com.github.sync.webdav.{DavConfig, DavFsElementSource, DavOperationHandler, DavSourceFileProvider}
 
 import scala.concurrent.{ExecutionContext, Future}
 

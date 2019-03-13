@@ -21,7 +21,8 @@ import akka.http.scaladsl.model.HttpRequest
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import com.github.sync.{FsFile, SourceFileProvider}
+import com.github.sync.SourceFileProvider
+import com.github.sync.SyncTypes.FsFile
 
 import scala.concurrent.Future
 

@@ -16,10 +16,10 @@
 
 package com.github.sync.impl
 
+import com.github.sync.AsyncTestHelper
+import com.github.sync.SyncTypes.{DestinationStructureType, SourceStructureType, StructureType}
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.webdav.DavConfig
-import com.github.sync.{AsyncTestHelper, DestinationStructureType, SourceStructureType,
-  StructureType}
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global

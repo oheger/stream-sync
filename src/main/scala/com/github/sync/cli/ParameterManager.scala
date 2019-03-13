@@ -22,7 +22,7 @@ import java.util.Locale
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{FileIO, Framing, Sink}
 import akka.util.{ByteString, Timeout}
-import com.github.sync.SupportedArgument
+import com.github.sync.SyncTypes.SupportedArgument
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._

@@ -17,7 +17,7 @@
 package com.github.sync.webdav
 
 import akka.http.scaladsl.model.Uri
-import com.github.sync.{StructureType, SupportedArgument}
+import com.github.sync.SyncTypes.{StructureType, SupportedArgument}
 
 import scala.concurrent.{ExecutionContext, Future}
 

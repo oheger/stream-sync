@@ -25,6 +25,7 @@ import akka.http.scaladsl.model.{HttpRequest, Uri}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
 import com.github.sync._
 import com.github.sync.util.UriEncodingHelper
 import com.github.tomakehurst.wiremock.client.WireMock._
