@@ -16,40 +16,9 @@
 
 package com.github.sync.util
 
-import com.github.sync.SyncTypes.FsFolder
+import com.github.sync.SyncTypes.SyncFolderData
 
 import scala.collection.SortedSet
-
-/**
-  * A trait describing the elements that can be stored in a
-  * [[SyncFolderQueue]].
-  *
-  * An client can store use case-specific data, but to make the queue working,
-  * a minimum set of properties must be provided. Based on these properties, an
-  * ''Ordering'' implementation is provided.
-  */
-trait SyncFolderData {
-  /**
-    * Returns the represented ''FsFolder'' object.
-    *
-    * @return the folder
-    */
-  def folder: FsFolder
-
-  /**
-    * Returns the URI of the represented folder.
-    *
-    * @return the folder URI
-    */
-  def uri: String = folder.relativeUri
-
-  /**
-    * Returns the level of the represented folder.
-    *
-    * @return the level of the folder
-    */
-  def level: Int = folder.level
-}
 
 object SyncFolderQueue {
   /**
@@ -64,19 +33,6 @@ object SyncFolderQueue {
     */
   def apply[T <: SyncFolderData](init: T)(implicit o: Ordering[T]): SyncFolderQueue[T] = {
     new SyncFolderQueue[T](SortedSet(init))
-  }
-
-  /**
-    * Provides an implicit ordering for the given type derived from
-    * [[SyncFolderData]]. This is required to use the queue for such types.
-    *
-    * @tparam T the type
-    * @return the ordering for this type
-    */
-  implicit def derivedOrdering[T <: SyncFolderData]: Ordering[T] = (x: T, y: T) => {
-    val deltaLevel = x.level - y.level
-    if (deltaLevel != 0) deltaLevel
-    else x.uri.compareTo(y.uri)
   }
 }
 

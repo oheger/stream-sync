@@ -16,7 +16,7 @@
 
 package com.github.sync.util
 
-import com.github.sync.SyncTypes.FsFolder
+import com.github.sync.SyncTypes.{FsFolder, SyncFolderData}
 import org.scalatest.{FlatSpec, Matchers}
 
 object SyncFolderQueueSpec {
@@ -61,7 +61,6 @@ object SyncFolderQueueSpec {
   */
 class SyncFolderQueueSpec extends FlatSpec with Matchers {
 
-  import SyncFolderQueue._
   import SyncFolderQueueSpec._
 
   "A SyncFolderQueue" should "order elements by their URI" in {

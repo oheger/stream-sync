@@ -29,9 +29,8 @@ import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import akka.util.ByteString
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
-import com.github.sync.util.SyncFolderQueue._
-import com.github.sync.util.{SyncFolderData, SyncFolderQueue, UriEncodingHelper}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncFolderData}
+import com.github.sync.util.{SyncFolderQueue, UriEncodingHelper}
 
 import scala.annotation.tailrec
 import scala.concurrent.Future

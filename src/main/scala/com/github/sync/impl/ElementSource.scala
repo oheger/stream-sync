@@ -16,11 +16,11 @@
 
 package com.github.sync.impl
 
-import akka.stream.{Attributes, Outlet, SourceShape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
+import akka.stream.{Attributes, Outlet, SourceShape}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncFolderData}
 import com.github.sync.impl.ElementSource.{IterateFunc, NextFolderFunc, ReadResult}
-import com.github.sync.util.{SyncFolderData, SyncFolderQueue}
+import com.github.sync.util.SyncFolderQueue
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -102,8 +102,6 @@ class ElementSource[F <: SyncFolderData, S](initState: S, initFolder: F)(iterate
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) {
-
-      import SyncFolderQueue._
 
       /** The state of the iteration, updated by the iterate function. */
       private var currentState = initState

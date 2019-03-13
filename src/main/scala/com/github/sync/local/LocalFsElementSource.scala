@@ -23,9 +23,9 @@ import akka.NotUsed
 import akka.stream.scaladsl.Source
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncFolderData}
 import com.github.sync.local.LocalFsElementSource.StreamFactory
-import com.github.sync.util.{SyncFolderData, SyncFolderQueue, UriEncodingHelper}
+import com.github.sync.util.{SyncFolderQueue, UriEncodingHelper}
 
 import scala.annotation.tailrec
 import scala.language.implicitConversions
@@ -206,8 +206,6 @@ class LocalFsElementSource(val config: LocalFsConfig,
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) {
-
-      import SyncFolderQueue._
 
       /** The current state of the iteration. */
       private var currentState = BFSState(None,

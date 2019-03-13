@@ -182,4 +182,51 @@ object SyncTypes {
     */
   case class SupportedArgument(key: String, mandatory: Boolean, defaultValue: Option[String] = None)
 
+  /**
+    * A trait describing objects storing information about folders during a
+    * sync operation.
+    *
+    * (Sub) folders discovered while iterating over a folder structure have to
+    * be recorded and processed later in a defined order. To support this in a
+    * generic way, a minimum set of properties must be provided. Based on these
+    * properties, an ''Ordering'' implementation is provided. Concrete
+    * implementations can enhance the data by use case-specific properties.
+    */
+  trait SyncFolderData {
+    /**
+      * Returns the represented ''FsFolder'' object.
+      *
+      * @return the folder
+      */
+    def folder: FsFolder
+
+    /**
+      * Returns the URI of the represented folder.
+      *
+      * @return the folder URI
+      */
+    def uri: String = folder.relativeUri
+
+    /**
+      * Returns the level of the represented folder.
+      *
+      * @return the level of the folder
+      */
+    def level: Int = folder.level
+  }
+
+  /**
+    * Provides an implicit ordering for the given type derived from
+    * [[SyncFolderData]]. This enables ordering support for all concrete
+    * implementations of this trait.
+    *
+    * @tparam T the type
+    * @return the ordering for this type
+    */
+  implicit def derivedOrdering[T <: SyncFolderData]: Ordering[T] = (x: T, y: T) => {
+    val deltaLevel = x.level - y.level
+    if (deltaLevel != 0) deltaLevel
+    else x.uri.compareTo(y.uri)
+  }
+
 }
