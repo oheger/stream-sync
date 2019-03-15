@@ -269,4 +269,10 @@ object SyncTypes {
     */
   type IterateFunc[F <: SyncFolderData, S] = (S, NextFolderFunc[F]) => Future[Option[ReadResult[F, S]]]
 
+  /**
+    * Type definition of a function that is invoked when the iteration over a
+    * folder structure is complete. This mechanism allows doing some cleanup at
+    * the end of processing.
+    */
+  type CompletionFunc[S] = S => Unit
 }

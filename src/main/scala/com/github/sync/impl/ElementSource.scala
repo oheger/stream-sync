@@ -18,7 +18,7 @@ package com.github.sync.impl
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
-import com.github.sync.SyncTypes.{FsElement, IterateFunc, NextFolderFunc, ReadResult, SyncFolderData}
+import com.github.sync.SyncTypes.{CompletionFunc, FsElement, IterateFunc, NextFolderFunc, ReadResult, SyncFolderData}
 import com.github.sync.util.SyncFolderQueue
 
 import scala.concurrent.ExecutionContext
@@ -47,14 +47,17 @@ object ElementSource {
   * by their URI, which is needed for the sync process. So the iterate function
   * does not have to care about the order of the elements it generates.
   *
-  * @param initState   the initial state of the iteration
-  * @param initFolder  the initial folder to be processed
-  * @param iterateFunc the iteration function
-  * @param ec          the execution context
+  * @param initState       the initial state of the iteration
+  * @param initFolder      the initial folder to be processed
+  * @param optCompleteFunc option for the function to be called at completion
+  * @param iterateFunc     the iteration function
+  * @param ec              the execution context
   * @tparam F the type of the data used for folders
   * @tparam S the type of the iteration state
   */
-class ElementSource[F <: SyncFolderData, S](initState: S, initFolder: F)(iterateFunc: IterateFunc[F, S])
+class ElementSource[F <: SyncFolderData, S](initState: S, initFolder: F,
+                                            optCompleteFunc: Option[CompletionFunc[S]] = None)
+                                           (iterateFunc: IterateFunc[F, S])
                                            (implicit ec: ExecutionContext)
   extends GraphStage[SourceShape[FsElement]] {
   val out: Outlet[FsElement] = Outlet("ElementSource")
@@ -107,9 +110,11 @@ class ElementSource[F <: SyncFolderData, S](initState: S, initFolder: F)(iterate
             currentState = result.nextState
 
           case Success(None) =>
+            optCompleteFunc foreach (_.apply(currentState))
             completeStage()
 
           case Failure(exception) =>
+            optCompleteFunc foreach (_.apply(currentState))
             failStage(exception)
         }
       }

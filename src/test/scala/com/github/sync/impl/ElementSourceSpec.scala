@@ -17,7 +17,7 @@
 package com.github.sync.impl
 
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
@@ -80,7 +80,8 @@ object ElementSourceSpec {
 /**
   * Test class for ''ElementSource''.
   */
-class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with BeforeAndAfterAll with Matchers with AsyncTestHelper {
+class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with BeforeAndAfterAll
+  with Matchers with AsyncTestHelper {
   def this() = this(ActorSystem("ElementSourceSpec"))
 
   override protected def afterAll(): Unit = {
@@ -107,6 +108,18 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
 
     helper.runSource()
     helper.states should be(List(1, 2, 3, 4))
+  }
+
+  it should "pass the last state to the completion function" in {
+    val results = List(
+      createSimpleResult(createFile("/1", 2), 2),
+      createSimpleResult(createFile("/2", 2), 3),
+      createSimpleResult(createFile("/3", 2), 4)
+    )
+    val helper = new SourceTestHelper(results)
+
+    helper.runSource()
+    helper.completationState should be(4)
   }
 
   it should "return folders as well received from the iterate function" in {
@@ -177,6 +190,17 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     expectFailedFuture[IllegalStateException](helper.executeStream())
   }
 
+  it should "pass the last state to the completion function in case of a failure" in {
+    val results = List(
+      ReadResult[SyncFolderDataImpl, Int](RootFolder.folder, List(createFile("/foo", 2)), Nil, 1),
+      ReadResult[SyncFolderDataImpl, Int](RootFolder.folder, Nil, Nil, 2)
+    )
+    val helper = new SourceTestHelper(results)
+
+    expectFailedFuture[IllegalStateException](helper.executeStream())
+    helper.completationState should be(1)
+  }
+
   /**
     * A test helper class managing the environment for testing an element
     * source.
@@ -197,6 +221,9 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     /** Stores the state values passed to the iterate function. */
     private val refStates = new AtomicReference(List.empty[Int])
 
+    /** Stores the state passed to the completion function. */
+    private val refCompleteState = new AtomicInteger
+
     /** Stores the function for fetching the next folder. */
     private val refFolderFunc = new AtomicReference[NextFolderFunc[SyncFolderDataImpl]]
 
@@ -208,7 +235,7 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
       */
     def executeStream(): Future[List[FsElement]] = {
       implicit val mat: ActorMaterializer = ActorMaterializer()
-      val source = new ElementSource(InitState, RootFolder)(iterateFunc)
+      val source = new ElementSource(InitState, RootFolder, Some(completionFunc _))(iterateFunc)
       val sink = Sink.fold[List[FsElement], FsElement](Nil)((lst, e) => e :: lst)
       Source.fromGraph(source).runWith(sink)
     }
@@ -228,6 +255,13 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
       * @return the list with state values
       */
     def states: List[Int] = refStates.get().reverse
+
+    /**
+      * Returns the state that was passed to the completion function.
+      *
+      * @return the completion state
+      */
+    def completationState: Int = refCompleteState.get()
 
     /**
       * Returns the function to obtain the next folder that was passed to the
@@ -262,6 +296,15 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
             None
         }
       }
+    }
+
+    /**
+      * The completion function. Stores the last state.
+      *
+      * @param lastState the last state
+      */
+    private def completionFunc(lastState: Int): Unit = {
+      refCompleteState.set(lastState)
     }
   }
 
