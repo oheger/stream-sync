@@ -21,15 +21,26 @@ import java.nio.file.{DirectoryStream, Files, Path}
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
-import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
-import akka.stream.{Attributes, Outlet, SourceShape}
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncFolderData}
-import com.github.sync.local.LocalFsElementSource.StreamFactory
-import com.github.sync.util.{SyncFolderQueue, UriEncodingHelper}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, IterateFunc, IterateResult, NextFolderFunc, SyncFolderData}
+import com.github.sync.impl.ElementSource
+import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec
+import scala.concurrent.ExecutionContext
 import scala.language.implicitConversions
 
+/**
+  * A module providing a stream source for traversing a directory structure.
+  *
+  * This source generates [[FsElement]] objects for all files and folders
+  * below a given root folder. Note that the root directory itself is not part
+  * of the output of this source. Detected elements are are passed downstream
+  * one by one in an undefined order; additional means must be applied to
+  * create the order required by the sync stage.
+  *
+  * This source makes use of the ''DirectoryStream'' API from Java nio. It
+  * thus uses blocking operations.
+  */
 object LocalFsElementSource {
   /**
     * Returns a new source for iterating over the files in the specified root
@@ -39,9 +50,14 @@ object LocalFsElementSource {
     * @param streamFactory an optional stream factory
     * @return the new source
     */
-  def apply(config: LocalFsConfig, streamFactory: StreamFactory = createDirectoryStream):
-  Source[FsElement, NotUsed] =
-    Source.fromGraph(new LocalFsElementSource(config, streamFactory))
+  def apply(config: LocalFsConfig, streamFactory: StreamFactory = createDirectoryStream)
+           (implicit ec: ExecutionContext):
+  Source[FsElement, NotUsed] = {
+    val initState = BFSState(None, null)
+    val initFolder = FolderData(config.rootPath, FsFolder("", -1))
+    Source.fromGraph(new ElementSource(initState, initFolder, optCompleteFunc = Some(iterationComplete _))
+    (iterateFunc(config, streamFactory)))
+  }
 
   /**
     * An internally used data class for storing data about a directory
@@ -78,12 +94,10 @@ object LocalFsElementSource {
     * Case class representing the state of a BFS iteration.
     *
     * @param optCurrentStream option for the currently active stream
-    * @param dirsToProcess    a list with directories to be processed
     * @param currentFolder    the current folder whose elements are iterated
     */
   private case class BFSState(optCurrentStream: Option[DirectoryStreamRef],
-                              dirsToProcess: SyncFolderQueue[FolderData],
-                              currentFolder: FsElement)
+                              currentFolder: FsFolder)
 
   /**
     * Definition of a function serving as stream factory. Such a function can
@@ -103,6 +117,22 @@ object LocalFsElementSource {
     Files.newDirectoryStream(path)
 
   /**
+    * Returns the function for iterating over all elements in the source folder
+    * structure.
+    *
+    * @param config        the configuration for this source
+    * @param streamFactory the function for creating directory streams
+    * @param ec            the execution context
+    * @return the iteration function
+    */
+  private def iterateFunc(config: LocalFsConfig, streamFactory: StreamFactory = createDirectoryStream)
+                         (implicit ec: ExecutionContext): IterateFunc[FolderData, BFSState] =
+    (state, nextFolder) =>
+      iterateBFS(config, streamFactory, state, nextFolder) map { res =>
+        (res._1, Some(res._2), None)
+      } getOrElse ((state, None, None))
+
+  /**
     * The iteration function for BFS traversal. This function processes
     * directories on the current level first before sub directories are
     * iterated over.
@@ -110,32 +140,36 @@ object LocalFsElementSource {
     * @param config        the configuration for this source
     * @param streamFactory the function for creating directory streams
     * @param state         the current state of the iteration
-    * @return a tuple with the new current directory stream, the new list of
-    *         pending directories, and the next element to emit
+    * @param nextFolder    the function to fetch the next folder
+    * @return an object with the updated iteration state and the result
+    *         to emit or ''None'' if iteration is complete
     */
   @tailrec private def iterateBFS(config: LocalFsConfig, streamFactory: StreamFactory,
-                                  state: BFSState): (BFSState, Option[FsElement]) = {
+                                  state: BFSState, nextFolder: NextFolderFunc[FolderData]):
+  Option[(BFSState, IterateResult[FolderData])] = {
     state.optCurrentStream match {
       case Some(ref) =>
         if (ref.iterator.hasNext) {
           val path = ref.iterator.next()
           val isDir = Files isDirectory path
           val elem = createElement(config, path, state.currentFolder, isDir = isDir)
-          if (isDir) (state.copy(dirsToProcess = state.dirsToProcess +
-            FolderData(path, elem.asInstanceOf[FsFolder])), Some(elem))
-          else (state, Some(elem))
+          if (isDir)
+            Some((state, IterateResult(state.currentFolder, Nil, List(FolderData(path, elem.asInstanceOf[FsFolder])))))
+          else
+            Some((state, IterateResult(state.currentFolder, List(elem.asInstanceOf[FsFile]), List.empty[FolderData])))
         } else {
           ref.close()
-          iterateBFS(config, streamFactory, state.copy(optCurrentStream = None))
+          iterateBFS(config, streamFactory, state.copy(optCurrentStream = None), nextFolder)
         }
 
       case None =>
-        if (state.dirsToProcess.nonEmpty) {
-          val (data, queue) = state.dirsToProcess.dequeue()
-          iterateBFS(config, streamFactory, BFSState(optCurrentStream = Some(createStreamRef(data
-            .folderPath, streamFactory)),
-            currentFolder = data.folder, dirsToProcess = queue))
-        } else (BFSState(None, state.dirsToProcess, null), None)
+        nextFolder() match {
+          case Some(data) =>
+            iterateBFS(config, streamFactory,
+              state.copy(optCurrentStream = Some(createStreamRef(data.folderPath, streamFactory)),
+                currentFolder = data.folder), nextFolder)
+          case None => None
+        }
     }
   }
 
@@ -179,64 +213,15 @@ object LocalFsElementSource {
     val stream = factory(p)
     DirectoryStreamRef(stream, stream.iterator())
   }
-}
-
-/**
-  * A stream source for traversing a directory structure.
-  *
-  * This source generates [[FsElement]] objects for all files and folders
-  * below a given root folder. Note that the root directory itself is not part
-  * of the output of this source.
-  *
-  * This source makes use of the ''DirectoryStream'' API from Java nio. It
-  * thus uses blocking operations.
-  *
-  * @param config        the configuration for this source
-  * @param streamFactory the factory for creating streams
-  */
-class LocalFsElementSource(val config: LocalFsConfig,
-                           streamFactory: StreamFactory)
-  extends GraphStage[SourceShape[FsElement]] {
-
-  import LocalFsElementSource._
-
-  val out: Outlet[FsElement] = Outlet("DirectoryStreamSource")
-
-  override def shape: SourceShape[FsElement] = SourceShape(out)
-
-  override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) {
-
-      /** The current state of the iteration. */
-      private var currentState = BFSState(None,
-        SyncFolderQueue(FolderData(config.rootPath, FsFolder("", -1))), null)
-
-      setHandler(out, new OutHandler {
-        override def onPull(): Unit = {
-          val (nextState, optElem) = iterateBFS(config, streamFactory, currentState)
-          optElem match {
-            case Some(e) =>
-              push(out, e)
-              currentState = nextState
-            case None =>
-              complete(out)
-          }
-        }
-
-        override def onDownstreamFinish(): Unit = {
-          iterationComplete(currentState)
-          super.onDownstreamFinish()
-        }
-      })
-    }
 
   /**
-    * Callback function to indicate that stream processing is now finished. A
-    * concrete implementation should free all resources that are still in use.
+    * The completion function called when stream processing is finished. This
+    * implementation makes sure that an open directory stream is closed.
     *
     * @param state the current iteration state
     */
   private def iterationComplete(state: BFSState): Unit = {
+    println("iterationComplete() with " + state.optCurrentStream)
     state.optCurrentStream foreach (_.close())
   }
 }

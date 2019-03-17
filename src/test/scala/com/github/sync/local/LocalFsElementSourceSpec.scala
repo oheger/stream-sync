@@ -19,6 +19,7 @@ package com.github.sync.local
 import java.io.IOException
 import java.nio.file.{DirectoryStream, Files, NoSuchFileException, Path}
 import java.util
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 
 import akka.actor.ActorSystem
@@ -195,7 +196,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   @tailrec private def checkAllStreamsClosed(queue: BlockingQueue[DirectoryStreamWrapper]):
   Unit = {
     if (!queue.isEmpty) {
-      queue.poll().closed shouldBe true
+      queue.poll().closed.get() shouldBe true
       checkAllStreamsClosed(queue)
     }
   }
@@ -206,6 +207,8 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @return the test configuration
     */
   private def sourceConfig(): LocalFsConfig = LocalFsConfig(testDirectory, None)
+
+  import system.dispatcher
 
   "A DirectoryStreamSource" should "return all elements in the scanned folder structure" in {
     val fileData = setUpDirectoryStructure()
@@ -242,7 +245,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     killSwitch.shutdown()
     val result = Await.result(futSrc, 5.seconds)
     result.size should be < Count
-    streamWrapper.closed shouldBe true
+    streamWrapper.closed.get() shouldBe true
     checkAllStreamsClosed(queue)
   }
 
@@ -337,13 +340,13 @@ case class PathData(path: Path, isDir: Boolean)
 class DirectoryStreamWrapper(stream: DirectoryStream[Path], failOnClose: Boolean)
   extends DirectoryStream[Path] {
   /** Stores a flag whether the stream was closed. */
-  var closed = false
+  val closed = new AtomicBoolean
 
   override def iterator(): util.Iterator[Path] = stream.iterator()
 
   override def close(): Unit = {
     stream.close()
-    closed = true
+    closed set true
     if (failOnClose)
       throw new IOException("Test exception!")
   }
