@@ -18,7 +18,7 @@ package com.github.sync.impl
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
-import com.github.sync.SyncTypes.{CompletionFunc, FsElement, IterateFunc, NextFolderFunc, ReadResult, SyncFolderData}
+import com.github.sync.SyncTypes.{CompletionFunc, FsElement, FutureResultFunc, IterateFunc, IterateResult, NextFolderFunc, SyncFolderData}
 import com.github.sync.util.SyncFolderQueue
 
 import scala.concurrent.ExecutionContext
@@ -88,35 +88,93 @@ class ElementSource[F <: SyncFolderData, S](initState: S, initFolder: F,
 
       setHandler(out, new OutHandler {
         override def onPull(): Unit = {
-          val callback = getAsyncCallback[Try[Option[ReadResult[F, S]]]](handleResult)
-          iterateFunc(currentState, nextFolderFunc) onComplete callback.invoke
+          Try {
+            iterateFunc(currentState, nextFolderFunc)
+          } match {
+            case Success((nextState, optResult, optFutureFunc)) =>
+              if (optResult.isEmpty && optFutureFunc.isEmpty) {
+                onComplete()
+                completeStage()
+              } else {
+                handleDirectResult(nextState, optResult)
+                handleFutureResult(nextState, optFutureFunc)
+              }
+            case Failure(exception) =>
+              handleFailure(exception)
+          }
+        }
+
+        override def onDownstreamFinish(): Unit = {
+          onComplete()
+          super.onDownstreamFinish()
         }
       })
 
       /**
-        * Handles a future result received from the iterate function. Received
-        * results are processed and passed downstream. If there are no results,
-        * this stage can be completed. In case of an error, this stage fails.
+        * Handles a direct result received from the iterate function. If
+        * defined, the next state and the result are passed to the generic
+        * result handling function.
+        *
+        * @param nextState the next state
+        * @param optResult an option with the result
+        */
+      private def handleDirectResult(nextState: S, optResult: Option[IterateResult[F]]): Unit = {
+        optResult foreach (result => handleResult(Success((nextState, result))))
+      }
+
+      /**
+        * Handles a future result function obtain from the iterate function. If
+        * defined, an async callback is obtained which is invoked when the
+        * future result from the function completes.
+        *
+        * @param nextState     the next state
+        * @param optFutureFunc the option with the future result function
+        */
+      private def handleFutureResult(nextState: S, optFutureFunc: Option[FutureResultFunc[F, S]]): Unit = {
+        optFutureFunc foreach { resultFunc =>
+          currentState = nextState
+          val callback = getAsyncCallback[Try[(S, IterateResult[F])]](handleResult)
+          resultFunc() onComplete callback.invoke
+        }
+      }
+
+      /**
+        * Handles a result received from the iterate function (either directly
+        * or via the future function). Received elements are processed and
+        * passed downstream. In case of an error, this stage fails.
         *
         * @param triedResult a ''Try'' with the result from the iterate func
         */
-      private def handleResult(triedResult: Try[Option[ReadResult[F, S]]]): Unit = {
+      private def handleResult(triedResult: Try[(S, IterateResult[F])]): Unit = {
         triedResult match {
-          case Success(Some(result)) =>
+          case Success((state, result)) =>
+            currentState = state
             pendingFolders = pendingFolders ++ result.folders
             val folderElems = result.folders map (_.folder)
             val orderedElements = (result.files ++ folderElems).sortWith(_.relativeUri < _.relativeUri)
             emitMultiple(out, orderedElements)
-            currentState = result.nextState
-
-          case Success(None) =>
-            optCompleteFunc foreach (_.apply(currentState))
-            completeStage()
 
           case Failure(exception) =>
-            optCompleteFunc foreach (_.apply(currentState))
-            failStage(exception)
+            handleFailure(exception)
         }
+      }
+
+      /**
+        * Handles a failed result. This causes the stage to fail with the
+        * given exception.
+        *
+        * @param exception the exception causing the failure
+        */
+      private def handleFailure(exception: Throwable): Unit = {
+        onComplete()
+        failStage(exception)
+      }
+
+      /**
+        * Executes final steps when the source is complete.
+        */
+      private def onComplete(): Unit = {
+        optCompleteFunc foreach (_.apply(currentState))
       }
     }
 

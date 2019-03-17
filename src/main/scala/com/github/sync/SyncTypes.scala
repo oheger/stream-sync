@@ -232,23 +232,19 @@ object SyncTypes {
   }
 
   /**
-    * A class describing a result of a read function.
+    * A class describing a result generate by a folder iteration function.
     *
-    * The read function is invoked continuously during iteration over the
-    * folder structure. It returns newly detected elements and an updated
-    * iteration state.
+    * The iterate function is invoked continuously during iteration over a
+    * folder structure. It returns the newly detected elements.
     *
     * @param currentFolder the current folder this result is for
     * @param files         a list with detected files in this folder
     * @param folders       a list with detected sub folders of this folder
-    * @param nextState     the updated iteration state
     * @tparam F the type used for folder elements
-    * @tparam S the state type
     */
-  case class ReadResult[F <: SyncFolderData, S](currentFolder: FsFolder,
+  case class IterateResult[F <: SyncFolderData](currentFolder: FsFolder,
                                                 files: List[FsFile],
-                                                folders: List[F],
-                                                nextState: S)
+                                                folders: List[F])
 
   /**
     * Type definition of a function that returns the next folder that is
@@ -260,14 +256,45 @@ object SyncTypes {
   type NextFolderFunc[F <: SyncFolderData] = () => Option[F]
 
   /**
-    * Type definition of a function that is invoked when iterating over a
-    * folder structure. The function takes the current iteration state and
-    * tries to find new elements. The newly detected elements and the updated
-    * state are returned. This can happen asynchronously; therefore, the
-    * function returns a ''Future''. If the end of the iteration is reached,
-    * the future contains an empty option.
+    * Type definition of a function that returns an iteration result that is
+    * generated asynchronously. Result is an updated state and the actual
+    * iteration result.
     */
-  type IterateFunc[F <: SyncFolderData, S] = (S, NextFolderFunc[F]) => Future[Option[ReadResult[F, S]]]
+  type FutureResultFunc[F <: SyncFolderData, S] = () => Future[(S, IterateResult[F])]
+
+  /**
+    * Type definition for the result type of an [[IterateFunc]].
+    */
+  type IterateFuncResult[F <: SyncFolderData, S] = (S, Option[IterateResult[F]], Option[FutureResultFunc[F, S]])
+
+  /**
+    * Type definition of a function that is invoked when iterating over a
+    * folder structure.
+    *
+    * Defining a generic function type for the iteration over folder structures
+    * is hard because there are different requirements from specific
+    * structures. Some structures allow synchronous access to results while
+    * others produce results in background. To support these different
+    * scenarios, the return type of the iteration function is a tuple with
+    * multiple optional values. An updated status value is returned in any
+    * case.
+    *
+    * If a result is available immediately, the first ''Option'' is defined.
+    * The result can then be processed directly, and iteration can continue.
+    *
+    * If the result requires asynchronous processing, the second ''Option''
+    * with a function returning a future result is defined. In this case, the
+    * function is invoked, and the result is processed when it becomes
+    * available; it is here also possible to provide another updated state.
+    * Note that during execution of the asynchronous function no state of the
+    * element source can be accessed; this includes invocations of the
+    * [[NextFolderFunc]]!
+    *
+    * If both ''Option'' objects are undefined, this is interpreted as the end
+    * of the iteration.
+    */
+  type IterateFunc[F <: SyncFolderData, S] = (S, NextFolderFunc[F]) =>
+    (S, Option[IterateResult[F]], Option[FutureResultFunc[F, S]])
 
   /**
     * Type definition of a function that is invoked when the iteration over a

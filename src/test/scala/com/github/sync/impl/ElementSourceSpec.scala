@@ -16,6 +16,7 @@
 
 package com.github.sync.impl
 
+import java.io.IOException
 import java.time.Instant
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
@@ -24,7 +25,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, IterateFunc, NextFolderFunc, ReadResult, SyncFolderData}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateFuncResult, IterateResult, NextFolderFunc, SyncFolderData}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.Future
@@ -43,6 +44,9 @@ object ElementSourceSpec {
 
   /** The initial state value. */
   private val InitState = 1
+
+  /** The end state returned by the test iterate function. */
+  private val EndState = 111
 
   /**
     * Helper function to create a file element.
@@ -66,6 +70,16 @@ object ElementSourceSpec {
     createFile(parent.relativeUri + "/" + name, parent.level + 1)
 
   /**
+    * Convenience function to create an iteration result for a single file
+    * element.
+    *
+    * @param elem the single file in the result
+    * @return the result object
+    */
+  private def createFileIterateResult(elem: FsFile): IterateResult[SyncFolderDataImpl] =
+    IterateResult(RootFolder.folder, List(elem), Nil)
+
+  /**
     * Convenience function to create a result object that reports a single
     * file.
     *
@@ -73,8 +87,31 @@ object ElementSourceSpec {
     * @param state the next state
     * @return the result object
     */
-  private def createSimpleResult(elem: FsFile, state: Int = InitState): ReadResult[SyncFolderDataImpl, Int] =
-    ReadResult(RootFolder.folder, List(elem), Nil, state)
+  private def createSimpleResult(elem: FsFile, state: Int = InitState): IterateFuncResult[SyncFolderDataImpl, Int] =
+    (state, Some(createFileIterateResult(elem)), None)
+
+  /**
+    * Convenience function to create a future result function that returns the
+    * specified data.
+    *
+    * @param result the result to be returned
+    * @param state  the next state
+    * @return the future result function returning this data
+    */
+  private def createFutureResultFunc(result: IterateResult[SyncFolderDataImpl], state: Int):
+  FutureResultFunc[SyncFolderDataImpl, Int] = () =>
+    Future.successful((state, result))
+
+  /**
+    * Convenience function to create a result object for a future result
+    * containing only a single file.
+    *
+    * @param elem  the single file in the result
+    * @param state the next state
+    * @return the result object
+    */
+  private def createFutureResult(elem: FsFile, state: Int = InitState): IterateFuncResult[SyncFolderDataImpl, Int] =
+    (state, None, Some(createFutureResultFunc(createFileIterateResult(elem), state)))
 }
 
 /**
@@ -98,10 +135,18 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     helper.runSource() should be(files)
   }
 
+  it should "return the elements received from a future result function" in {
+    val files = List(createFile("/a", 2), createFile("/b", 2), createFile("/c", 2))
+    val results = files map (f => createFutureResult(f))
+    val helper = new SourceTestHelper(results)
+
+    helper.runSource() should be(files)
+  }
+
   it should "pass correct state values to the iterate function" in {
     val results = List(
       createSimpleResult(createFile("/1", 2), 2),
-      createSimpleResult(createFile("/2", 2), 3),
+      createFutureResult(createFile("/2", 2), 3),
       createSimpleResult(createFile("/3", 2), 4)
     )
     val helper = new SourceTestHelper(results)
@@ -119,14 +164,14 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     val helper = new SourceTestHelper(results)
 
     helper.runSource()
-    helper.completationState should be(4)
+    helper.completionState should be(4)
   }
 
-  it should "return folders as well received from the iterate function" in {
+  it should "return folders received from the iterate function as well" in {
     val file = createFile("/a.txt", 2)
     val folder = FsFolder("/f", 2)
     val results = List(createSimpleResult(file),
-      ReadResult(RootFolder.folder, Nil, List(SyncFolderDataImpl(folder)), 2))
+      (2, Some(IterateResult(RootFolder.folder, Nil, List(SyncFolderDataImpl(folder)))), None))
     val helper = new SourceTestHelper(results)
 
     helper.runSource() should contain only(file, folder)
@@ -139,8 +184,8 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     val subFile1 = createFile(subFolder, "sub1.txt")
     val subFile2 = createFile(subFolder, "sub2.doc")
     val results = List(
-      ReadResult(RootFolder.folder, List(file1, file2), List(SyncFolderDataImpl(subFolder)), 42),
-      ReadResult[SyncFolderDataImpl, Int](subFolder, List(subFile1, subFile2), Nil, 100)
+      (42, Some(IterateResult(RootFolder.folder, List(file1, file2), List(SyncFolderDataImpl(subFolder)))), None),
+      (100, Some(IterateResult[SyncFolderDataImpl](subFolder, List(subFile1, subFile2), Nil)), None)
     )
     val helper = new SourceTestHelper(results)
 
@@ -151,9 +196,9 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     val folder1 = SyncFolderDataImpl(FsFolder("/folder1", 2))
     val folder2 = SyncFolderDataImpl(FsFolder("/folder2", 2))
     val folder3 = SyncFolderDataImpl(FsFolder("/folder3", 2))
-    val results = List(ReadResult(RootFolder.folder,
+    val results = List((11, Some(IterateResult(RootFolder.folder,
       List(createFile("/file1.txt", 2), createFile("/otherFile.dat", 2)),
-      List(folder2, folder3, folder1), 11))
+      List(folder2, folder3, folder1))), None))
     val helper = new SourceTestHelper(results)
 
     helper.runSource()
@@ -172,8 +217,8 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     val folder1 = FsFolder("/aFolder", 2)
     val folder2 = FsFolder("/anotherFolder", 2)
     val folder3 = FsFolder("/oneMoreFolder", 2)
-    val results = List(ReadResult(RootFolder.folder, List(file2, file1, file3),
-      List(SyncFolderDataImpl(folder3), SyncFolderDataImpl(folder2), SyncFolderDataImpl(folder1)), 0))
+    val results = List((0, Some(IterateResult(RootFolder.folder, List(file2, file1, file3),
+      List(SyncFolderDataImpl(folder3), SyncFolderDataImpl(folder2), SyncFolderDataImpl(folder1)))), None))
     val expElements = List(file1, folder1, folder2, file2, folder3, file3)
     val helper = new SourceTestHelper(results)
 
@@ -182,8 +227,9 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
 
   it should "handle failures in the iteration function" in {
     val results = List(
-      ReadResult[SyncFolderDataImpl, Int](RootFolder.folder, List(createFile("/foo", 2)), Nil, 1),
-      ReadResult[SyncFolderDataImpl, Int](RootFolder.folder, Nil, Nil, 2)
+      (1, Some(IterateResult[SyncFolderDataImpl](RootFolder.folder, List(createFile("/foo", 2)), Nil)),
+        None),
+      (2, None, None)
     )
     val helper = new SourceTestHelper(results)
 
@@ -192,13 +238,27 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
 
   it should "pass the last state to the completion function in case of a failure" in {
     val results = List(
-      ReadResult[SyncFolderDataImpl, Int](RootFolder.folder, List(createFile("/foo", 2)), Nil, 1),
-      ReadResult[SyncFolderDataImpl, Int](RootFolder.folder, Nil, Nil, 2)
+      (1, Some(IterateResult[SyncFolderDataImpl](RootFolder.folder, List(createFile("/foo", 2)), Nil)),
+        None),
+      (2, None, None)
     )
     val helper = new SourceTestHelper(results)
 
     expectFailedFuture[IllegalStateException](helper.executeStream())
-    helper.completationState should be(1)
+    helper.completionState should be(1)
+  }
+
+  it should "handle failed futures returned by the future result func" in {
+    val exception = new IOException("BOOM")
+    val LastState = 47
+    val results = List(
+      createFutureResult(createFile("/someFile.txt", 2)),
+      (LastState, None, Some(() => Future.failed(exception)))
+    )
+    val helper = new SourceTestHelper(results)
+
+    expectFailedFuture[IOException](helper.executeStream()) should be(exception)
+    helper.completionState should be(LastState)
   }
 
   /**
@@ -207,7 +267,7 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     *
     * @param readResults the results to be returned from an iteration function
     */
-  private class SourceTestHelper(readResults: List[ReadResult[SyncFolderDataImpl, Int]]) {
+  private class SourceTestHelper(readResults: List[IterateFuncResult[SyncFolderDataImpl, Int]]) {
 
     import system.dispatcher
 
@@ -261,7 +321,7 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
       *
       * @return the completion state
       */
-    def completationState: Int = refCompleteState.get()
+    def completionState: Int = refCompleteState.get()
 
     /**
       * Returns the function to obtain the next folder that was passed to the
@@ -285,17 +345,17 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
       else {
         next should be(refFolderFunc.get())
       }
-      Future {
-        refResults.get() match {
-          case h :: t =>
-            refResults.set(t)
-            if (h.files.nonEmpty || h.folders.nonEmpty)
-              Some(h)
-            else throw new IllegalStateException("Simulated processing error!")
-          case _ =>
-            None
-        }
+
+      refResults.get() match {
+        case h :: t =>
+          refResults.set(t)
+          if (h._2.nonEmpty || h._3.nonEmpty)
+            h
+          else throw new IllegalStateException("Simulated processing error!")
+        case _ =>
+          (EndState, None, None)
       }
+
     }
 
     /**
