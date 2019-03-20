@@ -244,7 +244,17 @@ object SyncTypes {
     */
   case class IterateResult[F <: SyncFolderData](currentFolder: FsFolder,
                                                 files: List[FsFile],
-                                                folders: List[F])
+                                                folders: List[F]) {
+    /**
+      * Returns a flag whether this result contains some data. This function
+      * checks whether there is at least one result element - a file or a
+      * folder.
+      *
+      * @return '''true''' if this object contains result elements; '''false'''
+      *         otherwise
+      */
+    def nonEmpty: Boolean = files.nonEmpty || folders.nonEmpty
+  }
 
   /**
     * Type definition of a function that returns the next folder that is

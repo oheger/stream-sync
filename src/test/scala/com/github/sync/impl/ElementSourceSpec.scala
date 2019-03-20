@@ -261,6 +261,18 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     helper.completionState should be(LastState)
   }
 
+  it should "deal with results from the iterate func that contain no new data" in {
+    val file1 = createFile("/aFile.dat", 2)
+    val file2 = createFile("/bFile.data", 2)
+    val results = List(createSimpleResult(file1, 2),
+      (3, Some(IterateResult(RootFolder.folder, Nil, List.empty[SyncFolderDataImpl])), None),
+      createSimpleResult(file2, 4))
+    val helper = new SourceTestHelper(results)
+
+    helper.runSource() should contain only(file1, file2)
+    helper.states should be(List(InitState, 2, 3, 4))
+  }
+
   /**
     * A test helper class managing the environment for testing an element
     * source.

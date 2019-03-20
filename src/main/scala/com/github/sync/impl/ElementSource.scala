@@ -16,7 +16,7 @@
 
 package com.github.sync.impl
 
-import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
+import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import akka.stream.{Attributes, Outlet, SourceShape}
 import com.github.sync.SyncTypes.{CompletionFunc, FsElement, FutureResultFunc, IterateFunc, IterateResult, NextFolderFunc, SyncFolderData}
 import com.github.sync.util.SyncFolderQueue
@@ -65,7 +65,7 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
   override def shape: SourceShape[FsElement] = SourceShape(out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) {
+    new GraphStageLogic(shape) with StageLogging {
 
       /** The state of the iteration, updated by the iterate function. */
       private var currentState = initState
@@ -83,25 +83,13 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
         else {
           val (f, q) = pendingFolders.dequeue()
           pendingFolders = q
+          log.info("Processing folder {}.", f.folder.relativeUri)
           Some(f)
         }
 
       setHandler(out, new OutHandler {
         override def onPull(): Unit = {
-          Try {
-            iterateFunc(currentState, nextFolderFunc)
-          } match {
-            case Success((nextState, optResult, optFutureFunc)) =>
-              if (optResult.isEmpty && optFutureFunc.isEmpty) {
-                onComplete()
-                completeStage()
-              } else {
-                handleDirectResult(nextState, optResult)
-                handleFutureResult(nextState, optFutureFunc)
-              }
-            case Failure(exception) =>
-              handleFailure(exception)
-          }
+          continueIteration()
         }
 
         override def onDownstreamFinish(): Unit = {
@@ -109,6 +97,27 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
           super.onDownstreamFinish()
         }
       })
+
+      /**
+        * Invokes the iteration function to generate new results. The results
+        * (if available) are passed downstream.
+        */
+      private def continueIteration(): Unit = {
+        Try {
+          iterateFunc(currentState, nextFolderFunc)
+        } match {
+          case Success((nextState, optResult, optFutureFunc)) =>
+            if (optResult.isEmpty && optFutureFunc.isEmpty) {
+              onComplete()
+              completeStage()
+            } else {
+              handleDirectResult(nextState, optResult)
+              handleFutureResult(nextState, optFutureFunc)
+            }
+          case Failure(exception) =>
+            handleFailure(exception)
+        }
+      }
 
       /**
         * Handles a direct result received from the iterate function. If
@@ -147,14 +156,22 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
         */
       private def handleResult(triedResult: Try[(S, IterateResult[F])]): Unit = {
         triedResult match {
-          case Success((state, result)) =>
+          case Success((state, result)) if result.nonEmpty =>
+            log.debug("Folder {} has {} files and {} sub folders.", result.currentFolder.relativeUri,
+              result.files.size, result.folders.size)
             currentState = state
             pendingFolders = pendingFolders ++ result.folders
             val folderElems = result.folders map (_.folder)
             val orderedElements = (result.files ++ folderElems).sortWith(_.relativeUri < _.relativeUri)
             emitMultiple(out, orderedElements)
 
+          case Success((state, result)) =>
+            log.debug("Folder {} is empty.", result.currentFolder.relativeUri)
+            currentState = state
+            continueIteration()
+
           case Failure(exception) =>
+            log.error(exception, "Exception during iteration.")
             handleFailure(exception)
         }
       }
