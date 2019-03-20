@@ -27,7 +27,9 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
 import com.github.sync._
+import com.github.sync.impl.ElementSource
 import com.github.sync.util.UriEncodingHelper
+import com.github.sync.webdav.DavFsElementSource.{DavIterationState, FolderData}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.xml.sax.SAXException
@@ -244,12 +246,12 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     * @param modifiedProperty the property for the modified time
     * @return the test source shape
     */
-  private def createTestSourceShape(modifiedProperty: String): DavFsElementSource = {
+  private def createTestSourceShape(modifiedProperty: String): ElementSource[FolderData, DavIterationState] = {
     implicit val mat: ActorMaterializer = ActorMaterializer()
     val config = DavConfig(serverUri(RootPath), UserId, Password, modifiedProperty, None,
       deleteBeforeOverride = false,
       modifiedProperties = List(modifiedProperty, DavConfig.DefaultModifiedProperty))
-    new DavFsElementSource(config)
+    DavFsElementSource.createSource(config).asInstanceOf[ElementSource[FolderData, DavIterationState]]
   }
 
   "A DavFsElementSource" should "iterate over a WebDav structure" in {
@@ -282,7 +284,7 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     val source = createTestSourceShape(DavConfig.DefaultModifiedProperty)
     futureResult(runSource(Source.fromGraph(source)))
 
-    expectFailedFuture[RuntimeException](source.requestQueue.queueRequest(testRequest))
+    expectFailedFuture[RuntimeException](source.initState.requestQueue.queueRequest(testRequest))
   }
 
   it should "evaluate the status code from a response" in {

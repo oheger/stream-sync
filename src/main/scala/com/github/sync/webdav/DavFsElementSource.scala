@@ -27,20 +27,34 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
 import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
-import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import akka.util.ByteString
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncFolderData}
-import com.github.sync.util.{SyncFolderQueue, UriEncodingHelper}
+import com.github.sync.SyncTypes.{CompletionFunc, FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateResult, SyncFolderData}
+import com.github.sync.impl.ElementSource
+import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec
-import scala.concurrent.Future
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 import scala.xml._
 
+/**
+  * A module providing a stream source for listing the content of a folder
+  * structure located on a WebDav server.
+  *
+  * This source sends ''PROPFIND'' requests to the server specified by the
+  * given configuration. From the responses information about the files and
+  * sub folders is extracted, so that the whole structure can be iterated over.
+  *
+  * Results ([[FsFolder]] and [[FsFile]] elements) are already returned in the
+  * correct order; so no sorting is needed as post-processing step.
+  *
+  * Note that error handling is very basic: a request that fails for whatever
+  * reason (non-success server response, I/O error, unexpected data in the
+  * response, etc.) causes the source to cancel the whole stream. This is
+  * desired because when the server has a (temporary) problem a sync process
+  * must be stopped; otherwise, it can have unexpected results.
+  */
 object DavFsElementSource {
-  /** Constant for the slash terminating the URI to a folder. */
-  private val Slash = "/"
-
   /**
     * Data class storing information about a folder that is to be fetched from
     * the WebDav server.
@@ -53,8 +67,26 @@ object DavFsElementSource {
       * The normalized URI to reference the folder on the server. This URI
       * always ends on a slash which is required by some Dav servers.
       */
-    val normalizedRef: String = if(ref endsWith Slash) ref else ref + Slash
+    val normalizedRef: String = UriEncodingHelper.withTrailingSeparator(ref)
   }
+
+  /**
+    * A class representing the state of an iteration over a dav server's folder
+    * structure.
+    *
+    * The class stores a bunch of parameters that are needed during the
+    * iteration. There are no real state updates.
+    *
+    * @param requestQueue            the queue for sending requests
+    * @param rootUriPrefix           the common prefix of all URIs in the structure to be
+    *                                processed; the URIs generated for ''FsElement''
+    *                                objects must be relative to this URI.
+    * @param decodedRootUriPrefixLen the length of the root URI prefix
+    * @param headerAuth              the authorization header for all requests
+    * @param config                  the configuration for the dav server
+    */
+  case class DavIterationState(requestQueue: RequestQueue, rootUriPrefix: String, decodedRootUriPrefixLen: Int,
+                               headerAuth: Authorization, config: DavConfig)
 
   /**
     * A data class holding information about an element that is processed.
@@ -107,8 +139,196 @@ object DavFsElementSource {
     * @return the new source
     */
   def apply(config: DavConfig)(implicit system: ActorSystem, mat: ActorMaterializer):
-  Source[FsElement, NotUsed] =
-    Source.fromGraph(new DavFsElementSource(config))
+  Source[FsElement, NotUsed] = Source.fromGraph(createSource(config))
+
+  /**
+    * Creates the source for iterating over a dav folder structure.
+    *
+    * @param config the configuration
+    * @param system the actor system
+    * @param mat    the object to materialize streams
+    * @return the new source
+    */
+  def createSource(config: DavConfig)
+                  (implicit system: ActorSystem, mat: ActorMaterializer):
+  Graph[SourceShape[FsElement], NotUsed] = {
+    implicit val ec: ExecutionContext = system.dispatcher
+    val requestQueue = new RequestQueue(config.rootUri)
+    val rootUriPrefix = removeTrailingSlash(config.rootUri.path.toString())
+    val rootPrefixLen = UriEncodingHelper.decode(rootUriPrefix).length
+    val state = DavIterationState(requestQueue, rootUriPrefix, rootPrefixLen, authHeader(config), config)
+    new ElementSource(state, FolderData(config.rootUri.toString(), FsFolder("", -1)),
+      Some(completionFunc))(iterateFunc)
+  }
+
+  /**
+    * Returns the function that iterates over the folder structure of the web
+    * dav server.
+    *
+    * @param ec  the execution context
+    * @param mat the object to materialize streams
+    * @return the iterate function
+    */
+  private def iterateFunc(implicit ec: ExecutionContext, mat: ActorMaterializer):
+  IterateFunc[FolderData, DavIterationState] = (state, nextFolder) => {
+    nextFolder() match {
+      case Some(folder) =>
+        (state, None, Some(futureResultFunc(state, folder)))
+      case None =>
+        (state, None, None)
+    }
+  }
+
+  /**
+    * Returns the function that retrieves the content of the current folder as
+    * a ''Future'' result.
+    *
+    * @param state         the current iteration state
+    * @param currentFolder the current folder
+    * @param ec            the execution context
+    * @param mat           the object to materialize streams
+    * @return the future with the content of the current folder
+    */
+  private def futureResultFunc(state: DavIterationState, currentFolder: FolderData)
+                              (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  FutureResultFunc[FolderData, DavIterationState] = () =>
+    loadFolder(state, currentFolder) map (processFolderResult(state, currentFolder.folder, _))
+
+  /**
+    * Returns the function to be called at the end of the iteration. This
+    * function shuts down the request queue stored in the given state.
+    *
+    * @return the completion function
+    */
+  private def completionFunc: CompletionFunc[DavIterationState] = state =>
+    state.requestQueue.shutdown()
+
+  /**
+    * Sends a request for the content of the specified folder and parses
+    * the response.
+    *
+    * @param state      the current iteration state
+    * @param folderData the data of the folder to be loaded
+    * @param ec         the execution context
+    * @param mat        the object to materialize streams
+    * @return a future with the parsed content of the folder
+    */
+  private def loadFolder(state: DavIterationState, folderData: FolderData)
+                        (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[List[ElemData]] = {
+    val request = createFolderRequest(state, folderData)
+    sendAndProcess(state.requestQueue, request)(parseFolderResponse(state, folderData.folder)).flatten
+  }
+
+  /**
+    * Parses the response received for a folder request. The data of the
+    * entity is read, converted to XML, and processed to extract the
+    * elements contained in this folder.
+    *
+    * @param state    the current state
+    * @param folder   the folder whose content is to be computed
+    * @param response the response of the request for this folder
+    * @param ec       the execution context
+    * @param mat      the object to materialize streams
+    * @return a ''Future'' with the elements that have been extracted
+    */
+  private def parseFolderResponse(state: DavIterationState, folder: FsFolder)(response: HttpResponse)
+                                 (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[List[ElemData]] =
+    readResponse(response).map(elem => extractFolderElements(state, elem, folder.level + 1))
+
+  /**
+    * Reads the entity of the given response of a folder request and
+    * parses it as XML document.
+    *
+    * @param response the response to be read
+    * @param ec       the execution context
+    * @param mat      the object to materialize streams
+    * @return a future with the parsed XML result
+    */
+  private def readResponse(response: HttpResponse)
+                          (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[Elem] = {
+    val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
+    response.entity.dataBytes.runWith(sink).map { body =>
+      val stream = new ByteArrayInputStream(body.toArray)
+      XML.load(stream)
+    }
+  }
+
+  /**
+    * Extracts a sequence of ''FsElement'' objects from the XML result
+    * received for a specific folder.
+    *
+    * @param state the current state
+    * @param elem  the XML with the content of the folder
+    * @param level the level of the elements to extract
+    * @return a list with elements that have been extracted
+    */
+  private def extractFolderElements(state: DavIterationState, elem: Elem, level: Int): List[ElemData] =
+    (elem \ ElemResponse).drop(1) // first element is the folder itself
+      .map(node => extractFolderElement(state, node, level)).toList
+
+  /**
+    * Extracts an ''FsElement'' from the specified XML node.
+    *
+    * @param state the current state
+    * @param node  the node representing data of an element
+    * @param level the level for this element
+    * @return the element that was extracted
+    */
+  private def extractFolderElement(state: DavIterationState, node: Node, level: Int): ElemData = {
+    val ref = removeTrailingSlash(elemText(node, ElemHref))
+    val uri = extractElementUri(state, ref)
+    val propNode = node \ ElemPropStat \ ElemProp
+    val isFolder = isCollection(propNode)
+    if (isFolder) ElemData(ref, FsFolder(uri, level))
+    else {
+      val modifiedTime = obtainModifiedTime(propNode, state.config)
+      val fileSize = elemText(propNode, ElemContentLength).toLong
+      ElemData(ref, FsFile(uri, level, modifiedTime, fileSize))
+    }
+  }
+
+  /**
+    * Handles a result of parsing the content of a folder. If the folder
+    * contains elements, they are emitted downstream, and the set of sub
+    * folders pending to be processed is updated. Otherwise, processing
+    * continues with the next folder in the set.
+    *
+    * @param elements a list of elements contained in the folder
+    */
+  private def processFolderResult(state: DavIterationState, currentFolder: FsFolder, elements: List[ElemData]):
+  (DavIterationState, IterateResult[FolderData]) = {
+    val (files, folders) = elements.foldLeft((List.empty[FsFile], List.empty[FolderData])) { (lists, elem) =>
+      elem.elem match {
+        case f: FsFolder =>
+          (lists._1, FolderData(elem.ref, f) :: lists._2)
+        case f: FsFile =>
+          (f :: lists._1, lists._2)
+      }
+    }
+    (state, IterateResult(currentFolder, files, folders))
+  }
+
+  /**
+    * Creates a request for the specified folder.
+    *
+    * @param state      the current state
+    * @param folderData the data of the folder to be loaded
+    * @return the request to query the content of this folder
+    */
+  private def createFolderRequest(state: DavIterationState, folderData: FolderData): HttpRequest =
+    HttpRequest(method = MethodPropFind, uri = folderData.normalizedRef,
+      headers = List(state.headerAuth, HeaderAccept, HeaderDepth))
+
+  /**
+    * Obtains the URI of an element based on the reference URI from the server.
+    *
+    * @param state the current state
+    * @param ref   the reference URI of the element
+    * @return the extracted element URI
+    */
+  private def extractElementUri(state: DavIterationState, ref: String): String =
+    UriEncodingHelper.decode(ref) drop state.decodedRootUriPrefixLen
 
   /**
     * Parses a date in string form to a corresponding ''Instant''. If this
@@ -118,6 +338,7 @@ object DavFsElementSource {
     * @return the resulting ''Instant''
     */
   private def parseModifiedTime(strDate: String): Instant = {
+
     val query: TemporalQuery[Instant] = Instant.from _
     DateTimeFormatter.RFC_1123_DATE_TIME.parse(strDate, query)
   }
@@ -205,214 +426,6 @@ object DavFsElementSource {
     val elemCollection = propNode \ ElemResourceType \ ElemCollection
     elemCollection.nonEmpty
   }
-}
-
-/**
-  * A stream source for listing the content of a folder structure located on a
-  * WebDav server.
-  *
-  * This source sends ''PROPFIND'' requests to the server specified by the
-  * given configuration. From the responses information about the files and
-  * sub folders is extracted, so that the whole structure can be iterated over.
-  *
-  * Results ([[FsFolder]] and [[FsFile]] elements) are already returned in the
-  * correct order; so no sorting is needed as post-processing step.
-  *
-  * Note that error handling is very basic: a request that fails for whatever
-  * reason (non-success server response, I/O error, unexpected data in the
-  * response, etc.) causes the source to cancel the whole stream. This is
-  * desired because when the server has a (temporary) problem a sync process
-  * must be stopped; otherwise, it can have unexpected results.
-  *
-  * @param config the ''DavConfig''
-  * @param system the actor system (required for sending HTTP requests)
-  * @param mat    the object to materialize (sub) streams
-  */
-class DavFsElementSource(config: DavConfig)(implicit system: ActorSystem, mat: ActorMaterializer)
-  extends GraphStage[SourceShape[FsElement]] {
-  val out: Outlet[FsElement] = Outlet("DavFsElementSource")
-
-  import DavFsElementSource._
-  import system.dispatcher
-
-  /**
-    * The common prefix of all URIs in the structure to be processed. The URIs
-    * generated for ''FsElement'' objects must be relative to this URI.
-    */
-  private val rootUriPrefix = removeTrailingSlash(config.rootUri.path.toString())
-
-  /** The length of the root URI prefix. */
-  private val decodedRootUriPrefixLen = calcDecodedRootUriLength()
-
-  /** The queue for sending HTTP requests. */
-  private[webdav] val requestQueue = new RequestQueue(config.rootUri)
-
-  /** The authorization header to be used for all requests. */
-  private val HeaderAuth = authHeader(config)
-
-  override val shape: SourceShape[FsElement] = SourceShape(out)
-
-  override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) with StageLogging {
-      // A set with folders to be processed in BFS order
-      var folders = SyncFolderQueue(FolderData(config.rootUri.toString(), FsFolder("", -1)))
-
-      setHandler(out, new OutHandler {
-        override def onPull(): Unit = {
-          processNextFolder()
-        }
-      })
-
-      override def postStop(): Unit = {
-        log.info("Shutting down request queue.")
-        requestQueue.shutdown()
-      }
-
-      /**
-        * Tries to parse a folder from the set of pending folders. All elements
-        * contained in this folder are emitted. If there are no more pending
-        * folders to parse, the stage is completed.
-        */
-      private def processNextFolder(): Unit = {
-        if (folders.isEmpty) complete(out)
-        else {
-          val callback = getAsyncCallback[Try[List[ElemData]]](processFolderResult)
-          val (nextFolder, queue) = folders.dequeue()
-          folders = queue
-          loadFolder(nextFolder) onComplete callback.invoke
-        }
-      }
-
-      /**
-        * Sends a request for the content of the specified folder and parses
-        * the response.
-        *
-        * @param folderData the data of the folder to be loaded
-        * @return a future with the parsed content of the folder
-        */
-      private def loadFolder(folderData: FolderData): Future[List[ElemData]] = {
-        val request = createFolderRequest(folderData)
-        log.info("Sending request {}.", request.uri)
-        sendAndProcess(requestQueue, request)(parseFolderResponse(folderData.folder)).flatten
-      }
-
-      /**
-        * Parses the response received for a folder request. The data of the
-        * entity is read, converted to XML, and processed to extract the
-        * elements contained in this folder.
-        *
-        * @param folder   the folder whose content is to be computed
-        * @param response the response of the request for this folder
-        * @return a ''Future'' with the elements that have been extracted
-        */
-      private def parseFolderResponse(folder: FsFolder)(response: HttpResponse):
-      Future[List[ElemData]] =
-        readResponse(response).map(elem => extractFolderElements(elem, folder.level + 1))
-
-      /**
-        * Reads the entity of the given response of a folder request and
-        * parses it as XML document.
-        *
-        * @param response the response to be read
-        * @return a future with the parsed XML result
-        */
-      private def readResponse(response: HttpResponse): Future[Elem] = {
-        val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
-        response.entity.dataBytes.runWith(sink).map { body =>
-          val stream = new ByteArrayInputStream(body.toArray)
-          XML.load(stream)
-        }
-      }
-
-      /**
-        * Extracts a sequence of ''FsElement'' objects from the XML result
-        * received for a specific folder.
-        *
-        * @param elem  the XML with the content of the folder
-        * @param level the level of the elements to extract
-        * @return a list with elements that have been extracted
-        */
-      private def extractFolderElements(elem: Elem, level: Int): List[ElemData] =
-        (elem \ ElemResponse).drop(1) // first element is the folder itself
-          .map(node => extractFolderElement(node, level)).toList
-
-      /**
-        * Extracts an ''FsElement'' from the specified XML node.
-        *
-        * @param node  the node representing data of an element
-        * @param level the level for this element
-        * @return the element that was extracted
-        */
-      private def extractFolderElement(node: Node, level: Int): ElemData = {
-        val ref = removeTrailingSlash(elemText(node, ElemHref))
-        val uri = extractElementUri(ref)
-        val propNode = node \ ElemPropStat \ ElemProp
-        val isFolder = isCollection(propNode)
-        if (isFolder) ElemData(ref, FsFolder(uri, level))
-        else {
-          val modifiedTime = obtainModifiedTime(propNode, config)
-          val fileSize = elemText(propNode, ElemContentLength).toLong
-          ElemData(ref, FsFile(uri, level, modifiedTime, fileSize))
-        }
-      }
-
-      /**
-        * Handles a result of parsing the content of a folder. If the folder
-        * contains elements, they are emitted downstream, and the set of sub
-        * folders pending to be processed is updated. Otherwise, processing
-        * continues with the next folder in the set.
-        *
-        * @param triedElements a list of elements contained in the folder
-        */
-      private def processFolderResult(triedElements: Try[List[ElemData]]): Unit =
-        triedElements match {
-          case Success(elements) =>
-            if (elements.nonEmpty) {
-              val elemsSorted = elements.sortWith(_.elem.relativeUri < _.elem.relativeUri)
-              emitMultiple(out, elemsSorted map (_.elem))
-              folders = elemsSorted.foldLeft(folders) { (q, e) =>
-                e.elem match {
-                  case f: FsFolder => q + FolderData(e.ref, f)
-                  case _ => q
-                }
-              }
-            } else {
-              processNextFolder()
-            }
-
-          case Failure(exception) =>
-            log.error(exception, "Failed request!")
-            fail(out, exception)
-        }
-
-      /**
-        * Creates a request for the specified folder.
-        *
-        * @param folderData the data of the folder to be loaded
-        * @return the request to query the content of this folder
-        */
-      private def createFolderRequest(folderData: FolderData): HttpRequest =
-        HttpRequest(method = MethodPropFind, uri = folderData.normalizedRef,
-          headers = List(HeaderAuth, HeaderAccept, HeaderDepth))
-    }
-
-  /**
-    * Obtains the URI of an element based on the reference URI from the server.
-    *
-    * @param ref the reference URI of the element
-    * @return the extracted element URI
-    */
-  private def extractElementUri(ref: String): String =
-    UriEncodingHelper.decode(ref) drop decodedRootUriPrefixLen
-
-  /**
-    * Determines the length of the decoded root URI. This is needed to
-    * correctly generate relative element URIs.
-    *
-    * @return the length of the decoded root URI
-    */
-  private def calcDecodedRootUriLength(): Int =
-    UriEncodingHelper.decode(rootUriPrefix).length
 }
 
 /**

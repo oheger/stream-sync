@@ -55,7 +55,7 @@ object ElementSource {
   * @tparam F the type of the data used for folders
   * @tparam S the type of the iteration state
   */
-class ElementSource[F <: SyncFolderData, S](initState: S, initFolder: F,
+class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
                                             optCompleteFunc: Option[CompletionFunc[S]] = None)
                                            (iterateFunc: IterateFunc[F, S])
                                            (implicit ec: ExecutionContext)
