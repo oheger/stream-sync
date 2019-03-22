@@ -76,6 +76,34 @@ object ParameterManager {
     */
   val IgnoreTimeDeltaOption: String = OptionPrefix + "ignore-time-delta"
 
+  /**
+    * Name of the option defining the encryption password for the source
+    * structure. If defined, files from the source are decrypted using this
+    * password when downloaded.
+    */
+  val SourcePasswordOption: String = OptionPrefix + "src-encrypt-password"
+
+  /**
+    * Name of the option defining the encryption password for the destination
+    * structure. If defined, files are encrypted using this password when they
+    * are copied to the destination.
+    */
+  val DestPasswordOption: String = OptionPrefix + "dst-encrypt-password"
+
+  /**
+    * Name of the option that determines that the file names in the source
+    * structure are encrypted. This is evaluated only if a source password is
+    * set.
+    */
+  val EncryptSourceFileNamesOption: String = OptionPrefix + "src-encrypt-names"
+
+  /**
+    * Name of the option that determines that the file names in the destination
+    * structure are encrypted. This is evaluated only if a destination password
+    * is set.
+    */
+  val EncryptDestFileNamesOption: String = OptionPrefix + "dst-encrypt-names"
+
   /** The default timeout for sync operations. */
   val DefaultTimeout = Timeout(1.minute)
 
@@ -109,21 +137,33 @@ object ParameterManager {
     * An instance of this class is created from the command line options passed
     * to the program.
     *
-    * @param syncUris        the URIs to be synced (source and destination)
-    * @param applyMode       the apply mode
-    * @param timeout         a timeout for sync operations
-    * @param logFilePath     an option with the path to the log file if defined
-    * @param syncLogPath     an option with the path to a file containing sync
-    *                        operations to be executed
-    * @param ignoreTimeDelta optional threshold for a time difference between
-    *                        two files that should be ignored
+    * @param syncUris              the URIs to be synced (source and destination)
+    * @param applyMode             the apply mode
+    * @param timeout               a timeout for sync operations
+    * @param logFilePath           an option with the path to the log file if defined
+    * @param syncLogPath           an option with the path to a file containing sync
+    *                              operations to be executed
+    * @param ignoreTimeDelta       optional threshold for a time difference between
+    *                              two files that should be ignored
+    * @param srcPassword           an option with the password for the sync source;
+    *                              if set, files from the source are encrypted
+    * @param srcFileNamesEncrypted flag whether file names in the source are
+    *                              encrypted
+    * @param dstPassword           an option with the password for the sync dest;
+    *                              if set, files written to dest get encrypted
+    * @param dstFileNamesEncrypted flag whether file names in the destination
+    *                              should be encrypted
     */
   case class SyncConfig(syncUris: (String, String),
                         applyMode: ApplyMode,
                         timeout: Timeout,
                         logFilePath: Option[Path],
                         syncLogPath: Option[Path],
-                        ignoreTimeDelta: Option[Int])
+                        ignoreTimeDelta: Option[Int],
+                        srcPassword: Option[String],
+                        srcFileNamesEncrypted: Boolean,
+                        dstPassword: Option[String],
+                        dstFileNamesEncrypted: Boolean)
 
   /**
     * A case class representing a processor for command line options.
@@ -193,7 +233,7 @@ object ParameterManager {
     @tailrec def doParseParameters(argsList: Seq[String], argsMap: ParamMap):
     ParamMap = argsList match {
       case opt :: value :: tail if isOption(opt) =>
-        doParseParameters(tail, appendOptionValue(argsMap, opt.toLowerCase(Locale.ROOT), value))
+        doParseParameters(tail, appendOptionValue(argsMap, toLower(opt), value))
       case h :: t if !isOption(h) =>
         doParseParameters(t, appendOptionValue(argsMap, SyncUriOption, h))
       case h :: _ =>
@@ -272,6 +312,17 @@ object ParameterManager {
     singleOptionValue(key, defValue) map (_.flatMap(f))
 
   /**
+    * Returns a processor that extracts a boolean option from the command
+    * line. The given key must have a single value that is either "true" or
+    * "false" (case does not matter).
+    *
+    * @param key the option key
+    * @return the processor to extract the boolean option
+    */
+  def booleanOptionValue(key: String): CliProcessor[Try[Boolean]] =
+    singleOptionValueMapped(key, Some(java.lang.Boolean.FALSE.toString))(s => toBoolean(s, key))
+
+  /**
     * Returns a processor that extracts a single optional value of a command
     * line option. If the option has multiple values, an error is produced. If
     * it has a single value only, this value is returned as an option.
@@ -346,7 +397,12 @@ object ParameterManager {
     logFile <- optionalOptionValue(LogFileOption)
     syncLog <- optionalOptionValue(SyncLogOption)
     timeDelta <- ignoreTimeDeltaOption()
-  } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta)
+    srcPwd <- optionalOptionValue(SourcePasswordOption)
+    dstPwd <- optionalOptionValue(DestPasswordOption)
+    srcEncFiles <- booleanOptionValue(EncryptSourceFileNamesOption)
+    dstEncFiles <- booleanOptionValue(EncryptDestFileNamesOption)
+  } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta,
+    srcPwd, srcEncFiles, dstPwd, dstEncFiles)
 
   /**
     * Extracts an object with configuration options for the sync process from
@@ -514,7 +570,11 @@ object ParameterManager {
                                triedTimeout: Try[Timeout],
                                triedLogFile: Try[Option[String]],
                                triedSyncLog: Try[Option[String]],
-                               triedTimeDelta: Try[Option[Int]]): Try[SyncConfig] = {
+                               triedTimeDelta: Try[Option[Int]],
+                               triedSrcPassword: Try[Option[String]],
+                               triedEncSrcFileNames: Try[Boolean],
+                               triedDstPassword: Try[Option[String]],
+                               triedEncDstFileNames: Try[Boolean]): Try[SyncConfig] = {
     def collectErrorMessages(components: Try[_]*): Iterable[String] =
       components.foldLeft(List.empty[String]) { (lst, c) =>
         c match {
@@ -524,10 +584,12 @@ object ParameterManager {
       }
 
     val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout, triedLogFile,
-      triedSyncLog, triedTimeDelta)
+      triedSyncLog, triedTimeDelta, triedSrcPassword, triedEncSrcFileNames, triedDstPassword,
+      triedEncDstFileNames)
     if (messages.isEmpty)
       Success(SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
-        mapPath(triedLogFile.get), mapPath(triedSyncLog.get), triedTimeDelta.get))
+        mapPath(triedLogFile.get), mapPath(triedSyncLog.get), triedTimeDelta.get,
+        triedSrcPassword.get, triedEncSrcFileNames.get, triedDstPassword.get, triedEncDstFileNames.get))
     else Failure(new IllegalArgumentException(messages.mkString(", ")))
   }
 
@@ -580,4 +642,26 @@ object ParameterManager {
     */
   private def mapPath(optPathStr: Option[String]): Option[Path] =
     optPathStr map (s => Paths get s)
+
+  /**
+    * Conversion function to convert a string to a boolean. The case does not
+    * matter, but the string must either be "true" or "false".
+    *
+    * @param s   the string to be converted
+    * @param key the option key (to generate the error message)
+    * @return a ''Try'' with the conversion result
+    */
+  private def toBoolean(s: String, key: String): Try[Boolean] = toLower(s) match {
+    case "true" => Success(true)
+    case "false" => Success(false)
+    case _ => Failure(new IllegalArgumentException(s"$key: Not a valid boolean value '$s'."))
+  }
+
+  /**
+    * Converts a string to lower case.
+    *
+    * @param s the string
+    * @return the string in lower case
+    */
+  private def toLower(s: String): String = s.toLowerCase(Locale.ROOT)
 }

@@ -396,6 +396,39 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
       "Invalid threshold for file time deltas: '" + InvalidValue)
   }
 
+  it should "return correct default options related to encryption" in {
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+
+    config.srcPassword should be(None)
+    config.srcFileNamesEncrypted shouldBe false
+    config.dstPassword should be(None)
+    config.dstFileNamesEncrypted shouldBe false
+  }
+
+  it should "handle options related to encryption" in {
+    val SrcPwd = "secretSource!"
+    val DstPwd = "!secretDest"
+    val argsMap = ArgsMap + (ParameterManager.SourcePasswordOption -> List(SrcPwd)) +
+      (ParameterManager.DestPasswordOption -> List(DstPwd)) +
+      (ParameterManager.EncryptSourceFileNamesOption -> List("true")) +
+      (ParameterManager.EncryptDestFileNamesOption -> List("FaLSE"))
+
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    config.srcPassword should be(Some(SrcPwd))
+    config.dstPassword should be(Some(DstPwd))
+    config.srcFileNamesEncrypted shouldBe true
+    config.dstFileNamesEncrypted shouldBe false
+  }
+
+  it should "handle invalid boolean values for encryption-related flags" in {
+    val argsMap = ArgsMap + (ParameterManager.EncryptSourceFileNamesOption -> List("of course")) +
+      (ParameterManager.EncryptDestFileNamesOption -> List("be it"))
+
+    val msg = expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      ParameterManager.EncryptSourceFileNamesOption)
+    msg should include(ParameterManager.EncryptDestFileNamesOption)
+  }
+
   it should "remove all options contained in the sync config" in {
     val otherOptions = Map("foo" -> List("v1"), "bar" -> List("v2", "v3"))
     val argsMap = ArgsMap ++ otherOptions +
