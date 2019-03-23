@@ -89,6 +89,19 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
   }
 
   /**
+    * Reads the content of a binary file that is located in the given directory
+    * and returns it as byte array.
+    *
+    * @param dir  the directory
+    * @param name the name of the file
+    * @return the content of this file as byte array
+    */
+  private def readBinaryFileInPath(dir: Path, name: String): Array[Byte] = {
+    val file = dir.resolve(name)
+    Files.readAllBytes(file)
+  }
+
+  /**
     * Checks whether a file with the given name exists in the directory
     * provided. The content of the file is checked as well.
     *
@@ -481,5 +494,38 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
 
     futureResult(Sync.syncProcess(options))
     shutdownCount.get() should be(1)
+  }
+
+  it should "support encryption of files in a destination structure" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val TestFileName = "TestFileToBeEncrypted.txt"
+    createTestFile(srcFolder, TestFileName)
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--dst-encrypt-password", "!encryptDest!")
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.totalOperations should be(result.successfulOperations)
+    readBinaryFileInPath(srcFolder, TestFileName) should not be readBinaryFileInPath(dstFolder, TestFileName)
+  }
+
+  it should "support a round-trip with encryption and decryption of files" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder1 = Files.createDirectory(createPathInDirectory("destEnc"))
+    val dstFolder2 = Files.createDirectory(createPathInDirectory("destPlain"))
+    val TestFileName = "TestFileToBeEncryptedAndDecrypted.txt"
+    val Password = "privacy"
+    createTestFile(srcFolder, TestFileName)
+    val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
+      "--dst-encrypt-password", Password)
+    futureResult(Sync.syncProcess(options1))
+
+    val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
+      "--src-encrypt-password", Password)
+    val result = futureResult(Sync.syncProcess(options2))
+    result.totalOperations should be(result.successfulOperations)
+    readFileInPath(srcFolder, TestFileName) should be(readFileInPath(dstFolder2, TestFileName))
   }
 }

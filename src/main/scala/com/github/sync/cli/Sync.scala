@@ -24,11 +24,11 @@ import akka.http.scaladsl.Http
 import akka.stream._
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
-import com.github.sync.SyncStreamFactory
+import com.github.sync.{SourceFileProvider, SyncStreamFactory}
 import com.github.sync.SyncTypes.{DestinationStructureType, SourceStructureType, SyncOperation}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
-import com.github.sync.impl.SyncStreamFactoryImpl
+import com.github.sync.impl.{CryptAwareSourceFileProvider, SyncStreamFactoryImpl}
 import com.github.sync.log.SerializerStreamHelper
 
 import scala.concurrent.duration._
@@ -174,6 +174,7 @@ object Sync {
     * @param additionalArgs the map with additional arguments
     * @param ec             the execution context
     * @param system         the actor system
+    * @param mat            the object to materialize streams
     * @param factory        the factory for the sync stream
     * @return a future with the flow to apply sync operations
     */
@@ -185,7 +186,7 @@ object Sync {
     config.applyMode match {
       case ParameterManager.ApplyModeTarget(targetUri) =>
         for {
-          provider <- factory.createSourceFileProvider(config.syncUris._1).apply(additionalArgs)
+          provider <- createSourceFileProvider(config, additionalArgs)
           stage <- factory.createApplyStage(targetUri, provider).apply(additionalArgs)
         } yield stage
 
@@ -193,6 +194,28 @@ object Sync {
         Future.successful(Flow[SyncOperation].map(identity))
     }
   }
+
+  /**
+    * Creates the source file provider. A bsic provider can be obtained from
+    * the factory. Then support for encryption might need to be added if an
+    * encryption password has been provided.
+    *
+    * @param config         the sync configuration
+    * @param additionalArgs the map with additional arguments
+    * @param ec             the execution context
+    * @param system         the actor system
+    * @param mat            the object to materialize streams
+    * @param factory        the factory for the sync stream
+    * @return
+    */
+  private def createSourceFileProvider(config: SyncConfig, additionalArgs: Map[String, String])
+                                      (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
+                                       factory: SyncStreamFactory): Future[SourceFileProvider] =
+    factory.createSourceFileProvider(config.syncUris._1).apply(additionalArgs) map { provider =>
+      if (config.srcPassword.nonEmpty || config.dstPassword.nonEmpty)
+        new CryptAwareSourceFileProvider(provider, config.srcPassword, config.dstPassword)
+      else provider
+    }
 
   /**
     * Generates a predicate that filters out undesired sync operations based on
