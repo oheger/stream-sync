@@ -22,6 +22,7 @@ import java.security.{Key, SecureRandom}
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
 import akka.util.ByteString
+import com.github.sync.crypt.CryptStage.IvLength
 import javax.crypto.Cipher
 import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
 
@@ -41,14 +42,55 @@ object CryptStage {
   val AlgorithmName = "AES"
 
   /**
+    * Generates a key from the given byte array. This method expects that the
+    * passed in array has at least the length required by a valid key
+    * (additional bytes are ignored).
+    *
+    * @param keyData the array with the data of the key
+    * @return the resulting key
+    */
+  def keyFromArray(keyData: Array[Byte]): Key =
+    new SecretKeySpec(keyData, 0, KeyLength, AlgorithmName)
+
+  /**
+    * Generates a key from the given string. If necessary, the string is
+    * padded or truncated to come to the correct key length in bytes.
+    *
+    * @param strKey the string-based key
+    * @return the resulting key
+    */
+  def keyFromString(strKey: String): Key =
+    keyFromArray(generateKeyArray(strKey))
+
+  /**
+    * Convenience method to generate a ''CryptStage'' that can be used to
+    * encrypt data with the given key.
+    *
+    * @param key the key for encryption
+    * @return the stage to encrypt data
+    */
+  def encryptStage(key: Key): CryptStage =
+    new CryptStage(EncryptOpHandler, key)
+
+  /**
+    * Convenience method to generate a ''CryptStage'' that can be used to
+    * decrypt data with the given key.
+    *
+    * @param key the key for decryption
+    * @return the state to decrypt data
+    */
+  def decyptStage(key: Key): CryptStage =
+    new CryptStage(DecryptOpHandler, key)
+
+  /**
     * Transforms the given string key to a byte array which can be used for the
     * creation of a secret key spec. This function takes care that the
     * resulting array has the correct length.
     *
-    * @param strKey the string based key
+    * @param strKey the string-based key
     * @return an array with key data as base for a secret key spec
     */
-  def generateKeyArray(strKey: String): Array[Byte] = {
+  private def generateKeyArray(strKey: String): Array[Byte] = {
     val keyData = strKey.getBytes(StandardCharsets.UTF_8)
     if (keyData.length < KeyLength) {
       val paddedData = new Array[Byte](KeyLength)
@@ -85,9 +127,10 @@ object CryptStage {
   * which data is processed chunk-wise. The phases are represented by
   * transformation functions that need to be provided by concrete sub classes.
   *
-  * @param keyData the key to be used for the operation as byte array
+  * @param cryptOpHandler the operation handler
+  * @param key            the key to be used for the operation
   */
-abstract class CryptStage(private val keyData: Array[Byte]) extends GraphStage[FlowShape[ByteString, ByteString]] {
+class CryptStage(val cryptOpHandler: CryptOpHandler, key: Key) extends GraphStage[FlowShape[ByteString, ByteString]] {
 
   import CryptStage._
 
@@ -101,16 +144,6 @@ abstract class CryptStage(private val keyData: Array[Byte]) extends GraphStage[F
   val out: Outlet[ByteString] = Outlet[ByteString]("CryptStage.out")
 
   override val shape: FlowShape[ByteString, ByteString] = FlowShape.of(in, out)
-
-  /**
-    * Creates a new instance of ''CryptStage'' with a string based key. This is
-    * a convenience constructor; the string is transformed into an array with
-    * the correct key length.
-    *
-    * @param key the key as string
-    * @return the new instance
-    */
-  def this(key: String) = this(CryptStage.generateKeyArray(key))
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) {
@@ -166,24 +199,11 @@ abstract class CryptStage(private val keyData: Array[Byte]) extends GraphStage[F
         */
       private def initProcessing(data: ByteString, cipher: Cipher): ByteString = {
         dataProcessed = true
-        val secKey = new SecretKeySpec(keyData, 0, KeyLength, AlgorithmName)
-        val result = initCipher(secKey, cryptCipher, data, random)
+        val result = cryptOpHandler.initCipher(key, cryptCipher, data, random)
         processingFunc = cryptFunc
         result
       }
     }
-
-  /**
-    * Initializes the given cipher for the specific operation to be performed.
-    * This method when first data arrives and processing has to be setup.
-    *
-    * @param encKey    the key to encrypt / decrypt
-    * @param cipher    the cipher to be initialized
-    * @param chunk     the first chunk of data
-    * @param secRandom the secure random object to init the cipher
-    * @return the next chunk to be passed downstream
-    */
-  protected def initCipher(encKey: Key, cipher: Cipher, chunk: ByteString, secRandom: SecureRandom): ByteString
 
   /**
     * Returns the function executing encryption / decryption logic. This
@@ -199,27 +219,16 @@ abstract class CryptStage(private val keyData: Array[Byte]) extends GraphStage[F
 }
 
 /**
-  * A graph stage implementation that can encrypt a stream of data on the fly
-  * using AES.
-  *
-  * The stage is provided the key to use for encrypting. Based on the data
-  * flowing through the stream, a corresponding cipher text is generated that
-  * can be decrypted again using a matching [[DecryptStage]].
-  *
-  * @param key the key to be used for encryption
+  * A concrete ''CryptOpHandler'' implementation for encrypting data.
   */
-class EncryptStage(key: String) extends CryptStage(key) {
-
-  import CryptStage._
-
+object EncryptOpHandler extends CryptOpHandler {
   /**
     * @inheritdoc This implementation initializes the cipher for encryption.
     *             It creates a random initialization vector for this purpose.
     *             This IV is passed downstream as part of the initial chunk
     *             of data.
     */
-  override protected def initCipher(encKey: Key, cipher: Cipher, chunk: ByteString, secRandom: SecureRandom):
-  ByteString = {
+  override def initCipher(encKey: Key, cipher: Cipher, chunk: ByteString, secRandom: SecureRandom): ByteString = {
     val ivBytes = new Array[Byte](IvLength)
     secRandom.nextBytes(ivBytes)
     val iv = new IvParameterSpec(ivBytes)
@@ -228,21 +237,19 @@ class EncryptStage(key: String) extends CryptStage(key) {
     val encData = cipher.update(chunk.toArray)
     ByteString(ivBytes) ++ ByteString(encData)
   }
+
+  /**
+    * @inheritdoc During encryption the file size is increased because the
+    *             initialization vector is added. This is taken into account by
+    *             this implementation.
+    */
+  override def processedSize(orgSize: Long): Long = orgSize + IvLength
 }
 
 /**
-  * A graph stage implementation that can decrypt a stream of data on the fly
-  * using AES.
-  *
-  * This class can work together with [[EncryptStage]] to encrypt and decrypt
-  * streams of binary data.
-  *
-  * @param key the key to be used for decryption
+  * A concrete ''CryptOpHandler'' implementation for decrypting data.
   */
-class DecryptStage(key: String) extends CryptStage(key) {
-
-  import CryptStage._
-
+object DecryptOpHandler extends CryptOpHandler {
   /**
     * @inheritdoc This implementation expects that the initialization vector is
     *             at the beginning of the passed in data chunk. Based on this
@@ -250,8 +257,7 @@ class DecryptStage(key: String) extends CryptStage(key) {
     *             block decoded. If the IV cannot be extracted, an
     *             ''IllegalStateException'' exception is thrown.
     */
-  override protected def initCipher(encKey: Key, cipher: Cipher, chunk: ByteString, secRandom: SecureRandom):
-  ByteString = {
+  override def initCipher(encKey: Key, cipher: Cipher, chunk: ByteString, secRandom: SecureRandom): ByteString = {
     val data = chunk.toArray
     if (data.length < IvLength)
       throw new IllegalStateException("Illegal initial chunk! The chunk must at least contain the IV.")
@@ -260,4 +266,11 @@ class DecryptStage(key: String) extends CryptStage(key) {
 
     ByteString(cipher.update(data, IvLength, data.length - IvLength))
   }
+
+  /**
+    * @inheritdoc During decryption the file size is reduced by the
+    *             initialization vector length. This is taken into account by
+    *             this implementation.
+    */
+  override def processedSize(orgSize: Long): Long = orgSize - IvLength
 }

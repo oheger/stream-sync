@@ -92,7 +92,7 @@ class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with F
     * @return the resulting encrypted chunks
     */
   private def encrypt(message: String, key: String = Key): List[ByteString] =
-    runCryptStream(splitPlainText(message), new EncryptStage(key))
+    runCryptStream(splitPlainText(message), CryptStage.encryptStage(CryptStage.keyFromString(key)))
 
   /**
     * Runs a stream that decrypts the given data chunks and returns the result
@@ -103,7 +103,7 @@ class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with F
     * @return the resulting decrypted text
     */
   private def decrypt(cipherText: List[ByteString], key: String = Key): String =
-    combine(runCryptStream(cipherText, new DecryptStage(key)))
+    combine(runCryptStream(cipherText, CryptStage.decyptStage(CryptStage.keyFromString(key))))
 
   /**
     * Checks an encryption followed by a decryption. This should result in the
@@ -123,7 +123,7 @@ class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with F
   }
 
   it should "handle an empty source to encrypt" in {
-    val stage = new EncryptStage(Key)
+    val stage = CryptStage.encryptStage(CryptStage.keyFromString(Key))
 
     runCryptStream(Nil, stage) should have size 0
   }
@@ -165,5 +165,13 @@ class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with F
     intercept[IllegalStateException] {
       decrypt(blocks)
     }
+  }
+
+  "An EncryptOpHandler" should "calculate a correct file size" in {
+    EncryptOpHandler.processedSize(128) should be(144)
+  }
+
+  "A DecryptOpHandler" should "calculate a correct file size" in {
+    DecryptOpHandler.processedSize(128) should be(112)
   }
 }

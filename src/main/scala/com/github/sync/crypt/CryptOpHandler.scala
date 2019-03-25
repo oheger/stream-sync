@@ -51,5 +51,5 @@ trait CryptOpHandler {
     * @param orgSize the original file size
     * @return the size after processing by this handler
     */
-  def processedSize(orgSize: Int): Int
+  def processedSize(orgSize: Long): Long
 }

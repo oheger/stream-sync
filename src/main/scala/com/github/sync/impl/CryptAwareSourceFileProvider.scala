@@ -18,7 +18,7 @@ package com.github.sync.impl
 
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import com.github.sync.crypt.{DecryptStage, EncryptStage}
+import com.github.sync.crypt.CryptStage
 import com.github.sync.{SourceFileProvider, SyncTypes}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -48,8 +48,8 @@ class CryptAwareSourceFileProvider(wrappedProvider: SourceFileProvider, optSrcPa
     */
   override def fileSource(file: SyncTypes.FsFile): Future[Source[ByteString, Any]] =
     wrappedProvider.fileSource(file)
-      .map(src => optSrcPassword.map(pwd => src.via(new DecryptStage(pwd))).getOrElse(src))
-      .map(src => optDstPassword.map(pwd => src.via(new EncryptStage(pwd))).getOrElse(src))
+      .map(src => optSrcPassword.map(pwd => src.via(CryptStage.decyptStage(CryptStage.keyFromString(pwd)))).getOrElse(src))
+      .map(src => optDstPassword.map(pwd => src.via(CryptStage.encryptStage(CryptStage.keyFromString(pwd)))).getOrElse(src))
 
   /**
     * @inheritdoc This implementation delegates to the wrapped provider.
