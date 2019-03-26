@@ -50,4 +50,16 @@ trait SourceFileProvider {
     * needed. Here clean-up logic can be implemented.
     */
   def shutdown(): Unit = {}
+
+  /**
+    * Returns the size of a file based on its original size. Because of some
+    * processing operations that happen during file upload or download (such as
+    * encryption or archiving) the file size may change. This method can be
+    * used to determine the number of bytes that are transferred via a source
+    * returned by this instance.
+    *
+    * @param orgSize the original file size
+    * @return the size of the source returned by this object
+    */
+  def fileSize(orgSize: Long): Long = orgSize
 }

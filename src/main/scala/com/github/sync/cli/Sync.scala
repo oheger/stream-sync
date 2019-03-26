@@ -213,7 +213,7 @@ object Sync {
                                        factory: SyncStreamFactory): Future[SourceFileProvider] =
     factory.createSourceFileProvider(config.syncUris._1).apply(additionalArgs) map { provider =>
       if (config.srcPassword.nonEmpty || config.dstPassword.nonEmpty)
-        new CryptAwareSourceFileProvider(provider, config.srcPassword, config.dstPassword)
+        CryptAwareSourceFileProvider(provider, config.srcPassword, config.dstPassword)
       else provider
     }
 
