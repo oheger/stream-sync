@@ -117,6 +117,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     val fileProvider = mock[SourceFileProvider]
     Mockito.when(fileProvider.fileSource(file))
       .thenReturn(Future.successful(Source.single(ByteString(fileContent))))
+    Mockito.when(fileProvider.fileSize(file.size)).thenReturn(file.size)
     fileProvider
   }
 
@@ -225,6 +226,21 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
 
   it should "handle a file override action" in {
     checkUploadFile(ActionOverride)
+  }
+
+  it should "generate the content length header from the file source provider" in {
+    val FileTime = Instant.parse("2018-10-14T15:02:50.00Z")
+    val fileContent = FileTestHelper.testBytes()
+    val file = createFile(createFolder("/upload"), "/upload.txt", FileTime,
+      Some(fileContent.length))
+    val fileProvider = createFileProvider(file, fileContent)
+    // setting a wrong content length will cause the request to fail
+    Mockito.when(fileProvider.fileSize(file.size)).thenReturn(42)
+    val operations = List(SyncOperation(file, ActionCreate, 2))
+    stubFor(put(elemUri(file))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
+
+    runSync(operations, fileProvider) should have size 0
   }
 
   it should "handle a file override action if deleteBeforeOverride is set" in {
