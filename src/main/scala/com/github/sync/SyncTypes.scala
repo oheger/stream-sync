@@ -312,4 +312,22 @@ object SyncTypes {
     * the end of processing.
     */
   type CompletionFunc[S] = S => Unit
+
+  /**
+    * Type definition of a function that allows adapting the result of an
+    * iteration function.
+    *
+    * This function is used to integrate orthogonal functionality into the
+    * generic mechanism that iterates over folder structures. One example of
+    * such functionality is encryption: the elements produced by a source need
+    * to be transformed when the structure iterated over is encrypted.
+    *
+    * If an element source is configured with such an adapt function, it
+    * invokes it on each result object it produces; only the processed result
+    * is then passed downstream. Note that a concrete function is expected to
+    * manipulate existing result elements, but not to filter out existing ones
+    * or generate new ones. As the transformation may be complex, it can be
+    * done in background; hence the function returns a future.
+    */
+  type TransformResultFunc[F <: SyncFolderData] = IterateResult[F] => Future[IterateResult[F]]
 }

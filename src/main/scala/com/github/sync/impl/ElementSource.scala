@@ -18,14 +18,11 @@ package com.github.sync.impl
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import akka.stream.{Attributes, Outlet, SourceShape}
-import com.github.sync.SyncTypes.{CompletionFunc, FsElement, FutureResultFunc, IterateFunc, IterateResult, NextFolderFunc, SyncFolderData}
+import com.github.sync.SyncTypes.{CompletionFunc, FsElement, FutureResultFunc, IterateFunc, IterateResult, NextFolderFunc, SyncFolderData, TransformResultFunc}
 import com.github.sync.util.SyncFolderQueue
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
-
-object ElementSource {
-}
 
 /**
   * A generic source implementation for iterating over a folder structure.
@@ -47,16 +44,18 @@ object ElementSource {
   * by their URI, which is needed for the sync process. So the iterate function
   * does not have to care about the order of the elements it generates.
   *
-  * @param initState       the initial state of the iteration
-  * @param initFolder      the initial folder to be processed
-  * @param optCompleteFunc option for the function to be called at completion
-  * @param iterateFunc     the iteration function
-  * @param ec              the execution context
+  * @param initState        the initial state of the iteration
+  * @param initFolder       the initial folder to be processed
+  * @param optCompleteFunc  option for the function to be called at completion
+  * @param optTransformFunc option for the function to transform results
+  * @param iterateFunc      the iteration function
+  * @param ec               the execution context
   * @tparam F the type of the data used for folders
   * @tparam S the type of the iteration state
   */
 class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
-                                            optCompleteFunc: Option[CompletionFunc[S]] = None)
+                                            optCompleteFunc: Option[CompletionFunc[S]] = None,
+                                            optTransformFunc: Option[TransformResultFunc[F]] = None)
                                            (iterateFunc: IterateFunc[F, S])
                                            (implicit ec: ExecutionContext)
   extends GraphStage[SourceShape[FsElement]] {
@@ -128,7 +127,7 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
         * @param optResult an option with the result
         */
       private def handleDirectResult(nextState: S, optResult: Option[IterateResult[F]]): Unit = {
-        optResult foreach (result => handleResult(Success((nextState, result))))
+        optResult foreach (result => handleResult(optTransformFunc)(Success((nextState, result))))
       }
 
       /**
@@ -142,7 +141,7 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
       private def handleFutureResult(nextState: S, optFutureFunc: Option[FutureResultFunc[F, S]]): Unit = {
         optFutureFunc foreach { resultFunc =>
           currentState = nextState
-          val callback = getAsyncCallback[Try[(S, IterateResult[F])]](handleResult)
+          val callback = getAsyncCallback[Try[(S, IterateResult[F])]](handleResult(optTransformFunc))
           resultFunc() onComplete callback.invoke
         }
       }
@@ -152,18 +151,25 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
         * or via the future function). Received elements are processed and
         * passed downstream. In case of an error, this stage fails.
         *
-        * @param triedResult a ''Try'' with the result from the iterate func
+        * @param optTransFunc an option with the transformation function
+        * @param triedResult  a ''Try'' with the result from the iterate func
         */
-      private def handleResult(triedResult: Try[(S, IterateResult[F])]): Unit = {
+      private def handleResult(optTransFunc: Option[TransformResultFunc[F]])
+                              (triedResult: Try[(S, IterateResult[F])]): Unit = {
         triedResult match {
           case Success((state, result)) if result.nonEmpty =>
             log.debug("Folder {} has {} files and {} sub folders.", result.currentFolder.relativeUri,
               result.files.size, result.folders.size)
-            currentState = state
-            pendingFolders = pendingFolders ++ result.folders
-            val folderElems = result.folders map (_.folder)
-            val orderedElements = (result.files ++ folderElems).sortWith(_.relativeUri < _.relativeUri)
-            emitMultiple(out, orderedElements)
+            optTransFunc match {
+              case Some(f) =>
+                applyTransformation(state, result)(f)
+              case None =>
+                currentState = state
+                pendingFolders = pendingFolders ++ result.folders
+                val folderElems = result.folders map (_.folder)
+                val orderedElements = (result.files ++ folderElems).sortWith(_.relativeUri < _.relativeUri)
+                emitMultiple(out, orderedElements)
+            }
 
           case Success((state, result)) =>
             log.debug("Folder {} is empty.", result.currentFolder.relativeUri)
@@ -174,6 +180,19 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
             log.error(exception, "Exception during iteration.")
             handleFailure(exception)
         }
+      }
+
+      /**
+        * Invokes the given transformation function on the result and processes
+        * the result.
+        *
+        * @param state  the current state
+        * @param result the result to be transformed
+        * @param f      the transformation function
+        */
+      private def applyTransformation(state: S, result: IterateResult[F])(f: TransformResultFunc[F]): Unit = {
+        val callback = getAsyncCallback[Try[(S, IterateResult[F])]](handleResult(None))
+        f(result).map((state, _)) onComplete callback.invoke
       }
 
       /**

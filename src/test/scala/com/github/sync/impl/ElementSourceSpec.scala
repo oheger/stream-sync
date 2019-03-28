@@ -25,7 +25,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateFuncResult, IterateResult, NextFolderFunc, SyncFolderData}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateFuncResult, IterateResult, NextFolderFunc, SyncFolderData, TransformResultFunc}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.Future
@@ -274,12 +274,59 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
   }
 
   /**
+    * Helper function to check whether a result function is applied. The
+    * function can be used together with direct or future results. A function
+    * has to be provided which generates the results.
+    *
+    * @param resultFunc the function to generate results
+    */
+  private def checkTransformationFunction(resultFunc: List[FsFile] =>
+    IterateFuncResult[SyncFolderDataImpl, Int]): Unit = {
+    def transformFile(file: FsFile): FsFile =
+      file.copy(relativeUri = file.relativeUri + ".processed")
+
+    val transFunc: TransformResultFunc[SyncFolderDataImpl] = result =>
+      Future.successful(result.copy(files = result.files map transformFile))
+    val files = List(createFile("/test1.txt", 2), createFile("/test2.dat", 2),
+      createFile("/theLastTest.doc", 2))
+    val results = List(resultFunc(files))
+    val expectedFiles = files map transformFile
+    val helper = new SourceTestHelper(results, optTransformFunc = Some(transFunc))
+
+    helper.runSource() should contain theSameElementsAs expectedFiles
+  }
+
+  it should "invoke a transformation function if present" in {
+    checkTransformationFunction { files =>
+      (2, Some(IterateResult(RootFolder.folder, files, List.empty[SyncFolderDataImpl])), None)
+    }
+  }
+
+  it should "invoke a transformation function on future results if present" in {
+    checkTransformationFunction { files =>
+      val result = IterateResult(RootFolder.folder, files, List.empty[SyncFolderDataImpl])
+      (2, None, Some(createFutureResultFunc(result, 3)))
+    }
+  }
+
+  it should "handle a failed future returned by the transformation function" in {
+    val exception = new IllegalStateException("Crashed transformation")
+    val transFunc: TransformResultFunc[SyncFolderDataImpl] = _ => Future.failed(exception)
+    val helper = new SourceTestHelper(List(createSimpleResult(createFile("/foo", 2))),
+      optTransformFunc = Some(transFunc))
+
+    expectFailedFuture[IllegalStateException](helper.executeStream()) should be(exception)
+  }
+
+  /**
     * A test helper class managing the environment for testing an element
     * source.
     *
-    * @param readResults the results to be returned from an iteration function
+    * @param readResults      the results to be returned from an iteration function
+    * @param optTransformFunc an option with a transformation function
     */
-  private class SourceTestHelper(readResults: List[IterateFuncResult[SyncFolderDataImpl, Int]]) {
+  private class SourceTestHelper(readResults: List[IterateFuncResult[SyncFolderDataImpl, Int]],
+                                 optTransformFunc: Option[TransformResultFunc[SyncFolderDataImpl]] = None) {
 
     import system.dispatcher
 
@@ -307,7 +354,7 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
       */
     def executeStream(): Future[List[FsElement]] = {
       implicit val mat: ActorMaterializer = ActorMaterializer()
-      val source = new ElementSource(InitState, RootFolder, Some(completionFunc _))(iterateFunc)
+      val source = new ElementSource(InitState, RootFolder, Some(completionFunc _), optTransformFunc)(iterateFunc)
       val sink = Sink.fold[List[FsElement], FsElement](Nil)((lst, e) => e :: lst)
       Source.fromGraph(source).runWith(sink)
     }
