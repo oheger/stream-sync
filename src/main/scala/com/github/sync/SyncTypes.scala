@@ -18,6 +18,9 @@ package com.github.sync
 
 import java.time.Instant
 
+import akka.NotUsed
+import akka.stream.{Graph, SourceShape}
+
 import scala.concurrent.Future
 
 /**
@@ -330,4 +333,29 @@ object SyncTypes {
     * done in background; hence the function returns a future.
     */
   type TransformResultFunc[F <: SyncFolderData] = IterateResult[F] => Future[IterateResult[F]]
+
+  /**
+    * Trait describing a factory for an element source.
+    *
+    * An implementation of this trait is passed to places that need a source to
+    * iterate over folder structures.
+    */
+  trait ElementSourceFactory {
+    /**
+      * Creates a source to iterate over a folder structure.
+      *
+      * @param initState         the initial iteration state
+      * @param initFolder        the initial folder
+      * @param optCompletionFunc an optional function to be called at the end
+      * @param iterateFunc       the iteration function
+      * @tparam F the folder type
+      * @tparam S the type of the state
+      * @return the newly created source
+      */
+    def createElementSource[F <: SyncFolderData, S](initState: S, initFolder: F,
+                                                    optCompletionFunc: Option[CompletionFunc[S]] = None)
+                                                   (iterateFunc: IterateFunc[F, S]):
+    Graph[SourceShape[FsElement], NotUsed]
+  }
+
 }

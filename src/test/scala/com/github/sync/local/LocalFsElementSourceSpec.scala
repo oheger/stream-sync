@@ -22,12 +22,14 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 
+import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Keep, Sink, Source}
-import akka.stream.{ActorMaterializer, DelayOverflowStrategy, KillSwitches}
+import akka.stream._
 import akka.testkit.TestKit
-import com.github.sync.FileTestHelper
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
+import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, IterateFunc}
+import com.github.sync.impl.ElementSource
+import com.github.sync.{FileTestHelper, SyncTypes}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.annotation.tailrec
@@ -210,9 +212,21 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   import system.dispatcher
 
+  /**
+    * Returns the factory to create a source.
+    *
+    * @return the source factory
+    */
+  private def sourceFactory: ElementSourceFactory = new ElementSourceFactory {
+    override def createElementSource[F <: SyncTypes.SyncFolderData, S](initState: S, initFolder: F,
+                                                                       optCompletionFunc: Option[CompletionFunc[S]])
+                                                                      (iterateFunc: IterateFunc[F, S]):
+    Graph[SourceShape[FsElement], NotUsed] = new ElementSource(initState, initFolder, optCompletionFunc)(iterateFunc)
+  }
+
   "A DirectoryStreamSource" should "return all elements in the scanned folder structure" in {
     val fileData = setUpDirectoryStructure()
-    val source = LocalFsElementSource(sourceConfig())
+    val source = LocalFsElementSource(sourceConfig())(sourceFactory)
     val files = runSource(source)
 
     files should contain theSameElementsAs fileData.keys
@@ -221,7 +235,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "close all directory streams it creates" in {
     setUpDirectoryStructure()
     val (queue, factory) = createStreamWrapperFactory()
-    val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)
+    val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)(sourceFactory)
 
     runSource(source)
     queue.isEmpty shouldBe false
@@ -234,7 +248,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val root = FsFolder("", 0)
     (1 to Count).foreach(i => createFile(root, s"test$i.txt"))
     val (queue, factory) = createStreamWrapperFactory()
-    val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)
+    val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)(sourceFactory)
     val srcDelay = source.delay(1.second, DelayOverflowStrategy.backpressure)
     val (killSwitch, futSrc) = srcDelay
       .viaMat(KillSwitches.single)(Keep.right)
@@ -252,7 +266,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "ignore exceptions when closing directory streams" in {
     setUpDirectoryStructure()
     val (queue, factory) = createStreamWrapperFactory(failOnClose = true)
-    val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)
+    val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)(sourceFactory)
 
     runSource(source)
     queue.isEmpty shouldBe false
@@ -267,7 +281,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     def level(p: Path): Int = calcLevel(p, 0)
 
     val fileData = setUpDirectoryStructure()
-    val source = LocalFsElementSource(sourceConfig())
+    val source = LocalFsElementSource(sourceConfig())(sourceFactory)
     val elems = runSource(source)
     val pathLevels = elems map (d => level(fileData(d)))
     pathLevels.foldLeft(0)((last, cur) => {
@@ -279,7 +293,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "output the elements of a folder in series" in {
     val fileData = setUpDirectoryStructure()
     val folderCount = fileData.keys.count(_.isInstanceOf[FsFolder])
-    val source = LocalFsElementSource(sourceConfig())
+    val source = LocalFsElementSource(sourceConfig())(sourceFactory)
 
     val elems = runSource(source)
     val (_, dirChanges) = elems.foldLeft((testDirectory, 0)) { (s, e) =>
@@ -292,7 +306,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "handle a non existing root directory in BFS mode" in {
     val config = LocalFsConfig(createPathInDirectory("nonExisting"), None)
-    val source = LocalFsElementSource(config)
+    val source = LocalFsElementSource(config)(sourceFactory)
 
     intercept[NoSuchFileException] {
       runSource(source)
@@ -309,7 +323,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val (otherMedium, _) = createDir(FsFolder("", -1), "anotherDir")
     createFile(otherMedium, "data1.txt")
     createFile(otherMedium, "data2.txt")
-    val source = LocalFsElementSource(sourceConfig())
+    val source = LocalFsElementSource(sourceConfig())(sourceFactory)
 
     val files = runSource(source)
     val folderIteration = files.foldLeft(List.empty[String]) { (lst, e) =>

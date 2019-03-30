@@ -65,7 +65,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     case _ =>
       args =>
         LocalFsConfig(structureType, uri, args) map { config =>
-          LocalFsElementSource(config).via(new FolderSortStage)
+          LocalFsElementSource(config)(null).via(new FolderSortStage)
         }
   }
 

@@ -528,4 +528,23 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result.totalOperations should be(result.successfulOperations)
     readFileInPath(srcFolder, TestFileName) should be(readFileInPath(dstFolder2, TestFileName))
   }
+
+  it should "correctly calculate the sizes of encrypted files" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val TestFileName = "TestFileToBeEncrypted.txt"
+    createTestFile(srcFolder, TestFileName)
+    val Password = "let's_crypt"
+    val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--dst-encrypt-password", Password)
+    val options2 = Array(dstFolder.toAbsolutePath.toString, srcFolder.toAbsolutePath.toString,
+      "--src-encrypt-password", Password)
+    futureResult(Sync.syncProcess(options1))
+
+    val result1 = futureResult(Sync.syncProcess(options1))
+    result1.totalOperations should be(0)
+    val result2 = futureResult(Sync.syncProcess(options2))
+    result2.totalOperations should be(0)
+  }
 }

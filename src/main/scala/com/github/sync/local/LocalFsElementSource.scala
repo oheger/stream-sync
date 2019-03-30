@@ -21,8 +21,7 @@ import java.nio.file.{DirectoryStream, Files, Path}
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, IterateFunc, IterateResult, NextFolderFunc, SyncFolderData}
-import com.github.sync.impl.ElementSource
+import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, FsFile, FsFolder, IterateFunc, IterateResult, NextFolderFunc, SyncFolderData}
 import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec
@@ -48,15 +47,17 @@ object LocalFsElementSource {
     *
     * @param config        the configuration of the new source
     * @param streamFactory an optional stream factory
+    * @param sourceFactory a factory for creating an element source
+    * @param ec            the execution context
     * @return the new source
     */
   def apply(config: LocalFsConfig, streamFactory: StreamFactory = createDirectoryStream)
-           (implicit ec: ExecutionContext):
-  Source[FsElement, NotUsed] = {
+           (sourceFactory: ElementSourceFactory)
+           (implicit ec: ExecutionContext): Source[FsElement, NotUsed] = {
     val initState = BFSState(None, null)
     val initFolder = FolderData(config.rootPath, FsFolder("", -1))
-    Source.fromGraph(new ElementSource(initState, initFolder, optCompleteFunc = Some(iterationComplete _))
-    (iterateFunc(config, streamFactory)))
+    Source.fromGraph(sourceFactory.createElementSource(initState, initFolder,
+      Some(iterationComplete _))(iterateFunc(config, streamFactory)))
   }
 
   /**
@@ -68,7 +69,7 @@ object LocalFsElementSource {
     * @param iterator the iterator
     */
   private case class DirectoryStreamRef(stream: DirectoryStream[Path],
-                                        iterator: java.util.Iterator[Path]) {
+                                iterator: java.util.Iterator[Path]) {
     /**
       * Closes the underlying stream ignoring all exceptions.
       */
@@ -97,7 +98,7 @@ object LocalFsElementSource {
     * @param currentFolder    the current folder whose elements are iterated
     */
   private case class BFSState(optCurrentStream: Option[DirectoryStreamRef],
-                              currentFolder: FsFolder)
+                      currentFolder: FsFolder)
 
   /**
     * Definition of a function serving as stream factory. Such a function can
