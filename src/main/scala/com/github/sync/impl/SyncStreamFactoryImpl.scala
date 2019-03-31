@@ -22,7 +22,7 @@ import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.pattern.ask
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
-import akka.stream.{ActorMaterializer, ClosedShape, SourceShape}
+import akka.stream.{ActorMaterializer, ClosedShape, Graph, SourceShape}
 import akka.util.Timeout
 import com.github.sync.SyncTypes._
 import com.github.sync._
@@ -58,15 +58,18 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   override def createSyncInputSource(uri: String, structureType: StructureType)
                                     (implicit ec: ExecutionContext, system: ActorSystem,
                                      mat: ActorMaterializer):
-  ArgsFunc[Source[FsElement, Any]] = uri match {
-    case RegDavUri(davUri) =>
-      args =>
-        DavConfig(structureType, davUri, args) map (conf => DavFsElementSource(conf, null))
-    case _ =>
-      args =>
-        LocalFsConfig(structureType, uri, args) map { config =>
-          LocalFsElementSource(config)(null).via(new FolderSortStage)
-        }
+  ArgsFunc[Source[FsElement, Any]] = {
+    val factory = createElementSourceFactory()
+    uri match {
+      case RegDavUri(davUri) =>
+        args =>
+          DavConfig(structureType, davUri, args) map (conf => DavFsElementSource(conf, factory))
+      case _ =>
+        args =>
+          LocalFsConfig(structureType, uri, args) map { config =>
+            LocalFsElementSource(config)(factory).via(new FolderSortStage)
+          }
+    }
   }
 
   override def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext,
@@ -127,6 +130,22 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
           ClosedShape
     })
   }
+
+  /**
+    * Creates a factory for creating an element source. This factory is needed
+    * for creating the concrete sources of the sync process.
+    *
+    * @param ec the execution context
+    * @return the ''ElementSourceFactory''
+    */
+  private def createElementSourceFactory()(implicit ec: ExecutionContext): ElementSourceFactory =
+    new ElementSourceFactory {
+      override def createElementSource[F <: SyncFolderData, S](initState: S, initFolder: F,
+                                                               optCompletionFunc: Option[CompletionFunc[S]])
+                                                              (iterateFunc: IterateFunc[F, S]):
+      Graph[SourceShape[FsElement], NotUsed] =
+        new ElementSource[F, S](initState, initFolder, optCompleteFunc = optCompletionFunc)(iterateFunc)
+    }
 
   /**
     * Creates the apply stage to change a local file system.
