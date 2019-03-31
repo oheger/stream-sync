@@ -28,8 +28,7 @@ import akka.http.scaladsl.model.headers._
 import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
-import com.github.sync.SyncTypes.{CompletionFunc, FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateResult, SyncFolderData}
-import com.github.sync.impl.ElementSource
+import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateResult, SyncFolderData}
 import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec
@@ -55,6 +54,7 @@ import scala.xml._
   * must be stopped; otherwise, it can have unexpected results.
   */
 object DavFsElementSource {
+
   /**
     * Data class storing information about a folder that is to be fetched from
     * the WebDav server.
@@ -133,23 +133,26 @@ object DavFsElementSource {
     * Creates a ''Source'' based on this class using the specified
     * configuration.
     *
-    * @param config the configuration
-    * @param system the actor system
-    * @param mat    the object to materialize streams
+    * @param config        the configuration
+    * @param sourceFactory the factory for the element source
+    * @param system        the actor system
+    * @param mat           the object to materialize streams
     * @return the new source
     */
-  def apply(config: DavConfig)(implicit system: ActorSystem, mat: ActorMaterializer):
-  Source[FsElement, NotUsed] = Source.fromGraph(createSource(config))
+  def apply(config: DavConfig, sourceFactory: ElementSourceFactory)
+           (implicit system: ActorSystem, mat: ActorMaterializer):
+  Source[FsElement, NotUsed] = Source.fromGraph(createSource(config, sourceFactory))
 
   /**
     * Creates the source for iterating over a dav folder structure.
     *
-    * @param config the configuration
-    * @param system the actor system
-    * @param mat    the object to materialize streams
+    * @param config        the configuration
+    * @param sourceFactory the factory for the element source
+    * @param system        the actor system
+    * @param mat           the object to materialize streams
     * @return the new source
     */
-  def createSource(config: DavConfig)
+  def createSource(config: DavConfig, sourceFactory: ElementSourceFactory)
                   (implicit system: ActorSystem, mat: ActorMaterializer):
   Graph[SourceShape[FsElement], NotUsed] = {
     implicit val ec: ExecutionContext = system.dispatcher
@@ -157,7 +160,7 @@ object DavFsElementSource {
     val rootUriPrefix = removeTrailingSlash(config.rootUri.path.toString())
     val rootPrefixLen = UriEncodingHelper.decode(rootUriPrefix).length
     val state = DavIterationState(requestQueue, rootUriPrefix, rootPrefixLen, authHeader(config), config)
-    new ElementSource(state, FolderData(config.rootUri.toString(), FsFolder("", -1)),
+    sourceFactory.createElementSource(state, FolderData(config.rootUri.toString(), FsFolder("", -1)),
       Some(completionFunc))(iterateFunc)
   }
 

@@ -19,22 +19,24 @@ package com.github.sync.webdav
 import java.io.IOException
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
+import java.util.concurrent.atomic.AtomicReference
 
+import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.{HttpRequest, Uri}
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.{ActorMaterializer, Graph, SourceShape}
 import akka.testkit.TestKit
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
+import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, IterateFunc}
 import com.github.sync._
 import com.github.sync.impl.ElementSource
 import com.github.sync.util.UriEncodingHelper
-import com.github.sync.webdav.DavFsElementSource.{DavIterationState, FolderData}
+import com.github.sync.webdav.DavFsElementSource.DavIterationState
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.xml.sax.SAXException
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.xml.SAXParseException
 
 object DavFsElementSourceSpec {
@@ -171,8 +173,8 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
   FlatSpecLike with BeforeAndAfterAll with Matchers with AsyncTestHelper with WireMockSupport {
   def this() = this(ActorSystem("DavFsElementSourceSpec"))
 
-  import WireMockSupport._
   import DavFsElementSourceSpec._
+  import WireMockSupport._
 
   override protected def afterAll(): Unit = {
     TestKit shutdownActorSystem system
@@ -233,26 +235,27 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     * server.
     *
     * @param modifiedProperty the property for the modified time
+    * @param optFactory       an option with the factory to create the source
     * @return the test source
     */
-  private def createTestSource(modifiedProperty: String = DavConfig.DefaultModifiedProperty):
-  Source[FsElement, Any] =
-    Source.fromGraph(createTestSourceShape(modifiedProperty))
+  private def createTestSource(modifiedProperty: String = DavConfig.DefaultModifiedProperty,
+                               optFactory: Option[SourceFactoryImpl] = None):
+  Source[FsElement, Any] = {
+    implicit val mat: ActorMaterializer = ActorMaterializer()
+    DavFsElementSource(createDavConfig(modifiedProperty),
+      optFactory getOrElse new SourceFactoryImpl)
+  }
 
   /**
-    * Creates a ''DavFsElementSource'' instance with default settings to access
-    * the mock WebDav server.
+    * Creates a test DAV configuration.
     *
     * @param modifiedProperty the property for the modified time
-    * @return the test source shape
+    * @return the config
     */
-  private def createTestSourceShape(modifiedProperty: String): ElementSource[FolderData, DavIterationState] = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
-    val config = DavConfig(serverUri(RootPath), UserId, Password, modifiedProperty, None,
+  private def createDavConfig(modifiedProperty: String): DavConfig =
+    DavConfig(serverUri(RootPath), UserId, Password, modifiedProperty, None,
       deleteBeforeOverride = false,
       modifiedProperties = List(modifiedProperty, DavConfig.DefaultModifiedProperty))
-    DavFsElementSource.createSource(config).asInstanceOf[ElementSource[FolderData, DavIterationState]]
-  }
 
   "A DavFsElementSource" should "iterate over a WebDav structure" in {
     stubTestFolders("")
@@ -281,10 +284,12 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
   it should "shutdown the request queue when done" in {
     stubFolderRequest(RootPath, "folder3.xml")
     val testRequest = HttpRequest(uri = RootFolder.relativeUri)
-    val source = createTestSourceShape(DavConfig.DefaultModifiedProperty)
+    val factory = new SourceFactoryImpl
+    val source = createTestSource(optFactory = Some(factory))
     futureResult(runSource(Source.fromGraph(source)))
+    val state = factory.refSource.get().initState.asInstanceOf[DavIterationState]
 
-    expectFailedFuture[RuntimeException](source.initState.requestQueue.queueRequest(testRequest))
+    expectFailedFuture[RuntimeException](state.requestQueue.queueRequest(testRequest))
   }
 
   it should "evaluate the status code from a response" in {
@@ -302,4 +307,24 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
 
     expectFailedFuture[SAXException](runSource(createTestSource()))
   }
+
+  /**
+    * An implementation of the ElementSourceFactory trait to create test
+    * sources.
+    */
+  private class SourceFactoryImpl extends ElementSourceFactory {
+    /** Holds a reference to the latest source that was created. */
+    val refSource = new AtomicReference[ElementSource[_, _]]()
+
+    override def createElementSource[F <: SyncTypes.SyncFolderData, S](initState: S, initFolder: F,
+                                                                       optCompletionFunc: Option[CompletionFunc[S]])
+                                                                      (iterateFunc: IterateFunc[F, S]):
+    Graph[SourceShape[FsElement], NotUsed] = {
+      implicit val ec: ExecutionContext = system.dispatcher
+      val source = new ElementSource[F, S](initState, initFolder, optCompletionFunc)(iterateFunc)
+      refSource set source
+      source
+    }
+  }
+
 }

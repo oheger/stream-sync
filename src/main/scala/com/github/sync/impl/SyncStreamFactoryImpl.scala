@@ -61,7 +61,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   ArgsFunc[Source[FsElement, Any]] = uri match {
     case RegDavUri(davUri) =>
       args =>
-        DavConfig(structureType, davUri, args) map (conf => DavFsElementSource(conf))
+        DavConfig(structureType, davUri, args) map (conf => DavFsElementSource(conf, null))
     case _ =>
       args =>
         LocalFsConfig(structureType, uri, args) map { config =>
