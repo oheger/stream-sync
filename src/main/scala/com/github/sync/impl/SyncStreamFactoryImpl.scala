@@ -55,11 +55,12 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     Future.successful(args)
   }
 
-  override def createSyncInputSource(uri: String, structureType: StructureType)
+  override def createSyncInputSource(uri: String, optTransformer: Option[ResultTransformer],
+                                     structureType: StructureType)
                                     (implicit ec: ExecutionContext, system: ActorSystem,
                                      mat: ActorMaterializer):
   ArgsFunc[Source[FsElement, Any]] = {
-    val factory = createElementSourceFactory()
+    val factory = createElementSourceFactory(optTransformer)
     uri match {
       case RegDavUri(davUri) =>
         args =>
@@ -100,13 +101,14 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
         }
   }
 
-  override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs,
+  override def createSyncSource(uriSrc: String, optSrcTransformer: Option[ResultTransformer], uriDst: String,
+                                optDstTransformer: Option[ResultTransformer], additionalArgs: StructureArgs,
                                 ignoreTimeDelta: Int)
                                (implicit ec: ExecutionContext, system: ActorSystem,
                                 mat: ActorMaterializer):
   Future[Source[SyncOperation, NotUsed]] = for {
-    srcSource <- createSyncInputSource(uriSrc, SourceStructureType).apply(additionalArgs)
-    dstSource <- createSyncInputSource(uriDst, DestinationStructureType).apply(additionalArgs)
+    srcSource <- createSyncInputSource(uriSrc, optSrcTransformer, SourceStructureType).apply(additionalArgs)
+    dstSource <- createSyncInputSource(uriDst, optDstTransformer, DestinationStructureType).apply(additionalArgs)
   } yield createGraphForSyncSource(srcSource, dstSource, ignoreTimeDelta)
 
   override def createSyncStream(source: Source[SyncOperation, Any],
@@ -135,16 +137,19 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     * Creates a factory for creating an element source. This factory is needed
     * for creating the concrete sources of the sync process.
     *
-    * @param ec the execution context
+    * @param optTransformer an optional result transformer
+    * @param ec             the execution context
     * @return the ''ElementSourceFactory''
     */
-  private def createElementSourceFactory()(implicit ec: ExecutionContext): ElementSourceFactory =
+  private def createElementSourceFactory(optTransformer: Option[ResultTransformer])
+                                        (implicit ec: ExecutionContext): ElementSourceFactory =
     new ElementSourceFactory {
       override def createElementSource[F <: SyncFolderData, S](initState: S, initFolder: F,
                                                                optCompletionFunc: Option[CompletionFunc[S]])
                                                               (iterateFunc: IterateFunc[F, S]):
       Graph[SourceShape[FsElement], NotUsed] =
-        new ElementSource[F, S](initState, initFolder, optCompleteFunc = optCompletionFunc)(iterateFunc)
+        new ElementSource[F, S](initState, initFolder, optCompleteFunc = optCompletionFunc,
+          optTransformFunc = optTransformer)(iterateFunc)
     }
 
   /**

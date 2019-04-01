@@ -23,7 +23,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
 import akka.util.Timeout
-import com.github.sync.SyncTypes.{FsElement, StructureType, SupportedArgument, SyncOperation}
+import com.github.sync.SyncTypes.{FsElement, ResultTransformer, StructureType, SupportedArgument, SyncOperation}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -75,14 +75,15 @@ trait SyncStreamFactory {
     * arguments may be required, result is actually a function that expects
     * a map with arguments and returns a future with the source.
     *
-    * @param uri           the URI for the sync source in question
-    * @param structureType the type of the structure the source is for
-    * @param ec            the execution context
-    * @param system        the actor system
-    * @param mat           the object to materialize streams
+    * @param uri            the URI for the sync source in question
+    * @param optTransformer an optional transformer for the structure
+    * @param structureType  the type of the structure the source is for
+    * @param ec             the execution context
+    * @param system         the actor system
+    * @param mat            the object to materialize streams
     * @return a function to create the sync source
     */
-  def createSyncInputSource(uri: String, structureType: StructureType)
+  def createSyncInputSource(uri: String, optTransformer: Option[ResultTransformer], structureType: StructureType)
                            (implicit ec: ExecutionContext, system: ActorSystem,
                             mat: ActorMaterializer): ArgsFunc[Source[FsElement, Any]]
 
@@ -106,16 +107,19 @@ trait SyncStreamFactory {
     * folders of the given structures and calculates the operations to be
     * applied to synchronize them.
     *
-    * @param uriSrc          the URI to the source structure
-    * @param uriDst          the URI to the destination structure
-    * @param additionalArgs  a map with additional arguments for structures
-    * @param ignoreTimeDelta the time difference between two files to ignore
-    * @param ec              the execution context
-    * @param system          the actor system
-    * @param mat             the object to materialize streams
+    * @param uriSrc            the URI to the source structure
+    * @param optSrcTransformer an optional transformer to the source structure
+    * @param uriDst            the URI to the destination structure
+    * @param optDstTransformer an optional transformer for the dest structure
+    * @param additionalArgs    a map with additional arguments for structures
+    * @param ignoreTimeDelta   the time difference between two files to ignore
+    * @param ec                the execution context
+    * @param system            the actor system
+    * @param mat               the object to materialize streams
     * @return a future with the source
     */
-  def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs,
+  def createSyncSource(uriSrc: String, optSrcTransformer: Option[ResultTransformer], uriDst: String,
+                       optDstTransformer: Option[ResultTransformer], additionalArgs: StructureArgs,
                        ignoreTimeDelta: Int)
                       (implicit ec: ExecutionContext, system: ActorSystem,
                        mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]]

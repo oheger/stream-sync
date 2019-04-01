@@ -25,9 +25,10 @@ import akka.stream._
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.github.sync.{SourceFileProvider, SyncStreamFactory}
-import com.github.sync.SyncTypes.{DestinationStructureType, SourceStructureType, SyncOperation}
+import com.github.sync.SyncTypes.{DestinationStructureType, ResultTransformer, SourceStructureType, SyncOperation}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
+import com.github.sync.crypt.CryptService
 import com.github.sync.impl.{CryptAwareSourceFileProvider, SyncStreamFactoryImpl}
 import com.github.sync.log.SerializerStreamHelper
 
@@ -142,9 +143,21 @@ object Sync {
     case Some(path) =>
       createSyncSourceFromLog(config, path)
     case None =>
-      factory.createSyncSource(config.syncUris._1, config.syncUris._2, additionalArgs,
+      factory.createSyncSource(config.syncUris._1, createResultTransformer(config.srcPassword),
+        config.syncUris._2, createResultTransformer(config.dstPassword), additionalArgs,
         config.ignoreTimeDelta getOrElse 1)
   }
+
+  /**
+    * Returns a ''ResultTransformer'' for an element source based on the given
+    * parameters. The transformer makes sure that the results produced by an
+    * element source are compatible with the parameters passed in.
+    *
+    * @param optCryptPwd the optional encryption password
+    * @return the ''ResultTransformer'' for these parameters
+    */
+  private def createResultTransformer(optCryptPwd: Option[String]): Option[ResultTransformer] =
+    optCryptPwd.map(_ => CryptService.cryptTransformer())
 
   /**
     * Creates the source for the sync process if a sync log is provided. The

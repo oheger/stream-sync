@@ -23,7 +23,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
 import akka.util.Timeout
-import com.github.sync.SyncTypes.{FsElement, StructureType, SupportedArgument, SyncOperation}
+import com.github.sync.SyncTypes.{FsElement, ResultTransformer, StructureType, SupportedArgument, SyncOperation}
 import com.github.sync.impl.SyncStreamFactoryImpl
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -44,21 +44,24 @@ class DelegateSyncStreamFactory(delegate: SyncStreamFactory = SyncStreamFactoryI
                                   (implicit ec: ExecutionContext):
   Future[Iterable[SupportedArgument]] = delegate.additionalArguments(uri, structureType)
 
-  override def createSyncInputSource(uri: String, structureType: StructureType)
+  override def createSyncInputSource(uri: String, optTransformer: Option[ResultTransformer],
+                                     structureType: StructureType)
                                     (implicit ec: ExecutionContext, system: ActorSystem,
                                      mat: ActorMaterializer): ArgsFunc[Source[FsElement, Any]] =
-    delegate.createSyncInputSource(uri, structureType)
+    delegate.createSyncInputSource(uri, optTransformer, structureType)
 
   override def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext,
                                                      system: ActorSystem, mat: ActorMaterializer)
   : ArgsFunc[SourceFileProvider] =
     delegate.createSourceFileProvider(uri)
 
-  override def createSyncSource(uriSrc: String, uriDst: String, additionalArgs: StructureArgs,
+  override def createSyncSource(uriSrc: String, optSrcTransformer: Option[ResultTransformer], uriDst: String,
+                                optDstTransformer: Option[ResultTransformer], additionalArgs: StructureArgs,
                                 ignoreTimeDelta: Int)
                                (implicit ec: ExecutionContext, system: ActorSystem,
                                 mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]] =
-    delegate.createSyncSource(uriSrc, uriDst, additionalArgs, ignoreTimeDelta)
+    delegate.createSyncSource(uriSrc, optSrcTransformer, uriDst, optDstTransformer, additionalArgs,
+      ignoreTimeDelta)
 
   override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
                                (implicit system: ActorSystem, mat: ActorMaterializer,
