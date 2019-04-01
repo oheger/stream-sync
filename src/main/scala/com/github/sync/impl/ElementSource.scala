@@ -18,7 +18,7 @@ package com.github.sync.impl
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import akka.stream.{Attributes, Outlet, SourceShape}
-import com.github.sync.SyncTypes.{CompletionFunc, FsElement, FutureResultFunc, IterateFunc, IterateResult, NextFolderFunc, SyncFolderData, TransformResultFunc}
+import com.github.sync.SyncTypes.{CompletionFunc, FsElement, FutureResultFunc, IterateFunc, IterateResult, NextFolderFunc, ResultTransformer, SyncFolderData}
 import com.github.sync.util.SyncFolderQueue
 
 import scala.concurrent.ExecutionContext
@@ -55,7 +55,7 @@ import scala.util.{Failure, Success, Try}
   */
 class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
                                             optCompleteFunc: Option[CompletionFunc[S]] = None,
-                                            optTransformFunc: Option[TransformResultFunc[F]] = None)
+                                            optTransformFunc: Option[ResultTransformer] = None)
                                            (iterateFunc: IterateFunc[F, S])
                                            (implicit ec: ExecutionContext)
   extends GraphStage[SourceShape[FsElement]] {
@@ -154,15 +154,15 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
         * @param optTransFunc an option with the transformation function
         * @param triedResult  a ''Try'' with the result from the iterate func
         */
-      private def handleResult(optTransFunc: Option[TransformResultFunc[F]])
+      private def handleResult(optTransFunc: Option[ResultTransformer])
                               (triedResult: Try[(S, IterateResult[F])]): Unit = {
         triedResult match {
           case Success((state, result)) if result.nonEmpty =>
             log.debug("Folder {} has {} files and {} sub folders.", result.currentFolder.relativeUri,
               result.files.size, result.folders.size)
             optTransFunc match {
-              case Some(f) =>
-                applyTransformation(state, result)(f)
+              case Some(transformer) =>
+                applyTransformation(state, result, transformer)
               case None =>
                 currentState = state
                 pendingFolders = pendingFolders ++ result.folders
@@ -186,13 +186,13 @@ class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
         * Invokes the given transformation function on the result and processes
         * the result.
         *
-        * @param state  the current state
-        * @param result the result to be transformed
-        * @param f      the transformation function
+        * @param state       the current state
+        * @param result      the result to be transformed
+        * @param transformer the transformer object
         */
-      private def applyTransformation(state: S, result: IterateResult[F])(f: TransformResultFunc[F]): Unit = {
+      private def applyTransformation(state: S, result: IterateResult[F], transformer: ResultTransformer): Unit = {
         val callback = getAsyncCallback[Try[(S, IterateResult[F])]](handleResult(None))
-        f(result).map((state, _)) onComplete callback.invoke
+        transformer.transform(result).map((state, _)) onComplete callback.invoke
       }
 
       /**

@@ -317,22 +317,30 @@ object SyncTypes {
   type CompletionFunc[S] = S => Unit
 
   /**
-    * Type definition of a function that allows adapting the result of an
+    * A trait describing a transformation that allows adapting the result of an
     * iteration function.
     *
-    * This function is used to integrate orthogonal functionality into the
+    * This trait is used to integrate orthogonal functionality into the
     * generic mechanism that iterates over folder structures. One example of
     * such functionality is encryption: the elements produced by a source need
     * to be transformed when the structure iterated over is encrypted.
-    *
-    * If an element source is configured with such an adapt function, it
-    * invokes it on each result object it produces; only the processed result
-    * is then passed downstream. Note that a concrete function is expected to
-    * manipulate existing result elements, but not to filter out existing ones
-    * or generate new ones. As the transformation may be complex, it can be
-    * done in background; hence the function returns a future.
     */
-  type TransformResultFunc[F <: SyncFolderData] = IterateResult[F] => Future[IterateResult[F]]
+  trait ResultTransformer {
+    /**
+      * The transformation function for result objects produced by an element
+      * source. If an element source is configured with such an adapt function, it
+      * invokes it on each result object it produces; only the processed result
+      * is then passed downstream. Note that a concrete function is expected to
+      * manipulate existing result elements, but not to filter out existing ones
+      * or generate new ones. As the transformation may be complex, it can be
+      * done in background; hence the function returns a future.
+      *
+      * @param result the result object to be transformed
+      * @tparam F the type of folder data
+      * @return a future with the transformed result
+      */
+    def transform[F <: SyncFolderData](result: IterateResult[F]): Future[IterateResult[F]]
+  }
 
   /**
     * Trait describing a factory for an element source.

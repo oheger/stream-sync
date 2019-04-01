@@ -25,7 +25,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateFuncResult, IterateResult, NextFolderFunc, SyncFolderData, TransformResultFunc}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateFuncResult, IterateResult, NextFolderFunc, ResultTransformer, SyncFolderData}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.Future
@@ -285,13 +285,15 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     def transformFile(file: FsFile): FsFile =
       file.copy(relativeUri = file.relativeUri + ".processed")
 
-    val transFunc: TransformResultFunc[SyncFolderDataImpl] = result =>
-      Future.successful(result.copy(files = result.files map transformFile))
+    val transformer = new ResultTransformer {
+      override def transform[F <: SyncFolderData](result: IterateResult[F]): Future[IterateResult[F]] =
+        Future.successful(result.copy(files = result.files map transformFile))
+    }
     val files = List(createFile("/test1.txt", 2), createFile("/test2.dat", 2),
       createFile("/theLastTest.doc", 2))
     val results = List(resultFunc(files))
     val expectedFiles = files map transformFile
-    val helper = new SourceTestHelper(results, optTransformFunc = Some(transFunc))
+    val helper = new SourceTestHelper(results, optTransformFunc = Some(transformer))
 
     helper.runSource() should contain theSameElementsAs expectedFiles
   }
@@ -311,9 +313,12 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
 
   it should "handle a failed future returned by the transformation function" in {
     val exception = new IllegalStateException("Crashed transformation")
-    val transFunc: TransformResultFunc[SyncFolderDataImpl] = _ => Future.failed(exception)
+    val transformer = new ResultTransformer {
+      override def transform[F <: SyncFolderData](result: IterateResult[F]): Future[IterateResult[F]] =
+        Future.failed(exception)
+    }
     val helper = new SourceTestHelper(List(createSimpleResult(createFile("/foo", 2))),
-      optTransformFunc = Some(transFunc))
+      optTransformFunc = Some(transformer))
 
     expectFailedFuture[IllegalStateException](helper.executeStream()) should be(exception)
   }
@@ -326,7 +331,7 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     * @param optTransformFunc an option with a transformation function
     */
   private class SourceTestHelper(readResults: List[IterateFuncResult[SyncFolderDataImpl, Int]],
-                                 optTransformFunc: Option[TransformResultFunc[SyncFolderDataImpl]] = None) {
+                                 optTransformFunc: Option[ResultTransformer] = None) {
 
     import system.dispatcher
 

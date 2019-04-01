@@ -16,7 +16,7 @@
 
 package com.github.sync.crypt
 
-import com.github.sync.SyncTypes.{FsFile, IterateResult, SyncFolderData, TransformResultFunc}
+import com.github.sync.SyncTypes.{FsFile, IterateResult, ResultTransformer, SyncFolderData}
 
 import scala.concurrent.Future
 
@@ -28,14 +28,15 @@ import scala.concurrent.Future
   */
 object CryptService {
   /**
-    * Returns a transformation function that supports the iteration over an
+    * Returns a ''ResultTransformer'' that supports the iteration over an
     * encrypted folder structure.
     *
-    * @tparam F the type of the folders in the result
-    * @return the transformation function for encrypted folder structures
+    * @return the transformer for encrypted folder structures
     */
-  def cryptTransformFunc[F <: SyncFolderData](): TransformResultFunc[F] = result =>
-    Future.successful(transformEncryptedFileSizes(result))
+  def cryptTransformer(): ResultTransformer = new ResultTransformer {
+    override def transform[F <: SyncFolderData](result: IterateResult[F]): Future[IterateResult[F]] =
+      Future.successful(transformEncryptedFileSizes(result))
+  }
 
   /**
     * Adapts the sizes of encrypted files in the given result object. This is
