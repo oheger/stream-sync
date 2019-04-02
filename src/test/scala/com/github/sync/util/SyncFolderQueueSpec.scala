@@ -28,9 +28,9 @@ object SyncFolderQueueSpec {
     * @param queue the queue to be read
     * @return a list with the elements extracted from the queue
     */
-  private def readQueue(queue: SyncFolderQueue[SyncFolderData]): List[SyncFolderData] = {
-    def dequeueElement(q: SyncFolderQueue[SyncFolderData],
-                       resultList: List[SyncFolderData]): List[SyncFolderData] =
+  private def readQueue(queue: SyncFolderQueue[Int]): List[SyncFolderData[Int]] = {
+    def dequeueElement(q: SyncFolderQueue[Int],
+                       resultList: List[SyncFolderData[Int]]): List[SyncFolderData[Int]] =
       if (q.isEmpty) resultList.reverse
       else {
         val (d, q2) = q.dequeue()
@@ -48,11 +48,9 @@ object SyncFolderQueueSpec {
     * @param level the folder level
     * @return the resulting ''SyncFolderData''
     */
-  private def folderData(uri: String, level: Int): SyncFolderData = {
+  private def folderData(uri: String, level: Int): SyncFolderData[Int] = {
     val theFolder = FsFolder(uri, level)
-    new SyncFolderData {
-      override val folder: FsFolder = theFolder
-    }
+    SyncFolderData(theFolder, level + 1)
   }
 }
 

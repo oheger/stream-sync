@@ -24,12 +24,12 @@ import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream._
+import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.testkit.TestKit
-import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, IterateFunc}
+import com.github.sync.FileTestHelper
+import com.github.sync.SyncTypes._
 import com.github.sync.impl.ElementSource
-import com.github.sync.{FileTestHelper, SyncTypes}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.annotation.tailrec
@@ -218,9 +218,9 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @return the source factory
     */
   private def sourceFactory: ElementSourceFactory = new ElementSourceFactory {
-    override def createElementSource[F <: SyncTypes.SyncFolderData, S](initState: S, initFolder: F,
-                                                                       optCompletionFunc: Option[CompletionFunc[S]])
-                                                                      (iterateFunc: IterateFunc[F, S]):
+    override def createElementSource[F, S](initState: S, initFolder: SyncFolderData[F],
+                                           optCompletionFunc: Option[CompletionFunc[S]])
+                                          (iterateFunc: IterateFunc[F, S]):
     Graph[SourceShape[FsElement], NotUsed] = new ElementSource(initState, initFolder, optCompletionFunc)(iterateFunc)
   }
 

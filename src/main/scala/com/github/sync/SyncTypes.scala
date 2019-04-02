@@ -188,50 +188,25 @@ object SyncTypes {
   case class SupportedArgument(key: String, mandatory: Boolean, defaultValue: Option[String] = None)
 
   /**
-    * A trait describing objects storing information about folders during a
+    * A class describing objects storing information about folders during a
     * sync operation.
     *
     * (Sub) folders discovered while iterating over a folder structure have to
-    * be recorded and processed later in a defined order. To support this in a
-    * generic way, a minimum set of properties must be provided. Based on these
-    * properties, an ''Ordering'' implementation is provided. Concrete
-    * implementations can enhance the data by use case-specific properties.
-    */
-  trait SyncFolderData {
-    /**
-      * Returns the represented ''FsFolder'' object.
-      *
-      * @return the folder
-      */
-    def folder: FsFolder
-
-    /**
-      * Returns the URI of the represented folder.
-      *
-      * @return the folder URI
-      */
-    def uri: String = folder.relativeUri
-
-    /**
-      * Returns the level of the represented folder.
-      *
-      * @return the level of the folder
-      */
-    def level: Int = folder.level
-  }
-
-  /**
-    * Provides an implicit ordering for the given type derived from
-    * [[SyncFolderData]]. This enables ordering support for all concrete
-    * implementations of this trait.
+    * be recorded and processed later in a defined order. The order is
+    * determined by the folder object, but for concrete iteration
+    * implementations it may be necessary to store some additional properties.
+    * This is handled by a generic ''data'' property that can be used in an
+    * arbitrary way.
     *
-    * @tparam T the type
-    * @return the ordering for this type
+    * @param folder the associated ''FsFolder'' object
+    * @param data   arbitrary data to be stored with the folder
     */
-  implicit def derivedOrdering[T <: SyncFolderData]: Ordering[T] = (x: T, y: T) => {
-    val deltaLevel = x.level - y.level
-    if (deltaLevel != 0) deltaLevel
-    else x.uri.compareTo(y.uri)
+  case class SyncFolderData[T](folder: FsFolder, data: T) extends Ordered[SyncFolderData[T]] {
+    override def compare(that: SyncFolderData[T]): Int = {
+      val deltaLevel = folder.level - that.folder.level
+      if (deltaLevel != 0) deltaLevel
+      else folder.relativeUri.compareTo(that.folder.relativeUri)
+    }
   }
 
   /**
@@ -243,11 +218,11 @@ object SyncTypes {
     * @param currentFolder the current folder this result is for
     * @param files         a list with detected files in this folder
     * @param folders       a list with detected sub folders of this folder
-    * @tparam F the type used for folder elements
+    * @tparam F the type of data associated with folder elements
     */
-  case class IterateResult[F <: SyncFolderData](currentFolder: FsFolder,
-                                                files: List[FsFile],
-                                                folders: List[F]) {
+  case class IterateResult[F](currentFolder: FsFolder,
+                              files: List[FsFile],
+                              folders: List[SyncFolderData[F]]) {
     /**
       * Returns a flag whether this result contains some data. This function
       * checks whether there is at least one result element - a file or a
@@ -266,19 +241,19 @@ object SyncTypes {
     * folder; it then has to start with the next folder pending. If there are
     * no more pending folders, result is ''None''.
     */
-  type NextFolderFunc[F <: SyncFolderData] = () => Option[F]
+  type NextFolderFunc[F] = () => Option[SyncFolderData[F]]
 
   /**
     * Type definition of a function that returns an iteration result that is
     * generated asynchronously. Result is an updated state and the actual
     * iteration result.
     */
-  type FutureResultFunc[F <: SyncFolderData, S] = () => Future[(S, IterateResult[F])]
+  type FutureResultFunc[F, S] = () => Future[(S, IterateResult[F])]
 
   /**
     * Type definition for the result type of an [[IterateFunc]].
     */
-  type IterateFuncResult[F <: SyncFolderData, S] = (S, Option[IterateResult[F]], Option[FutureResultFunc[F, S]])
+  type IterateFuncResult[F, S] = (S, Option[IterateResult[F]], Option[FutureResultFunc[F, S]])
 
   /**
     * Type definition of a function that is invoked when iterating over a
@@ -306,7 +281,7 @@ object SyncTypes {
     * If both ''Option'' objects are undefined, this is interpreted as the end
     * of the iteration.
     */
-  type IterateFunc[F <: SyncFolderData, S] = (S, NextFolderFunc[F]) =>
+  type IterateFunc[F, S] = (S, NextFolderFunc[F]) =>
     (S, Option[IterateResult[F]], Option[FutureResultFunc[F, S]])
 
   /**
@@ -339,7 +314,7 @@ object SyncTypes {
       * @tparam F the type of folder data
       * @return a future with the transformed result
       */
-    def transform[F <: SyncFolderData](result: IterateResult[F]): Future[IterateResult[F]]
+    def transform[F](result: IterateResult[F]): Future[IterateResult[F]]
   }
 
   /**
@@ -360,9 +335,9 @@ object SyncTypes {
       * @tparam S the type of the state
       * @return the newly created source
       */
-    def createElementSource[F <: SyncFolderData, S](initState: S, initFolder: F,
-                                                    optCompletionFunc: Option[CompletionFunc[S]] = None)
-                                                   (iterateFunc: IterateFunc[F, S]):
+    def createElementSource[F, S](initState: S, initFolder: SyncFolderData[F],
+                                  optCompletionFunc: Option[CompletionFunc[S]] = None)
+                                 (iterateFunc: IterateFunc[F, S]):
     Graph[SourceShape[FsElement], NotUsed]
   }
 

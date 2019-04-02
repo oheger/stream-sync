@@ -27,7 +27,7 @@ import akka.http.scaladsl.model.{HttpRequest, Uri}
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{ActorMaterializer, Graph, SourceShape}
 import akka.testkit.TestKit
-import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, IterateFunc}
+import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, IterateFunc, SyncFolderData}
 import com.github.sync._
 import com.github.sync.impl.ElementSource
 import com.github.sync.util.UriEncodingHelper
@@ -316,9 +316,9 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     /** Holds a reference to the latest source that was created. */
     val refSource = new AtomicReference[ElementSource[_, _]]()
 
-    override def createElementSource[F <: SyncTypes.SyncFolderData, S](initState: S, initFolder: F,
-                                                                       optCompletionFunc: Option[CompletionFunc[S]])
-                                                                      (iterateFunc: IterateFunc[F, S]):
+    override def createElementSource[F, S](initState: S, initFolder: SyncFolderData[F],
+                                           optCompletionFunc: Option[CompletionFunc[S]])
+                                          (iterateFunc: IterateFunc[F, S]):
     Graph[SourceShape[FsElement], NotUsed] = {
       implicit val ec: ExecutionContext = system.dispatcher
       val source = new ElementSource[F, S](initState, initFolder, optCompletionFunc)(iterateFunc)

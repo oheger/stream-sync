@@ -56,13 +56,12 @@ import scala.xml._
 object DavFsElementSource {
 
   /**
-    * Data class storing information about a folder that is to be fetched from
-    * the WebDav server.
+    * Data class storing additional information about a folder that is to be
+    * fetched from the WebDav server.
     *
-    * @param ref    the URI to reference the folder on the server
-    * @param folder the folder element
+    * @param ref the URI to reference the folder on the server
     */
-  case class FolderData(ref: String, override val folder: FsFolder) extends SyncFolderData {
+  case class DavFolder(ref: String) {
     /**
       * The normalized URI to reference the folder on the server. This URI
       * always ends on a slash which is required by some Dav servers.
@@ -160,7 +159,7 @@ object DavFsElementSource {
     val rootUriPrefix = removeTrailingSlash(config.rootUri.path.toString())
     val rootPrefixLen = UriEncodingHelper.decode(rootUriPrefix).length
     val state = DavIterationState(requestQueue, rootUriPrefix, rootPrefixLen, authHeader(config), config)
-    sourceFactory.createElementSource(state, FolderData(config.rootUri.toString(), FsFolder("", -1)),
+    sourceFactory.createElementSource(state, SyncFolderData(FsFolder("", -1), DavFolder(config.rootUri.toString())),
       Some(completionFunc))(iterateFunc)
   }
 
@@ -173,7 +172,7 @@ object DavFsElementSource {
     * @return the iterate function
     */
   private def iterateFunc(implicit ec: ExecutionContext, mat: ActorMaterializer):
-  IterateFunc[FolderData, DavIterationState] = (state, nextFolder) => {
+  IterateFunc[DavFolder, DavIterationState] = (state, nextFolder) => {
     nextFolder() match {
       case Some(folder) =>
         (state, None, Some(futureResultFunc(state, folder)))
@@ -192,9 +191,9 @@ object DavFsElementSource {
     * @param mat           the object to materialize streams
     * @return the future with the content of the current folder
     */
-  private def futureResultFunc(state: DavIterationState, currentFolder: FolderData)
+  private def futureResultFunc(state: DavIterationState, currentFolder: SyncFolderData[DavFolder])
                               (implicit ec: ExecutionContext, mat: ActorMaterializer):
-  FutureResultFunc[FolderData, DavIterationState] = () =>
+  FutureResultFunc[DavFolder, DavIterationState] = () =>
     loadFolder(state, currentFolder) map (processFolderResult(state, currentFolder.folder, _))
 
   /**
@@ -216,7 +215,7 @@ object DavFsElementSource {
     * @param mat        the object to materialize streams
     * @return a future with the parsed content of the folder
     */
-  private def loadFolder(state: DavIterationState, folderData: FolderData)
+  private def loadFolder(state: DavIterationState, folderData: SyncFolderData[DavFolder])
                         (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[List[ElemData]] = {
     val request = createFolderRequest(state, folderData)
     sendAndProcess(state.requestQueue, request)(parseFolderResponse(state, folderData.folder)).flatten
@@ -300,11 +299,12 @@ object DavFsElementSource {
     * @param elements a list of elements contained in the folder
     */
   private def processFolderResult(state: DavIterationState, currentFolder: FsFolder, elements: List[ElemData]):
-  (DavIterationState, IterateResult[FolderData]) = {
-    val (files, folders) = elements.foldLeft((List.empty[FsFile], List.empty[FolderData])) { (lists, elem) =>
+  (DavIterationState, IterateResult[DavFolder]) = {
+    val (files, folders) = elements.foldLeft((List.empty[FsFile],
+      List.empty[SyncFolderData[DavFolder]])) { (lists, elem) =>
       elem.elem match {
         case f: FsFolder =>
-          (lists._1, FolderData(elem.ref, f) :: lists._2)
+          (lists._1, SyncFolderData(f, DavFolder(elem.ref)) :: lists._2)
         case f: FsFile =>
           (f :: lists._1, lists._2)
       }
@@ -319,8 +319,8 @@ object DavFsElementSource {
     * @param folderData the data of the folder to be loaded
     * @return the request to query the content of this folder
     */
-  private def createFolderRequest(state: DavIterationState, folderData: FolderData): HttpRequest =
-    HttpRequest(method = MethodPropFind, uri = folderData.normalizedRef,
+  private def createFolderRequest(state: DavIterationState, folderData: SyncFolderData[DavFolder]): HttpRequest =
+    HttpRequest(method = MethodPropFind, uri = folderData.data.normalizedRef,
       headers = List(state.headerAuth, HeaderAccept, HeaderDepth))
 
   /**

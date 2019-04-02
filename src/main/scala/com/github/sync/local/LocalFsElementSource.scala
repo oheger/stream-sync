@@ -55,7 +55,7 @@ object LocalFsElementSource {
            (sourceFactory: ElementSourceFactory)
            (implicit ec: ExecutionContext): Source[FsElement, NotUsed] = {
     val initState = BFSState(None, null)
-    val initFolder = FolderData(config.rootPath, FsFolder("", -1))
+    val initFolder = SyncFolderData(FsFolder("", -1), config.rootPath)
     Source.fromGraph(sourceFactory.createElementSource(initState, initFolder,
       Some(iterationComplete _))(iterateFunc(config, streamFactory)))
   }
@@ -69,7 +69,7 @@ object LocalFsElementSource {
     * @param iterator the iterator
     */
   private case class DirectoryStreamRef(stream: DirectoryStream[Path],
-                                iterator: java.util.Iterator[Path]) {
+                                        iterator: java.util.Iterator[Path]) {
     /**
       * Closes the underlying stream ignoring all exceptions.
       */
@@ -83,22 +83,13 @@ object LocalFsElementSource {
   }
 
   /**
-    * A simple data class that stores relevant information about a folder that
-    * is pending to be processed.
-    *
-    * @param folderPath the path to the folder
-    * @param folder     the associated folder element
-    */
-  private case class FolderData(folderPath: Path, override val folder: FsFolder) extends SyncFolderData
-
-  /**
     * Case class representing the state of a BFS iteration.
     *
     * @param optCurrentStream option for the currently active stream
     * @param currentFolder    the current folder whose elements are iterated
     */
   private case class BFSState(optCurrentStream: Option[DirectoryStreamRef],
-                      currentFolder: FsFolder)
+                              currentFolder: FsFolder)
 
   /**
     * Definition of a function serving as stream factory. Such a function can
@@ -127,7 +118,7 @@ object LocalFsElementSource {
     * @return the iteration function
     */
   private def iterateFunc(config: LocalFsConfig, streamFactory: StreamFactory = createDirectoryStream)
-                         (implicit ec: ExecutionContext): IterateFunc[FolderData, BFSState] =
+                         (implicit ec: ExecutionContext): IterateFunc[Path, BFSState] =
     (state, nextFolder) =>
       iterateBFS(config, streamFactory, state, nextFolder) map { res =>
         (res._1, Some(res._2), None)
@@ -146,8 +137,8 @@ object LocalFsElementSource {
     *         to emit or ''None'' if iteration is complete
     */
   @tailrec private def iterateBFS(config: LocalFsConfig, streamFactory: StreamFactory,
-                                  state: BFSState, nextFolder: NextFolderFunc[FolderData]):
-  Option[(BFSState, IterateResult[FolderData])] = {
+                                  state: BFSState, nextFolder: NextFolderFunc[Path]):
+  Option[(BFSState, IterateResult[Path])] = {
     state.optCurrentStream match {
       case Some(ref) =>
         if (ref.iterator.hasNext) {
@@ -155,9 +146,11 @@ object LocalFsElementSource {
           val isDir = Files isDirectory path
           val elem = createElement(config, path, state.currentFolder, isDir = isDir)
           if (isDir)
-            Some((state, IterateResult(state.currentFolder, Nil, List(FolderData(path, elem.asInstanceOf[FsFolder])))))
+            Some((state, IterateResult(state.currentFolder, Nil,
+              List(SyncFolderData(elem.asInstanceOf[FsFolder], path)))))
           else
-            Some((state, IterateResult(state.currentFolder, List(elem.asInstanceOf[FsFile]), List.empty[FolderData])))
+            Some((state, IterateResult(state.currentFolder, List(elem.asInstanceOf[FsFile]),
+              List.empty[SyncFolderData[Path]])))
         } else {
           ref.close()
           iterateBFS(config, streamFactory, state.copy(optCurrentStream = None), nextFolder)
@@ -167,7 +160,7 @@ object LocalFsElementSource {
         nextFolder() match {
           case Some(data) =>
             iterateBFS(config, streamFactory,
-              state.copy(optCurrentStream = Some(createStreamRef(data.folderPath, streamFactory)),
+              state.copy(optCurrentStream = Some(createStreamRef(data.data, streamFactory)),
                 currentFolder = data.folder), nextFolder)
           case None => None
         }

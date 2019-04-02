@@ -53,7 +53,7 @@ import scala.util.{Failure, Success, Try}
   * @tparam F the type of the data used for folders
   * @tparam S the type of the iteration state
   */
-class ElementSource[F <: SyncFolderData, S](val initState: S, initFolder: F,
+class ElementSource[F, S](val initState: S, initFolder: SyncFolderData[F],
                                             optCompleteFunc: Option[CompletionFunc[S]] = None,
                                             optTransformFunc: Option[ResultTransformer] = None)
                                            (iterateFunc: IterateFunc[F, S])

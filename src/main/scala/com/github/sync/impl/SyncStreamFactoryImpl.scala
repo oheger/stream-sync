@@ -144,7 +144,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   private def createElementSourceFactory(optTransformer: Option[ResultTransformer])
                                         (implicit ec: ExecutionContext): ElementSourceFactory =
     new ElementSourceFactory {
-      override def createElementSource[F <: SyncFolderData, S](initState: S, initFolder: F,
+      override def createElementSource[F, S](initState: S, initFolder: SyncFolderData[F],
                                                                optCompletionFunc: Option[CompletionFunc[S]])
                                                               (iterateFunc: IterateFunc[F, S]):
       Graph[SourceShape[FsElement], NotUsed] =

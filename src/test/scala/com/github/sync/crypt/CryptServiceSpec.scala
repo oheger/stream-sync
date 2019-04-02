@@ -33,7 +33,7 @@ class CryptServiceSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val expFiles = files.map { f =>
       f.copy(size = DecryptOpHandler.processedSize(f.size))
     }
-    val result = IterateResult(FsFolder("/aFolder", 2), files, List.empty[SyncFolderData])
+    val result = IterateResult(FsFolder("/aFolder", 2), files, List.empty[SyncFolderData[Unit]])
 
     val transformer = CryptService.cryptTransformer()
     val transResult = futureResult(transformer.transform(result))
