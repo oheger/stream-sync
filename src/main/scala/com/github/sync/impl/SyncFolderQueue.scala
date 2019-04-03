@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package com.github.sync.util
+package com.github.sync.impl
 
 import com.github.sync.SyncTypes.SyncFolderData
 
 import scala.collection.SortedSet
 
-object SyncFolderQueue {
+private object SyncFolderQueue {
   /**
     * Creates a new instance of ''SyncFolderQueue'' with the given initial
     * element. This is typically the start folder for the iteration over the
@@ -49,7 +49,7 @@ object SyncFolderQueue {
   *
   * @tparam T the type of the data managed by elements stored in the queue
   */
-class SyncFolderQueue[T] private(data: SortedSet[SyncFolderData[T]]) {
+private class SyncFolderQueue[T] private(data: SortedSet[SyncFolderData[T]]) {
   /**
     * Returns a new instance that contains the specified element.
     *
