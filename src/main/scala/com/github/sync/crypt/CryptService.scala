@@ -39,9 +39,11 @@ object CryptService {
     *
     * @return the transformer for encrypted folder structures
     */
-  def cryptTransformer(): ResultTransformer = new ResultTransformer {
-    override def transform[F](result: IterateResult[F]): Future[IterateResult[F]] =
-      Future.successful(transformEncryptedFileSizes(result))
+  def cryptTransformer(): ResultTransformer[Unit] = new ResultTransformer[Unit] {
+    override def initialState: Unit = ()
+
+    override def transform[F](result: IterateResult[F], s: Unit): Future[(IterateResult[F], Unit)] =
+      Future.successful((transformEncryptedFileSizes(result), ()))
   }
 
   /**

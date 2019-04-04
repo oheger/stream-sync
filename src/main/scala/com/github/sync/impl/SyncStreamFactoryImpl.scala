@@ -55,10 +55,10 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     Future.successful(args)
   }
 
-  override def createSyncInputSource(uri: String, optTransformer: Option[ResultTransformer],
-                                     structureType: StructureType)
-                                    (implicit ec: ExecutionContext, system: ActorSystem,
-                                     mat: ActorMaterializer):
+  override def createSyncInputSource[T](uri: String, optTransformer: Option[ResultTransformer[T]],
+                                        structureType: StructureType)
+                                       (implicit ec: ExecutionContext, system: ActorSystem,
+                                        mat: ActorMaterializer):
   ArgsFunc[Source[FsElement, Any]] = {
     val factory = createElementSourceFactory(optTransformer)
     uri match {
@@ -101,11 +101,11 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
         }
   }
 
-  override def createSyncSource(uriSrc: String, optSrcTransformer: Option[ResultTransformer], uriDst: String,
-                                optDstTransformer: Option[ResultTransformer], additionalArgs: StructureArgs,
-                                ignoreTimeDelta: Int)
-                               (implicit ec: ExecutionContext, system: ActorSystem,
-                                mat: ActorMaterializer):
+  override def createSyncSource[T1, T2](uriSrc: String, optSrcTransformer: Option[ResultTransformer[T1]],
+                                        uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
+                                        additionalArgs: StructureArgs, ignoreTimeDelta: Int)
+                                       (implicit ec: ExecutionContext, system: ActorSystem,
+                                        mat: ActorMaterializer):
   Future[Source[SyncOperation, NotUsed]] = for {
     srcSource <- createSyncInputSource(uriSrc, optSrcTransformer, SourceStructureType).apply(additionalArgs)
     dstSource <- createSyncInputSource(uriDst, optDstTransformer, DestinationStructureType).apply(additionalArgs)
@@ -141,14 +141,14 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     * @param ec             the execution context
     * @return the ''ElementSourceFactory''
     */
-  private def createElementSourceFactory(optTransformer: Option[ResultTransformer])
-                                        (implicit ec: ExecutionContext): ElementSourceFactory =
+  private def createElementSourceFactory[T](optTransformer: Option[ResultTransformer[T]])
+                                           (implicit ec: ExecutionContext): ElementSourceFactory =
     new ElementSourceFactory {
       override def createElementSource[F, S](initState: S, initFolder: SyncFolderData[F],
-                                                               optCompletionFunc: Option[CompletionFunc[S]])
-                                                              (iterateFunc: IterateFunc[F, S]):
+                                             optCompletionFunc: Option[CompletionFunc[S]])
+                                            (iterateFunc: IterateFunc[F, S]):
       Graph[SourceShape[FsElement], NotUsed] =
-        new ElementSource[F, S](initState, initFolder, optCompleteFunc = optCompletionFunc,
+        new ElementSource[F, S, T](initState, initFolder, optCompleteFunc = optCompletionFunc,
           optTransformFunc = optTransformer)(iterateFunc)
     }
 

@@ -81,11 +81,12 @@ trait SyncStreamFactory {
     * @param ec             the execution context
     * @param system         the actor system
     * @param mat            the object to materialize streams
+    * @tparam T the type of the result transformer
     * @return a function to create the sync source
     */
-  def createSyncInputSource(uri: String, optTransformer: Option[ResultTransformer], structureType: StructureType)
-                           (implicit ec: ExecutionContext, system: ActorSystem,
-                            mat: ActorMaterializer): ArgsFunc[Source[FsElement, Any]]
+  def createSyncInputSource[T](uri: String, optTransformer: Option[ResultTransformer[T]], structureType: StructureType)
+                              (implicit ec: ExecutionContext, system: ActorSystem,
+                               mat: ActorMaterializer): ArgsFunc[Source[FsElement, Any]]
 
   /**
     * Creates a ''SourceFileProvider'' based on the URI provided. This is
@@ -116,13 +117,15 @@ trait SyncStreamFactory {
     * @param ec                the execution context
     * @param system            the actor system
     * @param mat               the object to materialize streams
+    * @tparam TSRC the state type of the source transformer
+    * @tparam TDST the state type of the destination transformer
     * @return a future with the source
     */
-  def createSyncSource(uriSrc: String, optSrcTransformer: Option[ResultTransformer], uriDst: String,
-                       optDstTransformer: Option[ResultTransformer], additionalArgs: StructureArgs,
-                       ignoreTimeDelta: Int)
-                      (implicit ec: ExecutionContext, system: ActorSystem,
-                       mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]]
+  def createSyncSource[TSRC, TDST](uriSrc: String, optSrcTransformer: Option[ResultTransformer[TSRC]], uriDst: String,
+                                   optDstTransformer: Option[ResultTransformer[TDST]], additionalArgs: StructureArgs,
+                                   ignoreTimeDelta: Int)
+                                  (implicit ec: ExecutionContext, system: ActorSystem,
+                                   mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]]
 
   /**
     * Creates the flow stage that interprets sync operations and applies them

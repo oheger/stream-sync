@@ -274,17 +274,22 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     */
   private def checkTransformationFunction(resultFunc: List[FsFile] =>
     IterateFuncResult[String, Int]): Unit = {
-    def transformFile(file: FsFile): FsFile =
-      file.copy(relativeUri = file.relativeUri + ".processed")
+    def transformFile(file: FsFile, idx: Int): FsFile =
+      file.copy(relativeUri = file.relativeUri + ".processed" + idx)
 
-    val transformer = new ResultTransformer {
-      override def transform[F](result: IterateResult[F]): Future[IterateResult[F]] =
-        Future.successful(result.copy(files = result.files map transformFile))
+    val transformer: ResultTransformer[Int] = new ResultTransformer[Int] {
+      override val initialState = 0
+
+      override def transform[F](result: IterateResult[F], state: Int): Future[(IterateResult[F], Int)] = {
+        val processedFiles = result.files map (f => transformFile(f, state))
+        Future.successful((result.copy(files = processedFiles), state + 1))
+      }
     }
-    val files = List(createFile("/test1.txt", 2), createFile("/test2.dat", 2),
+    val files1 = List(createFile("/test1.txt", 2), createFile("/test2.dat", 2),
       createFile("/theLastTest.doc", 2))
-    val results = List(resultFunc(files))
-    val expectedFiles = files map transformFile
+    val files2 = List(createFile("/moreData.dat", 2))
+    val results = List(resultFunc(files1), resultFunc(files2))
+    val expectedFiles = files1.map(transformFile(_, 0)) ++ files2.map(transformFile(_, 1))
     val helper = new SourceTestHelper(results, optTransformFunc = Some(transformer))
 
     helper.runSource() should contain theSameElementsAs expectedFiles
@@ -305,8 +310,10 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
 
   it should "handle a failed future returned by the transformation function" in {
     val exception = new IllegalStateException("Crashed transformation")
-    val transformer = new ResultTransformer {
-      override def transform[F](result: IterateResult[F]): Future[IterateResult[F]] =
+    val transformer: ResultTransformer[Int] = new ResultTransformer[Int] {
+      override val initialState: Int = -1
+
+      override def transform[F](result: IterateResult[F], state: Int): Future[(IterateResult[F], Int)] =
         Future.failed(exception)
     }
     val helper = new SourceTestHelper(List(createSimpleResult(createFile("/foo", 2))),
@@ -323,7 +330,7 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     * @param optTransformFunc an option with a transformation function
     */
   private class SourceTestHelper(readResults: List[IterateFuncResult[String, Int]],
-                                 optTransformFunc: Option[ResultTransformer] = None) {
+                                 optTransformFunc: Option[ResultTransformer[Int]] = None) {
 
     import system.dispatcher
 

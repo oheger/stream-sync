@@ -314,14 +314,14 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     */
   private class SourceFactoryImpl extends ElementSourceFactory {
     /** Holds a reference to the latest source that was created. */
-    val refSource = new AtomicReference[ElementSource[_, _]]()
+    val refSource = new AtomicReference[ElementSource[_, _, _]]()
 
     override def createElementSource[F, S](initState: S, initFolder: SyncFolderData[F],
                                            optCompletionFunc: Option[CompletionFunc[S]])
                                           (iterateFunc: IterateFunc[F, S]):
     Graph[SourceShape[FsElement], NotUsed] = {
       implicit val ec: ExecutionContext = system.dispatcher
-      val source = new ElementSource[F, S](initState, initFolder, optCompletionFunc)(iterateFunc)
+      val source = new ElementSource[F, S, Unit](initState, initFolder, optCompletionFunc)(iterateFunc)
       refSource set source
       source
     }

@@ -156,7 +156,7 @@ object Sync {
     * @param optCryptPwd the optional encryption password
     * @return the ''ResultTransformer'' for these parameters
     */
-  private def createResultTransformer(optCryptPwd: Option[String]): Option[ResultTransformer] =
+  private def createResultTransformer(optCryptPwd: Option[String]): Option[ResultTransformer[Unit]] =
     optCryptPwd.map(_ => CryptService.cryptTransformer())
 
   /**

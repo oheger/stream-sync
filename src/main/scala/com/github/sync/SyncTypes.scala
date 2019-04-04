@@ -299,8 +299,22 @@ object SyncTypes {
     * generic mechanism that iterates over folder structures. One example of
     * such functionality is encryption: the elements produced by a source need
     * to be transformed when the structure iterated over is encrypted.
+    *
+    * A concrete transformer is allowed to use a state. This can be used for
+    * instance for performance optimizations if data is cached between multiple
+    * invocations. The state is managed by the iteration source.
+    *
+    * @tparam S the type of the state used by this transformer
     */
-  trait ResultTransformer {
+  trait ResultTransformer[S] {
+    /**
+      * Returns an object with the initial state used by this transformer. This
+      * is used by an element source to initialize its state field.
+      *
+      * @return the initial state of this ''ResultTransformer''
+      */
+    def initialState: S
+
     /**
       * The transformation function for result objects produced by an element
       * source. If an element source is configured with such an adapt function, it
@@ -314,7 +328,7 @@ object SyncTypes {
       * @tparam F the type of folder data
       * @return a future with the transformed result
       */
-    def transform[F](result: IterateResult[F]): Future[IterateResult[F]]
+    def transform[F](result: IterateResult[F], state: S): Future[(IterateResult[F], S)]
   }
 
   /**

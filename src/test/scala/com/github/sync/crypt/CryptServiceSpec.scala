@@ -57,7 +57,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val result = IterateResult(FsFolder("/aFolder", 2), files, List.empty[SyncFolderData[Unit]])
 
     val transformer = CryptService.cryptTransformer()
-    val transResult = futureResult(transformer.transform(result))
+    val transResult = futureResult(transformer.transform(result, ()))._1
     transResult.currentFolder should be(result.currentFolder)
     transResult.folders should be(result.folders)
     transResult.files should be(expFiles)

@@ -44,10 +44,10 @@ class DelegateSyncStreamFactory(delegate: SyncStreamFactory = SyncStreamFactoryI
                                   (implicit ec: ExecutionContext):
   Future[Iterable[SupportedArgument]] = delegate.additionalArguments(uri, structureType)
 
-  override def createSyncInputSource(uri: String, optTransformer: Option[ResultTransformer],
-                                     structureType: StructureType)
-                                    (implicit ec: ExecutionContext, system: ActorSystem,
-                                     mat: ActorMaterializer): ArgsFunc[Source[FsElement, Any]] =
+  override def createSyncInputSource[T](uri: String, optTransformer: Option[ResultTransformer[T]],
+                                        structureType: StructureType)
+                                       (implicit ec: ExecutionContext, system: ActorSystem,
+                                        mat: ActorMaterializer): ArgsFunc[Source[FsElement, Any]] =
     delegate.createSyncInputSource(uri, optTransformer, structureType)
 
   override def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext,
@@ -55,11 +55,11 @@ class DelegateSyncStreamFactory(delegate: SyncStreamFactory = SyncStreamFactoryI
   : ArgsFunc[SourceFileProvider] =
     delegate.createSourceFileProvider(uri)
 
-  override def createSyncSource(uriSrc: String, optSrcTransformer: Option[ResultTransformer], uriDst: String,
-                                optDstTransformer: Option[ResultTransformer], additionalArgs: StructureArgs,
-                                ignoreTimeDelta: Int)
-                               (implicit ec: ExecutionContext, system: ActorSystem,
-                                mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]] =
+  override def createSyncSource[T1, T2](uriSrc: String, optSrcTransformer: Option[ResultTransformer[T1]],
+                                        uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
+                                        additionalArgs: StructureArgs, ignoreTimeDelta: Int)
+                                       (implicit ec: ExecutionContext, system: ActorSystem,
+                                        mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]] =
     delegate.createSyncSource(uriSrc, optSrcTransformer, uriDst, optDstTransformer, additionalArgs,
       ignoreTimeDelta)
 

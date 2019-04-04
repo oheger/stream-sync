@@ -51,12 +51,13 @@ import scala.util.{Failure, Success, Try}
   * @param ec               the execution context
   * @tparam F the type of the data used for folders
   * @tparam S the type of the iteration state
+  * @tparam T the type of the state of the transformer function
   */
-class ElementSource[F, S](val initState: S, initFolder: SyncFolderData[F],
-                                            optCompleteFunc: Option[CompletionFunc[S]] = None,
-                                            optTransformFunc: Option[ResultTransformer] = None)
-                                           (iterateFunc: IterateFunc[F, S])
-                                           (implicit ec: ExecutionContext)
+class ElementSource[F, S, T](val initState: S, initFolder: SyncFolderData[F],
+                             optCompleteFunc: Option[CompletionFunc[S]] = None,
+                             optTransformFunc: Option[ResultTransformer[T]] = None)
+                            (iterateFunc: IterateFunc[F, S])
+                            (implicit ec: ExecutionContext)
   extends GraphStage[SourceShape[FsElement]] {
   val out: Outlet[FsElement] = Outlet("ElementSource")
 
@@ -70,6 +71,13 @@ class ElementSource[F, S](val initState: S, initFolder: SyncFolderData[F],
 
       /** The queue with the folders that are pending to be processed. */
       private var pendingFolders = SyncFolderQueue[F](initFolder)
+
+      /** The state of the result transformer. */
+      private var transformerState: T = _
+
+      if (optTransformFunc.isDefined) {
+        transformerState = optTransformFunc.get.initialState
+      }
 
       /**
         * The function to be passed to the iteration function in order to
@@ -126,7 +134,7 @@ class ElementSource[F, S](val initState: S, initFolder: SyncFolderData[F],
         * @param optResult an option with the result
         */
       private def handleDirectResult(nextState: S, optResult: Option[IterateResult[F]]): Unit = {
-        optResult foreach (result => handleResult(optTransformFunc)(Success((nextState, result))))
+        optResult foreach (result => handleResult(optTransformFunc)(Success((nextState, result, transformerState))))
       }
 
       /**
@@ -140,8 +148,9 @@ class ElementSource[F, S](val initState: S, initFolder: SyncFolderData[F],
       private def handleFutureResult(nextState: S, optFutureFunc: Option[FutureResultFunc[F, S]]): Unit = {
         optFutureFunc foreach { resultFunc =>
           currentState = nextState
-          val callback = getAsyncCallback[Try[(S, IterateResult[F])]](handleResult(optTransformFunc))
-          resultFunc() onComplete callback.invoke
+          val currentTransformerState = transformerState
+          val callback = getAsyncCallback[Try[(S, IterateResult[F], T)]](handleResult(optTransformFunc))
+          resultFunc().map(t => (t._1, t._2, currentTransformerState)) onComplete callback.invoke
         }
       }
 
@@ -153,12 +162,13 @@ class ElementSource[F, S](val initState: S, initFolder: SyncFolderData[F],
         * @param optTransFunc an option with the transformation function
         * @param triedResult  a ''Try'' with the result from the iterate func
         */
-      private def handleResult(optTransFunc: Option[ResultTransformer])
-                              (triedResult: Try[(S, IterateResult[F])]): Unit = {
+      private def handleResult(optTransFunc: Option[ResultTransformer[T]])
+                              (triedResult: Try[(S, IterateResult[F], T)]): Unit = {
         triedResult match {
-          case Success((state, result)) if result.nonEmpty =>
+          case Success((state, result, transState)) if result.nonEmpty =>
             log.debug("Folder {} has {} files and {} sub folders.", result.currentFolder.relativeUri,
               result.files.size, result.folders.size)
+            transformerState = transState
             optTransFunc match {
               case Some(transformer) =>
                 applyTransformation(state, result, transformer)
@@ -170,9 +180,10 @@ class ElementSource[F, S](val initState: S, initFolder: SyncFolderData[F],
                 emitMultiple(out, orderedElements)
             }
 
-          case Success((state, result)) =>
+          case Success((state, result, transState)) =>
             log.debug("Folder {} is empty.", result.currentFolder.relativeUri)
             currentState = state
+            transformerState = transState
             continueIteration()
 
           case Failure(exception) =>
@@ -189,9 +200,9 @@ class ElementSource[F, S](val initState: S, initFolder: SyncFolderData[F],
         * @param result      the result to be transformed
         * @param transformer the transformer object
         */
-      private def applyTransformation(state: S, result: IterateResult[F], transformer: ResultTransformer): Unit = {
-        val callback = getAsyncCallback[Try[(S, IterateResult[F])]](handleResult(None))
-        transformer.transform(result).map((state, _)) onComplete callback.invoke
+      private def applyTransformation(state: S, result: IterateResult[F], transformer: ResultTransformer[T]): Unit = {
+        val callback = getAsyncCallback[Try[(S, IterateResult[F], T)]](handleResult(None))
+        transformer.transform(result, transformerState).map(t => (state, t._1, t._2)) onComplete callback.invoke
       }
 
       /**
