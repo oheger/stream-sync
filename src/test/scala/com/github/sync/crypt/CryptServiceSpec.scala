@@ -18,14 +18,35 @@ package com.github.sync.crypt
 
 import java.time.Instant
 
+import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
+import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes.{FsFile, FsFolder, IterateResult, SyncFolderData}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+
+object CryptServiceSpec {
+  /** A key used for crypt operations. */
+  private val SecretKey = CryptStage.keyFromString("A_Secr3t.Key!")
+}
 
 /**
   * Test class for ''CryptService''.
   */
-class CryptServiceSpec extends FlatSpec with Matchers with AsyncTestHelper {
+class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with BeforeAndAfterAll
+  with Matchers with AsyncTestHelper {
+  def this() = this(ActorSystem("CryptServiceSpec"))
+
+  override protected def afterAll(): Unit = {
+    TestKit shutdownActorSystem system
+  }
+
+  import CryptServiceSpec._
+  import system.dispatcher
+
+  /** The object to materialize streams. */
+  implicit val mat: ActorMaterializer = ActorMaterializer()
+
   "CryptService" should "return a transformation function that adapts file sizes" in {
     val files = List(FsFile("/f1.txt", 2, Instant.now(), 180106),
       FsFile("/f2.doc", 2, Instant.now(), 180209),
@@ -40,5 +61,29 @@ class CryptServiceSpec extends FlatSpec with Matchers with AsyncTestHelper {
     transResult.currentFolder should be(result.currentFolder)
     transResult.folders should be(result.folders)
     transResult.files should be(expFiles)
+  }
+
+  it should "encrypt names" in {
+    val Name = "A test name"
+
+    val encName = futureResult(CryptService.encryptName(SecretKey, Name))
+    encName should not be Name
+  }
+
+  it should "use a proper encoding for encrypted names" in {
+    val Name = "ThisIsANameThatIsGoingToBeEncrypted.test"
+
+    val encName = futureResult(CryptService.encryptName(SecretKey, Name))
+    encName.filterNot { c =>
+      c.isLetterOrDigit || c == '-' || c == '_' || c == '='
+    } should be("")
+  }
+
+  it should "support a round-trip of encrypting and decrypting names" in {
+    val Name = "ThisNameWillBeEncryptedAndDecrypted.test"
+
+    val processedName = futureResult(CryptService.encryptName(SecretKey, Name)
+      .flatMap(n => CryptService.decryptName(SecretKey, n)))
+    processedName should be(Name)
   }
 }
