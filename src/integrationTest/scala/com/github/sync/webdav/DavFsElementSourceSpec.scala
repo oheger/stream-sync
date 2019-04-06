@@ -190,7 +190,7 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
   private def stubTestFolders(suffix: String): Unit = {
     stubFolderRequest(RootPath, "root" + suffix + ".xml")
     ExpectedElements foreach {
-      case FsFolder(relativeUri, _) =>
+      case FsFolder(relativeUri, _, _) =>
         val fileName = folderFileName(relativeUri, suffix)
         val httpUri = Uri(RootPath + encodedFolderUri(relativeUri))
         stubFolderRequest(httpUri.toString(), fileName)

@@ -67,7 +67,7 @@ object ElementSerializer {
     elem match {
       case folder: FsFolder =>
         serializeBaseProperties(TagFolder, folder)
-      case file@FsFile(_, _, lastModified, size) =>
+      case file@FsFile(_, _, lastModified, size, _) =>
         s"${serializeBaseProperties(TagFile, file)} $lastModified $size"
     }
   }

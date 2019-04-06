@@ -136,9 +136,9 @@ object DavOperationHandler {
       op match {
         case SyncOperation(_, ActionRemove, _) =>
           simpleRequest(op, HttpRequest(method = HttpMethods.DELETE, uri = uri, headers = headers))
-        case SyncOperation(FsFolder(_, _), ActionCreate, _) =>
+        case SyncOperation(FsFolder(_, _, _), ActionCreate, _) =>
           simpleRequest(op, HttpRequest(method = MethodMkCol, uri = uri, headers = headers))
-        case SyncOperation(file@FsFile(_, _, _, _), action, _) =>
+        case SyncOperation(file@FsFile(_, _, _, _, _), action, _) =>
           createUploadRequest(file) map { req =>
             val needDelete = config.deleteBeforeOverride && action == ActionOverride
             val standardRequests = List(req, createPatchRequest(op))

@@ -59,6 +59,28 @@ object SyncTypes {
       * @return the level of this element
       */
     def level: Int
+
+    /**
+      * Returns an ''Option'' with the original URI of this element. During
+      * processing, it can happen that the URI is changed, e.g. if the element
+      * name has to be adapted somehow. With this property the original URI can
+      * be obtained. It returns ''None'' if there was no change in the URI.
+      *
+      * @return an ''Option'' for the original URI of this element
+      */
+    def optOriginalUri: Option[String]
+
+    /**
+      * Returns the original URI of this element. This is the URI how it is
+      * stored in the folder structure the element lives in. It may have been
+      * changed during processing by a sync operation. In this case, the
+      * ''relativeUri'' property contains the modified URI while this property
+      * can be used to find the original one. If the URI has not been changed,
+      * both properties have the same value.
+      *
+      * @return the original URI of this element
+      */
+    def originalUri: String = optOriginalUri getOrElse relativeUri
   }
 
   /**
@@ -66,24 +88,28 @@ object SyncTypes {
     *
     * This class defines some additional attributes relevant for files.
     *
-    * @param relativeUri  the relative URI of this file
-    * @param level        the level of this file
-    * @param lastModified the time of the last modification
-    * @param size         the file size (in bytes)
+    * @param relativeUri    the relative URI of this file
+    * @param level          the level of this file
+    * @param lastModified   the time of the last modification
+    * @param size           the file size (in bytes)
+    * @param optOriginalUri an ''Option'' for the original URI of this element
     */
   case class FsFile(override val relativeUri: String,
                     override val level: Int,
                     lastModified: Instant,
-                    size: Long) extends FsElement
+                    size: Long,
+                    override val optOriginalUri: Option[String] = None) extends FsElement
 
   /**
     * A class representing a folder in a file system to be synced.
     *
-    * @param relativeUri the relative URI of this folder
-    * @param level       the level of this folder
+    * @param relativeUri    the relative URI of this folder
+    * @param level          the level of this folder
+    * @param optOriginalUri an ''Option'' for the original URI of this element
     */
   case class FsFolder(override val relativeUri: String,
-                      override val level: Int) extends FsElement
+                      override val level: Int,
+                      override val optOriginalUri: Option[String] = None) extends FsElement
 
   /**
     * A trait representing an action to be applied on an element during a sync
