@@ -41,6 +41,13 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
     s should be(s"FOLDER ${folder.relativeUri} ${folder.level}")
   }
 
+  it should "serialize a folder with a changed original URI" in {
+    val folder = FsFolder("my_folder", 4, Some("my_original_testFolder"))
+
+    val s = ElementSerializer.serializeElement(folder).utf8String
+    s should be(s"FOLDER ${folder.relativeUri} ${folder.originalUri} ${folder.level}")
+  }
+
   it should "serialize a file" in {
     val fileTime = "2018-09-06T17:25:28.103Z"
     val file = FsFile("test_data.txt", 21, Instant.parse(fileTime), 123456)
@@ -49,11 +56,19 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
     s should be(s"FILE ${file.relativeUri} ${file.level} $fileTime ${file.size}")
   }
 
+  it should "serialize a file with a changed original URI" in {
+    val fileTime = "2019-04-06T22:04:06.104Z"
+    val file = FsFile("test_data.tst", 21, Instant.parse(fileTime), 123456, Some("foo.org"))
+
+    val s = ElementSerializer.serializeElement(file).utf8String
+    s should be(s"FILE ${file.relativeUri} ${file.originalUri} ${file.level} $fileTime ${file.size}")
+  }
+
   it should "encode element URIs on serialization" in {
-    val folder = FsFolder("/my data/sub/cool stuff (42)", 10)
+    val folder = FsFolder("/my data/sub/cool stuff (42)", 10, Some("/org/encoded name"))
 
     val s = ElementSerializer.serializeElement(folder).utf8String
-    s should be(s"FOLDER %2Fmy%20data%2Fsub%2Fcool%20stuff%20%2842%29 ${folder.level}")
+    s should be(s"FOLDER %2Fmy%20data%2Fsub%2Fcool%20stuff%20%2842%29 %2Forg%2Fencoded%20name ${folder.level}")
   }
 
   /**
@@ -83,21 +98,47 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
     checkSerializedOperation(ActionRemove, "REMOVE")
   }
 
-  it should "deserialize a folder element" in {
-    val folder = FsFolder("some/test/folder", 9)
+  /**
+    * Checks the deserialization of a folder element.
+    *
+    * @param optOrgUri the folder's optional original URI
+    */
+  private def checkFolderDeserialization(optOrgUri: Option[String]): Unit = {
+    val folder = FsFolder("some/test/folder", 9, optOrgUri)
     val parts = ElementSerializer.serializeElement(folder).utf8String.split("\\s")
 
     val folder2 = ElementSerializer.deserializeElement(parts).get
     folder2 should be(folder)
   }
 
-  it should "deserialize a file element" in {
+  it should "deserialize a folder element" in {
+    checkFolderDeserialization(None)
+  }
+
+  it should "deserialize a folder element with a changed original URI" in {
+    checkFolderDeserialization(Some("orignal/folder/uri"))
+  }
+
+  /**
+    * Checks the deserialization of a file element.
+    *
+    * @param optOrgUri the file's optional original URI
+    */
+  private def checkFileDeserialization(optOrgUri: Option[String]): Unit = {
     val file = FsFile("my/test/file.txt", 2, Instant.parse("2018-09-06T19:14:36.189Z"),
-      20180906191501L)
+      20180906191501L, optOrgUri)
     val parts = ElementSerializer.serializeElement(file).utf8String.split("\\s")
 
     val file2 = ElementSerializer.deserializeElement(parts).get
     file2 should be(file)
+  }
+
+  it should "deserialize a file element" in {
+    checkFileDeserialization(None)
+  }
+
+  it should "deserialize a file element with a changed original URI" in {
+    checkFileDeserialization(Some("/my/original/file.org"))
   }
 
   it should "handle a deserialization of an unknown element tag" in {

@@ -85,7 +85,9 @@ object ElementSerializer {
       serializeElement(operation.element) ++ CR
 
   /**
-    * Tries to create an ''FsElement'' from its serialized form.
+    * Tries to create an ''FsElement'' from its serialized form. Note that the
+    * serialized form contains a variable number of properties depending on the
+    * fact whether an original URI is present or not.
     *
     * @param parts the single parts of the serialized form
     * @return a ''Try'' with the resulting element
@@ -93,10 +95,15 @@ object ElementSerializer {
   def deserializeElement(parts: Seq[String]): Try[FsElement] = Try {
     lazy val elemUri = UriEncodingHelper decode parts(1)
     parts.head match {
-      case TagFolder =>
+      case TagFolder if parts.length <= 3 =>
         FsFolder(elemUri, parts(2).toInt)
-      case TagFile =>
+      case TagFolder =>
+        FsFolder(elemUri, parts(3).toInt, Some(UriEncodingHelper decode parts(2)))
+      case TagFile if parts.length <= 5 =>
         FsFile(elemUri, parts(2).toInt, Instant.parse(parts(3)), parts(4).toLong)
+      case TagFile =>
+        FsFile(elemUri, parts(3).toInt, Instant.parse(parts(4)), parts(5).toLong,
+          Some(UriEncodingHelper decode parts(2)))
       case tag =>
         throw new IllegalArgumentException("Unknown element tag: " + tag)
     }
@@ -123,8 +130,10 @@ object ElementSerializer {
     * @param elem the element
     * @return the basic string representation for this element
     */
-  private def serializeBaseProperties(tag: String, elem: FsElement): String =
-    s"$tag ${UriEncodingHelper encode elem.relativeUri} ${elem.level}"
+  private def serializeBaseProperties(tag: String, elem: FsElement): String = {
+    val orgUriStr = elem.optOriginalUri.fold("")(" " + UriEncodingHelper.encode(_))
+    s"$tag ${UriEncodingHelper encode elem.relativeUri}$orgUriStr ${elem.level}"
+  }
 
   /**
     * Extracts the properties of a ''SyncAction'' from the serialized
