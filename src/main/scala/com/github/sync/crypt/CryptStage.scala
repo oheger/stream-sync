@@ -18,6 +18,7 @@ package com.github.sync.crypt
 
 import java.nio.charset.StandardCharsets
 import java.security.{Key, SecureRandom}
+import java.util.concurrent.atomic.AtomicLong
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
@@ -40,6 +41,9 @@ object CryptStage {
 
   /** The name of the encryption algorithm. */
   val AlgorithmName = "AES"
+
+  /** A counter for keeping track on the number of processed bytes. */
+  private val processedBytesCount = new AtomicLong
 
   /**
     * Generates a key from the given byte array. This method expects that the
@@ -79,8 +83,25 @@ object CryptStage {
     * @param key the key for decryption
     * @return the state to decrypt data
     */
-  def decyptStage(key: Key): CryptStage =
+  def decryptStage(key: Key): CryptStage =
     new CryptStage(DecryptOpHandler, key)
+
+  /**
+    * Returns the number of bytes that have been encrypted or decrypted in
+    * total by instances of this stage class. This information is mainly used
+    * for testing or statistical purposes.
+    *
+    * @return the number of bytes processed by instances of ''CryptStage''
+    */
+  def processedBytes: Long = processedBytesCount.get()
+
+  /**
+    * Resets the counter for the number of bytes processed by instances of
+    * ''CryptStage''.
+    */
+  def resetProcessedBytes(): Unit = {
+    processedBytesCount set 0
+  }
 
   /**
     * Transforms the given string key to a byte array which can be used for the
@@ -113,6 +134,15 @@ object CryptStage {
       target(idx) = orgData(idx % orgData.length)
       padKeyData(orgData, target, idx + 1)
     }
+
+  /**
+    * Updates the counter for the bytes processed.
+    *
+    * @param buf the current buffer with data to be processed
+    */
+  private def updateProcessed(buf: ByteString): Unit = {
+    processedBytesCount.addAndGet(buf.length)
+  }
 }
 
 /**
@@ -199,6 +229,7 @@ class CryptStage(val cryptOpHandler: CryptOpHandler, key: Key) extends GraphStag
         */
       private def initProcessing(data: ByteString, cipher: Cipher): ByteString = {
         dataProcessed = true
+        updateProcessed(data)
         val result = cryptOpHandler.initCipher(key, cryptCipher, data, random)
         processingFunc = cryptFunc
         result
@@ -214,6 +245,7 @@ class CryptStage(val cryptOpHandler: CryptOpHandler, key: Key) extends GraphStag
     */
   private def cryptFunc: CryptFunc = (chunk, cipher) => {
     val encData = cipher.update(chunk.toArray)
+    updateProcessed(chunk)
     ByteString(encData)
   }
 }

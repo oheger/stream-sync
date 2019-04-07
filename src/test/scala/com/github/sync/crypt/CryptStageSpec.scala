@@ -103,7 +103,7 @@ class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with F
     * @return the resulting decrypted text
     */
   private def decrypt(cipherText: List[ByteString], key: String = Key): String =
-    combine(runCryptStream(cipherText, CryptStage.decyptStage(CryptStage.keyFromString(key))))
+    combine(runCryptStream(cipherText, CryptStage.decryptStage(CryptStage.keyFromString(key))))
 
   /**
     * Checks an encryption followed by a decryption. This should result in the
@@ -165,6 +165,16 @@ class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with F
     intercept[IllegalStateException] {
       decrypt(blocks)
     }
+  }
+
+  it should "collect statistics about the number of bytes processed" in {
+    CryptStage.resetProcessedBytes()
+    val cipher = encrypt(FileTestHelper.TestData)
+
+    CryptStage.processedBytes should be(FileTestHelper.testBytes().length)
+    decrypt(cipher)
+
+    CryptStage.processedBytes should be > 2L * FileTestHelper.TestData.length
   }
 
   "An EncryptOpHandler" should "calculate a correct file size" in {
