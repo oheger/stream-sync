@@ -28,8 +28,7 @@ object ElementUriResolver {
     * @return the new ''ElementUriResolver''
     */
   def apply(rootUri: Uri): ElementUriResolver =
-    new ElementUriResolver(UriEncodingHelper.removeTrailing(rootUri.path.toString(),
-      UriEncodingHelper.UriSeparator))
+    new ElementUriResolver(UriEncodingHelper removeTrailingSeparator rootUri.path.toString())
 }
 
 /**

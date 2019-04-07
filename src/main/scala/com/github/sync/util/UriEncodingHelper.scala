@@ -68,6 +68,18 @@ object UriEncodingHelper {
     else s
 
   /**
+    * Removes the given prefix from the string if it exists. If the string does
+    * not start with this prefix, it is not changed.
+    *
+    * @param s      the string
+    * @param prefix the prefix to remove
+    * @return the resulting string
+    */
+  @tailrec def removeLeading(s: String, prefix: String): String =
+    if (s startsWith prefix) removeLeading(s.substring(prefix.length), prefix)
+    else s
+
+  /**
     * Makes sure that the passed in URI ends with a separator. A separator is
     * added if and only if the passed in string does not already end with one.
     *
@@ -78,6 +90,16 @@ object UriEncodingHelper {
     if (hasTrailingSeparator(uri)) uri else uri + UriSeparator
 
   /**
+    * Removes a trailing separator from the passed in URI if it is present. If
+    * the URI does not end with a separator, it is returned as is.
+    *
+    * @param uri the URI
+    * @return the URI with a trailing separator removed
+    */
+  def removeTrailingSeparator(uri: String): String =
+    removeTrailing(uri, UriSeparator)
+
+  /**
     * Returns a flag whether the passed in URI string ends with a separator
     * character.
     *
@@ -86,4 +108,53 @@ object UriEncodingHelper {
     *         otherwise
     */
   def hasTrailingSeparator(uri: String): Boolean = uri.endsWith(UriSeparator)
+
+  /**
+    * Removes a leading separator from the given URI if it is present.
+    * Otherwise, the URI is returned as is.
+    *
+    * @param uri the URI
+    * @return the URI with a leading separator removed
+    */
+  def removeLeadingSeparator(uri: String): String =
+    removeLeading(uri, UriSeparator)
+
+  /**
+    * Checks whether the given URI has a parent element. If this function
+    * returns '''false''' the URI points to a top-level element in the
+    * iteration.
+    *
+    * @param uri the URI in question
+    * @return a flag whether this URI has a parent element
+    */
+  def hasParent(uri: String): Boolean =
+    findNameComponentPos(uri) > 0
+
+  /**
+    * Splits the given URI in a parent URI and a name. This function
+    * determines the position of the last name component in the given URI. The
+    * URI is split at this position, and both strings are returned. The
+    * separator is not contained in any of these components, i.e. the parent
+    * URI does not end with a separator nor does the name start with one. If
+    * the URI has no parent, the resulting parent string is empty.
+    *
+    * @param uri the URI to be split
+    * @return a tuple with the parent URI and the name component
+    */
+  def splitParent(uri: String): (String, String) = {
+    val canonicalUri = removeTrailingSeparator(uri)
+    val pos = findNameComponentPos(canonicalUri)
+    if (pos >= 0) (canonicalUri.substring(0, pos), canonicalUri.substring(pos + 1))
+    else ("", canonicalUri)
+  }
+
+  /**
+    * Searches for the position of the name component in the given URI. If
+    * found, its index is returned; otherwise, result is -1.
+    *
+    * @param uri the URI
+    * @return the position of the name component or -1
+    */
+  private def findNameComponentPos(uri: String): Int =
+    uri lastIndexOf UriSeparator
 }
