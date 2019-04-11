@@ -23,7 +23,9 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
 import com.github.sync.SyncTypes.{FsFile, IterateResult, ResultTransformer}
+import com.github.sync.util.{LRUCache, UriEncodingHelper}
 
+import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -37,14 +39,25 @@ object CryptService {
     * Returns a ''ResultTransformer'' that supports the iteration over an
     * encrypted folder structure.
     *
+    * @param optNameDecryptKey an ''Option'' with the key for file name
+    *                          encryption; if set, names are decrypted
+    * @param ec                the eecution context
+    * @param mat               the object to materialize streams
     * @return the transformer for encrypted folder structures
     */
-  def cryptTransformer(): ResultTransformer[Unit] = new ResultTransformer[Unit] {
-    override def initialState: Unit = ()
+  def cryptTransformer(optNameDecryptKey: Option[Key])(implicit ec: ExecutionContext, mat: ActorMaterializer):
+  ResultTransformer[LRUCache[String, String]] =
+    new ResultTransformer[LRUCache[String, String]] {
+      override def initialState: LRUCache[String, String] = LRUCache(1024)
 
-    override def transform[F](result: IterateResult[F], s: Unit): Future[(IterateResult[F], Unit)] =
-      Future.successful((transformEncryptedFileSizes(result), ()))
-  }
+      override def transform[F](result: IterateResult[F], cache: LRUCache[String, String]):
+      Future[(IterateResult[F], LRUCache[String, String])] = optNameDecryptKey match {
+        case None =>
+          Future.successful((transformEncryptedFileSizes(result), cache))
+        case Some(key) =>
+          createDecryptedResult(key, result, cache)
+      }
+    }
 
   /**
     * Adapts the sizes of encrypted files in the given result object. This is
@@ -118,5 +131,186 @@ object CryptService {
     * @return the transformed file
     */
   private def transformEncryptedFileSize(f: FsFile): FsFile =
-    f.copy(size = DecryptOpHandler.processedSize(f.size))
+    f.copy(size = calculateEncryptedFileSize(f))
+
+  /**
+    * Calculates the size of an encrypted file.
+    *
+    * @param f the file object
+    * @return the actual size of this file
+    */
+  private def calculateEncryptedFileSize(f: FsFile): Long = DecryptOpHandler.processedSize(f.size)
+
+  /**
+    * Transforms the given result object to contain only decrypted paths. The
+    * cache is used to avoid unnecessary decrypt operations and updated with
+    * the new paths encountered.
+    *
+    * @param key    the key for decryption
+    * @param result the result object to be transformed
+    * @param cache  the cache
+    * @param ec     the execution context
+    * @param mat    the object to materialize streams
+    * @tparam F the type of folder data
+    * @return a future with the transformed result and the updated cache
+    */
+  private def createDecryptedResult[F](key: Key, result: IterateResult[F], cache: LRUCache[String, String])
+                                      (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[(IterateResult[F], LRUCache[String, String])] = {
+    val futDecryptedFolderUri = decryptCurrentDirectory(key, result, cache)
+    for {(decryptedFolderUri, cache2) <- futDecryptedFolderUri
+         (files, folders) <- decryptResultElements(key, result,
+           UriEncodingHelper.withTrailingSeparator(decryptedFolderUri))
+    } yield {
+      val decryptedResult = createDecryptedResult(result, decryptedFolderUri, files, folders)
+      val updatedCache = updateCacheWithResultFolders(decryptedResult, cache2)
+      (decryptedResult, updatedCache)
+    }
+  }
+
+  /**
+    * Decrypts the current directory path in the given result object. The cache
+    * is used to decrypt as few path components as possible; it is updated with
+    * new parts as necessary.
+    *
+    * @param key    the key for decryption
+    * @param result the result object to be transformed
+    * @param cache  the cache
+    * @param ec     the execution context
+    * @param mat    the object to materialize streams
+    * @tparam F the type of folder data
+    * @return a future with the decrypted directory path and the updated cache
+    */
+  private def decryptCurrentDirectory[F](key: Key, result: IterateResult[F], cache: LRUCache[String, String])
+                                        (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[(String, LRUCache[String, String])] = {
+    val (prefixCrypt, components) = splitUnknownPathComponents(result.currentFolder.relativeUri, cache)
+    Future.sequence(components.map(decryptName(key, _)))
+      .map { decryptComponents =>
+        val prefix = cache get prefixCrypt getOrElse ""
+        val cacheNext = updateCacheForDirectoryPath(prefix, prefixCrypt, decryptComponents.zip(components), cache)
+        (cacheNext(result.currentFolder.relativeUri), cacheNext)
+      }
+  }
+
+  /**
+    * Checks which parts of the given directory path is already contained in
+    * the cache. We will later only decrypt the unknown parts.
+    *
+    * @param dir   the directory to check
+    * @param cache the cache
+    * @return a tuple with the known prefix and a list with unknown components
+    */
+  private def splitUnknownPathComponents(dir: String, cache: LRUCache[String, String]): (String, List[String]) = {
+    @tailrec def checkComponent(path: String, results: List[String]): (String, List[String]) = {
+      if (path.length <= 0 || cache.contains(path)) (path, results)
+      else {
+        val (parent, name) = UriEncodingHelper.splitParent(path)
+        checkComponent(parent, name :: results)
+      }
+    }
+
+    checkComponent(dir, Nil)
+  }
+
+  /**
+    * Adds information about the given path components to the cache.
+    *
+    * @param prefix      the prefix of the path (decrypted)
+    * @param prefixCrypt the prefix of the path (encrypted)
+    * @param components  a list with tuples of decrypted and encrypted names
+    * @param cache       the cache
+    * @return the updated cache
+    */
+  private def updateCacheForDirectoryPath(prefix: String, prefixCrypt: String, components: List[(String, String)],
+                                          cache: LRUCache[String, String]): LRUCache[String, String] =
+    components.foldLeft((prefix, prefixCrypt, cache)) { (t, e) =>
+      val path = t._1 + UriEncodingHelper.UriSeparator + e._1
+      val pathCrypt = t._2 + UriEncodingHelper.UriSeparator + e._2
+      (path, pathCrypt, t._3.put(pathCrypt -> path))
+    }._3
+
+  /**
+    * Decrypts a sequence of URIs starting with a common prefix. On each URI
+    * the prefix is removed, the resulting name is processed, and then the
+    * other prefix is added.
+    *
+    * @param key             the key for the crypt operation
+    * @param prefixLen       the length of the prefix to be removed
+    * @param decryptedPrefix the prefix of the processed URI
+    * @param uris            the URIs to be processed
+    * @param ec              the execution context
+    * @param mat             the object to materialize streams
+    * @return a future with the resulting URIs
+    */
+  private def decryptPaths(key: Key, prefixLen: Int, decryptedPrefix: String, uris: List[String])
+                          (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[List[String]] = {
+    val processedUris = uris.map(_.substring(prefixLen))
+      .map(decryptName(key, _).map(decryptedPrefix + _))
+    Future.sequence(processedUris)
+  }
+
+  /**
+    * Decrypts the names of the files and folders in an iteration result based
+    * on the given parameters.
+    *
+    * @param key             the key to decrypt the names
+    * @param iterateResult   the result to be processed
+    * @param decryptedFolder the URI of the decrypted current folder
+    * @param ec              the execution context
+    * @param mat             the object to materialize streams
+    * @tparam F the type of folder results
+    * @return a tuple with the decrypted file and folder names
+    */
+  private def decryptResultElements[F](key: Key, iterateResult: IterateResult[F], decryptedFolder: String)
+                                      (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[(List[String], List[String])] = {
+    val prefixLength = UriEncodingHelper.withTrailingSeparator(iterateResult.currentFolder.relativeUri).length
+    val futFiles = decryptPaths(key, prefixLength, decryptedFolder, iterateResult.files.map(_.relativeUri))
+    val futFolders = decryptPaths(key, prefixLength, decryptedFolder, iterateResult.folders.map(_.folder.relativeUri))
+    for {files <- futFiles
+         folders <- futFolders
+    } yield (files, folders)
+  }
+
+  /**
+    * Constructs a new iteration result from the given decrypted paths.
+    *
+    * @param source          the original result
+    * @param decryptedFolder the URI of the decrypted current folder
+    * @param fileNames       the decrypted file names
+    * @param folderNames     the decrypted folder names
+    * @tparam F the type of folder results
+    * @return the new iteration result
+    */
+  private def createDecryptedResult[F](source: IterateResult[F], decryptedFolder: String,
+                                       fileNames: List[String], folderNames: List[String]): IterateResult[F] = {
+    val currentFolder = source.currentFolder.copy(relativeUri =
+      UriEncodingHelper.removeTrailingSeparator(decryptedFolder))
+    val files = source.files.zip(fileNames).map { t =>
+      t._1.copy(relativeUri = t._2, optOriginalUri = Some(t._1.relativeUri),
+        size = calculateEncryptedFileSize(t._1))
+    }
+    val folders = source.folders.zip(folderNames).map { t =>
+      t._1.copy(folder = t._1.folder.copy(relativeUri = t._2, optOriginalUri = Some(t._1.folder.relativeUri)))
+    }
+    IterateResult(currentFolder, files, folders)
+  }
+
+  /**
+    * Updates the given cache by adding the information about the folders
+    * contained in the result object. (This information is relevant because it
+    * is needed when processing the next level of the iteration.)
+    *
+    * @param result the result object
+    * @param cache  the cache to be updated
+    * @tparam F the type of additional data in folders
+    * @return the updated cache
+    */
+  private def updateCacheWithResultFolders[F](result: IterateResult[F], cache: LRUCache[String, String]):
+  LRUCache[String, String] = {
+    val pathMappings = result.folders.map(f => (f.folder.originalUri, f.folder.relativeUri))
+    cache.put(pathMappings: _*)
+  }
 }

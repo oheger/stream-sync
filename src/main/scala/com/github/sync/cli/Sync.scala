@@ -31,6 +31,7 @@ import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.crypt.CryptService
 import com.github.sync.impl.{CryptAwareSourceFileProvider, SyncStreamFactoryImpl}
 import com.github.sync.log.SerializerStreamHelper
+import com.github.sync.util.LRUCache
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -154,10 +155,14 @@ object Sync {
     * element source are compatible with the parameters passed in.
     *
     * @param optCryptPwd the optional encryption password
+    * @param ec          the execution context
+    * @param mat         the object to materialize streams
     * @return the ''ResultTransformer'' for these parameters
     */
-  private def createResultTransformer(optCryptPwd: Option[String]): Option[ResultTransformer[Unit]] =
-    optCryptPwd.map(_ => CryptService.cryptTransformer())
+  private def createResultTransformer(optCryptPwd: Option[String])
+                                     (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Option[ResultTransformer[LRUCache[String, String]]] =
+    optCryptPwd.map(_ => CryptService.cryptTransformer(None))
 
   /**
     * Creates the source for the sync process if a sync log is provided. The
@@ -209,7 +214,7 @@ object Sync {
   }
 
   /**
-    * Creates the source file provider. A bsic provider can be obtained from
+    * Creates the source file provider. A basic provider can be obtained from
     * the factory. Then support for encryption might need to be added if an
     * encryption password has been provided.
     *
