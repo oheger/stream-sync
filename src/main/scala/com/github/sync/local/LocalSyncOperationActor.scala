@@ -82,7 +82,7 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
   import context.dispatcher
 
   override def receive: Receive = {
-    case op@SyncOperation(file: FsFile, action, _)
+    case op@SyncOperation(file: FsFile, action, _, _, _)
       if action == ActionCreate || action == ActionOverride =>
       val futSource = sourceFileProvider fileSource file
       val destPath = resolveInDestination(file)
@@ -97,11 +97,11 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
           log.error("Failed copy operation {}!", exception)
       }
 
-    case op@SyncOperation(element, ActionCreate, _) =>
+    case op@SyncOperation(element, ActionCreate, _, _, _) =>
       Files.createDirectory(resolveInDestination(element))
       sender ! op
 
-    case op@SyncOperation(element, ActionRemove, _) =>
+    case op@SyncOperation(element, ActionRemove, _, _, _) =>
       Files delete resolveInDestination(element)
       sender ! op
   }

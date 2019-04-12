@@ -156,8 +156,9 @@ object SyncStage {
     */
   private def destinationFinished(state: SyncState, stage: SyncStage, portIdx: Int,
                                   element: FsElement): (EmitData, SyncState) = {
+    //TODO set correct URIs
     def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
-      (EmitData(List(SyncOperation(elem, ActionCreate, elem.level)), stage.PullSource), s)
+      (EmitData(List(SyncOperation(elem, ActionCreate, elem.level, null, null)), stage.PullSource), s)
 
     handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
       handleElement(state, element)
@@ -208,8 +209,8 @@ object SyncStage {
         elemDest, isRemoved)
       Some((EmitData(op, stage.PullDest), next))
     } else if (delta < 0)
-      Some((EmitData(List(SyncOperation(elemSource, ActionCreate, elemSource.level)),
-        stage.PullSource), state.updateCurrentElement(elemDest)))
+      Some((EmitData(List(SyncOperation(elemSource, ActionCreate, elemSource.level, null, null)),
+        stage.PullSource), state.updateCurrentElement(elemDest))) //TODO set correct URIs
     else None
   }
 
@@ -243,6 +244,7 @@ object SyncStage {
     * @param ignoreTimeDelta the delta in file times to be ignored
     * @return an ''Option'' with data how to handle these elements
     */
+  //TODO set correct URIs for operations
   private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement,
                                              state: SyncState, stage: SyncStage,
                                              ignoreTimeDelta: Int):
@@ -250,16 +252,16 @@ object SyncStage {
     (elemSource, elemDest) match {
       case (eSrc: FsFile, eDst: FsFile)
         if differentFileTimes(eSrc, eDst, ignoreTimeDelta) || eSrc.size != eDst.size =>
-        Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level)), state, stage))
+        Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, null, null)), state, stage))
 
       case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
-        val ops = List(SyncOperation(fileDst, ActionRemove, fileDst.level),
-          SyncOperation(folderSrc, ActionCreate, folderSrc.level))
+        val ops = List(SyncOperation(fileDst, ActionRemove, fileDst.level, null, null),
+          SyncOperation(folderSrc, ActionCreate, folderSrc.level, null, null))
         Some(emitAndPullBoth(ops, state, stage))
 
       case (fileSrc: FsFile, folderDst: FsFolder) => // folder converted to file
-        val defOps = SyncOperation(folderDst, ActionRemove, fileSrc.level) ::
-          SyncOperation(fileSrc, ActionCreate, fileSrc.level) :: state.deferredOps
+        val defOps = SyncOperation(folderDst, ActionRemove, fileSrc.level, null, null) ::
+          SyncOperation(fileSrc, ActionCreate, fileSrc.level, null, null) :: state.deferredOps
         val next = state.copy(deferredOps = defOps,
           removedPaths = addRemovedFolder(state, folderDst))
         Some(emitAndPullBoth(Nil, next, stage))
@@ -368,8 +370,9 @@ object SyncStage {
     */
   private def removeElement(state: SyncState, element: FsElement, removedPath: Option[FsElement]):
   (List[SyncOperation], SyncState) = {
+    //TODO set correct URIs for elements
     val op = SyncOperation(element, ActionRemove,
-      removedPath map (_.level) getOrElse element.level)
+      removedPath map (_.level) getOrElse element.level, null, null)
     element match {
       case folder: FsFolder =>
         val paths = if (removedPath.isDefined) state.removedPaths

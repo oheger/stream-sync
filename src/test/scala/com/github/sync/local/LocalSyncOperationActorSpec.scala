@@ -60,7 +60,7 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
     * @return the ''SyncOperation''
     */
   private def createSyncOp(element: FsElement, action: SyncAction): SyncOperation =
-    SyncOperation(element, action, 1)
+    SyncOperation(element, action, 1, null, null)
 
   "A LocalSyncOperationActor" should "create a folder in the destination structure" in {
     val FolderName = "newTestFolder"

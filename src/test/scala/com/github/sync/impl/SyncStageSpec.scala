@@ -64,7 +64,7 @@ object SyncStageSpec {
     * @return the sync operation
     */
   private def createOp(element: FsElement, action: SyncAction, level: Int = 0): SyncOperation =
-    SyncOperation(element, action, level)
+    SyncOperation(element, action, level, null, null)
 }
 
 /**

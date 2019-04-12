@@ -80,7 +80,7 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
     */
   private def checkSerializedOperation(action: SyncAction, strAction: String): Unit = {
     val elem = FsFolder("my_folder", 8)
-    val op = SyncOperation(elem, action, 4)
+    val op = SyncOperation(elem, action, 4, null, null)
 
     val s = ElementSerializer.serializeOperation(op).utf8String
     s should be(s"$strAction ${op.level} FOLDER ${elem.relativeUri} ${elem.level}$lineEnd")
@@ -174,7 +174,7 @@ class ElementSerializerSpec extends FlatSpec with Matchers {
   private def checkDeserializeOperation(action: SyncAction): Unit = {
     val file = FsFile("my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
       20180906193152L)
-    val operation = SyncOperation(file, action, 22)
+    val operation = SyncOperation(file, action, 22, null, null)
     val opRaw = ElementSerializer serializeOperation operation
 
     ElementSerializer.deserializeOperation(opRaw.utf8String) match {

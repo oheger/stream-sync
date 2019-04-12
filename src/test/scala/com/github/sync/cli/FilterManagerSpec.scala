@@ -60,6 +60,17 @@ object FilterManagerSpec {
     */
   private def elementWithTime(name: String, time: Instant): FsElement =
     FsFile(name, 0, time, 42)
+
+  /**
+    * Convenience function to create a sync operation with some default values.
+    *
+    * @param action  the action of the operation
+    * @param level   the level
+    * @param element the subject element
+    * @return the newly created operation
+    */
+  private def createOperation(action: SyncAction, level: Int, element: FsElement = Element): SyncOperation =
+    SyncOperation(element, action, level, element.originalUri, element.originalUri)
 }
 
 /**
@@ -171,14 +182,14 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
 
   it should "parse a min-level filter expression" in {
     val Expression = "min-level:1"
-    val opAccepted = SyncOperation(Element, ActionCreate, 1)
+    val opAccepted = createOperation(ActionCreate, 1)
 
     checkParsedFilterExpression(Expression, opAccepted, opAccepted.copy(level = 0))
   }
 
   it should "support = as expression separator" in {
     val Expression = "min-level=2"
-    val opAccepted = SyncOperation(Element, ActionCreate, 2)
+    val opAccepted = createOperation(ActionCreate, 2)
 
     checkParsedFilterExpression(Expression, opAccepted, opAccepted.copy(level = 1))
   }
@@ -192,7 +203,7 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val filter1: SyncOperationFilter = _ => true
     val filter2: SyncOperationFilter = op => op.level == 0
     val commonFilters = List[SyncOperationFilter](filter1, filter2)
-    val opAccepted = SyncOperation(Element, ActionCreate, 1)
+    val opAccepted = createOperation(ActionCreate, 1)
 
     val allFilters = checkParsedFilterExpression(Expression, opAccepted,
       opAccepted.copy(level = 0), commonFilters)
@@ -201,8 +212,8 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
 
   it should "parse a max-level filter expression" in {
     val Expression = "max-level:5"
-    val opAccepted = SyncOperation(Element, ActionRemove, 5)
-    val opRejected = SyncOperation(Element, ActionRemove, 6)
+    val opAccepted = createOperation(ActionRemove, 5)
+    val opRejected = createOperation(ActionRemove, 6)
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
@@ -211,10 +222,10 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val commonFilter: SyncOperationFilter = op => op.element.relativeUri == "/foo"
     val Expression1 = "min-level:1"
     val Expression2 = "max-level:4"
-    val opAcceptedMin = SyncOperation(Element, ActionRemove, 1)
-    val opRejectedMin = SyncOperation(Element, ActionRemove, 0)
-    val opAcceptedMax = SyncOperation(Element, ActionRemove, 4)
-    val opRejectedMax = SyncOperation(Element, ActionRemove, 5)
+    val opAcceptedMin = createOperation(ActionRemove, 1)
+    val opRejectedMin = createOperation(ActionRemove, 0)
+    val opAcceptedMax = createOperation(ActionRemove, 4)
+    val opRejectedMax = createOperation(ActionRemove, 5)
 
     val allFilters = futureResult(FilterManager.parseFilterOption(List(Expression1, Expression2),
       ActionRemove, List(commonFilter)))(ActionRemove)
@@ -224,7 +235,7 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
   }
 
   it should "accept operations if no filters are defined" in {
-    val op = SyncOperation(Element, ActionCreate, 0)
+    val op = createOperation(ActionCreate, 0)
 
     FilterManager.applyFilter(op, SyncFilterData(Map.empty)) shouldBe true
   }
@@ -232,7 +243,7 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
   it should "filter out a sync op based on the filter configuration" in {
     val filterData = SyncFilterData(futureResult(FilterManager.parseFilterOption(
       List("min-level:3"), ActionOverride, Nil)))
-    val op = SyncOperation(Element, ActionOverride, 2)
+    val op = createOperation(ActionOverride, 2)
 
     FilterManager.applyFilter(op, filterData) shouldBe false
   }
@@ -241,7 +252,7 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val Expressions = List("min-level:1", "max-level:2")
     val filterData = SyncFilterData(futureResult(FilterManager.parseFilterOption(Expressions,
       ActionOverride, Nil)))
-    val op = SyncOperation(Element, ActionOverride, 2)
+    val op = createOperation(ActionOverride, 2)
 
     FilterManager.applyFilter(op, filterData) shouldBe true
   }
@@ -250,7 +261,7 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val Expressions = List("min-level:1", "max-level:2")
     val filterData = SyncFilterData(futureResult(FilterManager.parseFilterOption(Expressions,
       ActionOverride, Nil)))
-    val op = SyncOperation(Element, ActionOverride, 3)
+    val op = createOperation(ActionOverride, 3)
 
     FilterManager.applyFilter(op, filterData) shouldBe false
   }
@@ -259,7 +270,7 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val Expressions = List("min-level:1", "max-level:2")
     val filterData = SyncFilterData(futureResult(FilterManager.parseFilterOption(Expressions,
       ActionOverride, Nil)))
-    val op = SyncOperation(Element, ActionCreate, 3)
+    val op = createOperation(ActionCreate, 3)
 
     FilterManager.applyFilter(op, filterData) shouldBe true
   }
@@ -276,13 +287,13 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val args = Map(FilterManager.ArgCreateFilter -> List("min-level:1", "max-level:2"),
       FilterManager.ArgOverrideFilter -> List("min-level:2", "max-level:4"),
       FilterManager.ArgRemoveFilter -> List("min-level:3"))
-    val acceptedOps = List(SyncOperation(Element, ActionCreate, 1),
-      SyncOperation(Element, ActionOverride, 4),
-      SyncOperation(Element, ActionRemove, 3))
-    val rejectedOps = List(SyncOperation(Element, ActionCreate, 0),
-      SyncOperation(Element, ActionCreate, 3),
-      SyncOperation(Element, ActionOverride, 5),
-      SyncOperation(Element, ActionRemove, 2))
+    val acceptedOps = List(createOperation(ActionCreate, 1),
+      createOperation(ActionOverride, 4),
+      createOperation(ActionRemove, 3))
+    val rejectedOps = List(createOperation(ActionCreate, 0),
+      createOperation(ActionCreate, 3),
+      createOperation(ActionOverride, 5),
+      createOperation(ActionRemove, 2))
 
     checkParseFilterArguments(args, acceptedOps, rejectedOps)
   }
@@ -290,12 +301,12 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
   it should "parse the argument with common filter expressions" in {
     val args = Map(FilterManager.ArgCommonFilter -> List("min-level:2", "max-level:4"),
       FilterManager.ArgRemoveFilter -> List("min-level:3", "max-level=3"))
-    val acceptedOps = List(SyncOperation(Element, ActionCreate, 2),
-      SyncOperation(Element, ActionOverride, 4),
-      SyncOperation(Element, ActionRemove, 3))
-    val rejectedOps = List(SyncOperation(Element, ActionCreate, 1),
-      SyncOperation(Element, ActionOverride, 5),
-      SyncOperation(Element, ActionRemove, 2))
+    val acceptedOps = List(createOperation(ActionCreate, 2),
+      createOperation(ActionOverride, 4),
+      createOperation(ActionRemove, 3))
+    val rejectedOps = List(createOperation(ActionCreate, 1),
+      createOperation(ActionOverride, 5),
+      createOperation(ActionRemove, 2))
 
     checkParseFilterArguments(args, acceptedOps, rejectedOps)
   }
@@ -311,27 +322,27 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
 
   it should "support a filter to disable specific action types" in {
     val args = Map(FilterManager.ArgActionFilter -> List("actioncreate", "actionoverride"))
-    val acceptedOps = List(SyncOperation(Element, ActionCreate, 1),
-      SyncOperation(Element, ActionOverride, 0))
-    val rejectedOps = List(SyncOperation(Element, ActionRemove, 0))
+    val acceptedOps = List(createOperation(ActionCreate, 1),
+      createOperation(ActionOverride, 0))
+    val rejectedOps = List(createOperation(ActionRemove, 0))
 
     checkParseFilterArguments(args, acceptedOps, rejectedOps)
   }
 
   it should "ignore case for action type filters" in {
     val args = Map(FilterManager.ArgActionFilter -> List("actionCreate", "ActionREMOVE"))
-    val acceptedOps = List(SyncOperation(Element, ActionCreate, 1),
-      SyncOperation(Element, ActionRemove, 0))
-    val rejectedOps = List(SyncOperation(Element, ActionOverride, 0))
+    val acceptedOps = List(createOperation(ActionCreate, 1),
+      createOperation(ActionRemove, 0))
+    val rejectedOps = List(createOperation(ActionOverride, 0))
 
     checkParseFilterArguments(args, acceptedOps, rejectedOps)
   }
 
   it should "support comma-separated action type filters" in {
     val args = Map(FilterManager.ArgActionFilter -> List("actionCreate , ActionOverride"))
-    val acceptedOps = List(SyncOperation(Element, ActionCreate, 1),
-      SyncOperation(Element, ActionOverride, 0))
-    val rejectedOps = List(SyncOperation(Element, ActionRemove, 0))
+    val acceptedOps = List(createOperation(ActionCreate, 1),
+      createOperation(ActionOverride, 0))
+    val rejectedOps = List(createOperation(ActionRemove, 0))
 
     checkParseFilterArguments(args, acceptedOps, rejectedOps)
   }
@@ -345,48 +356,48 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
 
   it should "parse a simple exclude filter expression" in {
     val Expression = "exclude:/foo"
-    val opAccepted = SyncOperation(FsFolder("/bar", 0), ActionCreate, 1)
-    val opRejected = SyncOperation(FsFolder("/foo", 0), ActionCreate, 1)
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/bar", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder("/foo", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "support ? characters in exclusion filters" in {
     val Expression = "exclude:/?oo"
-    val opAccepted = SyncOperation(FsFolder("/fof", 0), ActionCreate, 1)
-    val opRejected = SyncOperation(FsFolder("/hoo", 0), ActionCreate, 1)
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/fof", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder("/hoo", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "support * characters in exclusion filters" in {
     val Expression = "exclude:*/target/*"
-    val opAccepted = SyncOperation(FsFolder("/target-folder/test", 0), ActionCreate, 1)
-    val opRejected = SyncOperation(FsFolder("/test/target/sub", 0), ActionCreate, 1)
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/target-folder/test", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder("/test/target/sub", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "quote regular glob patterns in filter expressions" in {
     val Expression = "exclude:/foo(1)-(2)"
-    val opAccepted = SyncOperation(FsFolder("/foo(1)-(3)", 0), ActionCreate, 1)
-    val opRejected = SyncOperation(FsFolder("/foo(1)-(2)", 0), ActionCreate, 1)
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/foo(1)-(3)", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder("/foo(1)-(2)", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "match exclusions case insensitive" in {
     val Expression = "exclude:*/target/*"
-    val opAccepted = SyncOperation(FsFolder("/test/targetTest/test", 0), ActionCreate, 1)
-    val opRejected = SyncOperation(FsFolder("/test/TARGET/test", 0), ActionCreate, 1)
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/test/targetTest/test", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder("/test/TARGET/test", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "support inclusion filters" in {
     val Expression = "include:*/tar?et/*-bak"
-    val opAccepted = SyncOperation(FsFolder("/foo/TARSET/more/test-bak", 0), ActionCreate, 1)
-    val opRejected = SyncOperation(FsFolder("/hoo/targetDir/test-bak", 0), ActionCreate, 1)
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/foo/TARSET/more/test-bak", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder("/hoo/targetDir/test-bak", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
@@ -394,10 +405,10 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
   it should "support a date-after filter with full date and time" in {
     val timeStr = "2018-08-29T21:27:12"
     val Expression = "date-after:" + timeStr
-    val opAccepted = SyncOperation(elementWithTime("ok", toInstant(timeStr)),
-      ActionCreate, 0)
-    val opRejected = SyncOperation(elementWithTime("fail", toInstant("2018-08-29T21:27:11")),
-      ActionCreate, 0)
+    val opAccepted = createOperation(ActionCreate, 0,
+      elementWithTime("ok", toInstant(timeStr)))
+    val opRejected = createOperation(ActionCreate, 0,
+      elementWithTime("fail", toInstant("2018-08-29T21:27:11")))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
@@ -405,9 +416,9 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
   it should "accept folders when using a date-after filter" in {
     val timeStr = "2018-08-29T22:03:08"
     val Expression = "date-after:" + timeStr
-    val opAccepted = SyncOperation(Element, ActionCreate, 0)
-    val opRejected = SyncOperation(elementWithTime("e", toInstant("2018-08-29T22:00:00")),
-      ActionCreate, 0)
+    val opAccepted = createOperation(ActionCreate, 0)
+    val opRejected = createOperation(ActionCreate, 0,
+      elementWithTime("e", toInstant("2018-08-29T22:00:00")))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
@@ -415,10 +426,10 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
   it should "support a date-before filter with full date and time" in {
     val timeStr = "2018-08-29T22:05:04"
     val Expression = "date-before:" + timeStr
-    val opAccepted = SyncOperation(elementWithTime("ok", toInstant("2018-08-29T22:05:03")),
-      ActionCreate, 0)
-    val opRejected = SyncOperation(elementWithTime("!", toInstant(timeStr)),
-      ActionCreate, 0)
+    val opAccepted = createOperation(ActionCreate, 0,
+      elementWithTime("ok", toInstant("2018-08-29T22:05:03")))
+    val opRejected = createOperation(ActionCreate, 0,
+      elementWithTime("!", toInstant(timeStr)))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
@@ -426,29 +437,29 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
   it should "accept folders when using a date-before filter" in {
     val timeStr = "2018-08-29T22:09:45"
     val Expression = "date-before:" + timeStr
-    val opAccepted = SyncOperation(Element, ActionCreate, 0)
-    val opRejected = SyncOperation(elementWithTime("e", toInstant("2018-08-29T22:10:00")),
-      ActionCreate, 0)
+    val opAccepted = createOperation(ActionCreate, 0)
+    val opRejected = createOperation(ActionCreate, 0,
+      elementWithTime("e", toInstant("2018-08-29T22:10:00")))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "support date-after filters without a time" in {
     val Expression = "date-after=2018-08-29"
-    val opAccepted = SyncOperation(elementWithTime("ok", toInstant("2018-08-29T00:00:00")),
-      ActionOverride, 0)
-    val opRejected = SyncOperation(elementWithTime("!", toInstant("2018-08-28T23:59:59")),
-      ActionOverride, 0)
+    val opAccepted = createOperation(ActionOverride, 0,
+      elementWithTime("ok", toInstant("2018-08-29T00:00:00")))
+    val opRejected = createOperation(ActionOverride, 0,
+      elementWithTime("!", toInstant("2018-08-28T23:59:59")))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "support date-before filters without a time" in {
     val Expression = "date-before=2018-08-30"
-    val opAccepted = SyncOperation(elementWithTime("ok", toInstant("2018-08-29T23:59:59")),
-      ActionOverride, 0)
-    val opRejected = SyncOperation(elementWithTime("!", toInstant("2018-08-30T00:00:00")),
-      ActionOverride, 0)
+    val opAccepted = createOperation(ActionOverride, 0,
+      elementWithTime("ok", toInstant("2018-08-29T23:59:59")))
+    val opRejected = createOperation(ActionOverride, 0,
+      elementWithTime("!", toInstant("2018-08-30T00:00:00")))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }

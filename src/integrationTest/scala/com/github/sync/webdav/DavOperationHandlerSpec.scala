@@ -152,8 +152,8 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
   "DavOperationHandler" should "delete elements" in {
     val folder = createFolder("/someData")
     val file = createFile(folder, "/cool data.txt")
-    val operations = List(SyncOperation(folder, ActionRemove, 1),
-      SyncOperation(file, ActionRemove, 2))
+    val operations = List(SyncOperation(folder, ActionRemove, 1, null, null),
+      SyncOperation(file, ActionRemove, 2, null, null))
     stubSuccess()
 
     val processedOps = runSync(operations)
@@ -167,9 +167,9 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
   it should "drop sync operations that fail" in {
     val FailureCount = 16
     val successFolder = createFolder("/success")
-    val successOperation = SyncOperation(successFolder, ActionRemove, 1)
+    val successOperation = SyncOperation(successFolder, ActionRemove, 1, null, null)
     val failedFolders = (1 to FailureCount) map (i => createFolder("/failed" + i))
-    val operations = failedFolders.map(fld => SyncOperation(fld, ActionRemove, 1))
+    val operations = failedFolders.map(fld => SyncOperation(fld, ActionRemove, 1, null, null))
       .foldLeft(List(successOperation)) { (lst, op) => op :: lst }
     stubFor(authorized(any(anyUrl()).atPriority(PriorityDefault))
       .willReturn(aResponse().withStatus(StatusCodes.BadRequest.intValue)
@@ -182,7 +182,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
 
   it should "create a folder" in {
     val folder = createFolder("/new-folder")
-    val operations = List(SyncOperation(folder, ActionCreate, 1))
+    val operations = List(SyncOperation(folder, ActionCreate, 1, null, null))
     stubFor(authorized(request("MKCOL", elemUri(folder)))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
 
@@ -204,7 +204,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
       .getResource("/patch_default_modify.xml").toURI)
     val expPatchContent = readDataFile(pathPatchData)
     val fileProvider = createFileProvider(file, fileContent)
-    val operations = List(SyncOperation(file, action, 2))
+    val operations = List(SyncOperation(file, action, 2, null, null))
     stubFor(put(elemUri(file))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
     stubFor(request("PROPPATCH", elemUri(file))
@@ -236,7 +236,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     val fileProvider = createFileProvider(file, fileContent)
     // setting a wrong content length will cause the request to fail
     Mockito.when(fileProvider.fileSize(file.size)).thenReturn(42)
-    val operations = List(SyncOperation(file, ActionCreate, 2))
+    val operations = List(SyncOperation(file, ActionCreate, 2, null, null))
     stubFor(put(elemUri(file))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
 
@@ -248,7 +248,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     val file = createFile(createFolder("/upload"), "/upload.txt",
       Instant.now(), Some(fileContent.length))
     val fileProvider = createFileProvider(file, fileContent)
-    val operations = List(SyncOperation(file, ActionOverride, 2))
+    val operations = List(SyncOperation(file, ActionOverride, 2, null, null))
     val config = createDavConfig().copy(deleteBeforeOverride = true)
     stubFor(delete(elemUri(file))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
@@ -264,7 +264,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
   it should "not send a PROPPATCH request for a failed upload operation" in {
     val file = createFile(createFolder("/failedUpload"), "/failure.txt")
     val fileProvider = createFileProvider(file, file.relativeUri.getBytes)
-    val operations = List(SyncOperation(file, ActionOverride, 2))
+    val operations = List(SyncOperation(file, ActionOverride, 2, null, null))
     stubFor(put(elemUri(file))
       .willReturn(aResponse().withStatus(StatusCodes.InternalServerError.intValue)
         .withBody("Crashed!")))
@@ -276,7 +276,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
   it should "filter out upload operations with a failed PROPPATCH request" in {
     val file = createFile(createFolder("/failedPatch"), "/patchIt.diff")
     val fileProvider = createFileProvider(file, file.relativeUri.getBytes)
-    val operations = List(SyncOperation(file, ActionCreate, 2))
+    val operations = List(SyncOperation(file, ActionCreate, 2, null, null))
     stubSuccess()
     stubFor(request("PROPPATCH", elemUri(file))
       .willReturn(aResponse().withStatus(StatusCodes.BadRequest.intValue)
@@ -288,7 +288,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
   it should "handle a failed delete operation before an override" in {
     val file = createFile(createFolder("/failedDelete"), "/override.txt")
     val fileProvider = createFileProvider(file, file.relativeUri.getBytes)
-    val operations = List(SyncOperation(file, ActionOverride, 2))
+    val operations = List(SyncOperation(file, ActionOverride, 2, null, null))
     val config = createDavConfig().copy(deleteBeforeOverride = true)
     stubFor(delete(elemUri(file))
       .willReturn(aResponse().withStatus(StatusCodes.InternalServerError.intValue)
@@ -299,8 +299,8 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
   }
 
   it should "handle an invalid sync operation" in {
-    val opSuccess = SyncOperation(createFolder("/valid"), ActionRemove, 1)
-    val operations = List(SyncOperation(createFolder("/invalid"), ActionOverride, 1),
+    val opSuccess = SyncOperation(createFolder("/valid"), ActionRemove, 1, null, null)
+    val operations = List(SyncOperation(createFolder("/invalid"), ActionOverride, 1, null, null),
       opSuccess)
     stubSuccess()
 

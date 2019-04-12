@@ -118,7 +118,7 @@ object ElementSerializer {
   def deserializeOperation(raw: String): Try[SyncOperation] = for {
     actionData <- deserializeAction(raw)
     elem <- deserializeElement(actionData._3)
-  } yield SyncOperation(elem, actionData._1, actionData._2)
+  } yield SyncOperation(elem, actionData._1, actionData._2, null, null)
 
   /**
     * Generates a string representation for the given element with the given

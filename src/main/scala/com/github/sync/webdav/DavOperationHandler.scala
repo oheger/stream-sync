@@ -134,11 +134,11 @@ object DavOperationHandler {
     def createRequestData(op: SyncOperation): Future[SyncOpRequestData] = {
       val uri = uriResolver.resolveElementUri(op.element.relativeUri)
       op match {
-        case SyncOperation(_, ActionRemove, _) =>
+        case SyncOperation(_, ActionRemove, _, _, _) =>
           simpleRequest(op, HttpRequest(method = HttpMethods.DELETE, uri = uri, headers = headers))
-        case SyncOperation(FsFolder(_, _, _), ActionCreate, _) =>
+        case SyncOperation(FsFolder(_, _, _), ActionCreate, _, _, _) =>
           simpleRequest(op, HttpRequest(method = MethodMkCol, uri = uri, headers = headers))
-        case SyncOperation(file@FsFile(_, _, _, _, _), action, _) =>
+        case SyncOperation(file@FsFile(_, _, _, _, _), action, _, _, _) =>
           createUploadRequest(file) map { req =>
             val needDelete = config.deleteBeforeOverride && action == ActionOverride
             val standardRequests = List(req, createPatchRequest(op))

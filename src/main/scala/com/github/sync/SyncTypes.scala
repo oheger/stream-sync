@@ -145,10 +145,19 @@ object SyncTypes {
     * associated with the operation.) The level can be used in filter expressions
     * to customize sync behavior.
     *
+    * In some constellations it is required to know the URIs of the element
+    * affected on both the source and the destination side. The URI in the
+    * element is not sufficient here because both structures may use different
+    * file names (e.g. if file names are encrypted). Therefore, the operation
+    * stores both URIs explicitly.
+    *
     * @param element the element that is subject to this operation
     * @param action  the action to be executed on this element
+    * @param level the level of this operation
+    * @param srcUri the URI of the affected element in the source structure
+    * @param dstUri the URI of the affected element in the dest structure
     */
-  case class SyncOperation(element: FsElement, action: SyncAction, level: Int)
+  case class SyncOperation(element: FsElement, action: SyncAction, level: Int, srcUri: String, dstUri: String)
 
   /**
     * A trait defining the type of a structure to be synced.
