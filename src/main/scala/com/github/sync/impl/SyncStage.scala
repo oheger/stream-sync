@@ -156,9 +156,8 @@ object SyncStage {
     */
   private def destinationFinished(state: SyncState, stage: SyncStage, portIdx: Int,
                                   element: FsElement): (EmitData, SyncState) = {
-    //TODO set correct URIs
     def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
-      (EmitData(List(SyncOperation(elem, ActionCreate, elem.level, null, null)), stage.PullSource), s)
+      (EmitData(List(createOp(elem)), stage.PullSource), s)
 
     handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
       handleElement(state, element)
@@ -209,8 +208,7 @@ object SyncStage {
         elemDest, isRemoved)
       Some((EmitData(op, stage.PullDest), next))
     } else if (delta < 0)
-      Some((EmitData(List(SyncOperation(elemSource, ActionCreate, elemSource.level, null, null)),
-        stage.PullSource), state.updateCurrentElement(elemDest))) //TODO set correct URIs
+      Some((EmitData(List(createOp(elemSource)), stage.PullSource), state.updateCurrentElement(elemDest)))
     else None
   }
 
@@ -244,7 +242,6 @@ object SyncStage {
     * @param ignoreTimeDelta the delta in file times to be ignored
     * @return an ''Option'' with data how to handle these elements
     */
-  //TODO set correct URIs for operations
   private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement,
                                              state: SyncState, stage: SyncStage,
                                              ignoreTimeDelta: Int):
@@ -252,16 +249,15 @@ object SyncStage {
     (elemSource, elemDest) match {
       case (eSrc: FsFile, eDst: FsFile)
         if differentFileTimes(eSrc, eDst, ignoreTimeDelta) || eSrc.size != eDst.size =>
-        Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, null, null)), state, stage))
+        Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, eSrc.originalUri,
+          eDst.originalUri)), state, stage))
 
       case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
-        val ops = List(SyncOperation(fileDst, ActionRemove, fileDst.level, null, null),
-          SyncOperation(folderSrc, ActionCreate, folderSrc.level, null, null))
+        val ops = List(removeOp(fileDst, fileDst.level), createOp(folderSrc))
         Some(emitAndPullBoth(ops, state, stage))
 
       case (fileSrc: FsFile, folderDst: FsFolder) => // folder converted to file
-        val defOps = SyncOperation(folderDst, ActionRemove, fileSrc.level, null, null) ::
-          SyncOperation(fileSrc, ActionCreate, fileSrc.level, null, null) :: state.deferredOps
+        val defOps = removeOp(folderDst, fileSrc.level) :: createOp(fileSrc) :: state.deferredOps
         val next = state.copy(deferredOps = defOps,
           removedPaths = addRemovedFolder(state, folderDst))
         Some(emitAndPullBoth(Nil, next, stage))
@@ -370,9 +366,7 @@ object SyncStage {
     */
   private def removeElement(state: SyncState, element: FsElement, removedPath: Option[FsElement]):
   (List[SyncOperation], SyncState) = {
-    //TODO set correct URIs for elements
-    val op = SyncOperation(element, ActionRemove,
-      removedPath map (_.level) getOrElse element.level, null, null)
+    val op = removeOp(element, removedPath map (_.level) getOrElse element.level)
     element match {
       case folder: FsFolder =>
         val paths = if (removedPath.isDefined) state.removedPaths
@@ -393,6 +387,25 @@ object SyncStage {
   private def addRemovedFolder(state: SyncState, folder: FsFolder): Set[FsElement] =
     state.removedPaths + folder.copy(relativeUri = folder.relativeUri +
       UriEncodingHelper.UriSeparator)
+
+  /**
+    * Creates an operation that indicates that an element needs to be created.
+    *
+    * @param elem the element affected
+    * @return the operation
+    */
+  private def createOp(elem: FsElement): SyncOperation =
+    SyncOperation(elem, ActionCreate, elem.level, elem.originalUri, elem.originalUri)
+
+  /**
+    * Creates an operation that indicates that an element needs to be removed.
+    *
+    * @param element the element affected
+    * @param level   the level of the operation
+    * @return the operation
+    */
+  private def removeOp(element: FsElement, level: Int): SyncOperation =
+    SyncOperation(element, ActionRemove, level, element.originalUri, element.originalUri)
 
   /**
     * Checks whether the timestamps of the given files are different, taking
