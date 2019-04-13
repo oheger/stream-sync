@@ -77,7 +77,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     val provider = DavSourceFileProvider(createConfig())
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
 
-    val response = futureResult(provider.fileSource(file).flatMap { src => src.runWith(sink) })
+    val response = futureResult(provider.fileSource(file.relativeUri).flatMap { src => src.runWith(sink) })
     val expected = FileTestHelper.TestDataSingleLine
     response.utf8String should be(expected)
   }
@@ -89,7 +89,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     val file = FsFile(elemUri, 0, Instant.now(), 5)
     val provider = DavSourceFileProvider(createConfig())
 
-    val ex = expectFailedFuture[IOException](provider fileSource file)
+    val ex = expectFailedFuture[IOException](provider fileSource file.relativeUri)
     ex.getMessage should include("500")
     ex.getMessage should include(RootPath + elemUri)
   }
@@ -108,8 +108,8 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     val testFuture = Future {
       (1 to 32).map(i => FsFile(s"/test$i.txt", 1, Instant.now(), 13))
         .foreach { f =>
-          expectFailedFuture[IOException](provider fileSource f)
-          val source = futureResult(provider fileSource file)
+          expectFailedFuture[IOException](provider fileSource f.relativeUri)
+          val source = futureResult(provider fileSource file.relativeUri)
           futureResult(source.runWith(Sink.ignore))
         }
     }

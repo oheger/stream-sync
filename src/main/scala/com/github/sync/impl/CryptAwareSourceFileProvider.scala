@@ -20,9 +20,9 @@ import java.security.Key
 
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
+import com.github.sync.SourceFileProvider
 import com.github.sync.crypt.{CryptOpHandler, CryptStage, DecryptOpHandler, EncryptOpHandler}
 import com.github.sync.impl.CryptAwareSourceFileProvider.CryptData
-import com.github.sync.{SourceFileProvider, SyncTypes}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -80,8 +80,8 @@ class CryptAwareSourceFileProvider private(wrappedProvider: SourceFileProvider, 
     *             wrapped source and then appends a decryption or encryption
     *             stage as necessary.
     */
-  override def fileSource(file: SyncTypes.FsFile): Future[Source[ByteString, Any]] = {
-    val futSource = wrappedProvider.fileSource(file)
+  override def fileSource(uri: String): Future[Source[ByteString, Any]] = {
+    val futSource = wrappedProvider.fileSource(uri)
     cryptData.foldLeft(futSource) { (fut, crypt) =>
       fut.map(src => src.via(new CryptStage(crypt.cryptOpHandler, crypt.key)))
     }

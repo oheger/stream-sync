@@ -40,10 +40,10 @@ trait SourceFileProvider {
     * using an asynchronous operation which may also fail; therefore, a
     * ''Future'' is a proper return value.
     *
-    * @param file the file in question
+    * @param uri the URI to the file in question
     * @return a ''Future'' with a ''Source'' for reading this file
     */
-  def fileSource(file: FsFile): Future[Source[ByteString, Any]]
+  def fileSource(uri: String): Future[Source[ByteString, Any]]
 
   /**
     * A method that should be called by clients when this object is no longer

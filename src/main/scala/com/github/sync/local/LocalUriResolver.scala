@@ -21,7 +21,6 @@ import java.nio.file.Path
 import akka.stream.scaladsl.{FileIO, Source}
 import akka.util.ByteString
 import com.github.sync.SourceFileProvider
-import com.github.sync.SyncTypes.{FsElement, FsFile}
 import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec
@@ -40,19 +39,19 @@ import scala.util.Try
 class LocalUriResolver(val rootPath: Path) extends SourceFileProvider {
 
   /**
-    * Resolves the given ''FsElement'' relatively to the root path set for
-    * this object. If the element's URI is invalid this may fail. The function
+    * Resolves the given element URI relatively to the root path set for
+    * this object. If the element's URI is invalid, this may fail. The function
     * also checks whether the resulting path is a child of the root path.
     *
-    * @param element the element to be resolved
+    * @param uri the URI of the element to be resolved
     * @return a ''Try'' with the resolved path
     */
-  def resolve(element: FsElement): Try[Path] = Try {
-    val relativeUri = element.relativeUri.dropWhile(_ == UriEncodingHelper.UriSeparator.charAt(0))
+  def resolve(uri: String): Try[Path] = Try {
+    val relativeUri = UriEncodingHelper.removeLeadingSeparator(uri)
     val resolvedPath = rootPath.resolve(relativeUri).normalize()
     if (!verifyInRootPath(resolvedPath))
       throw new IllegalArgumentException(
-        s"Invalid element URI: ${element.relativeUri}! Not in root path.")
+        s"Invalid element URI: $uri! Not in root path.")
     resolvedPath
   }
 
@@ -61,8 +60,8 @@ class LocalUriResolver(val rootPath: Path) extends SourceFileProvider {
     *             successful, a source for reading this file is returned.
     *             Otherwise, result is a source that fails immediately.
     */
-  override def fileSource(file: FsFile): Future[Source[ByteString, Any]] =
-    Future.fromTry(resolve(file).map(path => FileIO.fromPath(path)))
+  override def fileSource(uri: String): Future[Source[ByteString, Any]] =
+    Future.fromTry(resolve(uri).map(path => FileIO.fromPath(path)))
 
   /**
     * Checks whether the given path is actually contained in the folder

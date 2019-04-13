@@ -115,7 +115,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     */
   private def createFileProvider(file: FsFile, fileContent: Array[Byte]): SourceFileProvider = {
     val fileProvider = mock[SourceFileProvider]
-    Mockito.when(fileProvider.fileSource(file))
+    Mockito.when(fileProvider.fileSource(file.relativeUri))
       .thenReturn(Future.successful(Source.single(ByteString(fileContent))))
     Mockito.when(fileProvider.fileSize(file.size)).thenReturn(file.size)
     fileProvider

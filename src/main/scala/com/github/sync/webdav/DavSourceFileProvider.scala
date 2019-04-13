@@ -22,7 +22,6 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.github.sync.SourceFileProvider
-import com.github.sync.SyncTypes.FsFile
 
 import scala.concurrent.Future
 
@@ -68,8 +67,8 @@ class DavSourceFileProvider(config: DavConfig, requestQueue: RequestQueue)
     *             WebDav server. The future fails if the request was not
     *             successful.
     */
-  override def fileSource(file: FsFile): Future[Source[ByteString, Any]] =
-    sendAndProcess(requestQueue, createFileRequest(file))(_.entity.dataBytes)
+  override def fileSource(uri: String): Future[Source[ByteString, Any]] =
+    sendAndProcess(requestQueue, createFileRequest(uri))(_.entity.dataBytes)
 
   /**
     * @inheritdoc This implementation frees the resources used for HTTP
@@ -83,10 +82,10 @@ class DavSourceFileProvider(config: DavConfig, requestQueue: RequestQueue)
     * Generates the ''HttpRequest'' to obtain the specified file from the
     * configured WebDav server.
     *
-    * @param file the file to be retrieved
+    * @param uri the URI of the file to be retrieved
     * @return the corresponding HTTP request
     */
-  private def createFileRequest(file: FsFile): HttpRequest =
-    HttpRequest(uri = uriResolver resolveElementUri file.relativeUri,
+  private def createFileRequest(uri: String): HttpRequest =
+    HttpRequest(uri = uriResolver resolveElementUri uri,
       headers = List(HeaderAuth))
 }

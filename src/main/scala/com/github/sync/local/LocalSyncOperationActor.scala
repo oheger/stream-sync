@@ -84,7 +84,7 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
   override def receive: Receive = {
     case op@SyncOperation(file: FsFile, action, _, _, _)
       if action == ActionCreate || action == ActionOverride =>
-      val futSource = sourceFileProvider fileSource file
+      val futSource = sourceFileProvider fileSource file.relativeUri
       val destPath = resolveInDestination(file)
       val sink = FileIO.toPath(destPath)
       val client = sender()
@@ -127,5 +127,5 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
     * @return the destination path for this element
     */
   private def resolveElement(resolver: LocalUriResolver, element: FsElement): Path =
-    resolver.resolve(element).get
+    resolver.resolve(element.relativeUri).get
 }

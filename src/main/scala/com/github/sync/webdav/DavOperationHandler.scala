@@ -159,7 +159,7 @@ object DavOperationHandler {
 
     // Creates a request to upload a file
     def createUploadRequest(file: FsFile): Future[HttpRequest] = {
-      fileProvider.fileSource(file) map { content =>
+      fileProvider.fileSource(file.relativeUri) map { content =>
         val entity = HttpEntity(ContentTypes.`application/octet-stream`,
           fileProvider.fileSize(file.size), content)
         HttpRequest(method = HttpMethods.PUT, headers = headers, entity = entity,

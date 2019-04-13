@@ -24,7 +24,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import akka.util.ByteString
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
+import com.github.sync.SyncTypes.FsFile
 import com.github.sync._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
@@ -34,14 +34,6 @@ import scala.util.Success
 object LocalUriResolverSpec {
   /** A test root path. */
   private val RootPath = Paths get "testRootPath"
-
-  /**
-    * Convenience function to create an element with a specific URI.
-    *
-    * @param uri the element's URI
-    * @return the element
-    */
-  private def createElement(uri: String): FsElement = FsFolder(uri, 1)
 }
 
 /**
@@ -79,7 +71,7 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val SubFolderName = "sub-dir"
     val resolver = new LocalUriResolver(RootPath)
 
-    resolver resolve createElement("/" + SubFolderName) match {
+    resolver resolve "/" + SubFolderName match {
       case Success(path) =>
         path should be(RootPath resolve SubFolderName)
       case r => fail("Unexpected result: " + r)
@@ -90,7 +82,7 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val SubFolderName = "no-slash-sub-dir"
     val resolver = new LocalUriResolver(RootPath)
 
-    resolver resolve createElement(SubFolderName) match {
+    resolver resolve SubFolderName match {
       case Success(path) =>
         path should be(RootPath resolve SubFolderName)
       case r => fail("Unexpected result: " + r)
@@ -101,7 +93,7 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val SubFolderName = "multi-slash-sub-dir"
     val resolver = new LocalUriResolver(RootPath)
 
-    resolver resolve createElement("/////" + SubFolderName) match {
+    resolver resolve "/////" + SubFolderName match {
       case Success(path) =>
         path should be(RootPath resolve SubFolderName)
       case r => fail("Unexpected result: " + r)
@@ -112,10 +104,10 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val Components = List("my work", "in+out", "new document.txt")
     val relPath = Paths.get(Components.head, Components.tail: _*)
     val path = RootPath resolve relPath
-    val element = createElement("/" + Components.mkString("/"))
+    val uri = "/" + Components.mkString("/")
     val resolver = new LocalUriResolver(RootPath)
 
-    resolver resolve element match {
+    resolver resolve uri match {
       case Success(p) =>
         p should be(path)
       case r => fail("Unexpected result: " + r)
@@ -125,7 +117,7 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
   it should "verify that the resolved element is a child of the root dir" in {
     val resolver = new LocalUriResolver(RootPath.toAbsolutePath)
 
-    val result = resolver resolve createElement("../../up")
+    val result = resolver resolve "../../up"
     result.isFailure shouldBe true
   }
 
@@ -133,18 +125,17 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val subDir = createPathInDirectory("sub")
     Files createDirectory subDir
     writeFileContent(subDir.resolve("data.txt"), FileTestHelper.TestData)
+    val FileUri = "/sub/data.txt"
     val resolver = new LocalUriResolver(testDirectory)
-    val file = FsFile("/sub/data.txt", 1, Instant.now(), 42)
 
-    val source = futureResult(resolver fileSource file)
+    val source = futureResult(resolver fileSource FileUri)
     val content = futureResult(readFileSource(source))
     content should be(FileTestHelper.TestData)
   }
 
   it should "return a future source that fails for an invalid file" in {
-    val file = FsFile("../../up", 2, Instant.now, 111)
     val resolver = new LocalUriResolver(testDirectory)
 
-    expectFailedFuture[IllegalArgumentException](resolver fileSource file)
+    expectFailedFuture[IllegalArgumentException](resolver fileSource "../../up")
   }
 }

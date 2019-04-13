@@ -39,7 +39,7 @@ class CryptAwareSourceFileProviderSpec extends FlatSpec with Matchers with Mocki
     * @return the wrapped provider instance
     */
   private def createWrappedProvider(): SourceFileProvider =
-    (_: SyncTypes.FsFile) => Future.failed(new UnsupportedOperationException("Unexpected invocation"))
+    (_: String) => Future.failed(new UnsupportedOperationException("Unexpected invocation"))
 
   "A CryptAwareSourceFileProver" should "delegate the shutdown() method" in {
     val wrapped = mock[SourceFileProvider]
