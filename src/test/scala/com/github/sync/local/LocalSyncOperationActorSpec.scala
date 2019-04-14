@@ -17,7 +17,7 @@
 package com.github.sync.local
 
 import java.nio.file.attribute.FileTime
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 import java.time.Instant
 
 import akka.actor.SupervisorStrategy.Stop
@@ -29,6 +29,43 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.annotation.tailrec
 import scala.util.Random
+
+object LocalSyncOperationActorSpec {
+  /** A suffix to be appended to URIs to represent an original URI. */
+  private val SuffixOrgUri = "_org"
+
+  /**
+    * Generates an original URI based on the given URI string.
+    *
+    * @param uri the URI
+    * @return the corresponding original URI
+    */
+  private def orgUri(uri: String): String = uri + SuffixOrgUri
+
+  /**
+    * Convenience function to create a file from the given URI.
+    *
+    * @param uri the file URI
+    * @return the file object
+    */
+  private def createFile(uri: String): FsFile =
+    FsFile(uri, 1, Instant.parse("2018-08-18T19:08:41.00Z"), 42L)
+
+  /**
+    * Convenience method to create a sync operation that sets a hard-coded
+    * level. (The level is not relevant for these tests.)
+    *
+    * @param element   the element
+    * @param action    the sync action
+    * @param optSrcUri an ''Option'' for the original source URI
+    * @param optDstUri an ''Option'' for the original destination URI
+    * @return the ''SyncOperation''
+    */
+  private def createSyncOp(element: FsElement, action: SyncAction, optSrcUri: Option[String] = None,
+                           optDstUri: Option[String] = None): SyncOperation =
+    SyncOperation(element, action, 1, optSrcUri getOrElse orgUri(element.relativeUri),
+      optDstUri getOrElse orgUri(element.relativeUri))
+}
 
 /**
   * Test class for ''FsSyncOperationActor''.
@@ -42,25 +79,7 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
     tearDownTestFile()
   }
 
-  /**
-    * Convenience function to create a file from a path.
-    *
-    * @param path the path
-    * @return the file object
-    */
-  private def createFile(path: Path): FsFile =
-    FsFile(path.getFileName.toString, 1, Instant.parse("2018-08-18T19:08:41.00Z"), 42L)
-
-  /**
-    * Convenience method to create a sync operation that sets a hard-coded
-    * level. (The level is not relevant for these tests.)
-    *
-    * @param element the element
-    * @param action  the sync action
-    * @return the ''SyncOperation''
-    */
-  private def createSyncOp(element: FsElement, action: SyncAction): SyncOperation =
-    SyncOperation(element, action, 1, null, null)
+  import LocalSyncOperationActorSpec._
 
   "A LocalSyncOperationActor" should "create a folder in the destination structure" in {
     val FolderName = "newTestFolder"
@@ -68,7 +87,7 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
     val helper = new LocalActorTestHelper
 
     val folderPath = helper.sendOperationAndExpectResponse(op)
-      .destinationPath(FolderName)
+      .destinationPath(orgUri(FolderName))
     Files.exists(folderPath) shouldBe true
     Files.isDirectory(folderPath) shouldBe true
   }
@@ -86,7 +105,7 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
     val FolderName = "toBeRemoved"
     val op = createSyncOp(FsFolder(FolderName, 1), ActionRemove)
     val helper = new LocalActorTestHelper
-    val path = helper.destinationPath(FolderName)
+    val path = helper.destinationPath(orgUri(FolderName))
     Files createDirectory path
 
     helper.sendOperationAndExpectResponse(op)
@@ -94,10 +113,11 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
   }
 
   it should "remove a file from the destination structure" in {
+    val FileUri = "fileToBeRemoved.tmp"
     val helper = new LocalActorTestHelper
-    val path = writeFileContent(helper.destinationPath("fileToBeRemoved.tmp"),
+    val path = writeFileContent(helper.destinationPath(orgUri(FileUri)),
       FileTestHelper.TestData)
-    val op = createSyncOp(createFile(path), ActionRemove)
+    val op = createSyncOp(createFile(FileUri), ActionRemove)
 
     helper.sendOperationAndExpectResponse(op)
     Files exists path shouldBe false
@@ -114,13 +134,14 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
 
   it should "create a file in the destination structure" in {
     val FileName = "copy.dat"
+    val DestName = FileName + ".dst"
     val helper = new LocalActorTestHelper
-    val sourcePath = writeFileContent(helper.sourcePath(FileName), FileTestHelper.TestData)
-    val file = createFile(sourcePath)
-    val op = createSyncOp(file, ActionCreate)
+    writeFileContent(helper.sourcePath(orgUri(FileName)), FileTestHelper.TestData)
+    val file = createFile(FileName)
+    val op = createSyncOp(file, ActionCreate, optDstUri = Some(DestName))
 
     val destPath = helper.sendOperationAndExpectResponse(op)
-      .destinationPath(FileName)
+      .destinationPath(DestName)
     readDataFile(destPath) should be(FileTestHelper.TestData)
     val timeDest = Files getLastModifiedTime destPath
     timeDest should be(FileTime.from(file.lastModified))
@@ -128,32 +149,33 @@ class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testS
 
   it should "override a file in the destination structure" in {
     val FileName = "override.dat"
+    val DestName = FileName + ".target"
     val helper = new LocalActorTestHelper
-    val sourcePath = writeFileContent(helper.sourcePath(FileName), FileTestHelper.TestData)
-    val destPath = writeFileContent(helper.destinationPath(FileName), "some old data")
-    val op = createSyncOp(createFile(sourcePath), ActionCreate)
+    writeFileContent(helper.sourcePath(orgUri(FileName)), FileTestHelper.TestData)
+    val destPath = writeFileContent(helper.destinationPath(DestName), "some old data")
+    val op = createSyncOp(createFile(FileName), ActionCreate, optDstUri = Some(DestName))
 
     helper.sendOperationAndExpectResponse(op)
     readDataFile(destPath) should be(FileTestHelper.TestData)
   }
 
   it should "handle errors in the source when copying a file" in {
-    val sourcePath = Paths get "nonExistingFile.xxx"
-    val op1 = createSyncOp(createFile(sourcePath), ActionCreate)
-    val op2 = createSyncOp(FsFolder("afterFailedCopy", 1), ActionCreate)
+    val FileName = "fileNotInSource.txt"
     val helper = new LocalActorTestHelper
+    writeFileContent(helper.sourcePath(FileName), FileTestHelper.TestData)
+    val op1 = createSyncOp(createFile(FileName), ActionCreate, optSrcUri = Some("nonExistingFile.xxx"))
+    val op2 = createSyncOp(FsFolder("afterFailedCopy", 1), ActionCreate)
 
     helper.sendOperation(op1)
       .sendOperationAndExpectResponse(op2)
   }
 
   it should "handle errors in the sink when copying a file" in {
-    val FileName = "deep/toCopy.txt"
+    val FileName = "toCopy.txt"
     val helper = new LocalActorTestHelper
-    val sourcePath = helper.sourcePath(FileName)
-    Files createDirectory sourcePath.getParent
+    val sourcePath = helper.sourcePath(orgUri(FileName))
     writeFileContent(sourcePath, FileTestHelper.TestData)
-    val op1 = createSyncOp(createFile(sourcePath), ActionCreate)
+    val op1 = createSyncOp(createFile(FileName), ActionCreate, optDstUri = Some("/deeply/nested/" + FileName))
     val op2 = createSyncOp(FsFolder("afterFailedSinkCopy", 1), ActionCreate)
 
     helper.sendOperation(op1)

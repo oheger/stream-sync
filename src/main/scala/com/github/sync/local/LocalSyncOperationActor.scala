@@ -82,10 +82,10 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
   import context.dispatcher
 
   override def receive: Receive = {
-    case op@SyncOperation(file: FsFile, action, _, _, _)
+    case op@SyncOperation(file: FsFile, action, _, srcUri, dstUri)
       if action == ActionCreate || action == ActionOverride =>
-      val futSource = sourceFileProvider fileSource file.relativeUri
-      val destPath = resolveInDestination(file)
+      val futSource = sourceFileProvider fileSource srcUri
+      val destPath = resolveInDestination(dstUri)
       val sink = FileIO.toPath(destPath)
       val client = sender()
       futSource.flatMap(_.runWith(sink)) map { _ =>
@@ -97,35 +97,35 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
           log.error("Failed copy operation {}!", exception)
       }
 
-    case op@SyncOperation(element, ActionCreate, _, _, _) =>
-      Files.createDirectory(resolveInDestination(element))
+    case op@SyncOperation(_, ActionCreate, _, _, dstUri) =>
+      Files.createDirectory(resolveInDestination(dstUri))
       sender ! op
 
-    case op@SyncOperation(element, ActionRemove, _, _, _) =>
-      Files delete resolveInDestination(element)
+    case op@SyncOperation(_, ActionRemove, _, _, dstUri) =>
+      Files delete resolveInDestination(dstUri)
       sender ! op
   }
 
   /**
-    * Convenience method to resolve the given element in the destination
+    * Convenience method to resolve the given element URI in the destination
     * structure.
     *
-    * @param element the element to be resolved
+    * @param elementUri the element to be resolved
     * @return the destination path for this element
     */
-  private def resolveInDestination(element: FsElement): Path =
-    resolveElement(destinationResolver, element)
+  private def resolveInDestination(elementUri: String): Path =
+    resolveElement(destinationResolver, elementUri)
 
   /**
-    * Resolves the given element using the specified resolver. Note that the
-    * ''Try'' instance from the [[LocalUriResolver]] is directly queried via
-    * ''get()''. If it failed, this will cause an exception causing the current
-    * operation to fail and this actor to be restarted.
+    * Resolves the given element URI using the specified resolver. Note that
+    * the ''Try'' instance from the [[LocalUriResolver]] is directly queried
+    * via ''get()''. If it failed, this will cause an exception causing the
+    * current operation to fail and this actor to be restarted.
     *
-    * @param resolver the resolver
-    * @param element  the element to be resolved
+    * @param resolver   the resolver
+    * @param elementUri the URI of the element to be resolved
     * @return the destination path for this element
     */
-  private def resolveElement(resolver: LocalUriResolver, element: FsElement): Path =
-    resolver.resolve(element.relativeUri).get
+  private def resolveElement(resolver: LocalUriResolver, elementUri: String): Path =
+    resolver.resolve(elementUri).get
 }
