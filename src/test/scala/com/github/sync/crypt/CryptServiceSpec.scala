@@ -17,6 +17,7 @@
 package com.github.sync.crypt
 
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
@@ -278,15 +279,16 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
       createTestFiles(directory, 1, 2), createTestFolders(directory, 1, 2))
     val dirParts = directory.substring(1).split(UriEncodingHelper.UriSeparator)
     val encDirParts = result.currentFolder.relativeUri.substring(1).split(UriEncodingHelper.UriSeparator)
-    val transformer = CryptService.cryptTransformer(Some(SecretKey))
+    val cryptCount = new AtomicInteger
+    val transformer = CryptService.cryptTransformer(Some(SecretKey), optCryptCount = Some(cryptCount))
 
     def checkTransformation(cache: LRUCache[String, String]): Long = {
-      CryptStage.resetProcessedBytes()
+      cryptCount.set(0)
       val transResult = futureResult(transformer.transform(result, cache))._1
       transResult.currentFolder.relativeUri should be(directory)
       transResult.files should be(files)
       transResult.folders should be(folderData)
-      CryptStage.processedBytes
+      cryptCount.get()
     }
 
     def pathPrefix(parts: Array[String], length: Int): String =
@@ -298,13 +300,13 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
       LRUCache(32).put(cryptPath -> path)
     }
 
-    val size1 = checkTransformation(transformer.initialState)
-    val size2 = checkTransformation(populateCache(2))
-    val size3 = checkTransformation(populateCache(5))
-    val size4 = checkTransformation(LRUCache(32).put(result.currentFolder.relativeUri -> directory))
-    size4 should be < size3
-    size3 should be < size2
-    size2 should be < size1
+    val cnt1 = checkTransformation(transformer.initialState)
+    val cnt2 = checkTransformation(populateCache(2))
+    val cnt3 = checkTransformation(populateCache(5))
+    val cnt4 = checkTransformation(LRUCache(32).put(result.currentFolder.relativeUri -> directory))
+    cnt4 should be < cnt3
+    cnt3 should be < cnt2
+    cnt2 should be < cnt1
   }
 
   it should "add new folders to the cache" in {

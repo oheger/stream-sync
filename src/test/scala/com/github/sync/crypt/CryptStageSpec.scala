@@ -171,7 +171,7 @@ class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with F
     CryptStage.resetProcessedBytes()
     val cipher = encrypt(FileTestHelper.TestData)
 
-    CryptStage.processedBytes should be(FileTestHelper.testBytes().length)
+    CryptStage.processedBytes should be >= FileTestHelper.TestData.length.toLong
     decrypt(cipher)
 
     CryptStage.processedBytes should be > 2L * FileTestHelper.TestData.length

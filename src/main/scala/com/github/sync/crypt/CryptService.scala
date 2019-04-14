@@ -18,6 +18,7 @@ package com.github.sync.crypt
 
 import java.security.Key
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicInteger
 
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
@@ -41,11 +42,14 @@ object CryptService {
     *
     * @param optNameDecryptKey an ''Option'' with the key for file name
     *                          encryption; if set, names are decrypted
-    * @param ec                the eecution context
+    * @param optCryptCount     an optional counter for crypt operations; mainly
+    *                          used for testing purposes
+    * @param ec                the execution context
     * @param mat               the object to materialize streams
     * @return the transformer for encrypted folder structures
     */
-  def cryptTransformer(optNameDecryptKey: Option[Key])(implicit ec: ExecutionContext, mat: ActorMaterializer):
+  def cryptTransformer(optNameDecryptKey: Option[Key], optCryptCount: Option[AtomicInteger] = None)
+                      (implicit ec: ExecutionContext, mat: ActorMaterializer):
   ResultTransformer[LRUCache[String, String]] =
     new ResultTransformer[LRUCache[String, String]] {
       override def initialState: LRUCache[String, String] = LRUCache(1024)
@@ -55,6 +59,7 @@ object CryptService {
         case None =>
           Future.successful((transformEncryptedFileSizes(result), cache))
         case Some(key) =>
+          implicit val cryptCount: AtomicInteger = optCryptCount getOrElse new AtomicInteger
           createDecryptedResult(key, result, cache)
       }
     }
@@ -151,11 +156,13 @@ object CryptService {
     * @param cache  the cache
     * @param ec     the execution context
     * @param mat    the object to materialize streams
+    * @param cnt    a counter for crypt operations
     * @tparam F the type of folder data
     * @return a future with the transformed result and the updated cache
     */
   private def createDecryptedResult[F](key: Key, result: IterateResult[F], cache: LRUCache[String, String])
-                                      (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                      (implicit ec: ExecutionContext, mat: ActorMaterializer,
+                                       cnt: AtomicInteger):
   Future[(IterateResult[F], LRUCache[String, String])] = {
     val futDecryptedFolderUri = decryptCurrentDirectory(key, result, cache)
     for {(decryptedFolderUri, cache2) <- futDecryptedFolderUri
@@ -178,13 +185,16 @@ object CryptService {
     * @param cache  the cache
     * @param ec     the execution context
     * @param mat    the object to materialize streams
+    * @param cnt    a counter for crypt operations
     * @tparam F the type of folder data
     * @return a future with the decrypted directory path and the updated cache
     */
   private def decryptCurrentDirectory[F](key: Key, result: IterateResult[F], cache: LRUCache[String, String])
-                                        (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                        (implicit ec: ExecutionContext, mat: ActorMaterializer,
+                                         cnt: AtomicInteger):
   Future[(String, LRUCache[String, String])] = {
     val (prefixCrypt, components) = splitUnknownPathComponents(result.currentFolder.relativeUri, cache)
+    cnt.addAndGet(components.size)
     Future.sequence(components.map(decryptName(key, _)))
       .map { decryptComponents =>
         val prefix = cache get prefixCrypt getOrElse ""
@@ -241,13 +251,15 @@ object CryptService {
     * @param uris            the URIs to be processed
     * @param ec              the execution context
     * @param mat             the object to materialize streams
+    * @param cnt             a counter for crypt operations
     * @return a future with the resulting URIs
     */
   private def decryptPaths(key: Key, prefixLen: Int, decryptedPrefix: String, uris: List[String])
-                          (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                          (implicit ec: ExecutionContext, mat: ActorMaterializer, cnt: AtomicInteger):
   Future[List[String]] = {
     val processedUris = uris.map(_.substring(prefixLen))
       .map(decryptName(key, _).map(decryptedPrefix + _))
+    cnt.addAndGet(uris.size)
     Future.sequence(processedUris)
   }
 
@@ -260,11 +272,12 @@ object CryptService {
     * @param decryptedFolder the URI of the decrypted current folder
     * @param ec              the execution context
     * @param mat             the object to materialize streams
+    * @param cnt             a counter for crypt operations
     * @tparam F the type of folder results
     * @return a tuple with the decrypted file and folder names
     */
   private def decryptResultElements[F](key: Key, iterateResult: IterateResult[F], decryptedFolder: String)
-                                      (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                      (implicit ec: ExecutionContext, mat: ActorMaterializer, cnt: AtomicInteger):
   Future[(List[String], List[String])] = {
     val prefixLength = UriEncodingHelper.withTrailingSeparator(iterateResult.currentFolder.relativeUri).length
     val futFiles = decryptPaths(key, prefixLength, decryptedFolder, iterateResult.files.map(_.relativeUri))
