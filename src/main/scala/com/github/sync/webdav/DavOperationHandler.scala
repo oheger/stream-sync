@@ -132,18 +132,19 @@ object DavOperationHandler {
 
     // Creates the object with requests for a single sync operation
     def createRequestData(op: SyncOperation): Future[SyncOpRequestData] = {
-      val uri = uriResolver.resolveElementUri(op.element.relativeUri)
       op match {
-        case SyncOperation(_, ActionRemove, _, _, _) =>
-          simpleRequest(op, HttpRequest(method = HttpMethods.DELETE, uri = uri, headers = headers))
-        case SyncOperation(FsFolder(_, _, _), ActionCreate, _, _, _) =>
-          simpleRequest(op, HttpRequest(method = MethodMkCol, uri = uri, headers = headers))
-        case SyncOperation(file@FsFile(_, _, _, _, _), action, _, _, _) =>
-          createUploadRequest(file) map { req =>
+        case SyncOperation(_, ActionRemove, _, _, dstUri) =>
+          simpleRequest(op, HttpRequest(method = HttpMethods.DELETE, headers = headers,
+            uri = uriResolver.resolveElementUri(dstUri)))
+        case SyncOperation(FsFolder(_, _, _), ActionCreate, _, _, dstUri) =>
+          simpleRequest(op, HttpRequest(method = MethodMkCol, headers = headers,
+            uri = uriResolver.resolveElementUri(dstUri)))
+        case SyncOperation(file@FsFile(_, _, _, _, _), action, _, srcUri, dstUri) =>
+          createUploadRequest(file, srcUri, dstUri) map { req =>
             val needDelete = config.deleteBeforeOverride && action == ActionOverride
             val standardRequests = List(req, createPatchRequest(op))
             val requests = if (needDelete)
-              HttpRequest(method = HttpMethods.DELETE, uri = uri,
+              HttpRequest(method = HttpMethods.DELETE, uri = uriResolver.resolveElementUri(dstUri),
                 headers = headers) :: standardRequests
             else standardRequests
             SyncOpRequestData(op, requests)
@@ -158,12 +159,12 @@ object DavOperationHandler {
       Future.successful(SyncOpRequestData(op, List(request)))
 
     // Creates a request to upload a file
-    def createUploadRequest(file: FsFile): Future[HttpRequest] = {
-      fileProvider.fileSource(file.relativeUri) map { content =>
+    def createUploadRequest(file: FsFile, srcUri: String, dstUri: String): Future[HttpRequest] = {
+      fileProvider.fileSource(srcUri) map { content =>
         val entity = HttpEntity(ContentTypes.`application/octet-stream`,
           fileProvider.fileSize(file.size), content)
         HttpRequest(method = HttpMethods.PUT, headers = headers, entity = entity,
-          uri = uriResolver.resolveElementUri(file.relativeUri))
+          uri = uriResolver.resolveElementUri(dstUri))
       }
     }
 
@@ -173,7 +174,7 @@ object DavOperationHandler {
       val content = ModifiedTimeRequestFactory
         .createModifiedTimeRequest(modifiedTimeTemplate, modifiedTime)
       HttpRequest(method = MethodPropPatch, headers = headers,
-        uri = uriResolver.resolveElementUri(op.element.relativeUri),
+        uri = uriResolver.resolveElementUri(op.dstUri),
         entity = HttpEntity(ContentTypes.`text/xml(UTF-8)`, content))
     }
 
