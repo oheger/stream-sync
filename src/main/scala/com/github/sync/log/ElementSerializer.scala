@@ -81,7 +81,7 @@ object ElementSerializer {
     * @return the string representation for this operation
     */
   def serializeOperation(operation: SyncOperation): ByteString =
-    ByteString(s"${ActionTagMapping(operation.action)} ${operation.level} ") ++
+    ByteString(s"${ActionTagMapping(operation.action)} ${operation.level}${serializeOperationUris(operation)} ") ++
       serializeElement(operation.element) ++ CR
 
   /**
@@ -95,15 +95,10 @@ object ElementSerializer {
   def deserializeElement(parts: Seq[String]): Try[FsElement] = Try {
     lazy val elemUri = UriEncodingHelper decode parts(1)
     parts.head match {
-      case TagFolder if parts.length <= 3 =>
-        FsFolder(elemUri, parts(2).toInt)
       case TagFolder =>
-        FsFolder(elemUri, parts(3).toInt, Some(UriEncodingHelper decode parts(2)))
-      case TagFile if parts.length <= 5 =>
-        FsFile(elemUri, parts(2).toInt, Instant.parse(parts(3)), parts(4).toLong)
+        FsFolder(elemUri, parts(2).toInt)
       case TagFile =>
-        FsFile(elemUri, parts(3).toInt, Instant.parse(parts(4)), parts(5).toLong,
-          Some(UriEncodingHelper decode parts(2)))
+        FsFile(elemUri, parts(2).toInt, Instant.parse(parts(3)), parts(4).toLong)
       case tag =>
         throw new IllegalArgumentException("Unknown element tag: " + tag)
     }
@@ -117,8 +112,9 @@ object ElementSerializer {
     */
   def deserializeOperation(raw: String): Try[SyncOperation] = for {
     actionData <- deserializeAction(raw)
-    elem <- deserializeElement(actionData._3)
-  } yield SyncOperation(elem, actionData._1, actionData._2, null, null)
+    elem <- deserializeElement(actionData._5)
+  } yield SyncOperation(elem, actionData._1, actionData._2, actionData._3 getOrElse elem.relativeUri,
+    actionData._4 getOrElse elem.relativeUri)
 
   /**
     * Generates a string representation for the given element with the given
@@ -130,10 +126,8 @@ object ElementSerializer {
     * @param elem the element
     * @return the basic string representation for this element
     */
-  private def serializeBaseProperties(tag: String, elem: FsElement): String = {
-    val orgUriStr = elem.optOriginalUri.fold("")(" " + UriEncodingHelper.encode(_))
-    s"$tag ${UriEncodingHelper encode elem.relativeUri}$orgUriStr ${elem.level}"
-  }
+  private def serializeBaseProperties(tag: String, elem: FsElement): String =
+    s"$tag ${UriEncodingHelper encode elem.relativeUri} ${elem.level}"
 
   /**
     * Extracts the properties of a ''SyncAction'' from the serialized
@@ -143,8 +137,26 @@ object ElementSerializer {
     * @param raw the raw data with the serialized form of the operation
     * @return a ''Try'' with elements that could be parsed
     */
-  private def deserializeAction(raw: String): Try[(SyncAction, Int, Seq[String])] = Try {
-    val parts = raw.split("\\s")
-    (TagActionMapping(parts.head), parts(1).toInt, parts drop 2)
-  }
+  private def deserializeAction(raw: String): Try[(SyncAction, Int, Option[String], Option[String], Seq[String])] =
+    Try {
+      val parts = raw.split("\\s")
+      val indexTag = parts.indexWhere(p => TagFile == p || TagFolder == p)
+      if (indexTag <= 2)
+        (TagActionMapping(parts.head), parts(1).toInt, None, None, parts drop 2)
+      else (TagActionMapping(parts.head), parts(1).toInt, Some(UriEncodingHelper decode parts(2)),
+        Some(UriEncodingHelper decode parts(3)), parts drop 4)
+    }
+
+  /**
+    * Generates a string for the serialized URIs of an operation. The URIs are
+    * only serialized if at least one of them is different from the element's
+    * URI.
+    *
+    * @param op the operation
+    * @return a string for the serialized operation URIs
+    */
+  private def serializeOperationUris(op: SyncOperation): String =
+    if (op.element.relativeUri != op.srcUri || op.element.relativeUri != op.dstUri)
+      " " + UriEncodingHelper.encode(op.srcUri) + " " + UriEncodingHelper.encode(op.dstUri)
+    else ""
 }
