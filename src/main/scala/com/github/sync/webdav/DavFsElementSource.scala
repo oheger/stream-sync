@@ -132,35 +132,49 @@ object DavFsElementSource {
     * Creates a ''Source'' based on this class using the specified
     * configuration.
     *
-    * @param config        the configuration
-    * @param sourceFactory the factory for the element source
-    * @param system        the actor system
-    * @param mat           the object to materialize streams
+    * @param config         the configuration
+    * @param sourceFactory  the factory for the element source
+    * @param startFolderUri URI of a folder to start the iteration
+    * @param system         the actor system
+    * @param mat            the object to materialize streams
     * @return the new source
     */
-  def apply(config: DavConfig, sourceFactory: ElementSourceFactory)
+  def apply(config: DavConfig, sourceFactory: ElementSourceFactory, startFolderUri: String = "")
            (implicit system: ActorSystem, mat: ActorMaterializer):
-  Source[FsElement, NotUsed] = Source.fromGraph(createSource(config, sourceFactory))
+  Source[FsElement, NotUsed] = Source.fromGraph(createSource(config, sourceFactory, startFolderUri))
 
   /**
     * Creates the source for iterating over a dav folder structure.
     *
-    * @param config        the configuration
-    * @param sourceFactory the factory for the element source
-    * @param system        the actor system
-    * @param mat           the object to materialize streams
+    * @param config         the configuration
+    * @param sourceFactory  the factory for the element source
+    * @param startFolderUri URI of a folder to start the iteration
+    * @param system         the actor system
+    * @param mat            the object to materialize streams
     * @return the new source
     */
-  def createSource(config: DavConfig, sourceFactory: ElementSourceFactory)
+  def createSource(config: DavConfig, sourceFactory: ElementSourceFactory, startFolderUri: String = "")
                   (implicit system: ActorSystem, mat: ActorMaterializer):
   Graph[SourceShape[FsElement], NotUsed] = {
     implicit val ec: ExecutionContext = system.dispatcher
     val requestQueue = new RequestQueue(config.rootUri)
-    val rootUriPrefix = removeTrailingSlash(config.rootUri.path.toString())
+    val rootUriPrefix = UriEncodingHelper.removeTrailingSeparator(config.rootUri.path.toString())
     val rootPrefixLen = UriEncodingHelper.decode(rootUriPrefix).length
     val state = DavIterationState(requestQueue, rootUriPrefix, rootPrefixLen, authHeader(config), config)
-    sourceFactory.createElementSource(state, SyncFolderData(FsFolder("", -1), DavFolder(config.rootUri.toString())),
+    sourceFactory.createElementSource(state, createInitialFolder(config, startFolderUri),
       Some(completionFunc))(iterateFunc)
+  }
+
+  /**
+    * Creates the data object for the folder to start the iteration from.
+    *
+    * @param config         the configuration
+    * @param startFolderUri the start folder URI
+    * @return
+    */
+  private def createInitialFolder(config: DavConfig, startFolderUri: String): SyncFolderData[DavFolder] = {
+    val rootUri = config.rootUri.toString() + UriEncodingHelper.encodeComponents(startFolderUri)
+    SyncFolderData(FsFolder(startFolderUri, UriEncodingHelper.componentCount(startFolderUri) - 1), DavFolder(rootUri))
   }
 
   /**
@@ -278,7 +292,7 @@ object DavFsElementSource {
     * @return the element that was extracted
     */
   private def extractFolderElement(state: DavIterationState, node: Node, level: Int): ElemData = {
-    val ref = removeTrailingSlash(elemText(node, ElemHref))
+    val ref = UriEncodingHelper.removeTrailingSeparator(elemText(node, ElemHref))
     val uri = extractElementUri(state, ref)
     val propNode = node \ ElemPropStat \ ElemProp
     val isFolder = isCollection(propNode)
@@ -367,17 +381,6 @@ object DavFsElementSource {
 
     obtainModifiedTimeFromProperty(config.modifiedProperties)
   }
-
-  /**
-    * Removes a trailing slash from the given string. This is useful when
-    * dealing with URI paths that need to be concatenated of otherwise
-    * manipulated.
-    *
-    * @param s the string to process
-    * @return the string with trailing slashes removed
-    */
-  private def removeTrailingSlash(s: String): String =
-    UriEncodingHelper.removeTrailing(s, UriEncodingHelper.UriSeparator)
 
   /**
     * Extracts the text of a sub element of the given XML node. Handles line

@@ -263,6 +263,19 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     runAndVerifySource(createTestSource())
   }
 
+  it should "support setting a start folder URI" in {
+    stubTestFolders("")
+    val StartFolder = createSubFolder(RootFolder, 2)
+    val expElements = ExpectedElements filter { elem =>
+      elem.relativeUri.startsWith(StartFolder.relativeUri) && elem.relativeUri != StartFolder.relativeUri
+    }
+    implicit val mat: ActorMaterializer = ActorMaterializer()
+    val source = DavFsElementSource(createDavConfig(DavConfig.DefaultModifiedProperty), new SourceFactoryImpl,
+      startFolderUri = StartFolder.relativeUri)
+
+    executeStream(source) should contain theSameElementsAs expElements
+  }
+
   it should "support a custom modified time property" in {
     stubTestFolders("_full")
 
