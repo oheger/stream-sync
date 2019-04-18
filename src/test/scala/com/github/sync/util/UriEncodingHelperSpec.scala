@@ -156,4 +156,57 @@ class UriEncodingHelperSpec extends FlatSpec with Matchers {
     p should be("")
     n should be(Name)
   }
+
+  it should "split a URI into its components" in {
+    val uriComponents = Array("this", "is", "a", "uri")
+    val uri = uriComponents.mkString(UriEncodingHelper.UriSeparator)
+
+    UriEncodingHelper splitComponents uri should be(uriComponents)
+  }
+
+  it should "split a URI starting with a slash into its components" in {
+    val uriComponents = Array("this", "is", "a", "uri")
+    val uri = UriEncodingHelper.UriSeparator + uriComponents.mkString(UriEncodingHelper.UriSeparator)
+
+    UriEncodingHelper splitComponents uri should be(uriComponents)
+  }
+
+  it should "generate a URI from its components" in {
+    val Uri = "/a/uri/with/multiple/components"
+    val components = UriEncodingHelper splitComponents Uri
+
+    UriEncodingHelper fromComponents components should be(Uri)
+  }
+
+  it should "map the components of a URI" in {
+    val Uri = "/the/test/uri"
+    val Expected = "/the_/test_/uri_"
+
+    val transformed = UriEncodingHelper.mapComponents(Uri)(_ + "_")
+    transformed should be(Expected)
+  }
+
+  it should "encode the components of a URI" in {
+    val Uri = "/a/test uri/to be/encoded"
+    val Expected = "/a/test%20uri/to%20be/encoded"
+
+    UriEncodingHelper encodeComponents Uri should be(Expected)
+  }
+
+  it should "decode the components of a URI" in {
+    val Uri = "/a/test%20uri/to%20be/decoded"
+    val Expected = "/a/test uri/to be/decoded"
+
+    UriEncodingHelper decodeComponents Uri should be(Expected)
+  }
+
+  it should "count the number of components of an empty URI" in {
+    UriEncodingHelper componentCount "" should be(0)
+  }
+
+  it should "count the number of components of a URI with multiple components" in {
+    val Uri = "/this/is/a/real/Uri"
+
+    UriEncodingHelper componentCount Uri should be(5)
+  }
 }

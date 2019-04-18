@@ -143,11 +143,8 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     * @param path the path to be encrypted
     * @return the encrypted path
     */
-  private def encryptPath(path: String): String = {
-    val components = UriEncodingHelper.removeLeadingSeparator(path).split(UriEncodingHelper.UriSeparator)
-    val cryptComponents = components map encrypt
-    UriEncodingHelper.UriSeparator + cryptComponents.mkString(UriEncodingHelper.UriSeparator)
-  }
+  private def encryptPath(path: String): String =
+    UriEncodingHelper.mapComponents(path)(encrypt)
 
   /**
     * Generates an encrypted file URI based on the given parameters. The passed
@@ -277,8 +274,8 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val directory = "/this/is/a/deeply/nested/fancy/directory/uri"
     val (result, files, folderData) = createEncryptedResultAndAdaptElements(directory,
       createTestFiles(directory, 1, 2), createTestFolders(directory, 1, 2))
-    val dirParts = directory.substring(1).split(UriEncodingHelper.UriSeparator)
-    val encDirParts = result.currentFolder.relativeUri.substring(1).split(UriEncodingHelper.UriSeparator)
+    val dirParts = UriEncodingHelper splitComponents directory
+    val encDirParts = UriEncodingHelper splitComponents result.currentFolder.relativeUri
     val cryptCount = new AtomicInteger
     val transformer = CryptService.cryptTransformer(Some(SecretKey), optCryptCount = Some(cryptCount))
 

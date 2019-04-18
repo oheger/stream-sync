@@ -42,8 +42,6 @@ object ElementUriResolver {
   */
 class ElementUriResolver private(rootUriPrefix: String) {
   def resolveElementUri(uri: String): Uri = {
-    Uri(rootUriPrefix + uri.split(UriEncodingHelper.UriSeparator)
-      .map(UriEncodingHelper.encode)
-      .mkString(UriEncodingHelper.UriSeparator))
+    Uri(rootUriPrefix + UriEncodingHelper.encodeComponents(uri))
   }
 }

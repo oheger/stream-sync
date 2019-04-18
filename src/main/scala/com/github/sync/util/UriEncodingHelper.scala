@@ -149,6 +149,81 @@ object UriEncodingHelper {
   }
 
   /**
+    * Splits the given URI into its components separated by the URI separator.
+    *
+    * @param uri the URI to be split
+    * @return an array with the single components
+    */
+  def splitComponents(uri: String): Array[String] =
+    removeLeadingSeparator(uri) split UriSeparator
+
+  /**
+    * Creates a URI string from the given components. The components are
+    * combined using the URI separator.
+    *
+    * @param components the sequence with components
+    * @return the resulting URI
+    */
+  def fromComponents(components: Seq[String]): String =
+    UriSeparator + components.mkString(UriSeparator)
+
+  /**
+    * Transforms a URI by applying the given mapping function to all its
+    * components. The URI is split into components, then the function is
+    * executed on each component, and finally the components are combined
+    * again.
+    *
+    * @param uri the URI
+    * @param f   the mapping function for components
+    * @return the resulting URI
+    */
+  def mapComponents(uri: String)(f: String => String): String = {
+    val components = splitComponents(uri)
+    val mappedComponents = components map f
+    fromComponents(mappedComponents)
+  }
+
+  /**
+    * Encodes all the components of the given URI. Note that it is typically
+    * not possible to encode the URI as a whole because then the separators
+    * will be encoded as well. This function splits the URI into its components
+    * first, then applies the encoding, and finally combines the parts to the
+    * resulting URI.
+    *
+    * @param uri the URI
+    * @return the URI with its components encoded
+    */
+  def encodeComponents(uri: String): String =
+    mapComponents(uri)(encode)
+
+  /**
+    * Decodes all the components of the given URI. Works like
+    * ''encodeComponents()'', but applies decoding to the single components.
+    *
+    * @param uri the URI
+    * @return the URI with its components decoded
+    */
+  def decodeComponents(uri: String): String =
+    mapComponents(uri)(decode)
+
+  /**
+    * Returns the number of components of the given URI. This is defined as the
+    * number of separator characters contained in the URI.
+    *
+    * @param uri the URI
+    * @return the number of components the URI consists of
+    */
+  def componentCount(uri: String): Int = {
+    @tailrec def findAndCountSeparator(startIdx: Int, count: Int): Int = {
+      val pos = uri.indexOf(UriSeparator, startIdx)
+      if (pos < 0) count
+      else findAndCountSeparator(pos + 1, count + 1)
+    }
+
+    findAndCountSeparator(0, 0)
+  }
+
+  /**
     * Searches for the position of the name component in the given URI. If
     * found, its index is returned; otherwise, result is -1.
     *
