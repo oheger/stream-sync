@@ -232,6 +232,18 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     files should contain theSameElementsAs fileData.keys
   }
 
+  it should "support setting a start directory" in {
+    val StartUri = "/Medium2"
+    val fileData = setUpDirectoryStructure()
+    val expectedElements = fileData.keys.filter { e =>
+      e.relativeUri.startsWith(StartUri) && e.relativeUri != StartUri
+    }
+    val source = LocalFsElementSource(sourceConfig(), startDirectory = StartUri)(sourceFactory)
+
+    val files = runSource(source)
+    files should contain theSameElementsAs expectedElements
+  }
+
   it should "close all directory streams it creates" in {
     setUpDirectoryStructure()
     val (queue, factory) = createStreamWrapperFactory()

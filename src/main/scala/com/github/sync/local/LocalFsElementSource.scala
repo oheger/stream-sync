@@ -45,17 +45,18 @@ object LocalFsElementSource {
     * Returns a new source for iterating over the files in the specified root
     * folder.
     *
-    * @param config        the configuration of the new source
-    * @param streamFactory an optional stream factory
-    * @param sourceFactory a factory for creating an element source
-    * @param ec            the execution context
+    * @param config         the configuration of the new source
+    * @param streamFactory  an optional stream factory
+    * @param startDirectory URI of a directory to start the iteration with
+    * @param sourceFactory  a factory for creating an element source
+    * @param ec             the execution context
     * @return the new source
     */
-  def apply(config: LocalFsConfig, streamFactory: StreamFactory = createDirectoryStream)
+  def apply(config: LocalFsConfig, streamFactory: StreamFactory = createDirectoryStream, startDirectory: String = "")
            (sourceFactory: ElementSourceFactory)
            (implicit ec: ExecutionContext): Source[FsElement, NotUsed] = {
-    val initState = BFSState(None, null)
-    val initFolder = SyncFolderData(FsFolder("", -1), config.rootPath)
+    val initState = IterationState(None, null)
+    val initFolder = createInitFolder(config, startDirectory)
     Source.fromGraph(sourceFactory.createElementSource(initState, initFolder,
       Some(iterationComplete _))(iterateFunc(config, streamFactory)))
   }
@@ -83,13 +84,13 @@ object LocalFsElementSource {
   }
 
   /**
-    * Case class representing the state of a BFS iteration.
+    * Case class representing the state of the iteration over the local FS.
     *
     * @param optCurrentStream option for the currently active stream
     * @param currentFolder    the current folder whose elements are iterated
     */
-  private case class BFSState(optCurrentStream: Option[DirectoryStreamRef],
-                              currentFolder: FsFolder)
+  private case class IterationState(optCurrentStream: Option[DirectoryStreamRef],
+                                    currentFolder: FsFolder)
 
   /**
     * Definition of a function serving as stream factory. Such a function can
@@ -109,6 +110,21 @@ object LocalFsElementSource {
     Files.newDirectoryStream(path)
 
   /**
+    * Creates the data object for the folder to start the iteration with.
+    *
+    * @param config         the configuration
+    * @param startDirectory the URI of the start directory
+    * @return the folder data object for the initial folder
+    */
+  private def createInitFolder(config: LocalFsConfig, startDirectory: String): SyncFolderData[Path] = {
+    val rootFolder = FsFolder(startDirectory, UriEncodingHelper.componentCount(startDirectory) - 1)
+    val rootPath = if (startDirectory.nonEmpty)
+      config.rootPath.resolve(UriEncodingHelper removeLeadingSeparator startDirectory)
+    else config.rootPath
+    SyncFolderData(rootFolder, rootPath)
+  }
+
+  /**
     * Returns the function for iterating over all elements in the source folder
     * structure.
     *
@@ -118,7 +134,7 @@ object LocalFsElementSource {
     * @return the iteration function
     */
   private def iterateFunc(config: LocalFsConfig, streamFactory: StreamFactory = createDirectoryStream)
-                         (implicit ec: ExecutionContext): IterateFunc[Path, BFSState] =
+                         (implicit ec: ExecutionContext): IterateFunc[Path, IterationState] =
     (state, nextFolder) =>
       iterateBFS(config, streamFactory, state, nextFolder) map { res =>
         (res._1, Some(res._2), None)
@@ -137,8 +153,8 @@ object LocalFsElementSource {
     *         to emit or ''None'' if iteration is complete
     */
   @tailrec private def iterateBFS(config: LocalFsConfig, streamFactory: StreamFactory,
-                                  state: BFSState, nextFolder: NextFolderFunc[Path]):
-  Option[(BFSState, IterateResult[Path])] = {
+                                  state: IterationState, nextFolder: NextFolderFunc[Path]):
+  Option[(IterationState, IterateResult[Path])] = {
     state.optCurrentStream match {
       case Some(ref) =>
         if (ref.iterator.hasNext) {
@@ -214,7 +230,7 @@ object LocalFsElementSource {
     *
     * @param state the current iteration state
     */
-  private def iterationComplete(state: BFSState): Unit = {
+  private def iterationComplete(state: IterationState): Unit = {
     println("iterationComplete() with " + state.optCurrentStream)
     state.optCurrentStream foreach (_.close())
   }
