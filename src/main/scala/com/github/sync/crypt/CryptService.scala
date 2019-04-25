@@ -20,10 +20,11 @@ import java.security.Key
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicInteger
 
+import akka.NotUsed
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
-import com.github.sync.SyncTypes.{FsFile, IterateResult, ResultTransformer}
+import com.github.sync.SyncTypes.{ActionCreate, FsElement, FsFile, FsFolder, IterateResult, ResultTransformer, SyncOperation}
 import com.github.sync.util.{LRUCache, UriEncodingHelper}
 
 import scala.annotation.tailrec
@@ -36,6 +37,16 @@ import scala.concurrent.{ExecutionContext, Future}
   * cryptographic operations in the regular sync process.
   */
 object CryptService {
+  /**
+    * Definition of a function that creates an element iteration source for a
+    * given start folder URI.
+    *
+    * This function is used when mapping sync operations before they are
+    * executed. It is then sometimes necessary to iterate over the destination
+    * structure to find specific elements.
+    */
+  type IterateSourceFunc = String => Source[FsElement, NotUsed]
+
   /**
     * Returns a ''ResultTransformer'' that supports the iteration over an
     * encrypted folder structure.
@@ -103,6 +114,149 @@ object CryptService {
     */
   def decryptName(key: Key, name: String)(implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] =
     cryptName(key, name, DecryptOpHandler)(n => ByteString(Base64.getUrlDecoder.decode(n)))(_.utf8String)
+
+  /**
+    * Returns a function to map sync operations before they are executed. When
+    * file names are encrypted in the destination structure, there needs to be
+    * some pre-processing on sync operations, especially when new elements are
+    * created. In this case, an encryption of file names has to be performed,
+    * but it must be guaranteed that encrypted paths match already existing
+    * paths in the folder structure. (The encryption algorithm produces
+    * different output for each crypt operation, even if the input is the same;
+    * therefore, paths cannot simply be encrypted again, but the results of
+    * earlier operations must be reused.) This function handles this
+    * requirement. If necessary, it browses the existing destination structure
+    * to determine the correct paths for elements to be newly created. As this
+    * is expensive, a cache is used to store known paths.
+    *
+    * @param key     the key for crypt operations
+    * @param srcFunc a function to obtain a source for a given relative folder
+    * @param ec      the execution context
+    * @param mat     the object to materialize streams
+    * @return the mapping function for sync operations
+    */
+  def mapOperationFunc(key: Key, srcFunc: IterateSourceFunc)(implicit ec: ExecutionContext, mat: ActorMaterializer):
+  (SyncOperation, LRUCache[String, String]) => Future[(SyncOperation, LRUCache[String, String])] =
+    (op, cache) => {
+      op match {
+        case SyncOperation(FsFile(uri, _, _, _, _), ActionCreate, _, _, _) =>
+          mapCreateOperation(key, srcFunc, op, cache, uri, updateCache = false)
+
+        case SyncOperation(FsFolder(uri, _, _), ActionCreate, _, _, _) =>
+          mapCreateOperation(key, srcFunc, op, cache, uri, updateCache = true)
+
+        case SyncOperation(FsFolder(uri, _, _), _, _, _, _) =>
+          Future.successful((op, cache.put(uri -> op.dstUri)))
+
+        case SyncOperation(FsFile(uri, _, _, _, _), _, _, _, _) =>
+          Future.successful((op,
+            cache.put(UriEncodingHelper.splitParent(uri)._1 -> UriEncodingHelper.splitParent(op.dstUri)._1)))
+      }
+    }
+
+  /**
+    * Implements the mapping of create operations. This is the complex part of
+    * the work that needs to be done by the operation mapping function.
+    *
+    * @param key         the key for crypt operations
+    * @param srcFunc     a function to obtain a source for a given relative folder
+    * @param op          the operation to be mapped
+    * @param cache       the current cache
+    * @param uri         the URI of the current element
+    * @param updateCache a flag whether the cache should be updated for the
+    *                    current element (only true for folders)
+    * @param ec          the execution context
+    * @param mat         the object to materialize streams
+    * @return
+    */
+  private def mapCreateOperation(key: Key, srcFunc: IterateSourceFunc, op: SyncOperation,
+                                 cache: LRUCache[String, String], uri: String, updateCache: Boolean)
+                                (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[(SyncOperation, LRUCache[String, String])] = {
+    val (parent, name) = UriEncodingHelper.splitParent(uri)
+    val futEncName = encryptName(key, name)
+    val (prefix, components) = splitUnknownPathComponents(parent, cache)
+    val encPrefix = fromCache(prefix, cache)
+    val futEncPath = resolveEncryptedPath(encPrefix, prefix, components, key, srcFunc, cache)
+    for {encName <- futEncName
+         (encPath, updCache) <- futEncPath
+    } yield {
+      val destUri = encPath + UriEncodingHelper.UriSeparator + encName
+      val nextCache = if (updateCache) updCache.put(uri -> destUri) else updCache
+      (op.copy(dstUri = destUri), nextCache)
+    }
+  }
+
+  /**
+    * Resolves a plain text path against an encrypted folder structure.
+    * Starting from the known prefix, all components are searched for using the
+    * given iteration function. The cache is updated for each component. Result
+    * is a future with the full resolved path and the updated cache.
+    *
+    * @param encPrefix   the known encrypted prefix
+    * @param plainPrefix the corresponding plain prefix
+    * @param components  a sequence with unknown plain components
+    * @param key         the key for crypt operations
+    * @param srcFunc     a function to obtain a source for a given relative folder
+    * @param cache       the current cache
+    * @param ec          the execution context
+    * @param mat         the object to materialize streams
+    * @return a future with the resolved path and the updated cache
+    */
+  private def resolveEncryptedPath(encPrefix: String, plainPrefix: String, components: Seq[String], key: Key,
+                                   srcFunc: IterateSourceFunc, cache: LRUCache[String, String])
+                                  (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[(String, LRUCache[String, String])] = {
+    val init = Future.successful((encPrefix, plainPrefix, cache))
+    components.foldLeft(init) { (fut, comp) =>
+      fut.flatMap { t =>
+        val plainPath = t._2 + UriEncodingHelper.UriSeparator + comp
+        val futName = searchEncryptedName(t._1, comp, key, srcFunc)
+        futName.map { name =>
+          val cryptPath = t._1 + UriEncodingHelper.UriSeparator + name
+          (cryptPath, plainPath, t._3.put(plainPath -> cryptPath))
+        }
+      }
+    }
+  } map (t => (t._1, t._3))
+
+  /**
+    * Searches for the element name in a a given directory that corresponds to
+    * the given plain text name.
+    *
+    * @param parent  the parent URI, the directory to be searched
+    * @param name    the plain text name to search for
+    * @param key     the key for crypt operations
+    * @param srcFunc a function to obtain a source for a given relative folder
+    * @param ec      the execution context
+    * @param mat     the object to materialize streams
+    * @return a future with the resolved encrypted name
+    */
+  private def searchEncryptedName(parent: String, name: String, key: Key, srcFunc: IterateSourceFunc)
+                                 (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] = {
+    val source = srcFunc(parent)
+    val sink = Sink.last[String]
+    source
+      .filter(_.isInstanceOf[FsFolder])
+      .map(elem => UriEncodingHelper.splitParent(elem.relativeUri))
+      .takeWhile(_._1 == parent)
+      .map(_._2)
+      .mapAsync(1)(name => decryptName(key, name).map((name, _)))
+      .filter(_._2 == name)
+      .map(_._1)
+      .runWith(sink)
+  }
+
+  /**
+    * Helper method for reading a key from a cache. The cache is accessed only
+    * if the key is not empty.
+    *
+    * @param key   the key
+    * @param cache the cache
+    * @return the mapped key from the cache
+    */
+  private def fromCache(key: String, cache: LRUCache[String, String]): String =
+    if (key.length > 0) cache(key) else key
 
   /**
     * A generic function to encrypt or decrypt a name. It implements the logic

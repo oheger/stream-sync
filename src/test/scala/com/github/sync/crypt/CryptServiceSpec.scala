@@ -17,19 +17,24 @@
 package com.github.sync.crypt
 
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Source
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, IterateResult, SyncFolderData}
+import com.github.sync.SyncTypes.{ActionCreate, ActionOverride, ActionRemove, FsElement, FsFile, FsFolder, IterateResult, SyncFolderData, SyncOperation}
+import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.util.{LRUCache, UriEncodingHelper}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 object CryptServiceSpec {
   /** A key used for crypt operations. */
   private val SecretKey = CryptStage.keyFromString("A_Secr3t.Key!")
+
+  /** Name of a test file. */
+  private val TestFileName = "test.txt"
 
   /**
     * Creates a test file based on the given parameters.
@@ -135,6 +140,15 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     */
   private def encrypt(data: String): String =
     futureResult(CryptService.encryptName(SecretKey, data))
+
+  /**
+    * A convenience function to decrypt some text and wait for the result.
+    *
+    * @param data the text to be decrypted
+    * @return the decrypted text
+    */
+  private def decrypt(data: String): String =
+    futureResult(CryptService.decryptName(SecretKey, data))
 
   /**
     * Encrypts the given path. The path is split into its components, and then
@@ -318,5 +332,206 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
       cache.contains(f.folder.relativeUri) shouldBe true
     }
     cache.size should be(3 + result.folders.size) // components of current dir
+  }
+
+  /**
+    * Simulates the function to create an iteration source for a specific
+    * directory. This function expects requests for a fixed list of folder
+    * URIs. For each URI a list with the relative element URIs to be returned
+    * is provided. A corresponding source producing these elements is then
+    * returned.
+    *
+    * @param data the data for generating source functions
+    * @return the ''IterateSourceFunc'' to be used
+    */
+  private def sourceFunction(data: List[(String, List[String])]): IterateSourceFunc = {
+    val refData = new AtomicReference(data)
+    uri => {
+      refData.get() match {
+        case h :: t if h._1 == uri =>
+          refData set t
+          val file = FsFile(UriEncodingHelper.withTrailingSeparator(uri) + encrypt(TestFileName), 1,
+            Instant.now(), 12345)
+          Source(file :: h._2.map(p => FsFolder(p, 2)))
+
+        case _ => fail("Unexpected source request for " + uri)
+      }
+    }
+  }
+
+  /**
+    * Obtains the mapping function for sync operations with the given
+    * parameters and invokes it.
+    *
+    * @param srcData the data for the simulated source function
+    * @param op      the sync operation
+    * @param cache   the cache
+    * @return the result from the function invocation
+    */
+  private def invokeMapOpFunc(srcData: List[(String, List[String])], op: SyncOperation, cache: LRUCache[String, String]):
+  (SyncOperation, LRUCache[String, String]) = {
+    implicit val mat: ActorMaterializer = ActorMaterializer()
+    val mapFunc = CryptService.mapOperationFunc(SecretKey, sourceFunction(srcData))
+    futureResult(mapFunc(op, cache))
+  }
+
+  /**
+    * Helper function to check the mapping of a sync operation which should not
+    * be changed.
+    *
+    * @param op the operation to check
+    */
+  private def checkMappedOperationUnchanged(op: SyncOperation): Unit = {
+    val cache = LRUCache[String, String](4)
+
+    val (mappedOp, _) = invokeMapOpFunc(Nil, op, cache)
+    mappedOp should be theSameInstanceAs op
+  }
+
+  it should "pass through delete operations" in {
+    val op = SyncOperation(createTestFile("/test", 1), ActionRemove, 1, "/src", "/dst")
+
+    checkMappedOperationUnchanged(op)
+  }
+
+  it should "pass through override operations" in {
+    val op = SyncOperation(createTestFile("/foo", 2), ActionOverride, 1, "/src/dat.txt", "/dst.txt")
+
+    checkMappedOperationUnchanged(op)
+  }
+
+  it should "add a deleted folder to the cache" in {
+    val folder = createTestFolder("/data", 1)
+    val op = SyncOperation(folder, ActionRemove, 1, "irrelevant", "/originalDestFolder")
+    val cache = LRUCache[String, String](8)
+
+    val (_, nextCache) = invokeMapOpFunc(Nil, op, cache)
+    nextCache(folder.relativeUri) should be(op.dstUri)
+  }
+
+  it should "add the folder of an overridden file to the cache" in {
+    val FolderUri = "/the/folder"
+    val OrgFolderUri = "/original/uri"
+    val file = createTestFile(FolderUri, 2)
+    val op = SyncOperation(file, ActionOverride, 1, "irrelevant", OrgFolderUri + "/orgFile.dat")
+    val cache = LRUCache[String, String](8)
+
+    val (_, nextCache) = invokeMapOpFunc(Nil, op, cache)
+    nextCache(FolderUri) should be(OrgFolderUri)
+  }
+
+  it should "adapt the URI of a create operation if the parent is in cache" in {
+    val FolderUri = "/plain/folder"
+    val OrgFolderUri = "/encrypted/uri"
+    val file = createTestFile(FolderUri, 1)
+    val op = SyncOperation(file, ActionCreate, 1, "irrelevant", "overridden")
+    val cache = LRUCache[String, String](8).put(FolderUri -> OrgFolderUri)
+
+    val (mappedOp, nextCache) = invokeMapOpFunc(Nil, op, cache)
+    val (mappedFolder, mappedName) = UriEncodingHelper.splitParent(mappedOp.dstUri)
+    mappedFolder should be(OrgFolderUri)
+    decrypt(mappedName) should be(UriEncodingHelper.splitParent(file.relativeUri)._2)
+    nextCache should be theSameInstanceAs cache
+  }
+
+  it should "store the URI of a create folder operation in the cache" in {
+    val ParentUri = "/plain/parent"
+    val OrgParentUri = "/enc/top"
+    val Name = "theFolder"
+    val folder = FsFolder(UriEncodingHelper.withTrailingSeparator(ParentUri) + Name, 2)
+    val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "overridden")
+    val cache = LRUCache[String, String](8).put(ParentUri -> OrgParentUri)
+
+    val (mappedOp, nextCache) = invokeMapOpFunc(Nil, op, cache)
+    val (mappedFolder, mappedName) = UriEncodingHelper.splitParent(mappedOp.dstUri)
+    mappedFolder should be(OrgParentUri)
+    decrypt(mappedName) should be(Name)
+    nextCache(folder.relativeUri) should be(UriEncodingHelper.withTrailingSeparator(OrgParentUri) + mappedName)
+  }
+
+  it should "encrypt the name for a create operation on the first level" in {
+    val Name = "foo"
+    val folder = FsFolder("/" + Name, 1)
+    val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "overridden")
+
+    val (mappedOp, nextCache) = invokeMapOpFunc(Nil, op, LRUCache(4))
+    decrypt(UriEncodingHelper.removeLeadingSeparator(mappedOp.dstUri)) should be(Name)
+    nextCache(folder.relativeUri) should be(mappedOp.dstUri)
+  }
+
+  it should "search the parent URI(s) using the source function" in {
+    val Comp1 = "top"
+    val Comp2 = "next"
+    val Comp3 = "sub"
+    val Name = "theActualName"
+    val plainComponents = List(Comp1, Comp2, Comp3)
+    val cryptComponents = plainComponents map encrypt
+    val otherNames = (1 to 3).map(i => "/" + encrypt("wrong" + i))
+
+    def generateSrcData(cryptPrefix: String, lstCrypt: List[String]):
+    List[(String, List[String])] = lstCrypt match {
+      case h :: t =>
+        val encName = cryptPrefix + "/" + h
+        val content = List(cryptPrefix + otherNames(0), cryptPrefix + otherNames(1),
+          encName, cryptPrefix + otherNames(2))
+        val mapping = (cryptPrefix, content)
+        mapping :: generateSrcData(encName, t)
+      case _ => Nil
+    }
+
+    val srcData = generateSrcData("", cryptComponents)
+    val folder = FsFolder(UriEncodingHelper.fromComponents(plainComponents) + "/" + Name, 2)
+    val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "overridden")
+
+    val (mappedOp, nextCache) = invokeMapOpFunc(srcData, op, LRUCache(4))
+    val (mappedFolder, mappedName) = UriEncodingHelper.splitParent(mappedOp.dstUri)
+    decrypt(mappedName) should be(Name)
+    mappedFolder should be(UriEncodingHelper.fromComponents(cryptComponents))
+    (1 to plainComponents.size) foreach { i =>
+      val cryptUri = UriEncodingHelper.fromComponents(cryptComponents take i)
+      val plainUri = UriEncodingHelper.fromComponents(plainComponents take i)
+      nextCache(plainUri) should be(cryptUri)
+    }
+    nextCache(folder.relativeUri) should be(mappedOp.dstUri)
+  }
+
+  it should "filter out files from the source function" in {
+    val folder = FsFolder(s"/$TestFileName/someUri", 2)
+    val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "irrelevant")
+    val cache = LRUCache[String, String](4)
+    val srcData = List(("", List("/" + encrypt("foo"))))
+
+    intercept[NoSuchElementException] {
+      invokeMapOpFunc(srcData, op, cache)
+    }
+  }
+
+  it should "stop the iteration of the source function when leaving the current folder" in {
+    val Name = "/parent"
+    val encName = encryptPath(Name)
+    val folder = FsFolder(Name + "/someUri", 2)
+    val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "irrelevant")
+    val cache = LRUCache[String, String](4)
+    val srcData = List(("", List("/" + encrypt("wrong"), encryptPath(Name + "/sub/other"), encName)))
+
+    intercept[NoSuchElementException] {
+      invokeMapOpFunc(srcData, op, cache)
+    }
+  }
+
+  it should "stop the iteration of the source function when the prefix changes" in {
+    val Root = "/parent_folder"
+    val encRoot = encryptPath(Root)
+    val Parent = "/sub"
+    val encParent = encRoot + encryptPath(Parent)
+    val folder = FsFolder(Root + Parent + "/someUri", 2)
+    val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "irrelevant")
+    val cache = LRUCache[String, String](4).put(Root -> encRoot)
+    val srcData = List((encRoot, List(encRoot + "/" + encrypt("other"),
+      encryptPath("/another/path"), encParent)))
+
+    intercept[NoSuchElementException] {
+      invokeMapOpFunc(srcData, op, cache)
+    }
   }
 }
