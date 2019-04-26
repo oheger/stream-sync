@@ -45,10 +45,10 @@ class DelegateSyncStreamFactory(delegate: SyncStreamFactory = SyncStreamFactoryI
   Future[Iterable[SupportedArgument]] = delegate.additionalArguments(uri, structureType)
 
   override def createSyncInputSource[T](uri: String, optTransformer: Option[ResultTransformer[T]],
-                                        structureType: StructureType)
+                                        structureType: StructureType, startFolderUri: String = "")
                                        (implicit ec: ExecutionContext, system: ActorSystem,
                                         mat: ActorMaterializer): ArgsFunc[Source[FsElement, Any]] =
-    delegate.createSyncInputSource(uri, optTransformer, structureType)
+    delegate.createSyncInputSource(uri, optTransformer, structureType, startFolderUri)
 
   override def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext,
                                                      system: ActorSystem, mat: ActorMaterializer)

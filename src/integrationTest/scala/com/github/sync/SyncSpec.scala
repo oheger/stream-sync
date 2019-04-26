@@ -16,6 +16,7 @@
 
 package com.github.sync
 
+import java.io.File
 import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}
 import java.time.Instant
@@ -546,5 +547,76 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     result1.totalOperations should be(0)
     val result2 = futureResult(Sync.syncProcess(options2))
     result2.totalOperations should be(0)
+  }
+
+  it should "support encrypted file names in a destination structure" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val TestFileName = "TestFileToBeEncryptedAndScrambled.txt"
+    createTestFile(srcFolder, TestFileName)
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--dst-encrypt-password", "crYptiC", "--dst-encrypt-names", "true")
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.totalOperations should be(result.successfulOperations)
+    val destFiles = dstFolder.toFile.list()
+    destFiles should have length 1
+    destFiles.head should not be TestFileName
+  }
+
+  it should "support a round-trip with encrypted file names" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder1 = Files.createDirectory(createPathInDirectory("destEnc"))
+    val dstFolder2 = Files.createDirectory(createPathInDirectory("destPlain"))
+    createTestFile(srcFolder, "top.txt")
+    val subDir = Files.createDirectory(srcFolder.resolve("sub"))
+    createTestFile(subDir, "sub.dat")
+    createTestFile(subDir, "anotherSub.txt")
+    val Password = "test-privacy"
+    val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
+      "--dst-encrypt-password", Password, "--dst-encrypt-names", "true")
+    futureResult(Sync.syncProcess(options1))
+
+    val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
+      "--src-encrypt-password", Password, "--src-encrypt-names", "true")
+    futureResult(Sync.syncProcess(options2))
+    checkFile(dstFolder2, "top.txt")
+    val options3 = Array(srcFolder.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString)
+    val result = futureResult(Sync.syncProcess(options3))
+    result.totalOperations should be(0)
+  }
+
+  it should "support complex structures when syncing with encrypted file names" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    createTestFile(srcFolder, "originalTestFile.tst")
+    val subDir = Files.createDirectory(srcFolder.resolve("sub"))
+    val subSubDir = Files.createDirectory(subDir.resolve("deep"))
+    createTestFile(subDir, "sub.txt")
+    createTestFile(subSubDir, "deep1.txt")
+    val Password = "Complex?"
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--dst-encrypt-password", Password, "--dst-encrypt-names", "true")
+    futureResult(Sync.syncProcess(options)).successfulOperations should be(5)
+
+    createTestFile(subSubDir, "deep2.txt")
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(1)
+
+    def findDirectory(content: Array[File]): File = {
+      val dirs = content.filter(_.isDirectory)
+      dirs should have length 1
+      dirs.head
+    }
+
+    val topContent = dstFolder.toFile.listFiles()
+    topContent should have length 2
+    val subContent = findDirectory(topContent).listFiles()
+    subContent should have length 2
+    val subSubContent = findDirectory(subContent).listFiles()
+    subSubContent should have length 2
   }
 }

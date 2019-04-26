@@ -28,8 +28,9 @@ import com.github.sync.{SourceFileProvider, SyncStreamFactory}
 import com.github.sync.SyncTypes.{DestinationStructureType, ResultTransformer, SourceStructureType, SyncOperation}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
-import com.github.sync.crypt.CryptService
-import com.github.sync.impl.{CryptAwareSourceFileProvider, SyncStreamFactoryImpl}
+import com.github.sync.crypt.CryptService.IterateSourceFunc
+import com.github.sync.crypt.{CryptService, CryptStage}
+import com.github.sync.impl.{CryptAwareSourceFileProvider, StatefulStage, SyncStreamFactoryImpl}
 import com.github.sync.log.SerializerStreamHelper
 import com.github.sync.util.LRUCache
 
@@ -144,8 +145,9 @@ object Sync {
     case Some(path) =>
       createSyncSourceFromLog(config, path)
     case None =>
-      factory.createSyncSource(config.syncUris._1, createResultTransformer(config.srcPassword),
-        config.syncUris._2, createResultTransformer(config.dstPassword), additionalArgs,
+      factory.createSyncSource(config.syncUris._1,
+        createResultTransformer(config.srcPassword, config.srcFileNamesEncrypted), config.syncUris._2,
+        createResultTransformer(config.dstPassword, config.dstFileNamesEncrypted), additionalArgs,
         config.ignoreTimeDelta getOrElse 1)
   }
 
@@ -154,15 +156,19 @@ object Sync {
     * parameters. The transformer makes sure that the results produced by an
     * element source are compatible with the parameters passed in.
     *
-    * @param optCryptPwd the optional encryption password
-    * @param ec          the execution context
-    * @param mat         the object to materialize streams
+    * @param optCryptPwd  the optional encryption password
+    * @param encryptNames flag whether file names are encrypted
+    * @param ec           the execution context
+    * @param mat          the object to materialize streams
     * @return the ''ResultTransformer'' for these parameters
     */
-  private def createResultTransformer(optCryptPwd: Option[String])
+  private def createResultTransformer(optCryptPwd: Option[String], encryptNames: Boolean)
                                      (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Option[ResultTransformer[LRUCache[String, String]]] =
-    optCryptPwd.map(_ => CryptService.cryptTransformer(None))
+    optCryptPwd.map { pwd =>
+      val optNameKey = if (encryptNames) Some(CryptStage.keyFromString(pwd)) else None
+      CryptService.cryptTransformer(optNameKey)
+    }
 
   /**
     * Creates the source for the sync process if a sync log is provided. The
@@ -206,12 +212,43 @@ object Sync {
         for {
           provider <- createSourceFileProvider(config, additionalArgs)
           stage <- factory.createApplyStage(targetUri, provider).apply(additionalArgs)
-        } yield stage
+        } yield decorateApplyStage(config, additionalArgs, stage)
 
       case ParameterManager.ApplyModeNone =>
         Future.successful(Flow[SyncOperation].map(identity))
     }
   }
+
+  /**
+    * Decorates the apply stage to fit into the parametrized sync stream. If
+    * necessary, special preparation stages are added before the apply stage
+    * to transform the operations to be processed accordingly.
+    *
+    * @param config         the sync configuration
+    * @param additionalArgs the map with additional arguments
+    * @param stage          the apply stage to be decorated
+    * @param ec             the execution context
+    * @param system         the actor system
+    * @param mat            the object to materialize streams
+    * @param factory        the factory for the sync stream
+    * @return the decorated apply stage
+    */
+  private def decorateApplyStage(config: SyncConfig, additionalArgs: Map[String, String],
+                                 stage: Flow[SyncOperation, SyncOperation, NotUsed])
+                                (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
+                                 factory: SyncStreamFactory): Flow[SyncOperation, SyncOperation, NotUsed] =
+    if (config.dstPassword.isEmpty || !config.dstFileNamesEncrypted) stage
+    else {
+      val srcFunc: IterateSourceFunc = startFolderUri => {
+        val inpSrcFunc = factory.createSyncInputSource(config.syncUris._2, None, DestinationStructureType,
+          startFolderUri)
+        inpSrcFunc(additionalArgs)
+      }
+      val cryptFunc = CryptService.mapOperationFunc(CryptStage.keyFromString(config.dstPassword.get), srcFunc)
+      val cryptStage = new StatefulStage[SyncOperation, SyncOperation,
+        LRUCache[String, String]](LRUCache[String, String](1024))(cryptFunc)
+      Flow[SyncOperation].via(cryptStage).via(stage)
+    }
 
   /**
     * Creates the source file provider. A basic provider can be obtained from

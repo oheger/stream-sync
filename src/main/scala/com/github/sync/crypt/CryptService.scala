@@ -20,11 +20,10 @@ import java.security.Key
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.NotUsed
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
-import com.github.sync.SyncTypes.{ActionCreate, FsElement, FsFile, FsFolder, IterateResult, ResultTransformer, SyncOperation}
+import com.github.sync.SyncTypes._
 import com.github.sync.util.{LRUCache, UriEncodingHelper}
 
 import scala.annotation.tailrec
@@ -45,7 +44,7 @@ object CryptService {
     * executed. It is then sometimes necessary to iterate over the destination
     * structure to find specific elements.
     */
-  type IterateSourceFunc = String => Source[FsElement, NotUsed]
+  type IterateSourceFunc = String => Future[Source[FsElement, Any]]
 
   /**
     * Returns a ''ResultTransformer'' that supports the iteration over an
@@ -234,17 +233,18 @@ object CryptService {
     */
   private def searchEncryptedName(parent: String, name: String, key: Key, srcFunc: IterateSourceFunc)
                                  (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] = {
-    val source = srcFunc(parent)
     val sink = Sink.last[String]
-    source
-      .filter(_.isInstanceOf[FsFolder])
-      .map(elem => UriEncodingHelper.splitParent(elem.relativeUri))
-      .takeWhile(_._1 == parent)
-      .map(_._2)
-      .mapAsync(1)(name => decryptName(key, name).map((name, _)))
-      .filter(_._2 == name)
-      .map(_._1)
-      .runWith(sink)
+    srcFunc(parent) flatMap { source =>
+      source
+        .filter(_.isInstanceOf[FsFolder])
+        .map(elem => UriEncodingHelper.splitParent(elem.relativeUri))
+        .takeWhile(_._1 == parent)
+        .map(_._2)
+        .mapAsync(1)(name => decryptName(key, name).map((name, _)))
+        .filter(_._2 == name)
+        .map(_._1)
+        .runWith(sink)
+    }
   }
 
   /**
@@ -347,13 +347,13 @@ object CryptService {
                                         (implicit ec: ExecutionContext, mat: ActorMaterializer,
                                          cnt: AtomicInteger):
   Future[(String, LRUCache[String, String])] = {
-    val (prefixCrypt, components) = splitUnknownPathComponents(result.currentFolder.relativeUri, cache)
+    val (prefixCrypt, components) = splitUnknownPathComponents(result.currentFolder.originalUri, cache)
     cnt.addAndGet(components.size)
     Future.sequence(components.map(decryptName(key, _)))
       .map { decryptComponents =>
         val prefix = cache get prefixCrypt getOrElse ""
         val cacheNext = updateCacheForDirectoryPath(prefix, prefixCrypt, decryptComponents.zip(components), cache)
-        (cacheNext(result.currentFolder.relativeUri), cacheNext)
+        (fromCache(result.currentFolder.originalUri, cacheNext), cacheNext)
       }
   }
 
@@ -456,14 +456,25 @@ object CryptService {
     val currentFolder = source.currentFolder.copy(relativeUri =
       UriEncodingHelper.removeTrailingSeparator(decryptedFolder))
     val files = source.files.zip(fileNames).map { t =>
-      t._1.copy(relativeUri = t._2, optOriginalUri = Some(t._1.relativeUri),
+      t._1.copy(relativeUri = t._2, optOriginalUri = Some(originalElemUri(currentFolder, t._1)),
         size = calculateEncryptedFileSize(t._1))
     }
     val folders = source.folders.zip(folderNames).map { t =>
-      t._1.copy(folder = t._1.folder.copy(relativeUri = t._2, optOriginalUri = Some(t._1.folder.relativeUri)))
+      t._1.copy(folder = t._1.folder.copy(relativeUri = t._2,
+        optOriginalUri = Some(originalElemUri(currentFolder, t._1.folder))))
     }
     IterateResult(currentFolder, files, folders)
   }
+
+  /**
+    * Generates the original URI of an element based on the current folder.
+    *
+    * @param currentFolder the folder the element belongs to
+    * @param elem          the element in question
+    * @return the original URI for this element
+    */
+  private def originalElemUri(currentFolder: FsFolder, elem: FsElement): String =
+    currentFolder.originalUri + UriEncodingHelper.UriSeparator + UriEncodingHelper.splitParent(elem.relativeUri)._2
 
   /**
     * Updates the given cache by adding the information about the folders

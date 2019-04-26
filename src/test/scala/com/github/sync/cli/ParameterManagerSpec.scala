@@ -215,7 +215,6 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val args = appendFileParameter(
       createParameterFile(ParameterManager.FileOption, nestedFile.toString,
         OptionName2, Option2Value), OptionName1 :: Option1Value :: Nil)
-    println("Parsing arguments " + args)
     val expArgs = Map(OptionName1 -> List(Option1Value),
       OptionName2 -> List(Option2Value),
       OptionName3 -> List(Option3Value))

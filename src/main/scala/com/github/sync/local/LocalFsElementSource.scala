@@ -231,7 +231,6 @@ object LocalFsElementSource {
     * @param state the current iteration state
     */
   private def iterationComplete(state: IterationState): Unit = {
-    println("iterationComplete() with " + state.optCurrentStream)
     state.optCurrentStream foreach (_.close())
   }
 }

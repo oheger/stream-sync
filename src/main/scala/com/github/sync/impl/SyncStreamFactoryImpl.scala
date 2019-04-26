@@ -56,7 +56,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   }
 
   override def createSyncInputSource[T](uri: String, optTransformer: Option[ResultTransformer[T]],
-                                        structureType: StructureType)
+                                        structureType: StructureType, startFolderUri: String = "")
                                        (implicit ec: ExecutionContext, system: ActorSystem,
                                         mat: ActorMaterializer):
   ArgsFunc[Source[FsElement, Any]] = {
@@ -64,11 +64,11 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     uri match {
       case RegDavUri(davUri) =>
         args =>
-          DavConfig(structureType, davUri, args) map (conf => DavFsElementSource(conf, factory))
+          DavConfig(structureType, davUri, args) map (conf => DavFsElementSource(conf, factory, startFolderUri))
       case _ =>
         args =>
           LocalFsConfig(structureType, uri, args) map { config =>
-            LocalFsElementSource(config)(factory).via(new FolderSortStage)
+            LocalFsElementSource(config, startDirectory = startFolderUri)(factory).via(new FolderSortStage)
           }
     }
   }

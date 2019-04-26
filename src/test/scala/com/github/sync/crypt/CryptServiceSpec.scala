@@ -29,6 +29,8 @@ import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.util.{LRUCache, UriEncodingHelper}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
+import scala.concurrent.Future
+
 object CryptServiceSpec {
   /** A key used for crypt operations. */
   private val SecretKey = CryptStage.keyFromString("A_Secr3t.Key!")
@@ -250,12 +252,12 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val encryptedDir = encryptPath(directory)
     val encryptedFiles = files.map(encryptedFile(encryptedDir, _))
     val encryptedFolderData = folderData.map(f => f.copy(folder = encryptedFolder(encryptedDir, f.folder)))
-    IterateResult(FsFolder(encryptedDir, 2), encryptedFiles, encryptedFolderData)
+    IterateResult(FsFolder(encryptedDir, 2, Some(encryptedDir)), encryptedFiles, encryptedFolderData)
   }
 
   /**
     * Creates an iteration result object with encrypted URIs based on the given
-    * parameters and adapt the files and folders to reference their original
+    * parameters and adapts the files and folders to reference their original
     * (encrypted) URI.
     *
     * @param directory  the current directory URI
@@ -279,7 +281,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
 
     val transformer = CryptService.cryptTransformer(Some(SecretKey))
     val transResult = futureResult(transformer.transform(result, transformer.initialState))._1
-    transResult.currentFolder should be(FsFolder(directory, 2))
+    transResult.currentFolder should be(FsFolder(directory, 2, Some(result.currentFolder.relativeUri)))
     transResult.files should be(files)
     transResult.folders should be(folderData)
   }
@@ -352,7 +354,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
           refData set t
           val file = FsFile(UriEncodingHelper.withTrailingSeparator(uri) + encrypt(TestFileName), 1,
             Instant.now(), 12345)
-          Source(file :: h._2.map(p => FsFolder(p, 2)))
+          Future.successful(Source(file :: h._2.map(p => FsFolder(p, 2))))
 
         case _ => fail("Unexpected source request for " + uri)
       }

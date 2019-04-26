@@ -78,15 +78,17 @@ trait SyncStreamFactory {
     * @param uri            the URI for the sync source in question
     * @param optTransformer an optional transformer for the structure
     * @param structureType  the type of the structure the source is for
+    * @param startFolderUri optional URI of a folder to start the iteration
     * @param ec             the execution context
     * @param system         the actor system
     * @param mat            the object to materialize streams
     * @tparam T the type of the result transformer
     * @return a function to create the sync source
     */
-  def createSyncInputSource[T](uri: String, optTransformer: Option[ResultTransformer[T]], structureType: StructureType)
-                              (implicit ec: ExecutionContext, system: ActorSystem,
-                               mat: ActorMaterializer): ArgsFunc[Source[FsElement, Any]]
+  def createSyncInputSource[T](uri: String, optTransformer: Option[ResultTransformer[T]], structureType: StructureType,
+                               startFolderUri: String = "")
+                              (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
+  ArgsFunc[Source[FsElement, Any]]
 
   /**
     * Creates a ''SourceFileProvider'' based on the URI provided. This is
