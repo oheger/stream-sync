@@ -144,7 +144,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
       createFile("/song2.mp3", optOrgUri = Some("/foo2.mp3")),
       createFile("songOther.ogg", optOrgUri = Some("/bar.ogg")))
     val expOps = files map { e =>
-      createOp(element = e, action = ActionCreate, optSrcUri = Some(e.originalUri), optDstUri = Some(e.originalUri))
+      createOp(element = e, action = ActionCreate, optSrcUri = Some(e.originalUri))
     }
 
     runStage(Source(files), Source.empty) should contain theSameElementsAs expOps
@@ -196,8 +196,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
     val file3 = createFile("/song3.mp3", optOrgUri = Some("/org3.mp3"))
     val filesSource = List(file1, file2)
     val filesDest = List(file2, file3)
-    val expSync = List(createOp(file1, ActionCreate, optSrcUri = Some(file1.originalUri),
-      optDstUri = Some(file1.originalUri)),
+    val expSync = List(createOp(file1, ActionCreate, optSrcUri = Some(file1.originalUri)),
       createOp(file3, ActionRemove, optSrcUri = Some(file3.originalUri), optDstUri = Some(file3.originalUri)))
 
     runStage(Source(filesSource), Source(filesDest)) should contain theSameElementsAs expSync

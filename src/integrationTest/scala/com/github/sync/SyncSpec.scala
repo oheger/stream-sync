@@ -26,9 +26,12 @@ import java.util.concurrent.atomic.AtomicInteger
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
+import akka.util.ByteString
 import com.github.sync.WireMockSupport._
 import com.github.sync.cli.Sync
+import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptOpHandler}
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.local.LocalUriResolver
 import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, RequestQueue}
@@ -55,10 +58,15 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     super.afterEach()
   }
 
+  import system.dispatcher
+
   /**
     * @inheritdoc Use a higher timeout because of more complex operations.
     */
   override val timeout: Duration = 10.seconds
+
+  /** The object to materialize streams. */
+  implicit private val mat: ActorMaterializer = ActorMaterializer()
 
   /**
     * Creates a test file with the given name in the directory specified. The
@@ -138,6 +146,31 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
                                           mat: ActorMaterializer):
     ArgsFunc[SourceFileProvider] = _ => Future.successful(provider)
   }
+
+  /**
+    * Performs a crypt operation on the given data and returns the result.
+    *
+    * @param key     the key for encryption / decryption
+    * @param handler the crypt handler
+    * @param data    the data to be processed
+    * @return the processed data
+    */
+  private def crypt(key: String, handler: CryptOpHandler, data: ByteString): ByteString = {
+    val source = Source.single(data)
+    val stage = new CryptStage(handler, CryptStage.keyFromString(key))
+    val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
+    futureResult(source.via(stage).runWith(sink))
+  }
+
+  /**
+    * Encrypts the given file name.
+    *
+    * @param key  the key for encryption
+    * @param data the name to be encrypted
+    * @return the encrypted name
+    */
+  private def encryptName(key: String, data: String): String =
+    futureResult(CryptService.encryptName(CryptStage.keyFromString(key), data))
 
   "Sync" should "synchronize two directory structures" in {
     implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
@@ -563,6 +596,29 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     val destFiles = dstFolder.toFile.list()
     destFiles should have length 1
     destFiles.head should not be TestFileName
+  }
+
+  it should "support other operations on encrypted file names" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val Password = "foo-bar;"
+    val OverrideName = "FileToOverride.txt"
+    val encOverrideName = encryptName(Password, OverrideName)
+    val delFolderName = encryptName(Password, "folderToDelete")
+    val delFileName = encryptName(Password, "fileToDelete.dat")
+    createTestFile(srcFolder, OverrideName)
+    val pathOverride = createTestFile(dstFolder, encOverrideName)
+    val delFolder = Files.createDirectory(dstFolder.resolve(delFolderName))
+    createTestFile(delFolder, delFileName)
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--dst-encrypt-password", Password, "--dst-encrypt-names", "true")
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.totalOperations should be(result.successfulOperations)
+    Files.exists(delFolder) shouldBe false
+    val overrideData = ByteString(Files.readAllBytes(pathOverride))
+    crypt(Password, DecryptOpHandler, overrideData).utf8String should be(OverrideName)
   }
 
   it should "support a round-trip with encrypted file names" in {

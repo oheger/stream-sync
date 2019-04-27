@@ -395,7 +395,7 @@ object SyncStage {
     * @return the operation
     */
   private def createOp(elem: FsElement): SyncOperation =
-    SyncOperation(elem, ActionCreate, elem.level, elem.originalUri, elem.originalUri)
+    SyncOperation(elem, ActionCreate, elem.level, elem.originalUri, elem.relativeUri)
 
   /**
     * Creates an operation that indicates that an element needs to be removed.
