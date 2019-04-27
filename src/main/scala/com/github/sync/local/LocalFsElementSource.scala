@@ -209,7 +209,7 @@ object LocalFsElementSource {
     * @return the URI for this element
     */
   private def generateElementUri(parent: FsElement, path: Path): String =
-    parent.relativeUri + UriEncodingHelper.UriSeparator + path.getFileName.toString
+    parent.originalUri + UriEncodingHelper.UriSeparator + path.getFileName.toString
 
   /**
     * Uses the specified ''StreamFactory'' to create a ''DirectoryStreamRef''

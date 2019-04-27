@@ -34,8 +34,10 @@ import com.github.sync.cli.Sync
 import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptOpHandler}
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.local.LocalUriResolver
+import com.github.sync.util.UriEncodingHelper
 import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, RequestQueue}
 import com.github.tomakehurst.wiremock.client.WireMock._
+import com.github.tomakehurst.wiremock.http.RequestMethod
 import org.scalatest._
 
 import scala.concurrent.duration._
@@ -75,10 +77,12 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     * @param dir      the parent directory
     * @param name     the name of the file
     * @param fileTime an optional timestamp for the file
+    * @param content  optional content of the file
     * @return the path to the newly created file
     */
-  private def createTestFile(dir: Path, name: String, fileTime: Option[Instant] = None): Path = {
-    val path = writeFileContent(dir.resolve(name), name)
+  private def createTestFile(dir: Path, name: String, fileTime: Option[Instant] = None,
+                             content: Option[String] = None): Path = {
+    val path = writeFileContent(dir.resolve(name), content getOrElse name)
     fileTime foreach { time =>
       Files.setLastModifiedTime(path, FileTime.from(time))
     }
@@ -171,6 +175,16 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     */
   private def encryptName(key: String, data: String): String =
     futureResult(CryptService.encryptName(CryptStage.keyFromString(key), data))
+
+  /**
+    * Decrypts the given file name.
+    *
+    * @param key  the key for decryption
+    * @param name the name to be decrypted
+    * @return the decrypted name
+    */
+  private def decryptName(key: String, name: String): String =
+    futureResult(CryptService.decryptName(CryptStage.keyFromString(key), name))
 
   "Sync" should "synchronize two directory structures" in {
     implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
@@ -674,5 +688,73 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     subContent should have length 2
     val subSubContent = findDirectory(subContent).listFiles()
     subSubContent should have length 2
+  }
+
+  /**
+    * Stubs a GET request to access a file from a DAV server.
+    *
+    * @param uri          the URI
+    * @param responseFile the file to be returned
+    */
+  private def stubFileRequest(uri: String, responseFile: String): Unit = {
+    stubFor(authorized(get(urlPathEqualTo(uri))
+      .willReturn(aResponse()
+        .withStatus(StatusCodes.OK.intValue)
+        .withBodyFile(responseFile))))
+  }
+
+  it should "support a WebDav source with encrypted file names" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val CryptPassword = Password
+    val WebDavPath = "/encrypted"
+    stubFolderRequest(WebDavPath, "root_encrypted.xml")
+    stubFolderRequest(WebDavPath + "/Q8Xcluxx2ADWaUAtUHLurqSmvw==/", "folder_encrypted.xml")
+    stubFileRequest(WebDavPath + "/HLL2gCNjWKvwRnp4my1U2ex0QLKWpZs=", "encrypted1.dat")
+    stubFileRequest(WebDavPath + "/uBQQYWockOWLuCROIHviFhU2XayMtps=", "encrypted2.dat")
+    stubFileRequest(WebDavPath + "/Q8Xcluxx2ADWaUAtUHLurqSmvw==/Oe3_2W9y1fFSrTj15xaGdt9_rovvGSLPY7NN",
+      "encrypted3.dat")
+    stubFileRequest(WebDavPath + "/Q8Xcluxx2ADWaUAtUHLurqSmvw==/Z3BDvmY89rQwUqJ3XzMUWgtBE9bcOCYxiTq-Zfo-sNlIGA==",
+      "encrypted4.dat")
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    createTestFile(dstFolder, "foo.txt", content = Some("Test file content"))
+    val pathDeleted = createTestFile(dstFolder, "toDelete.txt")
+    val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
+      "--src-encrypt-password", CryptPassword, "--src-encrypt-names", "true", "--src-user", UserId,
+      "--src-password", Password)
+
+    val result = futureResult(Sync.syncProcess(options))
+    result.successfulOperations should be(result.totalOperations)
+    Files.exists(pathDeleted) shouldBe false
+    val rootFiles = dstFolder.toFile.listFiles()
+    rootFiles.map(_.getName) should contain only("foo.txt", "bar.txt", "sub")
+    checkFile(dstFolder, "foo.txt")
+    val subFolder = dstFolder.resolve("sub")
+    checkFile(subFolder, "subFile.txt")
+    checkFile(subFolder, "anotherSubFile.dat")
+  }
+
+  it should "support a WebDav destination with encrypted file names" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val CryptPassword = "secretServer"
+    val WebDavPath = "/secret"
+    stubSuccess()
+    stubFolderRequest(WebDavPath, "empty_folder.xml")
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val FileName = "plainFile.txt"
+    val Content = "This is the content of the test file ;-)"
+    createTestFile(srcFolder, FileName, content = Some(Content))
+    val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "--dst-encrypt-password", CryptPassword, "--dst-encrypt-names", "true", "--dst-user", UserId,
+      "--dst-password", Password)
+
+    futureResult(Sync.syncProcess(options)).successfulOperations should be(1)
+    import collection.JavaConverters._
+    val events = getAllServeEvents.asScala
+    val putRequest = events.find(event => event.getRequest.getMethod == RequestMethod.PUT).get.getRequest
+    val (parent, fileUri) = UriEncodingHelper.splitParent(putRequest.getUrl)
+    parent should be(WebDavPath)
+    decryptName(CryptPassword, fileUri) should be(FileName)
+    val bodyPlain = crypt(CryptPassword, DecryptOpHandler, ByteString(putRequest.getBody))
+    bodyPlain.utf8String should be(Content)
   }
 }

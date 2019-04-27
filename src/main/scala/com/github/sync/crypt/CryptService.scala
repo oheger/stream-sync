@@ -70,7 +70,7 @@ object CryptService {
           Future.successful((transformEncryptedFileSizes(result), cache))
         case Some(key) =>
           implicit val cryptCount: AtomicInteger = optCryptCount getOrElse new AtomicInteger
-          createDecryptedResult(key, result, cache)
+          processResult(key, result, cache)
       }
     }
 
@@ -314,9 +314,8 @@ object CryptService {
     * @tparam F the type of folder data
     * @return a future with the transformed result and the updated cache
     */
-  private def createDecryptedResult[F](key: Key, result: IterateResult[F], cache: LRUCache[String, String])
-                                      (implicit ec: ExecutionContext, mat: ActorMaterializer,
-                                       cnt: AtomicInteger):
+  private def processResult[F](key: Key, result: IterateResult[F], cache: LRUCache[String, String])
+                              (implicit ec: ExecutionContext, mat: ActorMaterializer, cnt: AtomicInteger):
   Future[(IterateResult[F], LRUCache[String, String])] = {
     val futDecryptedFolderUri = decryptCurrentDirectory(key, result, cache)
     for {(decryptedFolderUri, cache2) <- futDecryptedFolderUri
@@ -433,7 +432,7 @@ object CryptService {
   private def decryptResultElements[F](key: Key, iterateResult: IterateResult[F], decryptedFolder: String)
                                       (implicit ec: ExecutionContext, mat: ActorMaterializer, cnt: AtomicInteger):
   Future[(List[String], List[String])] = {
-    val prefixLength = UriEncodingHelper.withTrailingSeparator(iterateResult.currentFolder.relativeUri).length
+    val prefixLength = UriEncodingHelper.withTrailingSeparator(iterateResult.currentFolder.originalUri).length
     val futFiles = decryptPaths(key, prefixLength, decryptedFolder, iterateResult.files.map(_.relativeUri))
     val futFolders = decryptPaths(key, prefixLength, decryptedFolder, iterateResult.folders.map(_.folder.relativeUri))
     for {files <- futFiles

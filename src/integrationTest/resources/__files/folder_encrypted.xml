@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/encrypted/Q8Xcluxx2ADWaUAtUHLurqSmvw==/</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:creationdate>2018-08-28T19:38:46Z</D:creationdate>
+        <D:getcontentlanguage>de</D:getcontentlanguage>
+        <D:getetag>AAABZdmWk30AAAFlggumbg</D:getetag>
+        <D:getlastmodified>Thu, 30 Aug 2018 20:07:40 GMT</D:getlastmodified>
+        <D:iscollection>true</D:iscollection>
+        <D:getcontentlength>0</D:getcontentlength>
+        <D:resourcetype>
+          <D:collection/>
+        </D:resourcetype>
+        <D:displayname>Q8Xcluxx2ADWaUAtUHLurqSmvw==</D:displayname>
+        <D:getcontenttype>httpd/unix-directory</D:getcontenttype>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>/encrypted/Q8Xcluxx2ADWaUAtUHLurqSmvw==/Oe3_2W9y1fFSrTj15xaGdt9_rovvGSLPY7NN</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:creationdate>2018-09-19T20:08:00Z</D:creationdate>
+        <D:getcontentlanguage>de</D:getcontentlanguage>
+        <D:getetag>ZXKjw_kC_AJQsw_E03tzwSatD_G1YzikF4DT2NsHk-c</D:getetag>
+        <D:getlastmodified>Wed, 19 Sep 2018 20:10:00 GMT</D:getlastmodified>
+        <D:iscollection>false</D:iscollection>
+        <D:getcontentlength>100</D:getcontentlength>
+        <D:resourcetype/>
+        <D:displayname>Oe3_2W9y1fFSrTj15xaGdt9_rovvGSLPY7NN</D:displayname>
+        <D:getcontenttype>audio/mp3</D:getcontenttype>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>/encrypted/Q8Xcluxx2ADWaUAtUHLurqSmvw==/Z3BDvmY89rQwUqJ3XzMUWgtBE9bcOCYxiTq-Zfo-sNlIGA==</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:creationdate>2018-09-19T20:08:00Z</D:creationdate>
+        <D:getcontentlanguage>de</D:getcontentlanguage>
+        <D:getetag>ZXKjw_kC_AJQsw_E03tzwSatD_G1YzikF4DT2NsHk-c</D:getetag>
+        <D:getlastmodified>Wed, 19 Sep 2018 20:10:00 GMT</D:getlastmodified>
+        <D:iscollection>false</D:iscollection>
+        <D:getcontentlength>100</D:getcontentlength>
+        <D:resourcetype/>
+        <D:displayname>Z3BDvmY89rQwUqJ3XzMUWgtBE9bcOCYxiTq-Zfo-sNlIGA==</D:displayname>
+        <D:getcontenttype>audio/mp3</D:getcontenttype>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>
