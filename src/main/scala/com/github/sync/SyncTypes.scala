@@ -238,7 +238,7 @@ object SyncTypes {
     */
   case class SyncFolderData[T](folder: FsFolder, data: T) extends Ordered[SyncFolderData[T]] {
     override def compare(that: SyncFolderData[T]): Int = {
-      val deltaLevel = folder.level - that.folder.level
+      val deltaLevel = that.folder.level - folder.level
       if (deltaLevel != 0) deltaLevel
       else folder.relativeUri.compareTo(that.folder.relativeUri)
     }

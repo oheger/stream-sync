@@ -195,10 +195,10 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
 
     helper.runSource()
     val folderFunc = helper.nextFolderFunc
-    folderFunc() should be(Some(RootFolder))
     List(folder1, folder2, folder3) foreach { f =>
       folderFunc().get should be(f)
     }
+    folderFunc() should be(Some(RootFolder))
     folderFunc() shouldBe 'empty
   }
 

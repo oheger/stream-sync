@@ -285,23 +285,6 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     checkAllStreamsClosed(queue)
   }
 
-  it should "support iteration in BFS order" in {
-    @tailrec def calcLevel(p: Path, dist: Int): Int =
-      if (testDirectory == p) dist
-      else calcLevel(p.getParent, dist + 1)
-
-    def level(p: Path): Int = calcLevel(p, 0)
-
-    val fileData = setUpDirectoryStructure()
-    val source = LocalFsElementSource(sourceConfig())(sourceFactory)
-    val elems = runSource(source)
-    val pathLevels = elems map (d => level(fileData(d)))
-    pathLevels.foldLeft(0)((last, cur) => {
-      last should be <= cur
-      cur
-    })
-  }
-
   it should "output the elements of a folder in series" in {
     val fileData = setUpDirectoryStructure()
     val folderCount = fileData.keys.count(_.isInstanceOf[FsFolder])

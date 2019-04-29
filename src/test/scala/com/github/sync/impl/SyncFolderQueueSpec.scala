@@ -81,7 +81,7 @@ class SyncFolderQueueSpec extends FlatSpec with Matchers {
     val q1 = SyncFolderQueue(elem1)
     val q2 = q1 ++ List(elem3, elem4, elem2)
 
-    readQueue(q2) should be(List(elem1, elem2, elem3, elem4))
+    readQueue(q2) should be(List(elem4, elem2, elem3, elem1))
   }
 
   it should "implement nonEmpty correctly" in {
