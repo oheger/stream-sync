@@ -224,9 +224,11 @@ object SyncStage {
     * @return the result of the comparison
     */
   private def compareElements(elemSource: FsElement, elemDest: FsElement): Int = {
-    val deltaLevel = elemSource.level - elemDest.level
-    if (deltaLevel != 0) deltaLevel
-    else elemSource.relativeUri.compareTo(elemDest.relativeUri)
+    val (srcParent, srcName) = UriEncodingHelper.splitParent(elemSource.relativeUri)
+    val (dstParent, dstName) = UriEncodingHelper.splitParent(elemDest.relativeUri)
+    val deltaParent = srcParent.compareTo(dstParent)
+    if (deltaParent != 0) deltaParent
+    else srcName.compareTo(dstName)
   }
 
   /**

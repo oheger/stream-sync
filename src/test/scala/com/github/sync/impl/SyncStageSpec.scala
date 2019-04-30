@@ -337,4 +337,20 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
 
     runStage(sourceOrg, sourceTarget) should contain only expOp
   }
+
+  it should "handle new files in a sub directory correctly" in {
+    val file1 = createFile("/file_top.txt")
+    val folder1 = createFolder("/folder")
+    val sub1 = createFolder("/folder/sub1", 1)
+    val sub2 = createFolder("/folder/sub2", 1)
+    val file2 = createFile(sub1.relativeUri + "/file_sub1.txt", level = 2)
+    val file3 = createFile(sub1.relativeUri + "/file_sub2.txt", level = 2)
+    val file4 = createFile(sub2.relativeUri + "/other_sub_file.txt", level = 2)
+    val folder2 = createFolder("/folder2")
+    val sourceOrg = Source(List(file1, folder1, folder2, sub1, sub2, file2, file3, file4))
+    val sourceTarget = Source(List(file1, folder1, folder2, sub1, sub2, file4))
+    val expOps = List(createOp(file2, ActionCreate, level = 2), createOp(file3, ActionCreate, level = 2))
+
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsAs expOps
+  }
 }
