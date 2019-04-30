@@ -402,21 +402,25 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     config.srcFileNamesEncrypted shouldBe false
     config.dstPassword should be(None)
     config.dstFileNamesEncrypted shouldBe false
+    config.cryptCacheSize should be(ParameterManager.DefaultCryptCacheSize)
   }
 
   it should "handle options related to encryption" in {
     val SrcPwd = "secretSource!"
     val DstPwd = "!secretDest"
+    val CacheSize = 555
     val argsMap = ArgsMap + (ParameterManager.SourcePasswordOption -> List(SrcPwd)) +
       (ParameterManager.DestPasswordOption -> List(DstPwd)) +
       (ParameterManager.EncryptSourceFileNamesOption -> List("true")) +
-      (ParameterManager.EncryptDestFileNamesOption -> List("FaLSE"))
+      (ParameterManager.EncryptDestFileNamesOption -> List("FaLSE")) +
+      (ParameterManager.CryptCacheSizeOption -> List(CacheSize.toString))
 
     val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
     config.srcPassword should be(Some(SrcPwd))
     config.dstPassword should be(Some(DstPwd))
     config.srcFileNamesEncrypted shouldBe true
     config.dstFileNamesEncrypted shouldBe false
+    config.cryptCacheSize should be(CacheSize)
   }
 
   it should "handle invalid boolean values for encryption-related flags" in {
@@ -426,6 +430,21 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val msg = expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
       ParameterManager.EncryptSourceFileNamesOption)
     msg should include(ParameterManager.EncryptDestFileNamesOption)
+  }
+
+  it should "handle invalid integer values for the crypt cache size option" in {
+    val argsMap = ArgsMap + (ParameterManager.CryptCacheSizeOption -> List("big"))
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "Invalid crypt cache size")
+  }
+
+  it should "handle a crypt cache size below the allowed minimum" in {
+    val argsMap = ArgsMap + (ParameterManager.CryptCacheSizeOption ->
+      List(String.valueOf(ParameterManager.MinCryptCacheSize - 1)))
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "Crypt cache size must be greater or equal " + ParameterManager.MinCryptCacheSize)
   }
 
   it should "remove all options contained in the sync config" in {
@@ -440,12 +459,14 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
   it should "combine multiple error messages when parsing the sync config" in {
     val argsMap = Map(ParameterManager.SyncUriOption -> List(SourceUri),
       ParameterManager.ApplyModeOption -> List("invalidApplyMode"),
-      ParameterManager.TimeoutOption -> List("invalidTimeout"))
+      ParameterManager.TimeoutOption -> List("invalidTimeout"),
+      ParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))
 
     val msg = expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
       "destination URI")
     msg should include("apply mode")
     msg should include("timeout value")
+    msg should include("crypt cache size")
   }
 
   it should "extract optional supported arguments" in {

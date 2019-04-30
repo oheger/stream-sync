@@ -104,8 +104,22 @@ object ParameterManager {
     */
   val EncryptDestFileNamesOption: String = OptionPrefix + "dst-encrypt-names"
 
+  /**
+    * Name of the option that defines the size of the cache for encrypted
+    * names. This option is evaluated if file names are encrypted. In this
+    * case, already encrypted or decrypted file names are stored in a cache, so
+    * that they can be reused rather than having to compute them again.
+    */
+  val CryptCacheSizeOption: String = OptionPrefix + "crypt-cache-size"
+
   /** The default timeout for sync operations. */
   val DefaultTimeout = Timeout(1.minute)
+
+  /** The default size of the cache for encrypted file names. */
+  val DefaultCryptCacheSize = 128
+
+  /** The minimum size of the cache for encrypted file names. */
+  val MinCryptCacheSize = 32
 
   /**
     * A trait representing the mode how sync operations are to be applied.
@@ -153,6 +167,7 @@ object ParameterManager {
     *                              if set, files written to dest get encrypted
     * @param dstFileNamesEncrypted flag whether file names in the destination
     *                              should be encrypted
+    * @param cryptCacheSize        the size of the cache for encrypted names
     */
   case class SyncConfig(syncUris: (String, String),
                         applyMode: ApplyMode,
@@ -163,7 +178,8 @@ object ParameterManager {
                         srcPassword: Option[String],
                         srcFileNamesEncrypted: Boolean,
                         dstPassword: Option[String],
-                        dstFileNamesEncrypted: Boolean)
+                        dstFileNamesEncrypted: Boolean,
+                        cryptCacheSize: Int)
 
   /**
     * A case class representing a processor for command line options.
@@ -401,8 +417,9 @@ object ParameterManager {
     dstPwd <- optionalOptionValue(DestPasswordOption)
     srcEncFiles <- booleanOptionValue(EncryptSourceFileNamesOption)
     dstEncFiles <- booleanOptionValue(EncryptDestFileNamesOption)
+    cacheSize <- cryptCacheSizeOption()
   } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta,
-    srcPwd, srcEncFiles, dstPwd, dstEncFiles)
+    srcPwd, srcEncFiles, dstPwd, dstEncFiles, cacheSize)
 
   /**
     * Extracts an object with configuration options for the sync process from
@@ -574,7 +591,8 @@ object ParameterManager {
                                triedSrcPassword: Try[Option[String]],
                                triedEncSrcFileNames: Try[Boolean],
                                triedDstPassword: Try[Option[String]],
-                               triedEncDstFileNames: Try[Boolean]): Try[SyncConfig] = {
+                               triedEncDstFileNames: Try[Boolean],
+                               triedCryptCacheSize: Try[Int]): Try[SyncConfig] = {
     def collectErrorMessages(components: Try[_]*): Iterable[String] =
       components.foldLeft(List.empty[String]) { (lst, c) =>
         c match {
@@ -585,11 +603,12 @@ object ParameterManager {
 
     val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout, triedLogFile,
       triedSyncLog, triedTimeDelta, triedSrcPassword, triedEncSrcFileNames, triedDstPassword,
-      triedEncDstFileNames)
+      triedEncDstFileNames, triedCryptCacheSize)
     if (messages.isEmpty)
       Success(SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
         mapPath(triedLogFile.get), mapPath(triedSyncLog.get), triedTimeDelta.get,
-        triedSrcPassword.get, triedEncSrcFileNames.get, triedDstPassword.get, triedEncDstFileNames.get))
+        triedSrcPassword.get, triedEncSrcFileNames.get, triedDstPassword.get, triedEncDstFileNames.get,
+        triedCryptCacheSize.get))
     else Failure(new IllegalArgumentException(messages.mkString(", ")))
   }
 
@@ -614,6 +633,22 @@ object ParameterManager {
   private def ignoreTimeDeltaOption(): CliProcessor[Try[Option[Int]]] =
     optionalOptionValue(IgnoreTimeDeltaOption) map { strRes =>
       strRes.map(_.map(toInt("threshold for file time deltas")))
+    }
+
+  /**
+    * Returns a processor that extracts the value of the option for the crypt
+    * cache size. The string value is converted to an integer, and some
+    * validation is performed.
+    *
+    * @return the processor for the crypt cache size
+    */
+  private def cryptCacheSizeOption(): CliProcessor[Try[Int]] =
+    singleOptionValueMapped(CryptCacheSizeOption, Some(DefaultCryptCacheSize.toString)) { s =>
+      Try(toInt("crypt cache size")(s)) map { size =>
+        if (size < MinCryptCacheSize)
+          throw new IllegalArgumentException(s"Crypt cache size must be greater or equal $MinCryptCacheSize.")
+        else size
+      }
     }
 
   /**
