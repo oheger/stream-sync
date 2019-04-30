@@ -207,7 +207,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     }
     val result = IterateResult(FsFolder("/aFolder", 2), files, List.empty[SyncFolderData[Unit]])
 
-    val transformer = CryptService.cryptTransformer(None)
+    val transformer = CryptService.cryptTransformer(None, 128)
     val transResult = futureResult(transformer.transform(result, transformer.initialState))._1
     transResult.currentFolder should be(result.currentFolder)
     transResult.folders should be(result.folders)
@@ -279,7 +279,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val (result, files, folderData) = createEncryptedResultAndAdaptElements(directory,
       createTestFiles(directory, 1, 8), createTestFolders(directory, 1, 4))
 
-    val transformer = CryptService.cryptTransformer(Some(SecretKey))
+    val transformer = CryptService.cryptTransformer(Some(SecretKey), 128)
     val transResult = futureResult(transformer.transform(result, transformer.initialState))._1
     transResult.currentFolder should be(FsFolder(directory, 2, Some(result.currentFolder.relativeUri)))
     transResult.files should be(files)
@@ -293,7 +293,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val dirParts = UriEncodingHelper splitComponents directory
     val encDirParts = UriEncodingHelper splitComponents result.currentFolder.relativeUri
     val cryptCount = new AtomicInteger
-    val transformer = CryptService.cryptTransformer(Some(SecretKey), optCryptCount = Some(cryptCount))
+    val transformer = CryptService.cryptTransformer(Some(SecretKey), 128, optCryptCount = Some(cryptCount))
 
     def checkTransformation(cache: LRUCache[String, String]): Long = {
       cryptCount.set(0)
@@ -326,7 +326,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val directory = "/the/current/folder"
     val (result, _, _) = createEncryptedResultAndAdaptElements(directory,
       createTestFiles(directory, 1, 2), createTestFolders(directory, 1, 4))
-    val transformer = CryptService.cryptTransformer(Some(SecretKey))
+    val transformer = CryptService.cryptTransformer(Some(SecretKey), 128)
 
     val (_, cache) = futureResult(transformer.transform(result, transformer.initialState))
     cache.contains(result.currentFolder.relativeUri) shouldBe true

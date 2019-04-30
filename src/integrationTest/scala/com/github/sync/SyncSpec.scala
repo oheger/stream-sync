@@ -23,18 +23,20 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import akka.util.ByteString
+import com.github.sync.SyncTypes.{ResultTransformer, SyncOperation}
 import com.github.sync.WireMockSupport._
 import com.github.sync.cli.Sync
 import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptOpHandler}
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.local.LocalUriResolver
-import com.github.sync.util.UriEncodingHelper
+import com.github.sync.util.{LRUCache, UriEncodingHelper}
 import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, RequestQueue}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
@@ -756,5 +758,27 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     decryptName(CryptPassword, fileUri) should be(FileName)
     val bodyPlain = crypt(CryptPassword, DecryptOpHandler, ByteString(putRequest.getBody))
     bodyPlain.utf8String should be(Content)
+  }
+
+  it should "evaluate the cache size for encrypted names" in {
+    val CacheSize = 444
+    implicit val factory: SyncStreamFactory = new DelegateSyncStreamFactory {
+      override def createSyncSource[T1, T2](uriSrc: String, optSrcTransformer: Option[ResultTransformer[T1]],
+                                            uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
+                                            additionalArgs: StructureArgs, ignoreTimeDelta: Int)
+                                           (implicit ec: ExecutionContext, system: ActorSystem,
+                                            mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]] = {
+        val cache = optDstTransformer.get.initialState.asInstanceOf[LRUCache[String, String]]
+        cache.capacity should be(CacheSize)
+        super.createSyncSource(uriSrc, optSrcTransformer, uriDst, optDstTransformer, additionalArgs, ignoreTimeDelta)
+      }
+    }
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    createTestFile(srcFolder, "someTestFile.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--dst-encrypt-password", Password, "--dst-encrypt-names", "true", "--crypt-cache-size", CacheSize.toString)
+
+    futureResult(Sync.syncProcess(options)).successfulOperations should be(1)
   }
 }

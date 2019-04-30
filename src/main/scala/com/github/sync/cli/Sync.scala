@@ -146,9 +146,10 @@ object Sync {
       createSyncSourceFromLog(config, path)
     case None =>
       factory.createSyncSource(config.syncUris._1,
-        createResultTransformer(config.srcPassword, config.srcFileNamesEncrypted), config.syncUris._2,
-        createResultTransformer(config.dstPassword, config.dstFileNamesEncrypted), additionalArgs,
-        config.ignoreTimeDelta getOrElse 1)
+        createResultTransformer(config.srcPassword, config.srcFileNamesEncrypted, config.cryptCacheSize),
+        config.syncUris._2,
+        createResultTransformer(config.dstPassword, config.dstFileNamesEncrypted, config.cryptCacheSize),
+        additionalArgs, config.ignoreTimeDelta getOrElse 1)
   }
 
   /**
@@ -156,18 +157,19 @@ object Sync {
     * parameters. The transformer makes sure that the results produced by an
     * element source are compatible with the parameters passed in.
     *
-    * @param optCryptPwd  the optional encryption password
-    * @param encryptNames flag whether file names are encrypted
-    * @param ec           the execution context
-    * @param mat          the object to materialize streams
+    * @param optCryptPwd    the optional encryption password
+    * @param encryptNames   flag whether file names are encrypted
+    * @param cryptCacheSize size of the cache for encrypted names
+    * @param ec             the execution context
+    * @param mat            the object to materialize streams
     * @return the ''ResultTransformer'' for these parameters
     */
-  private def createResultTransformer(optCryptPwd: Option[String], encryptNames: Boolean)
+  private def createResultTransformer(optCryptPwd: Option[String], encryptNames: Boolean, cryptCacheSize: Int)
                                      (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Option[ResultTransformer[LRUCache[String, String]]] =
     optCryptPwd.map { pwd =>
       val optNameKey = if (encryptNames) Some(CryptStage.keyFromString(pwd)) else None
-      CryptService.cryptTransformer(optNameKey)
+      CryptService.cryptTransformer(optNameKey, cryptCacheSize)
     }
 
   /**
@@ -246,7 +248,7 @@ object Sync {
       }
       val cryptFunc = CryptService.mapOperationFunc(CryptStage.keyFromString(config.dstPassword.get), srcFunc)
       val cryptStage = new StatefulStage[SyncOperation, SyncOperation,
-        LRUCache[String, String]](LRUCache[String, String](1024))(cryptFunc)
+        LRUCache[String, String]](LRUCache[String, String](config.cryptCacheSize))(cryptFunc)
       Flow[SyncOperation].via(cryptStage).via(stage)
     }
 

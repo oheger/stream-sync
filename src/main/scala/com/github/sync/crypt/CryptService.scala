@@ -52,17 +52,19 @@ object CryptService {
     *
     * @param optNameDecryptKey an ''Option'' with the key for file name
     *                          encryption; if set, names are decrypted
+    * @param cryptCacheSize    the size of the cache for encrypted names
     * @param optCryptCount     an optional counter for crypt operations; mainly
     *                          used for testing purposes
     * @param ec                the execution context
     * @param mat               the object to materialize streams
     * @return the transformer for encrypted folder structures
     */
-  def cryptTransformer(optNameDecryptKey: Option[Key], optCryptCount: Option[AtomicInteger] = None)
+  def cryptTransformer(optNameDecryptKey: Option[Key], cryptCacheSize: Int,
+                       optCryptCount: Option[AtomicInteger] = None)
                       (implicit ec: ExecutionContext, mat: ActorMaterializer):
   ResultTransformer[LRUCache[String, String]] =
     new ResultTransformer[LRUCache[String, String]] {
-      override def initialState: LRUCache[String, String] = LRUCache(1024)
+      override def initialState: LRUCache[String, String] = LRUCache(cryptCacheSize)
 
       override def transform[F](result: IterateResult[F], cache: LRUCache[String, String]):
       Future[(IterateResult[F], LRUCache[String, String])] = optNameDecryptKey match {
