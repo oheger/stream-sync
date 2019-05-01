@@ -273,6 +273,47 @@ should solve all issues related to the granularity of file timestamps. An
 example using this option can be found in the _Examples and use cases_
 section.
 
+### Encryption
+One use case for StreamSync is creating a backup of a local folder structure 
+on a cloud server; the data is then duplicated to another machine that is
+reachable from everywhere. However, if your data is sensitive, you probably do
+not want it lying around on a public server without additional protection.
+
+StreamSync offers such protection by supporting multiple options for encrypting
+the data that is synced:
+* The content of files can be encrypted.
+* The names of files and folders can be encrypted.
+
+In all cases, encryption is based on 
+[AES](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) using key
+sizes of 128 bits. The keys are derived from password strings that are
+transformed accordingly (password strings shorter than 128 bits are padded,
+longer strings are cut). In addition, a random initialization vector is used;
+so an encrypted text will always be different, even if the same input is
+passed.
+
+The source and the destination of a sync process can be encrypted 
+independently. If an encryption password for the destination is provided, but
+not for the source, files transferred to the destination are encrypted. If an
+encryption password is provided for the source, but not for the destination,
+files are decrypted. If encryption passwords are specified for both sides,
+files are decrypted first and then encrypted again with the destination 
+password.
+
+The following table lists the command line options that affect encryption (all
+of them are optional):
+
+| Option | Description | Default |
+| ------ | ----------- | ------- |
+| src-encrypt-password | Defines a password for the encryption of files in the source structure. If provided, files from the source structure are decrypted using this password when they need to be copied. | Undefined |
+| dst-encrypt-password | Analogous to ``src-encrypt-password``, but a password for the destination structure is defined. If set, files are encrypted using this password when they are copied to the destination. | Undefined |
+| src-encrypt-names | A boolean flag that determines whether file and folder names in the source structure are encrypted. This option is evaluated only if an encryption password for the source is specified. It can have the values **true** or **false**. If set to **true**, the file names from the source structure are decrypted using the password for the source. | **false** |
+| dst-encrypt-names | Analogous to ``src-encrypt-names``, but determines whether file names in the destination structure should be encrypted. | **false** |
+| crypt-cache-size | During a sync operation with encrypted file names, it may be necessary to encrypt or decrypt file names multiple times; for instance if parent folders are accessed multiple times to process their sub folders. As an optimization, a cache is maintained storing the names that have already been encrypted or decrypted; that way the number of crypt operations can be reduced. For sync operations of very complex structures (with deeply nested folder structures), it can make sense to set a higher cache size. Note that the minimum allowed size is 32. | 128 |
+
+Note that folder structures that are only partly encrypted are not supported;
+when specifying an encryption password, the password is applied to all files.
+
 ### Structure types
 This section lists the different types of structures that are supported for
 sync processes. If not mentioned otherwise, all types can act as source and as
@@ -420,7 +461,28 @@ server (which really exists) does not allow modifications of the standard
 WebDav _getlastmodified_ property, but uses a custom property named
 _Win32LastModifiedTime_ with the namespace _urn:schemas-microsoft-com:_ to
 hold a modified time different from the upload time. This property will be set
-correctly for each file that is uploaded during a sync process. 
+correctly for each file that is uploaded during a sync process.
+
+**Sync from a local directory to a WebDav server with encryption**
+Building upon the previous example, with some additional options it is possible
+to protect the data on the WebDav server using encryption: 
+
+```
+Sync C:\data\work dav:https://sd2dav.1und1.de/backup/work \
+--log C:\Temp\sync.log \
+--dst-user my.account --dst-password s3c3t_PASsword \
+--dst-modified-property Win32LastModifiedTime \
+--dst-modified-namespace urn:schemas-microsoft-com: \
+--filter exclude:*.bak \
+--dst-encrypt-password s3cr3t
+--dst-encrypt-names true
+--crypt-cache-size 1024
+```
+
+This command specifies that both the content and the names of files are
+encrypted using the password "s3cr3t" when copied onto the WebDav server. The
+size of the cache for encrypted names is increased to avoid unnecessary crypt
+operations.
 
 ## Architecture
 The Stream Sync tool makes use of [Reactive streams](http://www.reactive-streams.org/)
