@@ -263,17 +263,34 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     runAndVerifySource(createTestSource())
   }
 
-  it should "support setting a start folder URI" in {
+  /**
+    * Checks an iteration over a source for which a start folder URI is
+    * provided.
+    *
+    * @param config the DAV configuration to be used
+    */
+  private def checkIterationWithStartFolderUri(config: DavConfig): Unit = {
     stubTestFolders("")
     val StartFolder = createSubFolder(RootFolder, 2)
     val expElements = ExpectedElements filter { elem =>
       elem.relativeUri.startsWith(StartFolder.relativeUri) && elem.relativeUri != StartFolder.relativeUri
     }
     implicit val mat: ActorMaterializer = ActorMaterializer()
-    val source = DavFsElementSource(createDavConfig(DavConfig.DefaultModifiedProperty), new SourceFactoryImpl,
+    val source = DavFsElementSource(config, new SourceFactoryImpl,
       startFolderUri = StartFolder.relativeUri)
 
     executeStream(source) should contain theSameElementsAs expElements
+  }
+
+  it should "support setting a start folder URI" in {
+    checkIterationWithStartFolderUri(createDavConfig(DavConfig.DefaultModifiedProperty))
+  }
+
+  it should "support setting a start folder URI if the root URI ends on a slash" in {
+    val orgConfig = createDavConfig(DavConfig.DefaultModifiedProperty)
+    val config = orgConfig.copy(rootUri = UriEncodingHelper.withTrailingSeparator(orgConfig.rootUri.toString()))
+
+    checkIterationWithStartFolderUri(config)
   }
 
   it should "support a custom modified time property" in {

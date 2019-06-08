@@ -170,10 +170,11 @@ object DavFsElementSource {
     *
     * @param config         the configuration
     * @param startFolderUri the start folder URI
-    * @return
+    * @return the object describing the initial folder to be processed
     */
   private def createInitialFolder(config: DavConfig, startFolderUri: String): SyncFolderData[DavFolder] = {
-    val rootUri = config.rootUri.toString() + UriEncodingHelper.encodeComponents(startFolderUri)
+    val rootUri = UriEncodingHelper.withTrailingSeparator(config.rootUri.toString()) +
+      UriEncodingHelper.removeLeadingSeparator(UriEncodingHelper.encodeComponents(startFolderUri))
     SyncFolderData(FsFolder(startFolderUri, UriEncodingHelper.componentCount(startFolderUri) - 1), DavFolder(rootUri))
   }
 
