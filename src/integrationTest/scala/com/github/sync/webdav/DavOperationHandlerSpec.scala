@@ -114,12 +114,16 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     * Convenience function to define the URI of a stub or verification based on
     * an element and a suffix.
     *
-    * @param elem   the element
-    * @param suffix the suffix indicating the original URI
+    * @param elem          the element
+    * @param suffix        the suffix indicating the original URI
+    * @param trailingSlash flag whether the URI should end on a slash
     * @return the pattern for URI matching
     */
-  private def elemUri(elem: FsElement, suffix: String): UrlPathPattern =
-    urlPathEqualTo(RootPath + elem.relativeUri + suffix)
+  private def elemUri(elem: FsElement, suffix: String, trailingSlash: Boolean = false): UrlPathPattern = {
+    val path = RootPath + elem.relativeUri + suffix
+    val finalPath = if (trailingSlash) path + "/" else path
+    urlPathEqualTo(finalPath)
+  }
 
   /**
     * Creates a mock file provider that returns the given content for the file
@@ -165,19 +169,28 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     futureResult(futResult).reverse
   }
 
-  "DavOperationHandler" should "delete elements" in {
+  "DavOperationHandler" should "delete files" in {
     val folder = createFolder("/someData")
     val file = createFile(folder, "/cool data.txt")
-    val operations = List(SyncOperation(folder, ActionRemove, 1, null, orgUri(folder, DstSuffix)),
-      SyncOperation(file, ActionRemove, 2, null, orgUri(file, DstSuffix)))
+    val operations = List(SyncOperation(file, ActionRemove, 2, null, orgUri(file, DstSuffix)))
     stubSuccess()
 
     val processedOps = runSync(operations)
     processedOps should contain theSameElementsAs operations
-    verify(deleteRequestedFor(elemUri(folder, DstSuffix)))
     verify(deleteRequestedFor(urlPathEqualTo(RootPath + folder.relativeUri +
       "/cool%20data.txt" + DstSuffix)))
-    getAllServeEvents should have size 2
+    getAllServeEvents should have size 1
+  }
+
+  it should "delete folders" in {
+    val folder = createFolder("/someData")
+    val operations = List(SyncOperation(folder, ActionRemove, 1, null, orgUri(folder, DstSuffix)))
+    stubSuccess()
+
+    val processedOps = runSync(operations)
+    processedOps should contain theSameElementsAs operations
+    verify(deleteRequestedFor(elemUri(folder, DstSuffix, trailingSlash = true)))
+    getAllServeEvents should have size 1
   }
 
   it should "drop sync operations that fail" in {
@@ -190,7 +203,8 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     stubFor(authorized(any(anyUrl()).atPriority(PriorityDefault))
       .willReturn(aResponse().withStatus(StatusCodes.BadRequest.intValue)
         .withBody("<status>failed</status>")))
-    stubFor(authorized(delete(elemUri(successFolder, DstSuffix)).atPriority(PrioritySpecific))
+    stubFor(authorized(delete(elemUri(successFolder, DstSuffix, trailingSlash = true))
+      .atPriority(PrioritySpecific))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
 
     runSync(operations) should contain only successOperation

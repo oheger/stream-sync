@@ -133,9 +133,9 @@ object DavOperationHandler {
     // Creates the object with requests for a single sync operation
     def createRequestData(op: SyncOperation): Future[SyncOpRequestData] = {
       op match {
-        case SyncOperation(_, ActionRemove, _, _, dstUri) =>
+        case SyncOperation(elem, ActionRemove, _, _, dstUri) =>
           simpleRequest(op, HttpRequest(method = HttpMethods.DELETE, headers = headers,
-            uri = uriResolver.resolveElementUri(dstUri)))
+            uri = resolveRemoveUri(elem, dstUri)))
         case SyncOperation(FsFolder(_, _, _), ActionCreate, _, _, dstUri) =>
           simpleRequest(op, HttpRequest(method = MethodMkCol, headers = headers,
             uri = uriResolver.resolveElementUri(dstUri)))
@@ -153,6 +153,11 @@ object DavOperationHandler {
           Future.failed(new IllegalStateException("Invalid SyncOperation: " + op))
       }
     }
+
+    // Resolves the URI to remove an element. Ensures that URIs for folders
+    // end on a slash.
+    def resolveRemoveUri(elem: FsElement, uri: String): Uri =
+      uriResolver.resolveElementUri(uri, withTrailingSlash = elem.isInstanceOf[FsFolder])
 
     // Creates a SyncOpRequestData future object for a simple request
     def simpleRequest(op: SyncOperation, request: HttpRequest): Future[SyncOpRequestData] =
