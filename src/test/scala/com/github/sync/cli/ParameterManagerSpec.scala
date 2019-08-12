@@ -395,6 +395,28 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
       "Invalid threshold for file time deltas: '" + InvalidValue)
   }
 
+  it should "handle an undefined option for the operations per second" in {
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+
+    config.opsPerSecond should be(None)
+  }
+
+  it should "evaluate the threshold for the operations per second" in {
+    val OpsCount = 17
+    val argsMap = ArgsMap + (ParameterManager.OpsPerSecondOption -> List(OpsCount.toString))
+
+    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    config.opsPerSecond should be(Some(OpsCount))
+  }
+
+  it should "handle an invalid threshold for the operations per second" in {
+    val InvalidValue = "not a valid number of ops per sec"
+    val argsMap = ArgsMap + (ParameterManager.OpsPerSecondOption -> List(InvalidValue))
+
+    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+      "Invalid number of operations per second: '" + InvalidValue)
+  }
+
   it should "return correct default options related to encryption" in {
     val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
 

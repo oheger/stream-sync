@@ -77,6 +77,13 @@ object ParameterManager {
   val IgnoreTimeDeltaOption: String = OptionPrefix + "ignore-time-delta"
 
   /**
+    * Name of the option that restricts the number of sync operations that can
+    * be executed within a second. This is useful for instance when syncing to
+    * a server that accepts only a limit number of requests per time unit.
+    */
+  val OpsPerSecondOption: String = OptionPrefix + "ops-per-second"
+
+  /**
     * Name of the option defining the encryption password for the source
     * structure. If defined, files from the source are decrypted using this
     * password when downloaded.
@@ -168,6 +175,8 @@ object ParameterManager {
     * @param dstFileNamesEncrypted flag whether file names in the destination
     *                              should be encrypted
     * @param cryptCacheSize        the size of the cache for encrypted names
+    * @param opsPerSecond          optional restriction for the number of sync
+    *                              operations per second
     */
   case class SyncConfig(syncUris: (String, String),
                         applyMode: ApplyMode,
@@ -179,7 +188,8 @@ object ParameterManager {
                         srcFileNamesEncrypted: Boolean,
                         dstPassword: Option[String],
                         dstFileNamesEncrypted: Boolean,
-                        cryptCacheSize: Int)
+                        cryptCacheSize: Int,
+                        opsPerSecond: Option[Int])
 
   /**
     * A case class representing a processor for command line options.
@@ -358,6 +368,22 @@ object ParameterManager {
     }
 
   /**
+    * Returns a processor that extracts a single optional value of a command
+    * line option of type ''Int''. This is analogous to
+    * ''optionalOptionValue()'', but the resulting option is mapped to an
+    * ''Int'' (with error handling).
+    *
+    * @param key    the option key
+    * @param errMsg an error message in case the conversion fails
+    * @return the processor to extract the optional ''Int'' value
+    */
+  def optionalIntOptionValue(key: String, errMsg: => String): CliProcessor[Try[Option[Int]]] =
+    optionalOptionValue(key) map { strRes =>
+      strRes.map(_.map(toInt(errMsg)))
+    }
+
+
+  /**
     * Returns a processor that extracts the value of the option with the URIs
     * of the structures to be synced.
     *
@@ -413,12 +439,13 @@ object ParameterManager {
     logFile <- optionalOptionValue(LogFileOption)
     syncLog <- optionalOptionValue(SyncLogOption)
     timeDelta <- ignoreTimeDeltaOption()
+    opsPerSec <- opsPerSecondOption()
     srcPwd <- optionalOptionValue(SourcePasswordOption)
     dstPwd <- optionalOptionValue(DestPasswordOption)
     srcEncFiles <- booleanOptionValue(EncryptSourceFileNamesOption)
     dstEncFiles <- booleanOptionValue(EncryptDestFileNamesOption)
     cacheSize <- cryptCacheSizeOption()
-  } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta,
+  } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta, opsPerSec,
     srcPwd, srcEncFiles, dstPwd, dstEncFiles, cacheSize)
 
   /**
@@ -574,12 +601,18 @@ object ParameterManager {
     * created. Otherwise, all error messages are collected and returned in a
     * failed ''Try''.
     *
-    * @param triedUris      the sync URIs component
-    * @param triedApplyMode the apply mode component
-    * @param triedTimeout   the timeout component
-    * @param triedLogFile   the log file component
-    * @param triedSyncLog   the sync log component
-    * @param triedTimeDelta the ignore file time delta component
+    * @param triedUris            the sync URIs component
+    * @param triedApplyMode       the apply mode component
+    * @param triedTimeout         the timeout component
+    * @param triedLogFile         the log file component
+    * @param triedSyncLog         the sync log component
+    * @param triedTimeDelta       the ignore file time delta component
+    * @param triedOpsPerSec       the ops per second component
+    * @param triedSrcPassword     the source password component
+    * @param triedEncSrcFileNames the source files encrypted component
+    * @param triedDstPassword     the destination password component
+    * @param triedEncDstFileNames the destination files encrypted component
+    * @param triedCryptCacheSize  the crypt cache size component
     * @return a ''Try'' with the config
     */
   private def createSyncConfig(triedUris: Try[(String, String)],
@@ -588,6 +621,7 @@ object ParameterManager {
                                triedLogFile: Try[Option[String]],
                                triedSyncLog: Try[Option[String]],
                                triedTimeDelta: Try[Option[Int]],
+                               triedOpsPerSec: Try[Option[Int]],
                                triedSrcPassword: Try[Option[String]],
                                triedEncSrcFileNames: Try[Boolean],
                                triedDstPassword: Try[Option[String]],
@@ -602,13 +636,13 @@ object ParameterManager {
       }
 
     val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout, triedLogFile,
-      triedSyncLog, triedTimeDelta, triedSrcPassword, triedEncSrcFileNames, triedDstPassword,
+      triedSyncLog, triedTimeDelta, triedOpsPerSec, triedSrcPassword, triedEncSrcFileNames, triedDstPassword,
       triedEncDstFileNames, triedCryptCacheSize)
     if (messages.isEmpty)
       Success(SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
         mapPath(triedLogFile.get), mapPath(triedSyncLog.get), triedTimeDelta.get,
         triedSrcPassword.get, triedEncSrcFileNames.get, triedDstPassword.get, triedEncDstFileNames.get,
-        triedCryptCacheSize.get))
+        triedCryptCacheSize.get, triedOpsPerSec.get))
     else Failure(new IllegalArgumentException(messages.mkString(", ")))
   }
 
@@ -631,9 +665,16 @@ object ParameterManager {
     * @return the processor for the ignore time delta option
     */
   private def ignoreTimeDeltaOption(): CliProcessor[Try[Option[Int]]] =
-    optionalOptionValue(IgnoreTimeDeltaOption) map { strRes =>
-      strRes.map(_.map(toInt("threshold for file time deltas")))
-    }
+    optionalIntOptionValue(IgnoreTimeDeltaOption, "threshold for file time deltas")
+
+  /**
+    * Returns a processor that extracts he value of the option for the number
+    * of sync operations per second.
+    *
+    * @return the processor for the ops per second option
+    */
+  private def opsPerSecondOption(): CliProcessor[Try[Option[Int]]] =
+    optionalIntOptionValue(OpsPerSecondOption, "number of operations per second")
 
   /**
     * Returns a processor that extracts the value of the option for the crypt
