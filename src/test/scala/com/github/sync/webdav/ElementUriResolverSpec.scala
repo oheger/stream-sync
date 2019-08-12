@@ -40,4 +40,13 @@ class ElementUriResolverSpec extends FlatSpec with Matchers {
 
     resolver resolveElementUri elemUri should be(expectedUri)
   }
+
+  it should "support URIs ending with a slash" in {
+    val rootUri = Uri("https://github.com/oheger/stream-sync")
+    val elemUri = "/test/some stuff/sub"
+    val expectedUri = Uri("/oheger/stream-sync/test/some%20stuff/sub/")
+    val resolver = ElementUriResolver(rootUri)
+
+    resolver.resolveElementUri(elemUri, withTrailingSlash = true) should be(expectedUri)
+  }
 }

@@ -41,7 +41,18 @@ object ElementUriResolver {
   * @param rootUriPrefix the prefix of the root URI
   */
 class ElementUriResolver private(rootUriPrefix: String) {
-  def resolveElementUri(uri: String): Uri = {
-    Uri(rootUriPrefix + UriEncodingHelper.encodeComponents(uri))
+  /**
+    * The main method to resolve the URI of an element on the server. It
+    * generates a URI that can be used to access the element. The URI can
+    * optionally end with a slash, which is sometimes required for folders.
+    *
+    * @param uri               the (relative) URI to be resolved
+    * @param withTrailingSlash flag whether the result should end with a slash
+    * @return the resolved URI
+    */
+  def resolveElementUri(uri: String, withTrailingSlash: Boolean = false): Uri = {
+    val encodedUri = UriEncodingHelper encodeComponents uri
+    val relativeUri = if (withTrailingSlash) encodedUri + UriEncodingHelper.UriSeparator else encodedUri
+    Uri(rootUriPrefix + relativeUri)
   }
 }
