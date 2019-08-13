@@ -114,7 +114,6 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   override def createSyncStream(source: Source[SyncOperation, Any],
                                 flowProc: Flow[SyncOperation, SyncOperation, Any],
                                 logFile: Option[Path])
-                               (opFilter: SyncOperation => Boolean)
                                (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[(Int, Int)]]] = Future {
     val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
@@ -123,10 +122,9 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
       implicit builder =>
         (sinkTotal, sinkSuccess, sinkLog) =>
           import GraphDSL.Implicits._
-          val syncFilter = Flow[SyncOperation].filter(opFilter)
           val broadcastSink = builder.add(Broadcast[SyncOperation](2))
           val broadcastSuccess = builder.add(Broadcast[SyncOperation](2))
-          source ~> syncFilter ~> broadcastSink ~> sinkTotal.in
+          source ~> broadcastSink ~> sinkTotal.in
           broadcastSink ~> flowProc ~> broadcastSuccess ~> sinkSuccess.in
           broadcastSuccess ~> sinkLog
           ClosedShape

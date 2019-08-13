@@ -97,7 +97,7 @@ object Sync {
            srcArgs ++ dstArgs)
          _ <- ParameterManager.checkParametersConsumed(argsMap3)
          result <- runSync(config, filterData, addArgs)
-    } yield result
+         } yield result
   }
 
   /**
@@ -116,11 +116,11 @@ object Sync {
                      (implicit system: ActorSystem, mat: ActorMaterializer,
                       factory: SyncStreamFactory): Future[SyncResult] = {
     import system.dispatcher
-    val filter = createSyncFilter(filterData)
     for {
       source <- createSyncSource(config, additionalArgs)
+      decoratedSource <- decorateSource(source, config, filterData)
       stage <- createApplyStage(config, additionalArgs)
-      g <- factory.createSyncStream(source, stage, config.logFilePath)(filter)
+      g <- factory.createSyncStream(decoratedSource, stage, config.logFilePath)
       res <- g.run()
     } yield SyncResult(res._1, res._2)
   }
@@ -150,6 +150,26 @@ object Sync {
         config.syncUris._2,
         createResultTransformer(config.dstPassword, config.dstFileNamesEncrypted, config.cryptCacheSize),
         additionalArgs, config.ignoreTimeDelta getOrElse 1)
+  }
+
+  /**
+    * Applies some further configuration options to the source of the sync
+    * process, such as filtering or throttling.
+    *
+    * @param source     the original source
+    * @param config     the sync configuration
+    * @param filterData data about the current filter definition
+    * @return the decorated source
+    */
+  private def decorateSource(source: Source[SyncOperation, Any], config: SyncConfig, filterData: SyncFilterData):
+  Future[Source[SyncOperation, Any]] = {
+    val filteredSource = source.filter(createSyncFilter(filterData))
+    val throttledSource = config.opsPerSecond match {
+      case Some(value) =>
+        filteredSource.throttle(value, 1.second)
+      case None => filteredSource
+    }
+    Future.successful(throttledSource)
   }
 
   /**

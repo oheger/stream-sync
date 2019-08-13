@@ -43,7 +43,7 @@ import com.github.tomakehurst.wiremock.http.RequestMethod
 import org.scalatest._
 
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 
 /**
   * Integration test class for sync processes.
@@ -780,5 +780,22 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
       "--dst-encrypt-password", Password, "--dst-encrypt-names", "true", "--crypt-cache-size", CacheSize.toString)
 
     futureResult(Sync.syncProcess(options)).successfulOperations should be(1)
+  }
+
+  it should "support restricting the number of operations per second" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    createTestFile(srcFolder, "smallFile1.txt")
+    createTestFile(srcFolder, "smallFile2.txt")
+    createTestFile(srcFolder, "smallFile3.txt")
+    createTestFile(srcFolder, "smallFile4.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--ops-per-second", "1")
+
+    intercept[TimeoutException] {
+      val syncFuture = Sync.syncProcess(options)
+      Await.ready(syncFuture, 2.seconds)
+    }
   }
 }

@@ -70,8 +70,8 @@ class DelegateSyncStreamFactory(delegate: SyncStreamFactory = SyncStreamFactoryI
     delegate.createApplyStage(uriDst, fileProvider)
 
   override def createSyncStream(source: Source[SyncOperation, Any], flowProc: Flow[SyncOperation,
-    SyncOperation, Any], logFile: Option[Path])(opFilter: SyncOperation => Boolean)
+    SyncOperation, Any], logFile: Option[Path])
                                (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[(Int, Int)]]] =
-    delegate.createSyncStream(source, flowProc, logFile)(opFilter)
+    delegate.createSyncStream(source, flowProc, logFile)
 }

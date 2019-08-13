@@ -159,14 +159,12 @@ trait SyncStreamFactory {
     * @param source   the source producing ''SyncOperation'' objects
     * @param flowProc the flow that processes sync operations
     * @param logFile  an optional path to a log file to write
-    * @param opFilter a filter on sync operations
     * @param ec       the execution context
     * @return a future with the runnable graph
     */
   def createSyncStream(source: Source[SyncOperation, Any],
                        flowProc: Flow[SyncOperation, SyncOperation, Any],
                        logFile: Option[Path])
-                      (opFilter: SyncOperation => Boolean)
                       (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[(Int, Int)]]]
 }
