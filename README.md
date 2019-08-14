@@ -377,6 +377,40 @@ another request is sent to update the file's modification time to match the one
 of the source structure. Here again the configured property (with the optional
 namespace) is used or the standard property if unspecified.
 
+### Throttling sync streams
+
+In some situations it may be necessary to restrict the number of sync 
+operations that are executed in a given time unit. For instance, there are
+public servers that react with an error status of _429 Too many files_ when 
+many small files are uploaded over a fast internet connection.
+
+StreamSync supports a command line option to deal with such cases:
+``ops-per-second``. The option is passed a numeric value that limits the number
+of sync operations (file uploads, deletion of files, creation of folders, etc.)
+in a second. By specifying the minimum value of 1, only a single operation per
+second is executed. This is a good solution for the problem with overloaded
+servers because it mainly impacts small files and operations that complete very
+fast. The upload of larger files that takes significantly longer than a second
+will not be delayed by this switch.
+
+Another option to influence the speed of sync processes that have an HTTP 
+server as source or destination is to override certain configuration settings.
+StreamSync uses the [Akka HTTP](https://doc.akka.io/docs/akka-http/current/introduction.html)
+library for the communication via the HTTP protocol. The library can be 
+[configured](https://doc.akka.io/docs/akka-http/current/configuration.html) 
+in many ways, and system properties can be used to override its default 
+settings. Options you may want to modify in order to customize sync streams are
+the size of the pool for HTTP connections (which determines the parallelism 
+possible and is set to 4 per default) or the number of requests that can be
+open concurrently (32 by default). To achieve this, pass the following 
+arguments to the Java VM that executes StreamSync:
+
+``-Dakka.http.host-connection-pool.max-connections=1 -Dakka.http.host-connection-pool.max-open-requests=2``
+
+As you can see in this example, the name of the system properties is derived
+from the hierarchical structure of the configuration options for Akka HTTP as
+described in the referenced documentation.
+
 ### Examples and use cases
 **Sync a local directory to an external USB hard disk**
 
@@ -477,12 +511,15 @@ Sync C:\data\work dav:https://sd2dav.1und1.de/backup/work \
 --dst-encrypt-password s3cr3t
 --dst-encrypt-names true
 --crypt-cache-size 1024
+--ops-per-second 2
 ```
 
 This command specifies that both the content and the names of files are
 encrypted using the password "s3cr3t" when copied onto the WebDav server. The
 size of the cache for encrypted names is increased to avoid unnecessary crypt
-operations.
+operations. In the example the number of sync operations per second is
+limited to 2 to avoid that the server rejects requests because its load is too
+high.
 
 ## Architecture
 The Stream Sync tool makes use of [Reactive streams](http://www.reactive-streams.org/)
