@@ -31,17 +31,12 @@ import scala.util.{Failure, Success, Try}
   * This is based on the usage example of the Akka HTTP host-level client API
   * from the official Akka documentation.
   *
-  * @param uri    the URI requests are to be sent to
-  * @param system the actor system
-  * @param mat    the object to materialize streams
+  * @param uri       the URI requests are to be sent to
+  * @param queueSize the size of the request queue
+  * @param system    the actor system
+  * @param mat       the object to materialize streams
   */
-class RequestQueue(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer) {
-  /**
-    * Size of the request queue. Currently, requests are sent one after
-    * another; so there is no need to do much buffering.
-    */
-  private val QueueSize = 2
-
+class RequestQueue(uri: Uri, queueSize: Int = 2)(implicit system: ActorSystem, mat: ActorMaterializer) {
   /** The flow for generating HTTP requests. */
   val poolClientFlow: Flow[(HttpRequest, Promise[HttpResponse]),
     (Try[HttpResponse], Promise[HttpResponse]), Http.HostConnectionPool] =
@@ -51,7 +46,7 @@ class RequestQueue(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterialize
 
   /** The queue acting as source for the stream of requests and a kill switch. */
   val queue: SourceQueueWithComplete[(HttpRequest, Promise[HttpResponse])] =
-    Source.queue[(HttpRequest, Promise[HttpResponse])](QueueSize, OverflowStrategy.dropNew)
+    Source.queue[(HttpRequest, Promise[HttpResponse])](queueSize, OverflowStrategy.dropNew)
       .via(poolClientFlow)
       .toMat(Sink.foreach({
         case (Success(resp), p) => p.success(resp)
