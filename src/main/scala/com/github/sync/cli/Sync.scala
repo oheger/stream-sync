@@ -116,6 +116,7 @@ object Sync {
                      (implicit system: ActorSystem, mat: ActorMaterializer,
                       factory: SyncStreamFactory): Future[SyncResult] = {
     import system.dispatcher
+    implicit val timeout: Timeout = config.timeout
     for {
       source <- createSyncSource(config, additionalArgs)
       decoratedSource <- decorateSource(source, config, filterData)
@@ -136,11 +137,12 @@ object Sync {
     * @param ec             the execution context
     * @param mat            the object to materialize streams
     * @param factory        the factory for the sync stream
+    * @param timeout a general timeout for requests
     * @return the source for the sync process
     */
   private def createSyncSource(config: SyncConfig, additionalArgs: Map[String, String])
                               (implicit ec: ExecutionContext, system: ActorSystem,
-                               mat: ActorMaterializer, factory: SyncStreamFactory):
+                               mat: ActorMaterializer, factory: SyncStreamFactory, timeout: Timeout):
   Future[Source[SyncOperation, Any]] = config.syncLogPath match {
     case Some(path) =>
       createSyncSourceFromLog(config, path)
@@ -222,13 +224,13 @@ object Sync {
     * @param system         the actor system
     * @param mat            the object to materialize streams
     * @param factory        the factory for the sync stream
+    * @param timeout a general timeout for requests
     * @return a future with the flow to apply sync operations
     */
   private def createApplyStage(config: SyncConfig, additionalArgs: Map[String, String])
                               (implicit ec: ExecutionContext, system: ActorSystem,
-                               mat: ActorMaterializer, factory: SyncStreamFactory):
+                               mat: ActorMaterializer, factory: SyncStreamFactory, timeout: Timeout):
   Future[Flow[SyncOperation, SyncOperation, NotUsed]] = {
-    implicit val timeout: Timeout = config.timeout
     config.applyMode match {
       case ParameterManager.ApplyModeTarget(targetUri) =>
         for {
@@ -253,12 +255,14 @@ object Sync {
     * @param system         the actor system
     * @param mat            the object to materialize streams
     * @param factory        the factory for the sync stream
+    * @param timeout a general timeout for requests
     * @return the decorated apply stage
     */
   private def decorateApplyStage(config: SyncConfig, additionalArgs: Map[String, String],
                                  stage: Flow[SyncOperation, SyncOperation, NotUsed])
                                 (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
-                                 factory: SyncStreamFactory): Flow[SyncOperation, SyncOperation, NotUsed] =
+                                 factory: SyncStreamFactory, timeout: Timeout):
+  Flow[SyncOperation, SyncOperation, NotUsed] =
     if (config.dstPassword.isEmpty || !config.dstFileNamesEncrypted) stage
     else {
       val srcFunc: IterateSourceFunc = startFolderUri => {
@@ -283,11 +287,12 @@ object Sync {
     * @param system         the actor system
     * @param mat            the object to materialize streams
     * @param factory        the factory for the sync stream
-    * @return
+    * @param timeout a general timeout for requests
+    * @return a ''Future'' with the source file provider
     */
   private def createSourceFileProvider(config: SyncConfig, additionalArgs: Map[String, String])
                                       (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
-                                       factory: SyncStreamFactory): Future[SourceFileProvider] =
+                                       factory: SyncStreamFactory, timeout: Timeout): Future[SourceFileProvider] =
     factory.createSourceFileProvider(config.syncUris._1).apply(additionalArgs) map { provider =>
       if (config.srcPassword.nonEmpty || config.dstPassword.nonEmpty)
         CryptAwareSourceFileProvider(provider, config.srcPassword, config.dstPassword)

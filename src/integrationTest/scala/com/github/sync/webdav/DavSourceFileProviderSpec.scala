@@ -25,7 +25,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.testkit.TestKit
-import akka.util.ByteString
+import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes.FsFile
 import com.github.sync.WireMockSupport._
 import com.github.sync.{AsyncTestHelper, FileTestHelper, WireMockSupport}
@@ -35,6 +35,7 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 object DavSourceFileProviderSpec {
   /** The root path of the simulated sync operation. */
@@ -67,7 +68,8 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     */
   private def createConfig(): DavConfig =
     DavConfig(serverUri(RootPath), UserId, Password, DavConfig.DefaultModifiedProperty, None,
-      deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty))
+      deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty),
+      Timeout(10.seconds))
 
   "A DavSourceFileProvider" should "provide a source for a requested existing file" in {
     stubFor(authorized(get(urlPathEqualTo(RootPath + "/my%20data/request.txt")))

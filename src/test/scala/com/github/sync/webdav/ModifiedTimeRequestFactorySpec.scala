@@ -19,8 +19,10 @@ package com.github.sync.webdav
 import java.io.StringReader
 import java.time.Instant
 
+import akka.util.Timeout
 import org.scalatest.{FlatSpec, Matchers}
 
+import scala.concurrent.duration._
 import scala.xml.{Elem, NodeSeq, XML}
 
 object ModifiedTimeRequestFactorySpec {
@@ -43,7 +45,8 @@ object ModifiedTimeRequestFactorySpec {
     DavConfig(rootUri = "https://test.dav.org", user = "testUser", password = "S3cr3T",
       lastModifiedProperty = property, lastModifiedNamespace = namespace,
       deleteBeforeOverride = false,
-      modifiedProperties = List(property, DavConfig.DefaultModifiedProperty))
+      modifiedProperties = List(property, DavConfig.DefaultModifiedProperty),
+      Timeout(16.seconds))
 
   /**
     * Parses the given template string into an XML element.

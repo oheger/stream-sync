@@ -27,6 +27,7 @@ import akka.http.scaladsl.model.{HttpRequest, Uri}
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{ActorMaterializer, Graph, SourceShape}
 import akka.testkit.TestKit
+import akka.util.Timeout
 import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, IterateFunc, SyncFolderData}
 import com.github.sync._
 import com.github.sync.impl.ElementSource
@@ -37,6 +38,7 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.xml.sax.SAXException
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 import scala.xml.SAXParseException
 
 object DavFsElementSourceSpec {
@@ -255,7 +257,8 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
   private def createDavConfig(modifiedProperty: String): DavConfig =
     DavConfig(serverUri(RootPath), UserId, Password, modifiedProperty, None,
       deleteBeforeOverride = false,
-      modifiedProperties = List(modifiedProperty, DavConfig.DefaultModifiedProperty))
+      modifiedProperties = List(modifiedProperty, DavConfig.DefaultModifiedProperty),
+      Timeout(10.seconds))
 
   "A DavFsElementSource" should "iterate over a WebDav structure" in {
     stubTestFolders("")

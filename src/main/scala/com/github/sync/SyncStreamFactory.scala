@@ -82,26 +82,29 @@ trait SyncStreamFactory {
     * @param ec             the execution context
     * @param system         the actor system
     * @param mat            the object to materialize streams
+    * @param timeout        a general timeout for requests
     * @tparam T the type of the result transformer
     * @return a function to create the sync source
     */
   def createSyncInputSource[T](uri: String, optTransformer: Option[ResultTransformer[T]], structureType: StructureType,
                                startFolderUri: String = "")
-                              (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
+                              (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
+                               timeout: Timeout):
   ArgsFunc[Source[FsElement, Any]]
 
   /**
     * Creates a ''SourceFileProvider'' based on the URI provided. This is
     * needed to apply sync operations against destination structures.
     *
-    * @param uri    the URI of the source structure
-    * @param ec     the execution context
-    * @param system the actor system
-    * @param mat    the object to materialize streams
+    * @param uri     the URI of the source structure
+    * @param ec      the execution context
+    * @param system  the actor system
+    * @param mat     the object to materialize streams
+    * @param timeout a general timeout for requests
     * @return a function to create the ''SourceFileProvider''
     */
   def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext, system: ActorSystem,
-                                            mat: ActorMaterializer):
+                                            mat: ActorMaterializer, timeout: Timeout):
   ArgsFunc[SourceFileProvider]
 
   /**
@@ -119,6 +122,7 @@ trait SyncStreamFactory {
     * @param ec                the execution context
     * @param system            the actor system
     * @param mat               the object to materialize streams
+    * @param timeout           a general timeout for requests
     * @tparam TSRC the state type of the source transformer
     * @tparam TDST the state type of the destination transformer
     * @return a future with the source
@@ -127,7 +131,8 @@ trait SyncStreamFactory {
                                    optDstTransformer: Option[ResultTransformer[TDST]], additionalArgs: StructureArgs,
                                    ignoreTimeDelta: Int)
                                   (implicit ec: ExecutionContext, system: ActorSystem,
-                                   mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]]
+                                   mat: ActorMaterializer, timeout: Timeout):
+  Future[Source[SyncOperation, NotUsed]]
 
   /**
     * Creates the flow stage that interprets sync operations and applies them

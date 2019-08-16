@@ -58,13 +58,14 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   override def createSyncInputSource[T](uri: String, optTransformer: Option[ResultTransformer[T]],
                                         structureType: StructureType, startFolderUri: String = "")
                                        (implicit ec: ExecutionContext, system: ActorSystem,
-                                        mat: ActorMaterializer):
+                                        mat: ActorMaterializer, timeout: Timeout):
   ArgsFunc[Source[FsElement, Any]] = {
     val factory = createElementSourceFactory(optTransformer)
     uri match {
       case RegDavUri(davUri) =>
         args =>
-          DavConfig(structureType, davUri, args) map (conf => DavFsElementSource(conf, factory, startFolderUri))
+          DavConfig(structureType, davUri, timeout, args) map (conf =>
+            DavFsElementSource(conf, factory, startFolderUri))
       case _ =>
         args =>
           LocalFsConfig(structureType, uri, args) map { config =>
@@ -75,11 +76,12 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
 
   override def createSourceFileProvider(uri: String)(implicit ec: ExecutionContext,
                                                      system: ActorSystem,
-                                                     mat: ActorMaterializer):
+                                                     mat: ActorMaterializer,
+                                                     timeout: Timeout):
   ArgsFunc[SourceFileProvider] = uri match {
     case RegDavUri(davUri) =>
       args =>
-        DavConfig(SourceStructureType, davUri, args) map (conf => DavSourceFileProvider(conf))
+        DavConfig(SourceStructureType, davUri, timeout, args) map (conf => DavSourceFileProvider(conf))
     case _ =>
       _ => Future.successful(new LocalUriResolver(Paths get uri))
   }
@@ -90,7 +92,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]] = uriDst match {
     case RegDavUri(davUri) =>
       args =>
-        DavConfig(DestinationStructureType, davUri, args) map { conf =>
+        DavConfig(DestinationStructureType, davUri, timeout, args) map { conf =>
           cleanUpFileProvider(DavOperationHandler.webDavProcessingFlow(conf, fileProvider),
             fileProvider)
         }
@@ -105,7 +107,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
                                         uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
                                         additionalArgs: StructureArgs, ignoreTimeDelta: Int)
                                        (implicit ec: ExecutionContext, system: ActorSystem,
-                                        mat: ActorMaterializer):
+                                        mat: ActorMaterializer, timeout: Timeout):
   Future[Source[SyncOperation, NotUsed]] = for {
     srcSource <- createSyncInputSource(uriSrc, optSrcTransformer, SourceStructureType).apply(additionalArgs)
     dstSource <- createSyncInputSource(uriDst, optDstTransformer, DestinationStructureType).apply(additionalArgs)

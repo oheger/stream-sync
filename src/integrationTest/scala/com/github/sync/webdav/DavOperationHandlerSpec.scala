@@ -25,7 +25,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import akka.testkit.TestKit
-import akka.util.ByteString
+import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes._
 import com.github.sync.WireMockSupport.{Password, PriorityDefault, PrioritySpecific, UserId}
 import com.github.sync._
@@ -36,6 +36,7 @@ import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FlatSpecLike, Match
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 object DavOperationHandlerSpec {
   /** The root path for sync operations. */
@@ -108,7 +109,8 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     */
   private def createDavConfig(): DavConfig =
     DavConfig(serverUri(RootPath), UserId, Password, DavConfig.DefaultModifiedProperty, None,
-      deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty))
+      deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty),
+      Timeout(10.seconds))
 
   /**
     * Convenience function to define the URI of a stub or verification based on

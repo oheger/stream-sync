@@ -17,16 +17,25 @@
 package com.github.sync.webdav
 
 import akka.http.scaladsl.model.IllegalUriException
+import akka.util.Timeout
 import com.github.sync.SyncTypes.{DestinationStructureType, SourceStructureType, StructureType, SupportedArgument}
 import com.github.sync._
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+
+object DavConfigSpec {
+  /** A timeout value. */
+  private val DavTimeout = Timeout(11.seconds)
+}
 
 /**
   * Test class for ''DavConfig''.
   */
 class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
+  import DavConfigSpec._
+
   /**
     * Checks whether correct supported arguments are returned for the given
     * structure type.
@@ -78,9 +87,9 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
       "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
     val expConfig = DavConfig(uri, user, password, modifiedProp, Some(modifiedNamespace),
       deleteBeforeOverride = true,
-      modifiedProperties = List(modifiedProp, DavConfig.DefaultModifiedProperty))
+      modifiedProperties = List(modifiedProp, DavConfig.DefaultModifiedProperty), DavTimeout)
 
-    val config = futureResult(DavConfig(SourceStructureType, uri, args))
+    val config = futureResult(DavConfig(SourceStructureType, uri, DavTimeout, args))
     config should be(expConfig)
   }
 
@@ -90,7 +99,7 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
       "--" + SourceStructureType.name + DavConfig.PropDeleteBeforeOverride -> "true",
       "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
 
-    val config = futureResult(DavConfig(SourceStructureType, "someUri", args))
+    val config = futureResult(DavConfig(SourceStructureType, "someUri", DavTimeout, args))
     config.modifiedProperties should contain only DavConfig.DefaultModifiedProperty
   }
 
@@ -102,7 +111,7 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
       "--" + SourceStructureType.name + DavConfig.PropDeleteBeforeOverride -> "true",
       "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
 
-    val config = futureResult(DavConfig(SourceStructureType, "someUri", args))
+    val config = futureResult(DavConfig(SourceStructureType, "someUri", DavTimeout, args))
     config.modifiedProperties should contain only DavConfig.DefaultModifiedProperty
   }
 
@@ -111,27 +120,27 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
       DestinationStructureType.name + DavConfig.PropPassword -> "pwd",
       DestinationStructureType.name + DavConfig.PropModifiedProperty -> "mod")
 
-    expectFailedFuture[NoSuchElementException](DavConfig(DestinationStructureType, "root", args))
+    expectFailedFuture[NoSuchElementException](DavConfig(DestinationStructureType, "root", DavTimeout, args))
   }
 
   it should "set the default last modified property if undefined" in {
     val args = minimumParametersMap()
 
-    val config = futureResult(DavConfig(DestinationStructureType, "root", args))
+    val config = futureResult(DavConfig(DestinationStructureType, "root", DavTimeout, args))
     config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
   }
 
   it should "set an undefined namespace if this property is not set" in {
     val args = minimumParametersMap()
 
-    val config = futureResult(DavConfig(DestinationStructureType, "root", args))
+    val config = futureResult(DavConfig(DestinationStructureType, "root", DavTimeout, args))
     config.lastModifiedNamespace shouldBe 'empty
   }
 
   it should "interpret an arbitrary value for the delete-before-override property" in {
     val args = minimumParametersMap() + (DavConfig.PropDeleteBeforeOverride -> "unknown")
 
-    val config = futureResult(DavConfig(DestinationStructureType, "root", args))
+    val config = futureResult(DavConfig(DestinationStructureType, "root", DavTimeout, args))
     config.deleteBeforeOverride shouldBe false
   }
 
@@ -141,7 +150,7 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
       SourceStructureType.name + DavConfig.PropModifiedProperty -> "mod")
 
     expectFailedFuture[IllegalUriException] {
-      DavConfig(SourceStructureType, "https://this is not! a valid URI??", args)
+      DavConfig(SourceStructureType, "https://this is not! a valid URI??", DavTimeout, args)
     }
   }
 }

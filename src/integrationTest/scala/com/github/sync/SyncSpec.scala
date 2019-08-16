@@ -29,7 +29,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
-import akka.util.ByteString
+import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes.{ResultTransformer, SyncOperation}
 import com.github.sync.WireMockSupport._
 import com.github.sync.cli.Sync
@@ -149,7 +149,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
   DelegateSyncStreamFactory = new DelegateSyncStreamFactory {
     override def createSourceFileProvider(uri: String)
                                          (implicit ec: ExecutionContext, system: ActorSystem,
-                                          mat: ActorMaterializer):
+                                          mat: ActorMaterializer, timeout: Timeout):
     ArgsFunc[SourceFileProvider] = _ => Future.successful(provider)
   }
 
@@ -527,7 +527,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
     implicit val mat: ActorMaterializer = ActorMaterializer()
     val davConfig = DavConfig(serverUri(WebDavPath), UserId, Password,
       DavConfig.DefaultModifiedProperty, None, deleteBeforeOverride = false,
-      modifiedProperties = List(DavConfig.DefaultModifiedProperty))
+      modifiedProperties = List(DavConfig.DefaultModifiedProperty), Timeout(10.seconds))
     val shutdownCount = new AtomicInteger
     val provider = new DavSourceFileProvider(davConfig, new RequestQueue(davConfig.rootUri)) {
       override def shutdown(): Unit = {
@@ -767,7 +767,8 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
                                             uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
                                             additionalArgs: StructureArgs, ignoreTimeDelta: Int)
                                            (implicit ec: ExecutionContext, system: ActorSystem,
-                                            mat: ActorMaterializer): Future[Source[SyncOperation, NotUsed]] = {
+                                            mat: ActorMaterializer, timeout: Timeout):
+      Future[Source[SyncOperation, NotUsed]] = {
         val cache = optDstTransformer.get.initialState.asInstanceOf[LRUCache[String, String]]
         cache.capacity should be(CacheSize)
         super.createSyncSource(uriSrc, optSrcTransformer, uriDst, optDstTransformer, additionalArgs, ignoreTimeDelta)

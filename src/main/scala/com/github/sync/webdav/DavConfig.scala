@@ -17,6 +17,7 @@
 package com.github.sync.webdav
 
 import akka.http.scaladsl.model.Uri
+import akka.util.Timeout
 import com.github.sync.SyncTypes.{StructureType, SupportedArgument}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -78,11 +79,12 @@ object DavConfig {
     * @param structType the structure type (determines, which arguments are
     *                   read from the map)
     * @param rootUri    the root URI of the WebDav structure
+    * @param timeout    a timeout for requests to the DAV server
     * @param properties a map with properties
     * @param ec         the execution context
     * @return a ''Future'' with the resulting ''DavConfig''
     */
-  def apply(structType: StructureType, rootUri: String,
+  def apply(structType: StructureType, rootUri: String, timeout: Timeout,
             properties: Map[String, String])(implicit ec: ExecutionContext):
   Future[DavConfig] = Future {
     val optPropModified = properties get propName(structType, PropModifiedProperty)
@@ -91,7 +93,7 @@ object DavConfig {
       optPropModified getOrElse DefaultModifiedProperty,
       properties get propName(structType, PropModifiedNamespace),
       java.lang.Boolean.parseBoolean(properties(propName(structType, PropDeleteBeforeOverride))),
-      createModifiedProperties(optPropModified))
+      createModifiedProperties(optPropModified), timeout)
   }
 
   /**
@@ -154,7 +156,9 @@ object DavConfig {
   *                              issued before a file override
   * @param modifiedProperties    a list with properties to be checked to fetch
   *                              the last-modified timestamp
+  * @param timeout               a timeout for requests to the DAV server
   */
 case class DavConfig(rootUri: Uri, user: String, password: String,
                      lastModifiedProperty: String, lastModifiedNamespace: Option[String],
-                     deleteBeforeOverride: Boolean, modifiedProperties: List[String])
+                     deleteBeforeOverride: Boolean, modifiedProperties: List[String],
+                     timeout: Timeout)
