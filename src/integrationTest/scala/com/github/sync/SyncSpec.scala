@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+import akka.pattern.AskTimeoutException
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.{TestKit, TestProbe}
@@ -37,7 +38,7 @@ import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptO
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.local.LocalUriResolver
 import com.github.sync.util.{LRUCache, UriEncodingHelper}
-import com.github.sync.webdav.{DavConfig, DavSourceFileProvider}
+import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, HttpRequestActor}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
 import org.scalatest._
@@ -559,6 +560,21 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
 
     val result = futureResult(Sync.syncProcess(options))
     result.successfulOperations should be(0)
+  }
+
+  it should "evaluate the timeout for the WebDav element source" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
+    val timeout = 1.second
+    stubFolderRequest(WebDavPath, "folder3.xml", optDelay = Some(timeout * 2))
+    stubFor(authorized(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
+      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
+        .withBodyFile("response.txt")))
+    val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
+      "--src-user", UserId, "--src-password", Password, "--timeout", timeout.toSeconds.toString)
+
+    expectFailedFuture[AskTimeoutException](Sync.syncProcess(options))
   }
 
   it should "support encryption of files in a destination structure" in {

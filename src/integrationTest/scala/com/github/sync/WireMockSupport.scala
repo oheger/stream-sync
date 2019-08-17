@@ -23,6 +23,8 @@ import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
 import org.scalatest.{BeforeAndAfterEach, Suite}
 
+import scala.concurrent.duration.FiniteDuration
+
 object WireMockSupport {
   /** Test user ID. */
   val UserId = "scott"
@@ -102,15 +104,19 @@ trait WireMockSupport extends BeforeAndAfterEach {
     * @param uri          the URI of the folder
     * @param responseFile the file to serve the request
     * @param status       the status code to return from the request
+    * @param optDelay     an optional delay for this request
     */
   protected def stubFolderRequest(uri: String, responseFile: String,
-                                  status: Int = StatusCodes.OK.intValue): Unit = {
-    val reqUri = if(uri.endsWith("/")) uri else uri + "/"
+                                  status: Int = StatusCodes.OK.intValue,
+                                  optDelay: Option[FiniteDuration] = None): Unit = {
+    val reqUri = if (uri.endsWith("/")) uri else uri + "/"
+    val delay = optDelay.map(_.toMillis.toInt).getOrElse(0)
     stubFor(authorized(request("PROPFIND", urlPathEqualTo(reqUri))
       .withHeader("Accept", equalTo("text/xml"))
       .withHeader("Depth", equalTo("1"))
       .willReturn(aResponse()
         .withStatus(status)
+        .withFixedDelay(delay)
         .withBodyFile(responseFile))))
   }
 

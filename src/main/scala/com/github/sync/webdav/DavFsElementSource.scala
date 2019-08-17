@@ -22,12 +22,12 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalQuery
 
 import akka.NotUsed
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem, PoisonPill}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
 import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
-import akka.util.ByteString
+import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateResult, SyncFolderData}
 import com.github.sync.util.UriEncodingHelper
 
@@ -76,7 +76,7 @@ object DavFsElementSource {
     * The class stores a bunch of parameters that are needed during the
     * iteration. There are no real state updates.
     *
-    * @param requestQueue            the queue for sending requests
+    * @param requestActor            the actor for sending HTTP requests
     * @param rootUriPrefix           the common prefix of all URIs in the structure to be
     *                                processed; the URIs generated for ''FsElement''
     *                                objects must be relative to this URI.
@@ -84,7 +84,7 @@ object DavFsElementSource {
     * @param headerAuth              the authorization header for all requests
     * @param config                  the configuration for the dav server
     */
-  case class DavIterationState(requestQueue: RequestQueue, rootUriPrefix: String, decodedRootUriPrefixLen: Int,
+  case class DavIterationState(requestActor: ActorRef, rootUriPrefix: String, decodedRootUriPrefixLen: Int,
                                headerAuth: Authorization, config: DavConfig)
 
   /**
@@ -129,6 +129,12 @@ object DavFsElementSource {
   private val ElemCollection = "collection"
 
   /**
+    * The size of the request queue. Can be small because requests are executed
+    * one after the other.
+    */
+  private val RequestQueueSize = 2
+
+  /**
     * Creates a ''Source'' based on this class using the specified
     * configuration.
     *
@@ -157,10 +163,10 @@ object DavFsElementSource {
                   (implicit system: ActorSystem, mat: ActorMaterializer):
   Graph[SourceShape[FsElement], NotUsed] = {
     implicit val ec: ExecutionContext = system.dispatcher
-    val requestQueue = new RequestQueue(config.rootUri)
+    val requestActor = system.actorOf(HttpRequestActor(config.rootUri, RequestQueueSize))
     val rootUriPrefix = UriEncodingHelper.removeTrailingSeparator(config.rootUri.path.toString())
     val rootPrefixLen = UriEncodingHelper.decode(rootUriPrefix).length
-    val state = DavIterationState(requestQueue, rootUriPrefix, rootPrefixLen, authHeader(config), config)
+    val state = DavIterationState(requestActor, rootUriPrefix, rootPrefixLen, authHeader(config), config)
     sourceFactory.createElementSource(state, createInitialFolder(config, startFolderUri),
       Some(completionFunc))(iterateFunc)
   }
@@ -218,7 +224,7 @@ object DavFsElementSource {
     * @return the completion function
     */
   private def completionFunc: CompletionFunc[DavIterationState] = state =>
-    state.requestQueue.shutdown()
+    state.requestActor ! PoisonPill
 
   /**
     * Sends a request for the content of the specified folder and parses
@@ -232,8 +238,9 @@ object DavFsElementSource {
     */
   private def loadFolder(state: DavIterationState, folderData: SyncFolderData[DavFolder])
                         (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[List[ElemData]] = {
+    implicit val timeout: Timeout = state.config.timeout
     val request = createFolderRequest(state, folderData)
-    sendAndProcess(state.requestQueue, request)(parseFolderResponse(state, folderData.folder)).flatten
+    sendAndProcess(state.requestActor, request)(parseFolderResponse(state, folderData.folder)).flatten
   }
 
   /**
@@ -241,17 +248,17 @@ object DavFsElementSource {
     * entity is read, converted to XML, and processed to extract the
     * elements contained in this folder.
     *
-    * @param state    the current state
-    * @param folder   the folder whose content is to be computed
-    * @param response the response of the request for this folder
-    * @param ec       the execution context
-    * @param mat      the object to materialize streams
+    * @param state  the current state
+    * @param folder the folder whose content is to be computed
+    * @param result the result of the request for this folder
+    * @param ec     the execution context
+    * @param mat    the object to materialize streams
     * @return a ''Future'' with the elements that have been extracted
     */
-  private def parseFolderResponse(state: DavIterationState, folder: FsFolder)(response: HttpResponse)
+  private def parseFolderResponse(state: DavIterationState, folder: FsFolder)(result: HttpRequestActor.Result)
                                  (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Future[List[ElemData]] =
-    readResponse(response).map(elem => extractFolderElements(state, elem, folder.level + 1))
+    readResponse(result.response).map(elem => extractFolderElements(state, elem, folder.level + 1))
 
   /**
     * Reads the entity of the given response of a folder request and
@@ -334,9 +341,12 @@ object DavFsElementSource {
     * @param folderData the data of the folder to be loaded
     * @return the request to query the content of this folder
     */
-  private def createFolderRequest(state: DavIterationState, folderData: SyncFolderData[DavFolder]): HttpRequest =
-    HttpRequest(method = MethodPropFind, uri = folderData.data.normalizedRef,
+  private def createFolderRequest(state: DavIterationState, folderData: SyncFolderData[DavFolder]):
+  HttpRequestActor.SendRequest = {
+    val httpRequest = HttpRequest(method = MethodPropFind, uri = folderData.data.normalizedRef,
       headers = List(state.headerAuth, HeaderAccept, HeaderDepth))
+    HttpRequestActor.SendRequest(httpRequest, null)
+  }
 
   /**
     * Obtains the URI of an element based on the reference URI from the server.
@@ -371,7 +381,7 @@ object DavFsElementSource {
     * @return the last-modified time of this file
     */
   private def obtainModifiedTime(nodeSeq: NodeSeq, config: DavConfig): Instant = {
-    def obtainModifiedTimeFromProperty(properties: List[String]): Instant =
+    @tailrec def obtainModifiedTimeFromProperty(properties: List[String]): Instant =
       properties match {
         case p :: t =>
           val strTime = elemText(nodeSeq, p)

@@ -16,19 +16,18 @@
 
 package com.github.sync.webdav
 
-import java.io.IOException
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
 import java.util.concurrent.atomic.AtomicReference
 
 import akka.NotUsed
-import akka.actor.ActorSystem
-import akka.http.scaladsl.model.{HttpRequest, Uri}
+import akka.actor.{ActorSystem, Terminated}
+import akka.http.scaladsl.model.Uri
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{ActorMaterializer, Graph, SourceShape}
-import akka.testkit.TestKit
+import akka.testkit.{TestKit, TestProbe}
 import akka.util.Timeout
-import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, IterateFunc, SyncFolderData}
+import com.github.sync.SyncTypes._
 import com.github.sync._
 import com.github.sync.impl.ElementSource
 import com.github.sync.util.UriEncodingHelper
@@ -37,8 +36,8 @@ import com.github.tomakehurst.wiremock.client.WireMock._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.xml.sax.SAXException
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 import scala.xml.SAXParseException
 
 object DavFsElementSourceSpec {
@@ -314,15 +313,16 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     expectFailedFuture[SAXParseException](runSource(createTestSource()))
   }
 
-  it should "shutdown the request queue when done" in {
+  it should "shutdown the request actor when done" in {
     stubFolderRequest(RootPath, "folder3.xml")
-    val testRequest = HttpRequest(uri = RootFolder.relativeUri)
     val factory = new SourceFactoryImpl
     val source = createTestSource(optFactory = Some(factory))
     futureResult(runSource(Source.fromGraph(source)))
     val state = factory.refSource.get().initState.asInstanceOf[DavIterationState]
 
-    expectFailedFuture[RuntimeException](state.requestQueue.queueRequest(testRequest))
+    val watcher = TestProbe()
+    watcher watch state.requestActor
+    watcher.expectMsgType[Terminated]
   }
 
   it should "evaluate the status code from a response" in {
@@ -331,8 +331,8 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
         .withStatus(401)
         .withBodyFile("folder3.xml")))
 
-    val ex = expectFailedFuture[IOException](runSource(createTestSource()))
-    ex.getMessage should include(RootFolder.relativeUri)
+    val ex = expectFailedFuture[HttpRequestActor.RequestException](runSource(createTestSource()))
+    ex.request.request.uri.path.toString() should be(RootPath + "/")
   }
 
   it should "fail processing if no modified time can be obtained" in {
