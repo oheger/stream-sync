@@ -24,12 +24,12 @@ import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.NotUsed
-import akka.actor.ActorSystem
+import akka.actor.{ActorIdentity, ActorSystem, Identify}
 import akka.http.scaladsl.model.StatusCodes
 import akka.pattern.AskTimeoutException
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
-import akka.testkit.{TestKit, TestProbe}
+import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes.{ResultTransformer, SyncOperation}
 import com.github.sync.WireMockSupport._
@@ -38,7 +38,7 @@ import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptO
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.local.LocalUriResolver
 import com.github.sync.util.{LRUCache, UriEncodingHelper}
-import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, HttpRequestActor}
+import com.github.sync.webdav.{DavConfig, DavSourceFileProvider}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
 import org.scalatest._
@@ -49,7 +49,7 @@ import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 /**
   * Integration test class for sync processes.
   */
-class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with
+class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with ImplicitSender with FlatSpecLike with
   BeforeAndAfterAll with BeforeAndAfterEach with Matchers with FileTestHelper with
   AsyncTestHelper with WireMockSupport {
   def this() = this(ActorSystem("SyncSpec"))
@@ -432,6 +432,22 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpe
 
     futureResult(Sync.syncProcess(options))
     shutdownCount.get() should be(1)
+  }
+
+  it should "stop the actor for local sync operations after stream processing" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val identifyId = 20190817
+    createTestFile(srcFolder, "test.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString)
+
+    futureResult(Sync.syncProcess(options))
+    val selection = system.actorSelection(s"/user/${SyncStreamFactoryImpl.LocalSyncOpActorName}")
+    selection ! Identify(identifyId)
+    val identity = expectMsgType[ActorIdentity]
+    identity.correlationId should be(identifyId)
+    identity.ref.isDefined shouldBe false
   }
 
   it should "take the time zone of a local files source into account" in {

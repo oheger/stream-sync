@@ -19,7 +19,7 @@ package com.github.sync.impl
 import java.nio.file.{Path, Paths, StandardOpenOption}
 
 import akka.NotUsed
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem, PoisonPill, Props}
 import akka.pattern.ask
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import akka.stream.{ActorMaterializer, ClosedShape, Graph, SourceShape}
@@ -38,6 +38,9 @@ import scala.concurrent.{ExecutionContext, Future}
 object SyncStreamFactoryImpl extends SyncStreamFactory {
   /** URI prefix indicating a WebDav structure. */
   val PrefixWebDav = "dav:"
+
+  /** The name of the actor for local sync operations. */
+  val LocalSyncOpActorName = "localSyncOperationActor"
 
   /** Regular expression for parsing a WebDav URI. */
   private val RegDavUri = (PrefixWebDav + "(.+)").r
@@ -165,11 +168,11 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
                                      (implicit system: ActorSystem, timeout: Timeout):
   Flow[SyncOperation, SyncOperation, NotUsed] = {
     val operationActor = system.actorOf(Props(classOf[LocalSyncOperationActor],
-      fileProvider, config, BlockingDispatcherName))
-    cleanUpFileProvider(Flow[SyncOperation].mapAsync(1) { op =>
+      fileProvider, config, BlockingDispatcherName), LocalSyncOpActorName)
+    stopActor(cleanUpFileProvider(Flow[SyncOperation].mapAsync(1) { op =>
       val futWrite = operationActor ? op
       futWrite.mapTo[SyncOperation]
-    }, fileProvider)
+    }, fileProvider), operationActor)
   }
 
   /**
@@ -184,6 +187,19 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
                                   fileProvider: SourceFileProvider):
   Flow[SyncOperation, SyncOperation, NotUsed] =
     stage via new CleanupStage[SyncOperation](() => fileProvider.shutdown())
+
+  /**
+    * Appends a clean-up stage to the given stage that stops the given actor.
+    * This is used to make sure that all actors used during the sync process
+    * are stopped afterwards.
+    *
+    * @param stage the stage to be extended
+    * @param actor the actor to be stopped
+    * @return the enhanced stage
+    */
+  private def stopActor(stage: Flow[SyncOperation, SyncOperation, NotUsed], actor: ActorRef):
+  Flow[SyncOperation, SyncOperation, NotUsed] =
+    stage via new CleanupStage[SyncOperation](() => actor ! PoisonPill)
 
   /**
     * Creates a ''Source'' that produces ''SyncOperation'' objects to sync the
