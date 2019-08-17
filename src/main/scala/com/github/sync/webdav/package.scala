@@ -16,14 +16,11 @@
 
 package com.github.sync
 
-import java.io.IOException
-
 import akka.actor.ActorRef
 import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.http.scaladsl.{Http, HttpExt}
 import akka.pattern.ask
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 
@@ -84,27 +81,6 @@ package object webdav {
   }
 
   /**
-    * A convenience function for sending a request and processing the response
-    * in case the status code indicates success. This function executes the
-    * request using the given request queue. It then checks the status code of
-    * the response, causing the result future to fail if necessary. Otherwise,
-    * the given processing function is called to further process the response.
-    *
-    * @param requestQueue the request queue to execute the request
-    * @param request      the request to be executed
-    * @param f            the processing function
-    * @param ec           the execution context
-    * @param mat          the object to materialize streams
-    * @tparam T the type of the result of the processing function
-    * @return a ''Future'' with the processing result
-    */
-  def sendAndProcess[T](requestQueue: RequestQueue, request: HttpRequest)
-                       (f: HttpResponse => T)
-                       (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[T] =
-    checkResponseStatus(requestQueue.queueRequest(request))(standardErrorMapper(
-      request.uri.toString())) map f
-
-  /**
     * Sends a request to an HTTP actor and allows processing of the result.
     * This function passes the given request to the actor and expects the
     * future with the result. The future is then mapped with the specified
@@ -126,41 +102,6 @@ package object webdav {
     (httpActor ? request)
       .mapTo[HttpRequestActor.Result]
       .map(f)
-
-  /**
-    * Checks the status of a response and causes the future to fail if it was
-    * not successful. In this case, an IOException is thrown, and the passed in
-    * error mapper function is called to generate the error message. Also, the
-    * response entity is consumed.
-    *
-    * @param futResponse the future with the ''HttpResponse''
-    * @param errMapper   the error mapping function
-    * @param ec          the execution context
-    * @param mat         the object to materialize streams
-    * @return a ''Future'' with the same response if it is successful; a failed
-    *         ''Future'' otherwise
-    */
-  def checkResponseStatus(futResponse: Future[HttpResponse])
-                         (errMapper: => HttpResponse => String)
-                         (implicit ec: ExecutionContext, mat: ActorMaterializer):
-  Future[HttpResponse] =
-    futResponse flatMap { resp =>
-      if (resp.status.isSuccess()) Future.successful(resp)
-      else resp.entity.discardBytes().future() map (_ => throw new IOException(errMapper(resp)))
-    }
-
-  /**
-    * Returns a standard error mapper function that can be used together with
-    * ''checkResponseStatus()''. The function produces an error message that
-    * contains the given request URI and information from the status code of
-    * the response.
-    *
-    * @param requestUri the request URI
-    * @return a standard error mapper function
-    */
-  def standardErrorMapper(requestUri: String): HttpResponse => String = response =>
-    s"Failed request for '$requestUri': ${response.status.intValue()} " +
-      s"${response.status.defaultMessage()}."
 
   /**
     * Determines the port to be used for an URI based on its scheme.

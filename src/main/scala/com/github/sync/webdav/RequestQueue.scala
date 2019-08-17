@@ -36,7 +36,7 @@ import scala.util.{Failure, Success, Try}
   * @param system    the actor system
   * @param mat       the object to materialize streams
   */
-class RequestQueue(uri: Uri, queueSize: Int = 2)(implicit system: ActorSystem, mat: ActorMaterializer) {
+private class RequestQueue(uri: Uri, queueSize: Int = 2)(implicit system: ActorSystem, mat: ActorMaterializer) {
   /** The flow for generating HTTP requests. */
   val poolClientFlow: Flow[(HttpRequest, Promise[HttpResponse]),
     (Try[HttpResponse], Promise[HttpResponse]), Http.HostConnectionPool] =
