@@ -16,23 +16,20 @@
 
 package com.github.sync.webdav
 
-import java.io.IOException
 import java.time.Instant
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Terminated}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
-import akka.testkit.TestKit
+import akka.testkit.{TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes.FsFile
 import com.github.sync.WireMockSupport._
 import com.github.sync.{AsyncTestHelper, FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
-import org.mockito.Mockito
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
-import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -46,8 +43,7 @@ object DavSourceFileProviderSpec {
   * Test class for ''DavSourceFileProvider''.
   */
 class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
-  FlatSpecLike with BeforeAndAfterAll with Matchers with AsyncTestHelper with WireMockSupport
-  with MockitoSugar {
+  FlatSpecLike with BeforeAndAfterAll with Matchers with AsyncTestHelper with WireMockSupport {
   def this() = this(ActorSystem("DavSourceFileProviderSpec"))
 
   override protected def afterAll(): Unit = {
@@ -91,9 +87,13 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     val file = FsFile(elemUri, 0, Instant.now(), 5)
     val provider = DavSourceFileProvider(createConfig())
 
-    val ex = expectFailedFuture[IOException](provider fileSource file.relativeUri)
-    ex.getMessage should include("500")
-    ex.getMessage should include(RootPath + elemUri)
+    val ex = expectFailedFuture[HttpRequestActor.RequestException](provider fileSource file.relativeUri)
+    ex.request.request.uri should be(Uri(RootPath + elemUri))
+    ex.cause match {
+      case fre: HttpRequestActor.FailedResponseException =>
+        fre.response.status should be(StatusCodes.InternalServerError)
+      case e => fail(e)
+    }
   }
 
   it should "consume the response entity also in case of an error" in {
@@ -110,7 +110,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     val testFuture = Future {
       (1 to 32).map(i => FsFile(s"/test$i.txt", 1, Instant.now(), 13))
         .foreach { f =>
-          expectFailedFuture[IOException](provider fileSource f.relativeUri)
+          expectFailedFuture[HttpRequestActor.RequestException](provider fileSource f.relativeUri)
           val source = futureResult(provider fileSource file.relativeUri)
           futureResult(source.runWith(Sink.ignore))
         }
@@ -119,10 +119,12 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
   }
 
   it should "shutdown the request queue when it is shutdown" in {
-    val requestQueue = mock[RequestQueue]
-    val provider = new DavSourceFileProvider(createConfig(), requestQueue)
+    val probeHttpActor = TestProbe()
+    val provider = new DavSourceFileProvider(createConfig(), probeHttpActor.ref)
 
     provider.shutdown()
-    Mockito.verify(requestQueue).shutdown()
+    val watcher = TestProbe()
+    watcher watch probeHttpActor.ref
+    watcher.expectMsgType[Terminated]
   }
 }

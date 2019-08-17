@@ -16,27 +16,29 @@
 
 package com.github.sync.webdav
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.HttpRequest
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
-import akka.util.ByteString
+import akka.util.{ByteString, Timeout}
 import com.github.sync.SourceFileProvider
 
 import scala.concurrent.Future
 
 object DavSourceFileProvider {
+  /** The size of the request queue. */
+  private val QueueSize = 2
+
   /**
     * Creates a new instance of ''DavSourceFileProvider'' with the
     * configuration specified.
     *
     * @param config the configuration for the WebDav server
     * @param system the actor system
-    * @param mat    the object to materialize streams
     * @return the new ''DavSourceFileProvider''
     */
-  def apply(config: DavConfig)(implicit system: ActorSystem, mat: ActorMaterializer):
-  DavSourceFileProvider = new DavSourceFileProvider(config, new RequestQueue(config.rootUri))
+  def apply(config: DavConfig)(implicit system: ActorSystem):
+  DavSourceFileProvider = new DavSourceFileProvider(config,
+    system.actorOf(HttpRequestActor(config.rootUri, QueueSize)))
 }
 
 /**
@@ -46,19 +48,21 @@ object DavSourceFileProvider {
   * WebDav server. A source for the file content is then obtained from the
   * entity of a successful request.
   *
-  * @param config       the ''DavConfig'' for the WebDav server
-  * @param requestQueue the queue for sending requests
-  * @param system       the actor system
-  * @param mat          the object to materialize streams
+  * @param config    the ''DavConfig'' for the WebDav server
+  * @param httpActor the actor for sending HTTP requests
+  * @param system    the actor system
   */
-class DavSourceFileProvider(config: DavConfig, requestQueue: RequestQueue)
-                           (implicit system: ActorSystem, mat: ActorMaterializer)
+class DavSourceFileProvider(config: DavConfig, httpActor: ActorRef)
+                           (implicit system: ActorSystem)
   extends SourceFileProvider {
   /** The object to resolve element URIs. */
   private val uriResolver = ElementUriResolver(config.rootUri)
 
   /** The authorization header to be used for all requests. */
   private val HeaderAuth = authHeader(config)
+
+  /** The timeout for HTTP requests. */
+  private implicit val timeout: Timeout = config.timeout
 
   import system.dispatcher
 
@@ -68,14 +72,14 @@ class DavSourceFileProvider(config: DavConfig, requestQueue: RequestQueue)
     *             successful.
     */
   override def fileSource(uri: String): Future[Source[ByteString, Any]] =
-    sendAndProcess(requestQueue, createFileRequest(uri))(_.entity.dataBytes)
+    sendAndProcess(httpActor, createFileRequest(uri))(_.response.entity.dataBytes)
 
   /**
     * @inheritdoc This implementation frees the resources used for HTTP
     *             connections.
     */
   override def shutdown(): Unit = {
-    requestQueue.shutdown()
+    system stop httpActor
   }
 
   /**
@@ -85,7 +89,9 @@ class DavSourceFileProvider(config: DavConfig, requestQueue: RequestQueue)
     * @param uri the URI of the file to be retrieved
     * @return the corresponding HTTP request
     */
-  private def createFileRequest(uri: String): HttpRequest =
-    HttpRequest(uri = uriResolver resolveElementUri uri,
+  private def createFileRequest(uri: String): HttpRequestActor.SendRequest = {
+    val httpRequest = HttpRequest(uri = uriResolver resolveElementUri uri,
       headers = List(HeaderAuth))
+    HttpRequestActor.SendRequest(httpRequest, null)
+  }
 }
