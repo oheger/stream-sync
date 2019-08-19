@@ -67,8 +67,9 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     uri match {
       case RegDavUri(davUri) =>
         args =>
+          //TODO pass in correct actor reference
           DavConfig(structureType, davUri, timeout, args) map (conf =>
-            DavFsElementSource(conf, factory, startFolderUri))
+            DavFsElementSource(conf, factory, null, startFolderUri))
       case _ =>
         args =>
           LocalFsConfig(structureType, uri, args) map { config =>

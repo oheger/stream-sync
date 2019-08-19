@@ -22,13 +22,13 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalQuery
 
 import akka.NotUsed
-import akka.actor.{ActorRef, ActorSystem, PoisonPill}
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
 import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.{ByteString, Timeout}
-import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateResult, SyncFolderData}
+import com.github.sync.SyncTypes._
 import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec
@@ -81,11 +81,10 @@ object DavFsElementSource {
     *                                processed; the URIs generated for ''FsElement''
     *                                objects must be relative to this URI.
     * @param decodedRootUriPrefixLen the length of the root URI prefix
-    * @param headerAuth              the authorization header for all requests
     * @param config                  the configuration for the dav server
     */
   case class DavIterationState(requestActor: ActorRef, rootUriPrefix: String, decodedRootUriPrefixLen: Int,
-                               headerAuth: Authorization, config: DavConfig)
+                               config: DavConfig)
 
   /**
     * A data class holding information about an element that is processed.
@@ -129,44 +128,41 @@ object DavFsElementSource {
   private val ElemCollection = "collection"
 
   /**
-    * The size of the request queue. Can be small because requests are executed
-    * one after the other.
-    */
-  private val RequestQueueSize = 2
-
-  /**
     * Creates a ''Source'' based on this class using the specified
     * configuration.
     *
     * @param config         the configuration
     * @param sourceFactory  the factory for the element source
+    * @param requestActor   the actor for sending HTTP requests
     * @param startFolderUri URI of a folder to start the iteration
     * @param system         the actor system
     * @param mat            the object to materialize streams
     * @return the new source
     */
-  def apply(config: DavConfig, sourceFactory: ElementSourceFactory, startFolderUri: String = "")
+  def apply(config: DavConfig, sourceFactory: ElementSourceFactory, requestActor: ActorRef,
+            startFolderUri: String = "")
            (implicit system: ActorSystem, mat: ActorMaterializer):
-  Source[FsElement, NotUsed] = Source.fromGraph(createSource(config, sourceFactory, startFolderUri))
+  Source[FsElement, NotUsed] = Source.fromGraph(createSource(config, sourceFactory, requestActor, startFolderUri))
 
   /**
     * Creates the source for iterating over a dav folder structure.
     *
     * @param config         the configuration
     * @param sourceFactory  the factory for the element source
+    * @param requestActor   the actor for sending HTTP requests
     * @param startFolderUri URI of a folder to start the iteration
     * @param system         the actor system
     * @param mat            the object to materialize streams
     * @return the new source
     */
-  def createSource(config: DavConfig, sourceFactory: ElementSourceFactory, startFolderUri: String = "")
+  def createSource(config: DavConfig, sourceFactory: ElementSourceFactory, requestActor: ActorRef,
+                   startFolderUri: String = "")
                   (implicit system: ActorSystem, mat: ActorMaterializer):
   Graph[SourceShape[FsElement], NotUsed] = {
     implicit val ec: ExecutionContext = system.dispatcher
-    val requestActor = system.actorOf(HttpRequestActor(config.rootUri, RequestQueueSize))
     val rootUriPrefix = UriEncodingHelper.removeTrailingSeparator(config.rootUri.path.toString())
     val rootPrefixLen = UriEncodingHelper.decode(rootUriPrefix).length
-    val state = DavIterationState(requestActor, rootUriPrefix, rootPrefixLen, authHeader(config), config)
+    val state = DavIterationState(requestActor, rootUriPrefix, rootPrefixLen, config)
     sourceFactory.createElementSource(state, createInitialFolder(config, startFolderUri),
       Some(completionFunc))(iterateFunc)
   }
@@ -224,7 +220,7 @@ object DavFsElementSource {
     * @return the completion function
     */
   private def completionFunc: CompletionFunc[DavIterationState] = state =>
-    state.requestActor ! PoisonPill
+    state.requestActor ! HttpExtensionActor.Release
 
   /**
     * Sends a request for the content of the specified folder and parses
@@ -344,7 +340,7 @@ object DavFsElementSource {
   private def createFolderRequest(state: DavIterationState, folderData: SyncFolderData[DavFolder]):
   HttpRequestActor.SendRequest = {
     val httpRequest = HttpRequest(method = MethodPropFind, uri = folderData.data.normalizedRef,
-      headers = List(state.headerAuth, HeaderAccept, HeaderDepth))
+      headers = List(HeaderAccept, HeaderDepth))
     HttpRequestActor.SendRequest(httpRequest, null)
   }
 

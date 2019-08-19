@@ -18,20 +18,19 @@ package com.github.sync.webdav
 
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import akka.NotUsed
-import akka.actor.{ActorSystem, Terminated}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.model.Uri
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{ActorMaterializer, Graph, SourceShape}
-import akka.testkit.{TestKit, TestProbe}
+import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.SyncTypes._
 import com.github.sync._
 import com.github.sync.impl.ElementSource
 import com.github.sync.util.UriEncodingHelper
-import com.github.sync.webdav.DavFsElementSource.DavIterationState
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.xml.sax.SAXException
@@ -237,14 +236,28 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     *
     * @param modifiedProperty the property for the modified time
     * @param optFactory       an option with the factory to create the source
+    * @param optRequestActor  an option with a special request actor
     * @return the test source
     */
   private def createTestSource(modifiedProperty: String = DavConfig.DefaultModifiedProperty,
-                               optFactory: Option[SourceFactoryImpl] = None):
+                               optFactory: Option[SourceFactoryImpl] = None,
+                               optRequestActor: Option[ActorRef] = None):
   Source[FsElement, Any] = {
     implicit val mat: ActorMaterializer = ActorMaterializer()
-    DavFsElementSource(createDavConfig(modifiedProperty),
-      optFactory getOrElse new SourceFactoryImpl)
+    val config = createDavConfig(modifiedProperty)
+    val requestActor = optRequestActor getOrElse createRequestActor(config)
+    DavFsElementSource(config, optFactory getOrElse new SourceFactoryImpl, requestActor)
+  }
+
+  /**
+    * Creates an actor for sending HTTP requests.
+    *
+    * @param config the DAV config
+    * @return the request actor
+    */
+  private def createRequestActor(config: DavConfig): ActorRef = {
+    val httpActor = system.actorOf(HttpRequestActor(serverUri(""), 2))
+    system.actorOf(HttpBasicAuthActor(httpActor, config))
   }
 
   /**
@@ -278,7 +291,7 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
       elem.relativeUri.startsWith(StartFolder.relativeUri) && elem.relativeUri != StartFolder.relativeUri
     }
     implicit val mat: ActorMaterializer = ActorMaterializer()
-    val source = DavFsElementSource(config, new SourceFactoryImpl,
+    val source = DavFsElementSource(config, new SourceFactoryImpl, createRequestActor(config),
       startFolderUri = StartFolder.relativeUri)
 
     executeStream(source) should contain theSameElementsAs expElements
@@ -315,14 +328,21 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
 
   it should "shutdown the request actor when done" in {
     stubFolderRequest(RootPath, "folder3.xml")
+    val releaseCount = new AtomicInteger
+    val requestActor = createRequestActor(createDavConfig(DavConfig.DefaultModifiedProperty))
+    val propsRequestActor = Props(new Actor {
+      override def receive: Receive = {
+        case HttpExtensionActor.Release =>
+          releaseCount.incrementAndGet()
+        case m => requestActor forward m
+      }
+    })
+    val stubRequestActor = system.actorOf(propsRequestActor)
     val factory = new SourceFactoryImpl
-    val source = createTestSource(optFactory = Some(factory))
+    val source = createTestSource(optFactory = Some(factory), optRequestActor = Some(stubRequestActor))
     futureResult(runSource(Source.fromGraph(source)))
-    val state = factory.refSource.get().initState.asInstanceOf[DavIterationState]
 
-    val watcher = TestProbe()
-    watcher watch state.requestActor
-    watcher.expectMsgType[Terminated]
+    releaseCount.get() should be(1)
   }
 
   it should "evaluate the status code from a response" in {
