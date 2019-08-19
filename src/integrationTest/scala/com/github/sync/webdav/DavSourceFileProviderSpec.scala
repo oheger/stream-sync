@@ -18,7 +18,7 @@ package com.github.sync.webdav
 
 import java.time.Instant
 
-import akka.actor.{ActorSystem, Terminated}
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.stream.ActorMaterializer
@@ -67,12 +67,24 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
       deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty),
       Timeout(10.seconds))
 
+  /**
+    * Creates an actor for sending HTTP requests.
+    *
+    * @param config the DAV config
+    * @return the request actor
+    */
+  private def createRequestActor(config: DavConfig): ActorRef = {
+    val httpActor = system.actorOf(HttpRequestActor(serverUri(""), 2))
+    system.actorOf(HttpBasicAuthActor(httpActor, config))
+  }
+
   "A DavSourceFileProvider" should "provide a source for a requested existing file" in {
     stubFor(authorized(get(urlPathEqualTo(RootPath + "/my%20data/request.txt")))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
     val file = FsFile("/my data/request.txt", 2, Instant.now(), 42)
-    val provider = DavSourceFileProvider(createConfig())
+    val config = createConfig()
+    val provider = DavSourceFileProvider(config, createRequestActor(config))
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
 
     val response = futureResult(provider.fileSource(file.relativeUri).flatMap { src => src.runWith(sink) })
@@ -85,7 +97,8 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     stubFor(authorized(get(urlPathEqualTo(RootPath + elemUri)))
       .willReturn(aResponse().withStatus(StatusCodes.InternalServerError.intValue)))
     val file = FsFile(elemUri, 0, Instant.now(), 5)
-    val provider = DavSourceFileProvider(createConfig())
+    val config = createConfig()
+    val provider = DavSourceFileProvider(config, createRequestActor(config))
 
     val ex = expectFailedFuture[HttpRequestActor.RequestException](provider fileSource file.relativeUri)
     ex.request.request.uri should be(Uri(RootPath + elemUri))
@@ -105,7 +118,8 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
     val file = FsFile(fileUri, 1, Instant.now(), 100)
-    val provider = DavSourceFileProvider(createConfig())
+    val config = createConfig()
+    val provider = DavSourceFileProvider(config, createRequestActor(config))
 
     val testFuture = Future {
       (1 to 32).map(i => FsFile(s"/test$i.txt", 1, Instant.now(), 13))
@@ -118,13 +132,11 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     futureResult(testFuture)
   }
 
-  it should "shutdown the request queue when it is shutdown" in {
+  it should "release the request actor when it is shutdown" in {
     val probeHttpActor = TestProbe()
     val provider = new DavSourceFileProvider(createConfig(), probeHttpActor.ref)
 
     provider.shutdown()
-    val watcher = TestProbe()
-    watcher watch probeHttpActor.ref
-    watcher.expectMsgType[Terminated]
+    probeHttpActor.expectMsg(HttpExtensionActor.Release)
   }
 }

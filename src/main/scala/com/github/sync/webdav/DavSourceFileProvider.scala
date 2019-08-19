@@ -25,20 +25,17 @@ import com.github.sync.SourceFileProvider
 import scala.concurrent.Future
 
 object DavSourceFileProvider {
-  /** The size of the request queue. */
-  private val QueueSize = 2
-
   /**
     * Creates a new instance of ''DavSourceFileProvider'' with the
     * configuration specified.
     *
-    * @param config the configuration for the WebDav server
-    * @param system the actor system
+    * @param config    the configuration for the WebDav server
+    * @param httpActor the actor for sending HTTP requests
+    * @param system    the actor system
     * @return the new ''DavSourceFileProvider''
     */
-  def apply(config: DavConfig)(implicit system: ActorSystem):
-  DavSourceFileProvider = new DavSourceFileProvider(config,
-    system.actorOf(HttpRequestActor(config.rootUri, QueueSize)))
+  def apply(config: DavConfig, httpActor: ActorRef)(implicit system: ActorSystem):
+  DavSourceFileProvider = new DavSourceFileProvider(config, httpActor)
 }
 
 /**
@@ -58,9 +55,6 @@ class DavSourceFileProvider(config: DavConfig, httpActor: ActorRef)
   /** The object to resolve element URIs. */
   private val uriResolver = ElementUriResolver(config.rootUri)
 
-  /** The authorization header to be used for all requests. */
-  private val HeaderAuth = authHeader(config)
-
   /** The timeout for HTTP requests. */
   private implicit val timeout: Timeout = config.timeout
 
@@ -79,7 +73,7 @@ class DavSourceFileProvider(config: DavConfig, httpActor: ActorRef)
     *             connections.
     */
   override def shutdown(): Unit = {
-    system stop httpActor
+    httpActor ! HttpExtensionActor.Release
   }
 
   /**
@@ -90,8 +84,7 @@ class DavSourceFileProvider(config: DavConfig, httpActor: ActorRef)
     * @return the corresponding HTTP request
     */
   private def createFileRequest(uri: String): HttpRequestActor.SendRequest = {
-    val httpRequest = HttpRequest(uri = uriResolver resolveElementUri uri,
-      headers = List(HeaderAuth))
+    val httpRequest = HttpRequest(uri = uriResolver resolveElementUri uri)
     HttpRequestActor.SendRequest(httpRequest, null)
   }
 }

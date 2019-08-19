@@ -85,7 +85,8 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   ArgsFunc[SourceFileProvider] = uri match {
     case RegDavUri(davUri) =>
       args =>
-        DavConfig(SourceStructureType, davUri, timeout, args) map (conf => DavSourceFileProvider(conf))
+        //TODO pass in correct actor reference
+        DavConfig(SourceStructureType, davUri, timeout, args) map (conf => DavSourceFileProvider(conf, null))
     case _ =>
       _ => Future.successful(new LocalUriResolver(Paths get uri))
   }
