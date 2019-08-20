@@ -28,7 +28,7 @@ import com.github.sync.SyncTypes._
 import com.github.sync._
 import com.github.sync.local.{LocalFsConfig, LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
 import com.github.sync.log.ElementSerializer
-import com.github.sync.webdav.{DavConfig, DavFsElementSource, DavOperationHandler, DavSourceFileProvider}
+import com.github.sync.webdav.{DavConfig, DavFsElementSource, DavOperationHandler, DavSourceFileProvider, HttpBasicAuthActor, HttpRequestActor}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -67,13 +67,12 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     uri match {
       case RegDavUri(davUri) =>
         args =>
-          //TODO pass in correct actor reference
           DavConfig(structureType, davUri, timeout, args) map (conf =>
-            DavFsElementSource(conf, factory, null, startFolderUri))
+            DavFsElementSource(conf, factory, createHttpRequestActor(conf, system, clientCount = 1), startFolderUri))
       case _ =>
         args =>
           LocalFsConfig(structureType, uri, args) map { config =>
-            LocalFsElementSource(config, startDirectory = startFolderUri)(factory).via(new FolderSortStage)
+            createLocalFsElementSource(config, factory, startFolderUri)
           }
     }
   }
@@ -85,10 +84,34 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   ArgsFunc[SourceFileProvider] = uri match {
     case RegDavUri(davUri) =>
       args =>
-        //TODO pass in correct actor reference
-        DavConfig(SourceStructureType, davUri, timeout, args) map (conf => DavSourceFileProvider(conf, null))
+        DavConfig(SourceStructureType, davUri, timeout, args) map { conf =>
+          DavSourceFileProvider(conf, createHttpRequestActor(conf, system, clientCount = 1))
+        }
     case _ =>
       _ => Future.successful(new LocalUriResolver(Paths get uri))
+  }
+
+  override def createSourceComponents[T](uri: String, optTransformer: Option[ResultTransformer[T]])
+                                        (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
+                                         timeout: Timeout): ArgsFunc[SyncSourceComponents[FsElement]] = {
+    val factory = createElementSourceFactory(optTransformer)
+    uri match {
+      case RegDavUri(davUri) =>
+        args =>
+          DavConfig(SourceStructureType, davUri, timeout, args) map { conf =>
+            val requestActor = createHttpRequestActor(conf, system, clientCount = 2)
+            val source = DavFsElementSource(conf, factory, requestActor)
+            val fileProvider = DavSourceFileProvider(conf, requestActor)
+            SyncSourceComponents(source, fileProvider)
+          }
+      case _ =>
+        args =>
+          LocalFsConfig(SourceStructureType, uri, args) map { config =>
+            val source = createLocalFsElementSource(config, factory)
+            val fileProvider = new LocalUriResolver(Paths get uri)
+            SyncSourceComponents(source, fileProvider)
+          }
+    }
   }
 
   override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
@@ -108,15 +131,14 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
         }
   }
 
-  override def createSyncSource[T1, T2](uriSrc: String, optSrcTransformer: Option[ResultTransformer[T1]],
-                                        uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
-                                        additionalArgs: StructureArgs, ignoreTimeDelta: Int)
-                                       (implicit ec: ExecutionContext, system: ActorSystem,
-                                        mat: ActorMaterializer, timeout: Timeout):
-  Future[Source[SyncOperation, NotUsed]] = for {
-    srcSource <- createSyncInputSource(uriSrc, optSrcTransformer, SourceStructureType).apply(additionalArgs)
-    dstSource <- createSyncInputSource(uriDst, optDstTransformer, DestinationStructureType).apply(additionalArgs)
-  } yield createGraphForSyncSource(srcSource, dstSource, ignoreTimeDelta)
+  override def createSyncSource[T2](srcSource: Source[FsElement, Any],
+                                    uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
+                                    additionalArgs: StructureArgs, ignoreTimeDelta: Int)
+                                   (implicit ec: ExecutionContext, system: ActorSystem,
+                                    mat: ActorMaterializer, timeout: Timeout):
+  Future[Source[SyncOperation, NotUsed]] =
+    createSyncInputSource(uriDst, optDstTransformer, DestinationStructureType).apply(additionalArgs)
+      .map(dstSource => createGraphForSyncSource(srcSource, dstSource, ignoreTimeDelta))
 
   override def createSyncStream(source: Source[SyncOperation, Any],
                                 flowProc: Flow[SyncOperation, SyncOperation, Any],
@@ -158,6 +180,20 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     }
 
   /**
+    * Creates the element source for the local file system.
+    *
+    * @param config         the configuration for the local file system
+    * @param factory        the ''ElementSourceFactory''
+    * @param startFolderUri the URI of the start folder for the iteration
+    * @param ec             the execution context
+    * @return the element source for the local file system
+    */
+  private def createLocalFsElementSource(config: LocalFsConfig, factory: ElementSourceFactory,
+                                         startFolderUri: String = "")
+                                        (implicit ec: ExecutionContext): Source[FsElement, NotUsed] =
+    LocalFsElementSource(config, startDirectory = startFolderUri)(factory).via(new FolderSortStage)
+
+  /**
     * Creates the apply stage to change a local file system.
     *
     * @param config       the configuration for the local FS stage
@@ -175,6 +211,19 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
       val futWrite = operationActor ? op
       futWrite.mapTo[SyncOperation]
     }, fileProvider), operationActor)
+  }
+
+  /**
+    * Creates the actor for executing HTTP requests.
+    *
+    * @param conf        the DAV configuration
+    * @param system      the actor system
+    * @param clientCount the number of clients for the actor
+    * @return the actor for HTTP requests
+    */
+  private def createHttpRequestActor(conf: DavConfig, system: ActorSystem, clientCount: Int): ActorRef = {
+    val httpActor = system.actorOf(HttpRequestActor(conf.rootUri))
+    system.actorOf(HttpBasicAuthActor(httpActor, conf, clientCount))
   }
 
   /**

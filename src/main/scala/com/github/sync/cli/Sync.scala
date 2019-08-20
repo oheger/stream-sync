@@ -25,7 +25,7 @@ import akka.stream._
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.github.sync.{SourceFileProvider, SyncStreamFactory}
-import com.github.sync.SyncTypes.{DestinationStructureType, ResultTransformer, SourceStructureType, SyncOperation}
+import com.github.sync.SyncTypes.{DestinationStructureType, ResultTransformer, SourceStructureType, SyncOperation, SyncSourceComponents}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.SyncConfig
 import com.github.sync.crypt.CryptService.IterateSourceFunc
@@ -118,9 +118,9 @@ object Sync {
     import system.dispatcher
     implicit val timeout: Timeout = config.timeout
     for {
-      source <- createSyncSource(config, additionalArgs)
-      decoratedSource <- decorateSource(source, config, filterData)
-      stage <- createApplyStage(config, additionalArgs)
+      srcComponents <- createSyncSource(config, additionalArgs)
+      decoratedSource <- decorateSource(srcComponents.elementSource, config, filterData)
+      stage <- createApplyStage(config, additionalArgs, srcComponents.sourceFileProvider)
       g <- factory.createSyncStream(decoratedSource, stage, config.logFilePath)
       res <- g.run()
     } yield SyncResult(res._1, res._2)
@@ -137,21 +137,26 @@ object Sync {
     * @param ec             the execution context
     * @param mat            the object to materialize streams
     * @param factory        the factory for the sync stream
-    * @param timeout a general timeout for requests
+    * @param timeout        a general timeout for requests
     * @return the source for the sync process
     */
   private def createSyncSource(config: SyncConfig, additionalArgs: Map[String, String])
                               (implicit ec: ExecutionContext, system: ActorSystem,
                                mat: ActorMaterializer, factory: SyncStreamFactory, timeout: Timeout):
-  Future[Source[SyncOperation, Any]] = config.syncLogPath match {
+  Future[SyncSourceComponents[SyncOperation]] = config.syncLogPath match {
     case Some(path) =>
-      createSyncSourceFromLog(config, path)
+      for {src <- createSyncSourceFromLog(config, path)
+           provider <- createSourceFileProvider(config, additionalArgs)
+           } yield SyncSourceComponents(src, provider)
     case None =>
-      factory.createSyncSource(config.syncUris._1,
-        createResultTransformer(config.srcPassword, config.srcFileNamesEncrypted, config.cryptCacheSize),
-        config.syncUris._2,
-        createResultTransformer(config.dstPassword, config.dstFileNamesEncrypted, config.cryptCacheSize),
-        additionalArgs, config.ignoreTimeDelta getOrElse 1)
+      for {srcComponents <- factory.createSourceComponents(config.syncUris._1,
+        createResultTransformer(config.srcPassword, config.srcFileNamesEncrypted, config.cryptCacheSize))
+        .apply(additionalArgs)
+           source <- factory.createSyncSource(srcComponents.elementSource,
+             config.syncUris._2,
+             createResultTransformer(config.dstPassword, config.dstFileNamesEncrypted, config.cryptCacheSize),
+             additionalArgs, config.ignoreTimeDelta getOrElse 1)
+           } yield SyncSourceComponents(source, decorateSourceFileProvider(srcComponents.sourceFileProvider, config))
   }
 
   /**
@@ -218,25 +223,25 @@ object Sync {
     * sync config. If the apply mode does not require any actions, a dummy flow
     * is returned that passes all operations through.
     *
-    * @param config         the sync configuration
-    * @param additionalArgs the map with additional arguments
-    * @param ec             the execution context
-    * @param system         the actor system
-    * @param mat            the object to materialize streams
-    * @param factory        the factory for the sync stream
-    * @param timeout a general timeout for requests
+    * @param config             the sync configuration
+    * @param additionalArgs     the map with additional arguments
+    * @param sourceFileProvider the ''SourceFileProvider''
+    * @param ec                 the execution context
+    * @param system             the actor system
+    * @param mat                the object to materialize streams
+    * @param factory            the factory for the sync stream
+    * @param timeout            a general timeout for requests
     * @return a future with the flow to apply sync operations
     */
-  private def createApplyStage(config: SyncConfig, additionalArgs: Map[String, String])
+  private def createApplyStage(config: SyncConfig, additionalArgs: Map[String, String],
+                               sourceFileProvider: SourceFileProvider)
                               (implicit ec: ExecutionContext, system: ActorSystem,
                                mat: ActorMaterializer, factory: SyncStreamFactory, timeout: Timeout):
   Future[Flow[SyncOperation, SyncOperation, NotUsed]] = {
     config.applyMode match {
       case ParameterManager.ApplyModeTarget(targetUri) =>
-        for {
-          provider <- createSourceFileProvider(config, additionalArgs)
-          stage <- factory.createApplyStage(targetUri, provider).apply(additionalArgs)
-        } yield decorateApplyStage(config, additionalArgs, stage)
+        factory.createApplyStage(targetUri, sourceFileProvider).apply(additionalArgs)
+          .map(stage => decorateApplyStage(config, additionalArgs, stage))
 
       case ParameterManager.ApplyModeNone =>
         Future.successful(Flow[SyncOperation].map(identity))
@@ -255,7 +260,7 @@ object Sync {
     * @param system         the actor system
     * @param mat            the object to materialize streams
     * @param factory        the factory for the sync stream
-    * @param timeout a general timeout for requests
+    * @param timeout        a general timeout for requests
     * @return the decorated apply stage
     */
   private def decorateApplyStage(config: SyncConfig, additionalArgs: Map[String, String],
@@ -287,17 +292,30 @@ object Sync {
     * @param system         the actor system
     * @param mat            the object to materialize streams
     * @param factory        the factory for the sync stream
-    * @param timeout a general timeout for requests
+    * @param timeout        a general timeout for requests
     * @return a ''Future'' with the source file provider
     */
   private def createSourceFileProvider(config: SyncConfig, additionalArgs: Map[String, String])
                                       (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
                                        factory: SyncStreamFactory, timeout: Timeout): Future[SourceFileProvider] =
     factory.createSourceFileProvider(config.syncUris._1).apply(additionalArgs) map { provider =>
-      if (config.srcPassword.nonEmpty || config.dstPassword.nonEmpty)
-        CryptAwareSourceFileProvider(provider, config.srcPassword, config.dstPassword)
-      else provider
+      decorateSourceFileProvider(provider, config)
     }
+
+  /**
+    * Decorates the given ''SourceFileProvider'' if necessary to support
+    * advanced features like encryption.
+    *
+    * @param provider the original ''SourceFileProvider''
+    * @param config   the sync configuration
+    * @param ec       the execution context
+    * @return the decorated ''SourceFileProvider''
+    */
+  private def decorateSourceFileProvider(provider: SourceFileProvider, config: SyncConfig)
+                                        (implicit ec: ExecutionContext): SourceFileProvider =
+    if (config.srcPassword.nonEmpty || config.dstPassword.nonEmpty)
+      CryptAwareSourceFileProvider(provider, config.srcPassword, config.dstPassword)
+    else provider
 
   /**
     * Generates a predicate that filters out undesired sync operations based on

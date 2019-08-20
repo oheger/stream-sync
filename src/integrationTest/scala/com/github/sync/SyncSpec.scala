@@ -31,7 +31,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
-import com.github.sync.SyncTypes.{ResultTransformer, SyncOperation}
+import com.github.sync.SyncTypes.{FsElement, ResultTransformer, SyncOperation}
 import com.github.sync.WireMockSupport._
 import com.github.sync.cli.Sync
 import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptOpHandler}
@@ -152,6 +152,18 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
                                          (implicit ec: ExecutionContext, system: ActorSystem,
                                           mat: ActorMaterializer, timeout: Timeout):
     ArgsFunc[SourceFileProvider] = _ => Future.successful(provider)
+
+    override def createSourceComponents[T](uri: String, optSrcTransformer: Option[ResultTransformer[T]])
+                                          (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
+                                           timeout: Timeout): ArgsFunc[SyncTypes.SyncSourceComponents[FsElement]] = {
+      val orgFunc = super.createSourceComponents(uri, optSrcTransformer)
+      args => {
+        val futComponents = orgFunc(args)
+        futComponents map { components =>
+          components.copy(sourceFileProvider = provider)
+        }
+      }
+    }
   }
 
   /**
@@ -810,15 +822,15 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   it should "evaluate the cache size for encrypted names" in {
     val CacheSize = 444
     implicit val factory: SyncStreamFactory = new DelegateSyncStreamFactory {
-      override def createSyncSource[T1, T2](uriSrc: String, optSrcTransformer: Option[ResultTransformer[T1]],
-                                            uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
-                                            additionalArgs: StructureArgs, ignoreTimeDelta: Int)
-                                           (implicit ec: ExecutionContext, system: ActorSystem,
-                                            mat: ActorMaterializer, timeout: Timeout):
+      override def createSyncSource[T2](sourceSrc: Source[FsElement, Any],
+                                        uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
+                                        additionalArgs: StructureArgs, ignoreTimeDelta: Int)
+                                       (implicit ec: ExecutionContext, system: ActorSystem,
+                                        mat: ActorMaterializer, timeout: Timeout):
       Future[Source[SyncOperation, NotUsed]] = {
         val cache = optDstTransformer.get.initialState.asInstanceOf[LRUCache[String, String]]
         cache.capacity should be(CacheSize)
-        super.createSyncSource(uriSrc, optSrcTransformer, uriDst, optDstTransformer, additionalArgs, ignoreTimeDelta)
+        super.createSyncSource(sourceSrc, uriDst, optDstTransformer, additionalArgs, ignoreTimeDelta)
       }
     }
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))

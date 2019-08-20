@@ -19,6 +19,7 @@ package com.github.sync
 import java.time.Instant
 
 import akka.NotUsed
+import akka.stream.scaladsl.Source
 import akka.stream.{Graph, SourceShape}
 
 import scala.concurrent.Future
@@ -153,9 +154,9 @@ object SyncTypes {
     *
     * @param element the element that is subject to this operation
     * @param action  the action to be executed on this element
-    * @param level the level of this operation
-    * @param srcUri the URI of the affected element in the source structure
-    * @param dstUri the URI of the affected element in the dest structure
+    * @param level   the level of this operation
+    * @param srcUri  the URI of the affected element in the source structure
+    * @param dstUri  the URI of the affected element in the dest structure
     */
   case class SyncOperation(element: FsElement, action: SyncAction, level: Int, srcUri: String, dstUri: String)
 
@@ -389,5 +390,20 @@ object SyncTypes {
                                  (iterateFunc: IterateFunc[F, S]):
     Graph[SourceShape[FsElement], NotUsed]
   }
+
+  /**
+    * A data class that holds components related to the source structure of a
+    * sync process.
+    *
+    * These components are typically related and might use shared objects for
+    * data access. Therefore, they are created together and returned in form of
+    * an instance of this class.
+    *
+    * @param elementSource      the element source for the source structure
+    * @param sourceFileProvider the object for accessing files
+    * @tparam T the element type of the source
+    */
+  case class SyncSourceComponents[T](elementSource: Source[T, Any],
+                                     sourceFileProvider: SourceFileProvider)
 
 }

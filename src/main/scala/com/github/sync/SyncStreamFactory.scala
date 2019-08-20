@@ -23,7 +23,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
 import akka.util.Timeout
-import com.github.sync.SyncTypes.{FsElement, ResultTransformer, StructureType, SupportedArgument, SyncOperation}
+import com.github.sync.SyncTypes.{FsElement, ResultTransformer, StructureType, SupportedArgument, SyncOperation, SyncSourceComponents}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -93,6 +93,29 @@ trait SyncStreamFactory {
   ArgsFunc[Source[FsElement, Any]]
 
   /**
+    * Creates the components for accessing the source structure of the sync
+    * process. These components are typically closely related; therefore, they
+    * are created in a single step. The concrete components returned by an
+    * implementation depend on the URI provided, as different protocols are
+    * supported.  As additional arguments may be required, result is actually a
+    * function that expects a map with arguments and returns a future with the
+    * source components.
+    *
+    * @param uri               the URI for the source structure to be synced
+    * @param optSrcTransformer an optional transformer for the structure
+    * @param ec                the execution context
+    * @param system            the actor system
+    * @param mat               the object to materialize streams
+    * @param timeout           a general timeout for requests
+    * @tparam T the type of the result transformer
+    * @return a function to create the sync source components
+    */
+  def createSourceComponents[T](uri: String, optSrcTransformer: Option[ResultTransformer[T]])
+                               (implicit ec: ExecutionContext, system: ActorSystem,
+                                mat: ActorMaterializer, timeout: Timeout):
+  ArgsFunc[SyncSourceComponents[FsElement]]
+
+  /**
     * Creates a ''SourceFileProvider'' based on the URI provided. This is
     * needed to apply sync operations against destination structures.
     *
@@ -111,10 +134,12 @@ trait SyncStreamFactory {
     * Creates a source that produces a sequence of [[SyncOperation]] objects
     * for the specified folder structures. This source compares the files and
     * folders of the given structures and calculates the operations to be
-    * applied to synchronize them.
+    * applied to synchronize them. The source component for the source
+    * structure has already been created by ''createSourceComponents()'';
+    * therefore, it is passed in directly. For the destination structure, the
+    * parameters required are passed in.
     *
-    * @param uriSrc            the URI to the source structure
-    * @param optSrcTransformer an optional transformer to the source structure
+    * @param sourceSrc         the source for the source structure
     * @param uriDst            the URI to the destination structure
     * @param optDstTransformer an optional transformer for the dest structure
     * @param additionalArgs    a map with additional arguments for structures
@@ -123,15 +148,14 @@ trait SyncStreamFactory {
     * @param system            the actor system
     * @param mat               the object to materialize streams
     * @param timeout           a general timeout for requests
-    * @tparam TSRC the state type of the source transformer
     * @tparam TDST the state type of the destination transformer
     * @return a future with the source
     */
-  def createSyncSource[TSRC, TDST](uriSrc: String, optSrcTransformer: Option[ResultTransformer[TSRC]], uriDst: String,
-                                   optDstTransformer: Option[ResultTransformer[TDST]], additionalArgs: StructureArgs,
-                                   ignoreTimeDelta: Int)
-                                  (implicit ec: ExecutionContext, system: ActorSystem,
-                                   mat: ActorMaterializer, timeout: Timeout):
+  def createSyncSource[TDST](sourceSrc: Source[FsElement, Any], uriDst: String,
+                             optDstTransformer: Option[ResultTransformer[TDST]], additionalArgs: StructureArgs,
+                             ignoreTimeDelta: Int)
+                            (implicit ec: ExecutionContext, system: ActorSystem,
+                             mat: ActorMaterializer, timeout: Timeout):
   Future[Source[SyncOperation, NotUsed]]
 
   /**
