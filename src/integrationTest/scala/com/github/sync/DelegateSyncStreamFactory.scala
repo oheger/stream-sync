@@ -70,11 +70,11 @@ class DelegateSyncStreamFactory(delegate: SyncStreamFactory = SyncStreamFactoryI
                                          timeout: Timeout): ArgsFunc[SyncTypes.SyncSourceComponents[FsElement]] =
     delegate.createSourceComponents(uri, optSrcTransformer)
 
-  override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
+  override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider, noop: Boolean)
                                (implicit system: ActorSystem, mat: ActorMaterializer,
                                 ec: ExecutionContext, timeout: Timeout):
   ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]] =
-    delegate.createApplyStage(uriDst, fileProvider)
+    delegate.createApplyStage(uriDst, fileProvider, noop)
 
   override def createSyncStream(source: Source[SyncOperation, Any], flowProc: Flow[SyncOperation,
     SyncOperation, Any], logFile: Option[Path])

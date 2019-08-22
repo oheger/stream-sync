@@ -116,23 +116,25 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     }
   }
 
-  override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
+  override def createApplyStage(uriDst: String, fileProvider: SourceFileProvider, noop: Boolean = false)
                                (implicit system: ActorSystem, mat: ActorMaterializer,
                                 ec: ExecutionContext, timeout: Timeout):
-  ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]] = uriDst match {
-    case RegDavUri(davUri) =>
-      args =>
-        DavConfig(DestinationStructureType, davUri, timeout, args) map { conf =>
-          val requestActor = createHttpRequestActor(conf, system, 1, "httpRequestActorSync")
-          cleanUpFileProvider(DavOperationHandler.webDavProcessingFlow(conf, fileProvider, requestActor),
-            fileProvider)
-        }
-    case _ =>
-      args =>
-        LocalFsConfig(DestinationStructureType, uriDst, args) map { conf =>
-          createLocalFsApplyStage(conf, fileProvider)
-        }
-  }
+  ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]] =
+    if (noop) createNoopApplyStage(fileProvider)
+    else uriDst match {
+      case RegDavUri(davUri) =>
+        args =>
+          DavConfig(DestinationStructureType, davUri, timeout, args) map { conf =>
+            val requestActor = createHttpRequestActor(conf, system, 1, "httpRequestActorSync")
+            cleanUpFileProvider(DavOperationHandler.webDavProcessingFlow(conf, fileProvider, requestActor),
+              fileProvider)
+          }
+      case _ =>
+        args =>
+          LocalFsConfig(DestinationStructureType, uriDst, args) map { conf =>
+            createLocalFsApplyStage(conf, fileProvider)
+          }
+    }
 
   override def createSyncSource[T2](srcSource: Source[FsElement, Any],
                                     uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
@@ -215,6 +217,18 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
       futWrite.mapTo[SyncOperation]
     }, fileProvider), operationActor)
   }
+
+  /**
+    * Creates an apply stage that does not execute any sync operations, but
+    * just passes them through. It is nevertheless necessary to cleanup the
+    * file provider.
+    *
+    * @param fileProvider the ''SourceFileProvider''
+    * @return the function to create the noop apply stage
+    */
+  private def createNoopApplyStage(fileProvider: SourceFileProvider):
+  ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]] = _ =>
+    Future.successful(cleanUpFileProvider(Flow[SyncOperation].map(identity), fileProvider))
 
   /**
     * Creates the actor for executing HTTP requests.

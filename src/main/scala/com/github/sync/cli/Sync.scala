@@ -244,8 +244,7 @@ object Sync {
           .map(stage => decorateApplyStage(config, additionalArgs, stage))
 
       case ParameterManager.ApplyModeNone =>
-        sourceFileProvider.shutdown()
-        Future.successful(Flow[SyncOperation].map(identity))
+        factory.createApplyStage(config.syncUris._2, sourceFileProvider, noop = true).apply(additionalArgs)
     }
   }
 

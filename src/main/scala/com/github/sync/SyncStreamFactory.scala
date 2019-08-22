@@ -160,17 +160,21 @@ trait SyncStreamFactory {
 
   /**
     * Creates the flow stage that interprets sync operations and applies them
-    * to the destination structure.
+    * to the destination structure. In some constellations, no operations
+    * should be executed (e.g. in dry-run mode). This can be specified using a
+    * boolean flag. In this case, a special flow stage is returned that does
+    * not execute any changes, but does the necessary cleanup.
     *
     * @param uriDst       the URI to the destination structure
     * @param fileProvider the provider for files from the source structure
+    * @param noop         flag whether no operations should be executed
     * @param system       the actor system
     * @param mat          the object to materialize streams
     * @param ec           the execution context
     * @param timeout      a timeout when applying a sync operation
     * @return a function to create the stage to process sync operations
     */
-  def createApplyStage(uriDst: String, fileProvider: SourceFileProvider)
+  def createApplyStage(uriDst: String, fileProvider: SourceFileProvider, noop: Boolean = false)
                       (implicit system: ActorSystem, mat: ActorMaterializer,
                        ec: ExecutionContext, timeout: Timeout):
   ArgsFunc[Flow[SyncOperation, SyncOperation, NotUsed]]
