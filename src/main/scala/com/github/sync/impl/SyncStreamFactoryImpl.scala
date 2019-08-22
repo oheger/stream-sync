@@ -68,7 +68,8 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
       case RegDavUri(davUri) =>
         args =>
           DavConfig(structureType, davUri, timeout, args) map (conf =>
-            DavFsElementSource(conf, factory, createHttpRequestActor(conf, system, clientCount = 1), startFolderUri))
+            DavFsElementSource(conf, factory, createHttpRequestActor(conf, system, clientCount = 1,
+              "httpRequestActorDest"), startFolderUri))
       case _ =>
         args =>
           LocalFsConfig(structureType, uri, args) map { config =>
@@ -85,7 +86,8 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     case RegDavUri(davUri) =>
       args =>
         DavConfig(SourceStructureType, davUri, timeout, args) map { conf =>
-          DavSourceFileProvider(conf, createHttpRequestActor(conf, system, clientCount = 1))
+          DavSourceFileProvider(conf, createHttpRequestActor(conf, system, clientCount = 1,
+            "httpRequestActorSrc"))
         }
     case _ =>
       _ => Future.successful(new LocalUriResolver(Paths get uri))
@@ -99,7 +101,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
       case RegDavUri(davUri) =>
         args =>
           DavConfig(SourceStructureType, davUri, timeout, args) map { conf =>
-            val requestActor = createHttpRequestActor(conf, system, clientCount = 2)
+            val requestActor = createHttpRequestActor(conf, system, clientCount = 2, "httpRequestActorSrc")
             val source = DavFsElementSource(conf, factory, requestActor)
             val fileProvider = DavSourceFileProvider(conf, requestActor)
             SyncSourceComponents(source, fileProvider)
@@ -121,7 +123,8 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     case RegDavUri(davUri) =>
       args =>
         DavConfig(DestinationStructureType, davUri, timeout, args) map { conf =>
-          cleanUpFileProvider(DavOperationHandler.webDavProcessingFlow(conf, fileProvider),
+          val requestActor = createHttpRequestActor(conf, system, 1, "httpRequestActorSync")
+          cleanUpFileProvider(DavOperationHandler.webDavProcessingFlow(conf, fileProvider, requestActor),
             fileProvider)
         }
     case _ =>
@@ -219,11 +222,13 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     * @param conf        the DAV configuration
     * @param system      the actor system
     * @param clientCount the number of clients for the actor
+    * @param name        the name of the request actor
     * @return the actor for HTTP requests
     */
-  private def createHttpRequestActor(conf: DavConfig, system: ActorSystem, clientCount: Int): ActorRef = {
-    val httpActor = system.actorOf(HttpRequestActor(conf.rootUri))
-    system.actorOf(HttpBasicAuthActor(httpActor, conf, clientCount))
+  private def createHttpRequestActor(conf: DavConfig, system: ActorSystem, clientCount: Int, name: String)
+  : ActorRef = {
+    val httpActor = system.actorOf(HttpRequestActor(conf.rootUri), name)
+    system.actorOf(HttpBasicAuthActor(httpActor, conf, clientCount), name + "_auth")
   }
 
   /**

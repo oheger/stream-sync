@@ -161,12 +161,14 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     }
     implicit val mat: ActorMaterializer =
       ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
+    val httpActor = system.actorOf(HttpRequestActor(config.rootUri))
+    val requestActor = system.actorOf(HttpBasicAuthActor(httpActor, config))
     val source = Source(operations)
     val sink = Sink.fold[List[SyncOperation], SyncOperation](List.empty) { (lst, op) =>
       op :: lst
     }
     val futResult = source
-      .via(DavOperationHandler.webDavProcessingFlow(config, fileProvider))
+      .via(DavOperationHandler.webDavProcessingFlow(config, fileProvider, requestActor))
       .runWith(sink)
     futureResult(futResult).reverse
   }

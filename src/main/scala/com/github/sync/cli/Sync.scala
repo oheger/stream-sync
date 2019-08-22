@@ -244,6 +244,7 @@ object Sync {
           .map(stage => decorateApplyStage(config, additionalArgs, stage))
 
       case ParameterManager.ApplyModeNone =>
+        sourceFileProvider.shutdown()
         Future.successful(Flow[SyncOperation].map(identity))
     }
   }
