@@ -819,6 +819,27 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     bodyPlain.utf8String should be(Content)
   }
 
+  it should "support an encrypted WebDav destination with a complex structure" in {
+    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val CryptPassword = Password
+    val WebDavPath = "/encrypted"
+    stubSuccess()
+    stubFolderRequest(WebDavPath, "root_encrypted.xml")
+    stubFolderRequest(WebDavPath + "/Q8Xcluxx2ADWaUAtUHLurqSmvw==/", "folder_encrypted.xml")
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    createTestFile(srcFolder, "foo.txt")
+    createTestFile(srcFolder, "bar.txt")
+    val subFolder = Files.createDirectory(srcFolder.resolve("sub"))
+    createTestFile(subFolder, "subFile.txt")
+    createTestFile(subFolder, "anotherSubFile.dat")
+    createTestFile(subFolder, "newSubFile.doc")
+    val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "--dst-encrypt-password", CryptPassword, "--dst-encrypt-names", "true", "--dst-user", UserId,
+      "--dst-password", Password, "--ignore-time-delta", Int.MaxValue.toString)
+
+    futureResult(Sync.syncProcess(options)).successfulOperations should be(1)
+  }
+
   it should "evaluate the cache size for encrypted names" in {
     val CacheSize = 444
     implicit val factory: SyncStreamFactory = new DelegateSyncStreamFactory {

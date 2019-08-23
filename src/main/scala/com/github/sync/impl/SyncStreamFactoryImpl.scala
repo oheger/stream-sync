@@ -17,6 +17,7 @@
 package com.github.sync.impl
 
 import java.nio.file.{Path, Paths, StandardOpenOption}
+import java.util.concurrent.atomic.AtomicInteger
 
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem, PoisonPill, Props}
@@ -42,11 +43,27 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
   /** The name of the actor for local sync operations. */
   val LocalSyncOpActorName = "localSyncOperationActor"
 
+  /** The name of the HTTP request actor for the source structure. */
+  val RequestActorSourceName = "httpRequestActorSrc"
+
+  /**
+    * The name of the HTTP request actor for the destination structure. Note
+    * that multiple actors may be active concurrently to resolve encrypted
+    * paths. Therefore, the name is only a prefix.
+    */
+  val RequestActorDestinationName = "httpRequestActorDest"
+
+  /** The name of the HTTP request actor for executing sync operations. */
+  val RequestActorSyncName = "httpRequestActorSync"
+
   /** Regular expression for parsing a WebDav URI. */
   private val RegDavUri = (PrefixWebDav + "(.+)").r
 
   /** The name of the blocking dispatcher. */
   private val BlockingDispatcherName = "blocking-dispatcher"
+
+  /** A counter for generating names for the destination request actor. */
+  private val httpRequestActorDestCount = new AtomicInteger
 
   override def additionalArguments(uri: String, structureType: StructureType)
                                   (implicit ec: ExecutionContext):
@@ -69,7 +86,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
         args =>
           DavConfig(structureType, davUri, timeout, args) map (conf =>
             DavFsElementSource(conf, factory, createHttpRequestActor(conf, system, clientCount = 1,
-              "httpRequestActorDest"), startFolderUri))
+              httpRequestActorDestName), startFolderUri))
       case _ =>
         args =>
           LocalFsConfig(structureType, uri, args) map { config =>
@@ -87,7 +104,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
       args =>
         DavConfig(SourceStructureType, davUri, timeout, args) map { conf =>
           DavSourceFileProvider(conf, createHttpRequestActor(conf, system, clientCount = 1,
-            "httpRequestActorSrc"))
+            RequestActorSourceName))
         }
     case _ =>
       _ => Future.successful(new LocalUriResolver(Paths get uri))
@@ -101,7 +118,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
       case RegDavUri(davUri) =>
         args =>
           DavConfig(SourceStructureType, davUri, timeout, args) map { conf =>
-            val requestActor = createHttpRequestActor(conf, system, clientCount = 2, "httpRequestActorSrc")
+            val requestActor = createHttpRequestActor(conf, system, clientCount = 2, RequestActorSourceName)
             val source = DavFsElementSource(conf, factory, requestActor)
             val fileProvider = DavSourceFileProvider(conf, requestActor)
             SyncSourceComponents(source, fileProvider)
@@ -125,7 +142,7 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
       case RegDavUri(davUri) =>
         args =>
           DavConfig(DestinationStructureType, davUri, timeout, args) map { conf =>
-            val requestActor = createHttpRequestActor(conf, system, 1, "httpRequestActorSync")
+            val requestActor = createHttpRequestActor(conf, system, 1, RequestActorSyncName)
             cleanUpFileProvider(DavOperationHandler.webDavProcessingFlow(conf, fileProvider, requestActor),
               fileProvider)
           }
@@ -335,4 +352,14 @@ object SyncStreamFactoryImpl extends SyncStreamFactory {
     success <- futSuccess
     _ <- futLog
   } yield (total, success)
+
+  /**
+    * Generates the name of an HTTP request actor for the destination
+    * structure. There can be multiple actors for this purpose; therefore, a
+    * counter is used to ensure that names are unique.
+    *
+    * @return the name for the actor
+    */
+  private def httpRequestActorDestName: String =
+    RequestActorDestinationName + httpRequestActorDestCount.incrementAndGet()
 }
