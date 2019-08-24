@@ -43,7 +43,7 @@ import scala.util.{Failure, Success, Try}
   * used. All parameters not assigned to options are grouped under a reserved
   * option key.
   */
-object ParameterManager {
+object SyncParameterManager {
   /** Key for the reserved option under which URIs to be synced are grouped. */
   val SyncUriOption = "syncUri"
 

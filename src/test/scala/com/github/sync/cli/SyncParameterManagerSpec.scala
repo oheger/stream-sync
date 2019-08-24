@@ -23,7 +23,7 @@ import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.SyncTypes.SupportedArgument
-import com.github.sync.cli.ParameterManager.{ApplyModeNone, ApplyModeTarget}
+import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest._
 
@@ -31,7 +31,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
-object ParameterManagerSpec {
+object SyncParameterManagerSpec {
   /** Test source URI. */
   private val SourceUri = "/test/source/uri"
 
@@ -42,14 +42,14 @@ object ParameterManagerSpec {
   private val TimeoutValue = 44
 
   /** A map with test parameter values. */
-  private val ArgsMap = Map(ParameterManager.SyncUriOption -> List(DestinationUri, SourceUri),
-    ParameterManager.TimeoutOption -> List(TimeoutValue.toString))
+  private val ArgsMap = Map(SyncParameterManager.SyncUriOption -> List(DestinationUri, SourceUri),
+    SyncParameterManager.TimeoutOption -> List(TimeoutValue.toString))
 }
 
 /**
   * Test class for ''ParameterManager''.
   */
-class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper
   with AsyncTestHelper {
   def this() = this(ActorSystem("ParameterManagerSpec"))
@@ -62,7 +62,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     tearDownTestFile()
   }
 
-  import ParameterManagerSpec._
+  import SyncParameterManagerSpec._
 
   /**
     * Expects a failed future from a parsing operation. It is checked whether
@@ -106,7 +106,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     * @return the parameter list with the file parameter added
     */
   private def appendFileParameter(path: Path, argList: List[String]): List[String] =
-    ParameterManager.FileOption :: path.toString :: argList
+    SyncParameterManager.FileOption :: path.toString :: argList
 
   /**
     * Helper method for calling the parameter manager to parse a list of
@@ -127,7 +127,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     */
   private def parseParametersFuture(args: Seq[String]): Future[Map[String, Iterable[String]]] = {
     implicit val mat: ActorMaterializer = ActorMaterializer()
-    ParameterManager.parseParameters(args)
+    SyncParameterManager.parseParameters(args)
   }
 
   "ParameterManager" should "parse an empty sequence of arguments" in {
@@ -138,7 +138,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
 
   it should "correctly parse non-option parameters" in {
     val syncUris = List("uri1", "uri2")
-    val expArgMap = Map(ParameterManager.SyncUriOption -> syncUris.reverse)
+    val expArgMap = Map(SyncParameterManager.SyncUriOption -> syncUris.reverse)
 
     val argMap = parseParameters(syncUris)
     argMap should be(expArgMap)
@@ -164,14 +164,14 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val args = List("--TestOption", "TestValue", "--FOO", "BAR", "testUri")
     val expArgMap = Map("--testoption" -> List("TestValue"),
       "--foo" -> List("BAR"),
-      ParameterManager.SyncUriOption -> List("testUri"))
+      SyncParameterManager.SyncUriOption -> List("testUri"))
 
     val argMap = parseParameters(args)
     argMap should be(expArgMap)
   }
 
   it should "validate a map with all parameters consumed" in {
-    val result = futureResult(ParameterManager.checkParametersConsumed(Map.empty))
+    val result = futureResult(SyncParameterManager.checkParametersConsumed(Map.empty))
 
     result should have size 0
   }
@@ -179,7 +179,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
   it should "fail the check for consumed parameters if there are remaining parameters" in {
     val argsMap = Map("foo" -> List("bar"))
 
-    expectFailedFuture(ParameterManager.checkParametersConsumed(argsMap),
+    expectFailedFuture(SyncParameterManager.checkParametersConsumed(argsMap),
       "unexpected parameters: " + argsMap)
   }
 
@@ -198,9 +198,9 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val argsMap = parseParameters(args)
     argsMap(OptionName1) should contain only(Opt1Val1, Opt1Val2)
     argsMap(OptionName2) should contain only Opt2Val
-    argsMap.keys should not contain ParameterManager.FileOption
+    argsMap.keys should not contain SyncParameterManager.FileOption
 
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     Set(config.syncUris._1, config.syncUris._2) should contain only(uri1, uri2)
   }
 
@@ -213,7 +213,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val Option3Value = "inNestedFile"
     val nestedFile = createParameterFile(OptionName3, Option3Value)
     val args = appendFileParameter(
-      createParameterFile(ParameterManager.FileOption, nestedFile.toString,
+      createParameterFile(SyncParameterManager.FileOption, nestedFile.toString,
         OptionName2, Option2Value), OptionName1 :: Option1Value :: Nil)
     val expArgs = Map(OptionName1 -> List(Option1Value),
       OptionName2 -> List(Option2Value),
@@ -225,10 +225,10 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
 
   it should "deal with cyclic references in parameter files" in {
     val file1 = createFileReference()
-    val file3 = createParameterFile(ParameterManager.FileOption, file1.toString, "--op3", "v3")
-    val file2 = createParameterFile(ParameterManager.FileOption, file3.toString, "--op2", "v2")
-    writeFileContent(file1, parameterFileContent(ParameterManager.FileOption, file2.toString,
-      "--op1", "v1", ParameterManager.FileOption, file2.toString))
+    val file3 = createParameterFile(SyncParameterManager.FileOption, file1.toString, "--op3", "v3")
+    val file2 = createParameterFile(SyncParameterManager.FileOption, file3.toString, "--op2", "v2")
+    writeFileContent(file1, parameterFileContent(SyncParameterManager.FileOption, file2.toString,
+      "--op1", "v1", SyncParameterManager.FileOption, file2.toString))
     val args = appendFileParameter(file1, Nil)
     val expArgs = Map("--op1" -> List("v1"), "--op2" -> List("v2"), "--op3" -> List("v3"))
 
@@ -245,199 +245,199 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
   }
 
   it should "extract URI parameters if they are present" in {
-    val (map, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    val (map, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.syncUris._1 should be(SourceUri)
     config.syncUris._2 should be(DestinationUri)
     map should have size 0
   }
 
   it should "reject URI parameters if there are more than 2" in {
-    val argsMap = ArgsMap + (ParameterManager.SyncUriOption -> List("u1", "u2", "u3"))
+    val argsMap = ArgsMap + (SyncParameterManager.SyncUriOption -> List("u1", "u2", "u3"))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap), "Too many sync URIs")
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap), "Too many sync URIs")
   }
 
   it should "reject URI parameters if no destination URI is provided" in {
-    val argsMap = ArgsMap + (ParameterManager.SyncUriOption -> List("u1"))
+    val argsMap = ArgsMap + (SyncParameterManager.SyncUriOption -> List("u1"))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Missing destination URI")
   }
 
   it should "reject URI parameters if no URIs are provided" in {
-    val argsMap = ArgsMap + (ParameterManager.SyncUriOption -> List.empty[String])
+    val argsMap = ArgsMap + (SyncParameterManager.SyncUriOption -> List.empty[String])
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Missing URIs for source and destination")
   }
 
   it should "reject URI parameters if no non-option parameters are provided" in {
-    val argsMap = ArgsMap - ParameterManager.SyncUriOption
+    val argsMap = ArgsMap - SyncParameterManager.SyncUriOption
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Missing URIs for source and destination")
   }
 
   it should "not return a single option value if there are multiple" in {
-    val argsMap = ArgsMap + (ParameterManager.TimeoutOption -> List("bar", "baz"))
+    val argsMap = ArgsMap + (SyncParameterManager.TimeoutOption -> List("bar", "baz"))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
-      ParameterManager.TimeoutOption + " has multiple values")
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
+      SyncParameterManager.TimeoutOption + " has multiple values")
   }
 
   it should "return a default apply mode" in {
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.applyMode should be(ApplyModeTarget(DestinationUri))
   }
 
   it should "return a target apply mode with the specified URI" in {
     val applyUri = "/dest/apply/uri"
-    val argsMap = ArgsMap + (ParameterManager.ApplyModeOption -> List("Target:" + applyUri))
+    val argsMap = ArgsMap + (SyncParameterManager.ApplyModeOption -> List("Target:" + applyUri))
 
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.applyMode should be(ApplyModeTarget(applyUri))
   }
 
   it should "return the apply mode NONE" in {
-    val argsMap = ArgsMap + (ParameterManager.ApplyModeOption -> List("none"))
+    val argsMap = ArgsMap + (SyncParameterManager.ApplyModeOption -> List("none"))
 
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.applyMode should be(ApplyModeNone)
   }
 
   it should "handle an invalid apply mode" in {
     val Mode = "unknown:foo"
-    val argsMap = ArgsMap + (ParameterManager.ApplyModeOption -> List(Mode))
+    val argsMap = ArgsMap + (SyncParameterManager.ApplyModeOption -> List(Mode))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Invalid apply mode: '" + Mode)
   }
 
   it should "return a default timeout if no timeout option is provided" in {
-    val argsMap = ArgsMap - ParameterManager.TimeoutOption
+    val argsMap = ArgsMap - SyncParameterManager.TimeoutOption
 
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
-    config.timeout should be(ParameterManager.DefaultTimeout)
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    config.timeout should be(SyncParameterManager.DefaultTimeout)
   }
 
   it should "return the configured timeout option value" in {
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.timeout should be(Timeout(TimeoutValue.seconds))
   }
 
   it should "handle an invalid timeout value" in {
     val timeoutStr = "invalidTimeout!"
-    val argsMap = ArgsMap + (ParameterManager.TimeoutOption -> List(timeoutStr))
+    val argsMap = ArgsMap + (SyncParameterManager.TimeoutOption -> List(timeoutStr))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Invalid timeout value: '" + timeoutStr)
   }
 
   it should "have an undefined log file option if none is specified" in {
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.logFilePath should be(None)
   }
 
   it should "store the path to a log file in the sync config" in {
     val logFile = Paths.get("var", "logs", "sync.log").toAbsolutePath
-    val argsMap = ArgsMap + (ParameterManager.LogFileOption -> List(logFile.toString))
+    val argsMap = ArgsMap + (SyncParameterManager.LogFileOption -> List(logFile.toString))
 
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.logFilePath should be(Some(logFile))
   }
 
   it should "handle a log file option with multiple values" in {
-    val argsMap = ArgsMap + (ParameterManager.LogFileOption -> List("log1", "log2"))
+    val argsMap = ArgsMap + (SyncParameterManager.LogFileOption -> List("log1", "log2"))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
-      ParameterManager.LogFileOption + ": only a single value")
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
+      SyncParameterManager.LogFileOption + ": only a single value")
   }
 
   it should "have an undefined sync log option if none is specified" in {
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.syncLogPath should be(None)
   }
 
   it should "store the path to the sync log file in the sync config" in {
     val syncLogFile = Paths.get("data", "sync", "log", "sync.log").toAbsolutePath
-    val argsMap = ArgsMap + (ParameterManager.SyncLogOption -> List(syncLogFile.toString))
+    val argsMap = ArgsMap + (SyncParameterManager.SyncLogOption -> List(syncLogFile.toString))
 
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.syncLogPath should be(Some(syncLogFile))
   }
 
   it should "handle a sync log option with multiple values" in {
-    val argsMap = ArgsMap + (ParameterManager.SyncLogOption -> List("log1", "log2"))
+    val argsMap = ArgsMap + (SyncParameterManager.SyncLogOption -> List("log1", "log2"))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
-      ParameterManager.SyncLogOption + ": only a single value")
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
+      SyncParameterManager.SyncLogOption + ": only a single value")
   }
 
   it should "handle an undefined option for the file times threshold" in {
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
 
     config.ignoreTimeDelta should be(None)
   }
 
   it should "evaluate the threshold for file time deltas" in {
     val Delta = 28
-    val argsMap = ArgsMap + (ParameterManager.IgnoreTimeDeltaOption -> List(Delta.toString))
+    val argsMap = ArgsMap + (SyncParameterManager.IgnoreTimeDeltaOption -> List(Delta.toString))
 
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.ignoreTimeDelta should be(Some(Delta))
   }
 
   it should "handle an invalid threshold for file time deltas" in {
     val InvalidValue = "not a threshold for a time delta!"
-    val argsMap = ArgsMap + (ParameterManager.IgnoreTimeDeltaOption -> List(InvalidValue))
+    val argsMap = ArgsMap + (SyncParameterManager.IgnoreTimeDeltaOption -> List(InvalidValue))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Invalid threshold for file time deltas: '" + InvalidValue)
   }
 
   it should "handle an undefined option for the operations per second" in {
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
 
     config.opsPerSecond should be(None)
   }
 
   it should "evaluate the threshold for the operations per second" in {
     val OpsCount = 17
-    val argsMap = ArgsMap + (ParameterManager.OpsPerSecondOption -> List(OpsCount.toString))
+    val argsMap = ArgsMap + (SyncParameterManager.OpsPerSecondOption -> List(OpsCount.toString))
 
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.opsPerSecond should be(Some(OpsCount))
   }
 
   it should "handle an invalid threshold for the operations per second" in {
     val InvalidValue = "not a valid number of ops per sec"
-    val argsMap = ArgsMap + (ParameterManager.OpsPerSecondOption -> List(InvalidValue))
+    val argsMap = ArgsMap + (SyncParameterManager.OpsPerSecondOption -> List(InvalidValue))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Invalid number of operations per second: '" + InvalidValue)
   }
 
   it should "return correct default options related to encryption" in {
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(ArgsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
 
     config.srcPassword should be(None)
     config.srcFileNamesEncrypted shouldBe false
     config.dstPassword should be(None)
     config.dstFileNamesEncrypted shouldBe false
-    config.cryptCacheSize should be(ParameterManager.DefaultCryptCacheSize)
+    config.cryptCacheSize should be(SyncParameterManager.DefaultCryptCacheSize)
   }
 
   it should "handle options related to encryption" in {
     val SrcPwd = "secretSource!"
     val DstPwd = "!secretDest"
     val CacheSize = 555
-    val argsMap = ArgsMap + (ParameterManager.SourcePasswordOption -> List(SrcPwd)) +
-      (ParameterManager.DestPasswordOption -> List(DstPwd)) +
-      (ParameterManager.EncryptSourceFileNamesOption -> List("true")) +
-      (ParameterManager.EncryptDestFileNamesOption -> List("FaLSE")) +
-      (ParameterManager.CryptCacheSizeOption -> List(CacheSize.toString))
+    val argsMap = ArgsMap + (SyncParameterManager.SourcePasswordOption -> List(SrcPwd)) +
+      (SyncParameterManager.DestPasswordOption -> List(DstPwd)) +
+      (SyncParameterManager.EncryptSourceFileNamesOption -> List("true")) +
+      (SyncParameterManager.EncryptDestFileNamesOption -> List("FaLSE")) +
+      (SyncParameterManager.CryptCacheSizeOption -> List(CacheSize.toString))
 
-    val (_, config) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.srcPassword should be(Some(SrcPwd))
     config.dstPassword should be(Some(DstPwd))
     config.srcFileNamesEncrypted shouldBe true
@@ -446,45 +446,45 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
   }
 
   it should "handle invalid boolean values for encryption-related flags" in {
-    val argsMap = ArgsMap + (ParameterManager.EncryptSourceFileNamesOption -> List("of course")) +
-      (ParameterManager.EncryptDestFileNamesOption -> List("be it"))
+    val argsMap = ArgsMap + (SyncParameterManager.EncryptSourceFileNamesOption -> List("of course")) +
+      (SyncParameterManager.EncryptDestFileNamesOption -> List("be it"))
 
-    val msg = expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
-      ParameterManager.EncryptSourceFileNamesOption)
-    msg should include(ParameterManager.EncryptDestFileNamesOption)
+    val msg = expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
+      SyncParameterManager.EncryptSourceFileNamesOption)
+    msg should include(SyncParameterManager.EncryptDestFileNamesOption)
   }
 
   it should "handle invalid integer values for the crypt cache size option" in {
-    val argsMap = ArgsMap + (ParameterManager.CryptCacheSizeOption -> List("big"))
+    val argsMap = ArgsMap + (SyncParameterManager.CryptCacheSizeOption -> List("big"))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Invalid crypt cache size")
   }
 
   it should "handle a crypt cache size below the allowed minimum" in {
-    val argsMap = ArgsMap + (ParameterManager.CryptCacheSizeOption ->
-      List(String.valueOf(ParameterManager.MinCryptCacheSize - 1)))
+    val argsMap = ArgsMap + (SyncParameterManager.CryptCacheSizeOption ->
+      List(String.valueOf(SyncParameterManager.MinCryptCacheSize - 1)))
 
-    expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
-      "Crypt cache size must be greater or equal " + ParameterManager.MinCryptCacheSize)
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
+      "Crypt cache size must be greater or equal " + SyncParameterManager.MinCryptCacheSize)
   }
 
   it should "remove all options contained in the sync config" in {
     val otherOptions = Map("foo" -> List("v1"), "bar" -> List("v2", "v3"))
     val argsMap = ArgsMap ++ otherOptions +
-      (ParameterManager.IgnoreTimeDeltaOption -> List("1"))
+      (SyncParameterManager.IgnoreTimeDeltaOption -> List("1"))
 
-    val (updArgs, _) = futureResult(ParameterManager.extractSyncConfig(argsMap))
+    val (updArgs, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     updArgs should be(otherOptions)
   }
 
   it should "combine multiple error messages when parsing the sync config" in {
-    val argsMap = Map(ParameterManager.SyncUriOption -> List(SourceUri),
-      ParameterManager.ApplyModeOption -> List("invalidApplyMode"),
-      ParameterManager.TimeoutOption -> List("invalidTimeout"),
-      ParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))
+    val argsMap = Map(SyncParameterManager.SyncUriOption -> List(SourceUri),
+      SyncParameterManager.ApplyModeOption -> List("invalidApplyMode"),
+      SyncParameterManager.TimeoutOption -> List("invalidTimeout"),
+      SyncParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))
 
-    val msg = expectFailedFuture(ParameterManager.extractSyncConfig(argsMap),
+    val msg = expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "destination URI")
     msg should include("apply mode")
     msg should include("timeout value")
@@ -498,7 +498,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
       SupportedArgument("--notAvailable", mandatory = false))
 
     val (updArgs, args) =
-      futureResult(ParameterManager.extractSupportedArguments(argsMap, supportedArgs))
+      futureResult(SyncParameterManager.extractSupportedArguments(argsMap, supportedArgs))
     updArgs should be(expUpdMap)
     args("--foo") should be("bar")
     args should have size 1
@@ -511,7 +511,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
       SupportedArgument("--bar", mandatory = false),
       SupportedArgument("--baz", mandatory = false))
 
-    val msg = expectFailedFuture(ParameterManager.extractSupportedArguments(argsMap,
+    val msg = expectFailedFuture(SyncParameterManager.extractSupportedArguments(argsMap,
       supportedArgs), "--foo")
     msg should include("--baz")
     msg should not include "--bar"
@@ -525,7 +525,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     val expResult = Map("--foo" -> "bar", "--bar" -> "test")
 
     val (updArgs, args) =
-      futureResult(ParameterManager.extractSupportedArguments(argsMap, supportedArgs))
+      futureResult(SyncParameterManager.extractSupportedArguments(argsMap, supportedArgs))
     updArgs should be(expUpdMap)
     args should be(expResult)
   }
@@ -536,7 +536,7 @@ class ParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
       SupportedArgument("--bar", mandatory = true),
       SupportedArgument("--baz", mandatory = true))
 
-    val msg = expectFailedFuture(ParameterManager.extractSupportedArguments(argsMap,
+    val msg = expectFailedFuture(SyncParameterManager.extractSupportedArguments(argsMap,
       supportedArgs), "--foo")
     msg should include("--baz")
     msg should not include "--bar"

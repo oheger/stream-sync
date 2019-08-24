@@ -27,7 +27,7 @@ import akka.util.Timeout
 import com.github.sync.{SourceFileProvider, SyncStreamFactory}
 import com.github.sync.SyncTypes.{DestinationStructureType, ResultTransformer, SourceStructureType, SyncOperation, SyncSourceComponents}
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterManager.SyncConfig
+import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.crypt.{CryptService, CryptStage}
 import com.github.sync.impl.{CryptAwareSourceFileProvider, StatefulStage, SyncStreamFactoryImpl}
@@ -88,14 +88,14 @@ object Sync {
       ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
     implicit val ec: ExecutionContext = system.dispatcher
 
-    for {argsMap <- ParameterManager.parseParameters(args)
-         (argsMap1, config) <- ParameterManager.extractSyncConfig(argsMap)
+    for {argsMap <- SyncParameterManager.parseParameters(args)
+         (argsMap1, config) <- SyncParameterManager.extractSyncConfig(argsMap)
          (argsMap2, filterData) <- FilterManager.parseFilters(argsMap1)
          srcArgs <- factory.additionalArguments(config.syncUris._1, SourceStructureType)
          dstArgs <- factory.additionalArguments(config.syncUris._2, DestinationStructureType)
-         (argsMap3, addArgs) <- ParameterManager.extractSupportedArguments(argsMap2,
+         (argsMap3, addArgs) <- SyncParameterManager.extractSupportedArguments(argsMap2,
            srcArgs ++ dstArgs)
-         _ <- ParameterManager.checkParametersConsumed(argsMap3)
+         _ <- SyncParameterManager.checkParametersConsumed(argsMap3)
          result <- runSync(config, filterData, addArgs)
          } yield result
   }
@@ -239,11 +239,11 @@ object Sync {
                                mat: ActorMaterializer, factory: SyncStreamFactory, timeout: Timeout):
   Future[Flow[SyncOperation, SyncOperation, NotUsed]] = {
     config.applyMode match {
-      case ParameterManager.ApplyModeTarget(targetUri) =>
+      case SyncParameterManager.ApplyModeTarget(targetUri) =>
         factory.createApplyStage(targetUri, sourceFileProvider).apply(additionalArgs)
           .map(stage => decorateApplyStage(config, additionalArgs, stage))
 
-      case ParameterManager.ApplyModeNone =>
+      case SyncParameterManager.ApplyModeNone =>
         factory.createApplyStage(config.syncUris._2, sourceFileProvider, noop = true).apply(additionalArgs)
     }
   }
