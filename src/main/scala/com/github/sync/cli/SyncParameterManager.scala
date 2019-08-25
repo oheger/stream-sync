@@ -17,14 +17,11 @@
 package com.github.sync.cli
 
 import java.nio.file.{Path, Paths}
-import java.util.Locale
 
-import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{FileIO, Framing, Sink}
-import akka.util.{ByteString, Timeout}
+import akka.util.Timeout
 import com.github.sync.SyncTypes.SupportedArgument
+import com.github.sync.cli.ParameterManager.CliProcessor
 
-import scala.annotation.tailrec
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -44,29 +41,17 @@ import scala.util.{Failure, Success, Try}
   * option key.
   */
 object SyncParameterManager {
-  /** Key for the reserved option under which URIs to be synced are grouped. */
-  val SyncUriOption = "syncUri"
-
-  /** The prefix for arguments that are command line options. */
-  val OptionPrefix = "--"
-
-  /**
-    * Name of an option that defines a parameters file. The file is read, and
-    * its content is added to the command line options.
-    */
-  val FileOption: String = OptionPrefix + "file"
-
   /** Name of the option for the apply mode. */
-  val ApplyModeOption: String = OptionPrefix + "apply"
+  val ApplyModeOption: String = ParameterManager.OptionPrefix + "apply"
 
   /** Name of the option that defines a timeout for sync operations. */
-  val TimeoutOption: String = OptionPrefix + "timeout"
+  val TimeoutOption: String = ParameterManager.OptionPrefix + "timeout"
 
   /** Name of the option that defines the path to the log file. */
-  val LogFileOption: String = OptionPrefix + "log"
+  val LogFileOption: String = ParameterManager.OptionPrefix + "log"
 
   /** Name of the option that defines the path to the sync log file. */
-  val SyncLogOption: String = OptionPrefix + "sync-log"
+  val SyncLogOption: String = ParameterManager.OptionPrefix + "sync-log"
 
   /**
     * Name of the option that defines the threshold for time deltas to be
@@ -74,42 +59,42 @@ object SyncParameterManager {
     * considered different only if the difference of their timestamps is
     * greater than this value (in seconds).
     */
-  val IgnoreTimeDeltaOption: String = OptionPrefix + "ignore-time-delta"
+  val IgnoreTimeDeltaOption: String = ParameterManager.OptionPrefix + "ignore-time-delta"
 
   /**
     * Name of the option that restricts the number of sync operations that can
     * be executed within a second. This is useful for instance when syncing to
     * a server that accepts only a limit number of requests per time unit.
     */
-  val OpsPerSecondOption: String = OptionPrefix + "ops-per-second"
+  val OpsPerSecondOption: String = ParameterManager.OptionPrefix + "ops-per-second"
 
   /**
     * Name of the option defining the encryption password for the source
     * structure. If defined, files from the source are decrypted using this
     * password when downloaded.
     */
-  val SourcePasswordOption: String = OptionPrefix + "src-encrypt-password"
+  val SourcePasswordOption: String = ParameterManager.OptionPrefix + "src-encrypt-password"
 
   /**
     * Name of the option defining the encryption password for the destination
     * structure. If defined, files are encrypted using this password when they
     * are copied to the destination.
     */
-  val DestPasswordOption: String = OptionPrefix + "dst-encrypt-password"
+  val DestPasswordOption: String = ParameterManager.OptionPrefix + "dst-encrypt-password"
 
   /**
     * Name of the option that determines that the file names in the source
     * structure are encrypted. This is evaluated only if a source password is
     * set.
     */
-  val EncryptSourceFileNamesOption: String = OptionPrefix + "src-encrypt-names"
+  val EncryptSourceFileNamesOption: String = ParameterManager.OptionPrefix + "src-encrypt-names"
 
   /**
     * Name of the option that determines that the file names in the destination
     * structure are encrypted. This is evaluated only if a destination password
     * is set.
     */
-  val EncryptDestFileNamesOption: String = OptionPrefix + "dst-encrypt-names"
+  val EncryptDestFileNamesOption: String = ParameterManager.OptionPrefix + "dst-encrypt-names"
 
   /**
     * Name of the option that defines the size of the cache for encrypted
@@ -117,7 +102,7 @@ object SyncParameterManager {
     * case, already encrypted or decrypted file names are stored in a cache, so
     * that they can be reused rather than having to compute them again.
     */
-  val CryptCacheSizeOption: String = OptionPrefix + "crypt-cache-size"
+  val CryptCacheSizeOption: String = ParameterManager.OptionPrefix + "crypt-cache-size"
 
   /** The default timeout for sync operations. */
   val DefaultTimeout = Timeout(1.minute)
@@ -191,33 +176,6 @@ object SyncParameterManager {
                         cryptCacheSize: Int,
                         opsPerSecond: Option[Int])
 
-  /**
-    * A case class representing a processor for command line options.
-    *
-    * This is a kind of state action. Such processors can be combined to
-    * extract multiple options from the command line and to remove the
-    * corresponding option keys from the map with arguments.
-    *
-    * @param run a function to obtain an option and update the arguments map
-    * @tparam A the type of the result of the processor
-    */
-  case class CliProcessor[A](run: Map[String, Iterable[String]] =>
-    (A, Map[String, Iterable[String]])) {
-    def flatMap[B](f: A => CliProcessor[B]): CliProcessor[B] = CliProcessor(map => {
-      val (a, map1) = run(map)
-      f(a).run(map1)
-    })
-
-    def map[B](f: A => B): CliProcessor[B] =
-      flatMap(a => CliProcessor(m => (f(a), m)))
-  }
-
-  /**
-    * Type definition for an internal map type used during processing of
-    * command line arguments.
-    */
-  private type ParamMap = Map[String, List[String]]
-
   /** Prefix for regular expressions related to the target apply mode. */
   private val RegApplyTargetPrefix = "(?i)TARGET"
 
@@ -240,157 +198,13 @@ object SyncParameterManager {
     """(?i)NONE""".r
 
   /**
-    * Parses the command line arguments and converts them into a map keyed by
-    * options.
-    *
-    * @param args the sequence with command line arguments
-    * @param ec   the execution context
-    * @param mat  an object to materialize streams for reading parameter files
-    * @return a future with the parsed map of arguments
-    */
-  def parseParameters(args: Seq[String])(implicit ec: ExecutionContext, mat: ActorMaterializer):
-  Future[Map[String, Iterable[String]]] = {
-    def appendOptionValue(argMap: ParamMap, opt: String, value: String):
-    ParamMap = {
-      val optValues = argMap.getOrElse(opt, List.empty)
-      argMap + (opt -> (value :: optValues))
-    }
-
-    @tailrec def doParseParameters(argsList: Seq[String], argsMap: ParamMap):
-    ParamMap = argsList match {
-      case opt :: value :: tail if isOption(opt) =>
-        doParseParameters(tail, appendOptionValue(argsMap, toLower(opt), value))
-      case h :: t if !isOption(h) =>
-        doParseParameters(t, appendOptionValue(argsMap, SyncUriOption, h))
-      case h :: _ =>
-        throw new IllegalArgumentException("Option without value: " + h)
-      case Nil =>
-        argsMap
-    }
-
-    def parseParameterSeq(argList: Seq[String]): ParamMap =
-      doParseParameters(argList, Map.empty)
-
-    def parseParametersWithFiles(argList: Seq[String], currentParams: ParamMap,
-                                 processedFiles: Set[String]): Future[ParamMap] = Future {
-      combineParameterMaps(currentParams, parseParameterSeq(argList))
-    } flatMap { argMap =>
-      argMap get FileOption match {
-        case None =>
-          Future.successful(argMap)
-        case Some(files) =>
-          val filesToRead = files.toSet diff processedFiles
-          readAllParameterFiles(filesToRead.toList) flatMap { argList =>
-            parseParametersWithFiles(argList, argMap - FileOption, processedFiles ++ filesToRead)
-          }
-      }
-    }
-
-    parseParametersWithFiles(args.toList, Map.empty, Set.empty)
-  }
-
-  /**
-    * Returns a processor that extracts all values of the specified option key.
-    *
-    * @param key the key of the option
-    * @return the processor to extract the option values
-    */
-  def optionValue(key: String): CliProcessor[Iterable[String]] = CliProcessor(map => {
-    val values = map.getOrElse(key, Nil)
-    (values, map - key)
-  })
-
-  /**
-    * Returns a processor that extracts a single value of a command line
-    * option. If the option has multiple values, a failure is generated. An
-    * option with a default value can be specified.
-    *
-    * @param key      the option key
-    * @param defValue a default value
-    * @return the processor to extract the single option value
-    */
-  def singleOptionValue(key: String, defValue: => Option[String] = None):
-  CliProcessor[Try[String]] = optionValue(key) map { values =>
-    Try {
-      if (values.size > 1) throw new IllegalArgumentException(key + " has multiple values!")
-      values.headOption orElse defValue match {
-        case Some(value) =>
-          value
-        case None =>
-          throw new IllegalArgumentException("No value specified for " + key + "!")
-      }
-    }
-  }
-
-  /**
-    * Returns a processor that extracts the single value of a command line
-    * option and applies a mapping function on it. Calls
-    * ''singleOptionValue()'' and then invokes the mapping function.
-    *
-    * @param key      the option key
-    * @param defValue a default value
-    * @param f        the mapping function
-    * @tparam R the result type of the mapping function
-    * @return the processor to extract the single option value
-    */
-  def singleOptionValueMapped[R](key: String, defValue: => Option[String] = None)
-                                (f: String => Try[R]): CliProcessor[Try[R]] =
-    singleOptionValue(key, defValue) map (_.flatMap(f))
-
-  /**
-    * Returns a processor that extracts a boolean option from the command
-    * line. The given key must have a single value that is either "true" or
-    * "false" (case does not matter).
-    *
-    * @param key the option key
-    * @return the processor to extract the boolean option
-    */
-  def booleanOptionValue(key: String): CliProcessor[Try[Boolean]] =
-    singleOptionValueMapped(key, Some(java.lang.Boolean.FALSE.toString))(s => toBoolean(s, key))
-
-  /**
-    * Returns a processor that extracts a single optional value of a command
-    * line option. If the option has multiple values, an error is produced. If
-    * it has a single value only, this value is returned as an option.
-    * Otherwise, result is an undefined ''Option''.
-    *
-    * @param key the option key
-    * @return the processor to extract the optional value
-    */
-  def optionalOptionValue(key: String): CliProcessor[Try[Option[String]]] =
-    optionValue(key) map { values =>
-      Try {
-        if (values.isEmpty) None
-        else if (values.size > 1)
-          throw new IllegalArgumentException(s"$key: only a single value is supported!")
-        else Some(values.head)
-      }
-    }
-
-  /**
-    * Returns a processor that extracts a single optional value of a command
-    * line option of type ''Int''. This is analogous to
-    * ''optionalOptionValue()'', but the resulting option is mapped to an
-    * ''Int'' (with error handling).
-    *
-    * @param key    the option key
-    * @param errMsg an error message in case the conversion fails
-    * @return the processor to extract the optional ''Int'' value
-    */
-  def optionalIntOptionValue(key: String, errMsg: => String): CliProcessor[Try[Option[Int]]] =
-    optionalOptionValue(key) map { strRes =>
-      strRes.map(_.map(toInt(errMsg)))
-    }
-
-
-  /**
     * Returns a processor that extracts the value of the option with the URIs
     * of the structures to be synced.
     *
     * @return the processor to extract the sync URIs
     */
   def syncUrisProcessor(): CliProcessor[Try[(String, String)]] =
-    optionValue(SyncUriOption) map { values =>
+    ParameterManager.optionValue(ParameterManager.InputOption) map { values =>
       Try {
         values match {
           case uriDst :: uriSrc :: Nil =>
@@ -413,7 +227,7 @@ object SyncParameterManager {
     * @return the processor to extract the apply mode
     */
   def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
-    singleOptionValue(ApplyModeOption, Some("TARGET")) map (_.map {
+    ParameterManager.singleOptionValue(ApplyModeOption, Some("TARGET")) map (_.map {
       case RegApplyTargetUri(uri) =>
         ApplyModeTarget(uri)
       case RegApplyTargetDefault(_*) =>
@@ -434,16 +248,16 @@ object SyncParameterManager {
   def syncConfigProcessor(): CliProcessor[Try[SyncConfig]] = for {
     uris <- syncUrisProcessor()
     mode <- applyModeProcessor(uris.getOrElse(("", ""))._2)
-    timeout <- singleOptionValueMapped(TimeoutOption,
+    timeout <- ParameterManager.singleOptionValueMapped(TimeoutOption,
       Some(DefaultTimeout.duration.toSeconds.toString))(mapTimeout)
-    logFile <- optionalOptionValue(LogFileOption)
-    syncLog <- optionalOptionValue(SyncLogOption)
+    logFile <- ParameterManager.optionalOptionValue(LogFileOption)
+    syncLog <- ParameterManager.optionalOptionValue(SyncLogOption)
     timeDelta <- ignoreTimeDeltaOption()
     opsPerSec <- opsPerSecondOption()
-    srcPwd <- optionalOptionValue(SourcePasswordOption)
-    dstPwd <- optionalOptionValue(DestPasswordOption)
-    srcEncFiles <- booleanOptionValue(EncryptSourceFileNamesOption)
-    dstEncFiles <- booleanOptionValue(EncryptDestFileNamesOption)
+    srcPwd <- ParameterManager.optionalOptionValue(SourcePasswordOption)
+    dstPwd <- ParameterManager.optionalOptionValue(DestPasswordOption)
+    srcEncFiles <- ParameterManager.booleanOptionValue(EncryptSourceFileNamesOption)
+    dstEncFiles <- ParameterManager.booleanOptionValue(EncryptDestFileNamesOption)
     cacheSize <- cryptCacheSizeOption()
   } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta, opsPerSec,
     srcPwd, srcEncFiles, dstPwd, dstEncFiles, cacheSize)
@@ -503,12 +317,12 @@ object SyncParameterManager {
       List.empty[String])) { (state, arg) =>
       arg match {
         case SupportedArgument(key, false, _) =>
-          val proc = optionalOptionValue(key)
+          val proc = ParameterManager.optionalOptionValue(key)
           handleTriedResult(state._1, state._2, proc, state._3) { (map, res) =>
             res.map(v => map + (key -> v)).getOrElse(map)
           }
         case SupportedArgument(key, true, defaultValue) =>
-          val proc = singleOptionValue(key, defaultValue)
+          val proc = ParameterManager.singleOptionValue(key, defaultValue)
           handleTriedResult(state._1, state._2, proc, state._3) { (map, res) =>
             map + (key -> res)
           }
@@ -518,82 +332,6 @@ object SyncParameterManager {
       throw new IllegalArgumentException(result._3.mkString(", "))
     (result._1, result._2)
   }
-
-  /**
-    * Checks whether all parameters in the given parameters map have been
-    * consumed. This is a test to find out whether invalid parameters have been
-    * specified. During parameter processing, parameters that are recognized and
-    * processed by sub systems are removed from the map with parameters. So if
-    * there are remaining parameters, this means that the user has specified
-    * unknown or superfluous ones. In this case, parameter validation should
-    * fail and no action should be executed.
-    *
-    * @param argsMap the map with parameters to be checked
-    * @return a future with the passed in map if the check succeeds
-    */
-  def checkParametersConsumed(argsMap: Map[String, Iterable[String]]):
-  Future[Map[String, Iterable[String]]] =
-    if (argsMap.isEmpty) Future.successful(argsMap)
-    else Future.failed(new IllegalArgumentException("Found unexpected parameters: " + argsMap))
-
-  /**
-    * Checks whether the given argument string is an option. This is the case
-    * if it starts with the option prefix.
-    *
-    * @param arg the argument to be checked
-    * @return a flag whether this argument is an option
-    */
-  private def isOption(arg: String): Boolean = arg startsWith OptionPrefix
-
-  /**
-    * Creates a combined parameter map from the given source maps. The lists
-    * with the values of parameter options need to be concatenated.
-    *
-    * @param m1 the first map
-    * @param m2 the second map
-    * @return the combined map
-    */
-  private def combineParameterMaps(m1: ParamMap, m2: ParamMap): ParamMap =
-    m2.foldLeft(m1) { (resMap, e) =>
-      val values = resMap.getOrElse(e._1, List.empty)
-      resMap + (e._1 -> (e._2 ::: values))
-    }
-
-  /**
-    * Reads a file with parameters asynchronously and returns its single lines
-    * as a list of strings.
-    *
-    * @param path the path to the parameters
-    * @param mat  the ''ActorMaterializer'' for reading the file
-    * @param ec   the execution context
-    * @return a future with the result of the read operation
-    */
-  private def readParameterFile(path: String)
-                               (implicit mat: ActorMaterializer, ec: ExecutionContext):
-  Future[List[String]] = {
-    val source = FileIO.fromPath(Paths get path)
-    val sink = Sink.fold[List[String], String](List.empty)((lst, line) => line :: lst)
-    source.via(Framing.delimiter(ByteString("\n"), 1024,
-      allowTruncation = true))
-      .map(bs => bs.utf8String.trim)
-      .filter(_.length > 0)
-      .runWith(sink)
-      .map(_.reverse)
-  }
-
-  /**
-    * Reads all parameter files referenced by the provided list. The arguments
-    * they contain are combined to a single sequence of strings.
-    *
-    * @param files list with the files to be read
-    * @param mat   the ''ActorMaterializer'' for reading files
-    * @param ec    the execution context
-    * @return a future with the result of the combined read operation
-    */
-  private def readAllParameterFiles(files: List[String])
-                                   (implicit mat: ActorMaterializer, ec: ExecutionContext):
-  Future[List[String]] =
-    Future.sequence(files.map(readParameterFile)).map(_.flatten)
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all
@@ -654,7 +392,7 @@ object SyncParameterManager {
     * @return a ''Try'' with the converted value
     */
   private def mapTimeout(timeoutStr: String): Try[Timeout] = Try {
-    Timeout(toInt("timeout value")(timeoutStr).seconds)
+    Timeout(ParameterManager.toInt("timeout value")(timeoutStr).seconds)
   }
 
   /**
@@ -665,7 +403,7 @@ object SyncParameterManager {
     * @return the processor for the ignore time delta option
     */
   private def ignoreTimeDeltaOption(): CliProcessor[Try[Option[Int]]] =
-    optionalIntOptionValue(IgnoreTimeDeltaOption, "threshold for file time deltas")
+    ParameterManager.optionalIntOptionValue(IgnoreTimeDeltaOption, "threshold for file time deltas")
 
   /**
     * Returns a processor that extracts he value of the option for the number
@@ -674,7 +412,7 @@ object SyncParameterManager {
     * @return the processor for the ops per second option
     */
   private def opsPerSecondOption(): CliProcessor[Try[Option[Int]]] =
-    optionalIntOptionValue(OpsPerSecondOption, "number of operations per second")
+    ParameterManager.optionalIntOptionValue(OpsPerSecondOption, "number of operations per second")
 
   /**
     * Returns a processor that extracts the value of the option for the crypt
@@ -684,29 +422,12 @@ object SyncParameterManager {
     * @return the processor for the crypt cache size
     */
   private def cryptCacheSizeOption(): CliProcessor[Try[Int]] =
-    singleOptionValueMapped(CryptCacheSizeOption, Some(DefaultCryptCacheSize.toString)) { s =>
-      Try(toInt("crypt cache size")(s)) map { size =>
+    ParameterManager.singleOptionValueMapped(CryptCacheSizeOption, Some(DefaultCryptCacheSize.toString)) { s =>
+      Try(ParameterManager.toInt("crypt cache size")(s)) map { size =>
         if (size < MinCryptCacheSize)
           throw new IllegalArgumentException(s"Crypt cache size must be greater or equal $MinCryptCacheSize.")
         else size
       }
-    }
-
-  /**
-    * A mapping function to convert a string to an integer. If this fails due
-    * to a ''NumberFormatException'', an ''IllegalArgumentException'' is thrown
-    * with a message generated from the passed tag and the original string
-    * value.
-    *
-    * @param tag a tag for generating an error message
-    * @param str the string to be converted
-    * @return the resulting integer value
-    */
-  private def toInt(tag: String)(str: String): Int =
-    try str.toInt
-    catch {
-      case e: NumberFormatException =>
-        throw new IllegalArgumentException(s"Invalid $tag: '$str'!", e)
     }
 
   /**
@@ -718,26 +439,4 @@ object SyncParameterManager {
     */
   private def mapPath(optPathStr: Option[String]): Option[Path] =
     optPathStr map (s => Paths get s)
-
-  /**
-    * Conversion function to convert a string to a boolean. The case does not
-    * matter, but the string must either be "true" or "false".
-    *
-    * @param s   the string to be converted
-    * @param key the option key (to generate the error message)
-    * @return a ''Try'' with the conversion result
-    */
-  private def toBoolean(s: String, key: String): Try[Boolean] = toLower(s) match {
-    case "true" => Success(true)
-    case "false" => Success(false)
-    case _ => Failure(new IllegalArgumentException(s"$key: Not a valid boolean value '$s'."))
-  }
-
-  /**
-    * Converts a string to lower case.
-    *
-    * @param s the string
-    * @return the string in lower case
-    */
-  private def toLower(s: String): String = s.toLowerCase(Locale.ROOT)
 }

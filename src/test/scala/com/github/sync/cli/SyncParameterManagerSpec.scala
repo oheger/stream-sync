@@ -42,17 +42,18 @@ object SyncParameterManagerSpec {
   private val TimeoutValue = 44
 
   /** A map with test parameter values. */
-  private val ArgsMap = Map(SyncParameterManager.SyncUriOption -> List(DestinationUri, SourceUri),
+  private val ArgsMap = Map(ParameterManager.InputOption -> List(DestinationUri, SourceUri),
     SyncParameterManager.TimeoutOption -> List(TimeoutValue.toString))
 }
 
 /**
-  * Test class for ''ParameterManager''.
+  * Test class for ''SyncParameterManager''. This class also tests
+  * functionality of the generic ''ParameterManager'' class.
   */
 class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper
   with AsyncTestHelper {
-  def this() = this(ActorSystem("ParameterManagerSpec"))
+  def this() = this(ActorSystem("SyncParameterManagerSpec"))
 
   override protected def afterAll(): Unit = {
     TestKit shutdownActorSystem system
@@ -106,7 +107,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @return the parameter list with the file parameter added
     */
   private def appendFileParameter(path: Path, argList: List[String]): List[String] =
-    SyncParameterManager.FileOption :: path.toString :: argList
+    ParameterManager.FileOption :: path.toString :: argList
 
   /**
     * Helper method for calling the parameter manager to parse a list of
@@ -127,7 +128,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     */
   private def parseParametersFuture(args: Seq[String]): Future[Map[String, Iterable[String]]] = {
     implicit val mat: ActorMaterializer = ActorMaterializer()
-    SyncParameterManager.parseParameters(args)
+    ParameterManager.parseParameters(args)
   }
 
   "ParameterManager" should "parse an empty sequence of arguments" in {
@@ -138,7 +139,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "correctly parse non-option parameters" in {
     val syncUris = List("uri1", "uri2")
-    val expArgMap = Map(SyncParameterManager.SyncUriOption -> syncUris.reverse)
+    val expArgMap = Map(ParameterManager.InputOption -> syncUris.reverse)
 
     val argMap = parseParameters(syncUris)
     argMap should be(expArgMap)
@@ -164,14 +165,14 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val args = List("--TestOption", "TestValue", "--FOO", "BAR", "testUri")
     val expArgMap = Map("--testoption" -> List("TestValue"),
       "--foo" -> List("BAR"),
-      SyncParameterManager.SyncUriOption -> List("testUri"))
+      ParameterManager.InputOption -> List("testUri"))
 
     val argMap = parseParameters(args)
     argMap should be(expArgMap)
   }
 
   it should "validate a map with all parameters consumed" in {
-    val result = futureResult(SyncParameterManager.checkParametersConsumed(Map.empty))
+    val result = futureResult(ParameterManager.checkParametersConsumed(Map.empty))
 
     result should have size 0
   }
@@ -179,7 +180,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "fail the check for consumed parameters if there are remaining parameters" in {
     val argsMap = Map("foo" -> List("bar"))
 
-    expectFailedFuture(SyncParameterManager.checkParametersConsumed(argsMap),
+    expectFailedFuture(ParameterManager.checkParametersConsumed(argsMap),
       "unexpected parameters: " + argsMap)
   }
 
@@ -198,7 +199,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = parseParameters(args)
     argsMap(OptionName1) should contain only(Opt1Val1, Opt1Val2)
     argsMap(OptionName2) should contain only Opt2Val
-    argsMap.keys should not contain SyncParameterManager.FileOption
+    argsMap.keys should not contain ParameterManager.FileOption
 
     val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     Set(config.syncUris._1, config.syncUris._2) should contain only(uri1, uri2)
@@ -213,7 +214,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val Option3Value = "inNestedFile"
     val nestedFile = createParameterFile(OptionName3, Option3Value)
     val args = appendFileParameter(
-      createParameterFile(SyncParameterManager.FileOption, nestedFile.toString,
+      createParameterFile(ParameterManager.FileOption, nestedFile.toString,
         OptionName2, Option2Value), OptionName1 :: Option1Value :: Nil)
     val expArgs = Map(OptionName1 -> List(Option1Value),
       OptionName2 -> List(Option2Value),
@@ -225,10 +226,10 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "deal with cyclic references in parameter files" in {
     val file1 = createFileReference()
-    val file3 = createParameterFile(SyncParameterManager.FileOption, file1.toString, "--op3", "v3")
-    val file2 = createParameterFile(SyncParameterManager.FileOption, file3.toString, "--op2", "v2")
-    writeFileContent(file1, parameterFileContent(SyncParameterManager.FileOption, file2.toString,
-      "--op1", "v1", SyncParameterManager.FileOption, file2.toString))
+    val file3 = createParameterFile(ParameterManager.FileOption, file1.toString, "--op3", "v3")
+    val file2 = createParameterFile(ParameterManager.FileOption, file3.toString, "--op2", "v2")
+    writeFileContent(file1, parameterFileContent(ParameterManager.FileOption, file2.toString,
+      "--op1", "v1", ParameterManager.FileOption, file2.toString))
     val args = appendFileParameter(file1, Nil)
     val expArgs = Map("--op1" -> List("v1"), "--op2" -> List("v2"), "--op3" -> List("v3"))
 
@@ -252,27 +253,27 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "reject URI parameters if there are more than 2" in {
-    val argsMap = ArgsMap + (SyncParameterManager.SyncUriOption -> List("u1", "u2", "u3"))
+    val argsMap = ArgsMap + (ParameterManager.InputOption -> List("u1", "u2", "u3"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap), "Too many sync URIs")
   }
 
   it should "reject URI parameters if no destination URI is provided" in {
-    val argsMap = ArgsMap + (SyncParameterManager.SyncUriOption -> List("u1"))
+    val argsMap = ArgsMap + (ParameterManager.InputOption -> List("u1"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Missing destination URI")
   }
 
   it should "reject URI parameters if no URIs are provided" in {
-    val argsMap = ArgsMap + (SyncParameterManager.SyncUriOption -> List.empty[String])
+    val argsMap = ArgsMap + (ParameterManager.InputOption -> List.empty[String])
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Missing URIs for source and destination")
   }
 
   it should "reject URI parameters if no non-option parameters are provided" in {
-    val argsMap = ArgsMap - SyncParameterManager.SyncUriOption
+    val argsMap = ArgsMap - ParameterManager.InputOption
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Missing URIs for source and destination")
@@ -479,7 +480,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "combine multiple error messages when parsing the sync config" in {
-    val argsMap = Map(SyncParameterManager.SyncUriOption -> List(SourceUri),
+    val argsMap = Map(ParameterManager.InputOption -> List(SourceUri),
       SyncParameterManager.ApplyModeOption -> List("invalidApplyMode"),
       SyncParameterManager.TimeoutOption -> List("invalidTimeout"),
       SyncParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))

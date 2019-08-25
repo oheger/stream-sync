@@ -88,14 +88,14 @@ object Sync {
       ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
     implicit val ec: ExecutionContext = system.dispatcher
 
-    for {argsMap <- SyncParameterManager.parseParameters(args)
+    for {argsMap <- ParameterManager.parseParameters(args)
          (argsMap1, config) <- SyncParameterManager.extractSyncConfig(argsMap)
          (argsMap2, filterData) <- FilterManager.parseFilters(argsMap1)
          srcArgs <- factory.additionalArguments(config.syncUris._1, SourceStructureType)
          dstArgs <- factory.additionalArguments(config.syncUris._2, DestinationStructureType)
          (argsMap3, addArgs) <- SyncParameterManager.extractSupportedArguments(argsMap2,
            srcArgs ++ dstArgs)
-         _ <- SyncParameterManager.checkParametersConsumed(argsMap3)
+         _ <- ParameterManager.checkParametersConsumed(argsMap3)
          result <- runSync(config, filterData, addArgs)
          } yield result
   }
