@@ -1,0 +1,347 @@
+/*
+ * Copyright 2018-2019 The Developers Team.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License")
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.github.sync.cli
+
+import java.nio.file.Paths
+import java.util.Locale
+
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{FileIO, Framing, Sink}
+import akka.util.ByteString
+
+import scala.annotation.tailrec
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
+
+/**
+  * A generic service responsible for parsing command line arguments.
+  *
+  * This service offers functionality to process the command line arguments
+  * passed to an application and to convert them to specific configuration
+  * objects. There are helper functions to interpret options of different types
+  * and to collect arguments that are no options (such as files or directories
+  * to be processed). It is possible to check whether all mandatory options are
+  * present and that no unsupported options have been specified.
+  *
+  * This service converts the sequence of command line arguments to a map
+  * keyed by known option names. The values are lists with the strings assigned
+  * to these options. (Options are allowed to be repeated in the command line
+  * and thus can have multiple values; hence their values are represented as
+  * lists.) Case does not matter for options; they are always converted to
+  * lower case.
+  */
+object ParameterManager {
+  /** The prefix for arguments that are command line options. */
+  val OptionPrefix = "--"
+
+  /**
+    * Name of an option that collects the input strings that are no values of
+    * options.
+    */
+  val InputOption = "input"
+
+  /**
+    * Name of an option that defines a parameters file. The file is read, and
+    * its content is added to the command line options.
+    */
+  val FileOption: String = OptionPrefix + "file"
+
+  /**
+    * A case class representing a processor for command line options.
+    *
+    * This is a kind of state action. Such processors can be combined to
+    * extract multiple options from the command line and to remove the
+    * corresponding option keys from the map with arguments.
+    *
+    * @param run a function to obtain an option and update the arguments map
+    * @tparam A the type of the result of the processor
+    */
+  case class CliProcessor[A](run: Map[String, Iterable[String]] =>
+    (A, Map[String, Iterable[String]])) {
+    def flatMap[B](f: A => CliProcessor[B]): CliProcessor[B] = CliProcessor(map => {
+      val (a, map1) = run(map)
+      f(a).run(map1)
+    })
+
+    def map[B](f: A => B): CliProcessor[B] =
+      flatMap(a => CliProcessor(m => (f(a), m)))
+  }
+
+  /**
+    * Type definition for an internal map type used during processing of
+    * command line arguments.
+    */
+  private type ParamMap = Map[String, List[String]]
+
+  /**
+    * Parses the command line arguments and converts them into a map keyed by
+    * options.
+    *
+    * @param args the sequence with command line arguments
+    * @param ec   the execution context
+    * @param mat  an object to materialize streams for reading parameter files
+    * @return a future with the parsed map of arguments
+    */
+  def parseParameters(args: Seq[String])(implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[Map[String, Iterable[String]]] = {
+    def appendOptionValue(argMap: ParamMap, opt: String, value: String):
+    ParamMap = {
+      val optValues = argMap.getOrElse(opt, List.empty)
+      argMap + (opt -> (value :: optValues))
+    }
+
+    @tailrec def doParseParameters(argsList: Seq[String], argsMap: ParamMap):
+    ParamMap = argsList match {
+      case opt :: value :: tail if isOption(opt) =>
+        doParseParameters(tail, appendOptionValue(argsMap, toLower(opt), value))
+      case h :: t if !isOption(h) =>
+        doParseParameters(t, appendOptionValue(argsMap, InputOption, h))
+      case h :: _ =>
+        throw new IllegalArgumentException("Option without value: " + h)
+      case Nil =>
+        argsMap
+    }
+
+    def parseParameterSeq(argList: Seq[String]): ParamMap =
+      doParseParameters(argList, Map.empty)
+
+    def parseParametersWithFiles(argList: Seq[String], currentParams: ParamMap,
+                                 processedFiles: Set[String]): Future[ParamMap] = Future {
+      combineParameterMaps(currentParams, parseParameterSeq(argList))
+    } flatMap { argMap =>
+      argMap get FileOption match {
+        case None =>
+          Future.successful(argMap)
+        case Some(files) =>
+          val filesToRead = files.toSet diff processedFiles
+          readAllParameterFiles(filesToRead.toList) flatMap { argList =>
+            parseParametersWithFiles(argList, argMap - FileOption, processedFiles ++ filesToRead)
+          }
+      }
+    }
+
+    parseParametersWithFiles(args.toList, Map.empty, Set.empty)
+  }
+
+  /**
+    * Returns a processor that extracts all values of the specified option key.
+    *
+    * @param key the key of the option
+    * @return the processor to extract the option values
+    */
+  def optionValue(key: String): CliProcessor[Iterable[String]] = CliProcessor(map => {
+    val values = map.getOrElse(key, Nil)
+    (values, map - key)
+  })
+
+  /**
+    * Returns a processor that extracts a single value of a command line
+    * option. If the option has multiple values, a failure is generated. An
+    * option with a default value can be specified.
+    *
+    * @param key      the option key
+    * @param defValue a default value
+    * @return the processor to extract the single option value
+    */
+  def singleOptionValue(key: String, defValue: => Option[String] = None):
+  CliProcessor[Try[String]] = optionValue(key) map { values =>
+    Try {
+      if (values.size > 1) throw new IllegalArgumentException(key + " has multiple values!")
+      values.headOption orElse defValue match {
+        case Some(value) =>
+          value
+        case None =>
+          throw new IllegalArgumentException("No value specified for " + key + "!")
+      }
+    }
+  }
+
+  /**
+    * Returns a processor that extracts the single value of a command line
+    * option and applies a mapping function on it. Calls
+    * ''singleOptionValue()'' and then invokes the mapping function.
+    *
+    * @param key      the option key
+    * @param defValue a default value
+    * @param f        the mapping function
+    * @tparam R the result type of the mapping function
+    * @return the processor to extract the single option value
+    */
+  def singleOptionValueMapped[R](key: String, defValue: => Option[String] = None)
+                                (f: String => Try[R]): CliProcessor[Try[R]] =
+    singleOptionValue(key, defValue) map (_.flatMap(f))
+
+  /**
+    * Returns a processor that extracts a boolean option from the command
+    * line. The given key must have a single value that is either "true" or
+    * "false" (case does not matter).
+    *
+    * @param key the option key
+    * @return the processor to extract the boolean option
+    */
+  def booleanOptionValue(key: String): CliProcessor[Try[Boolean]] =
+    singleOptionValueMapped(key, Some(java.lang.Boolean.FALSE.toString))(s => toBoolean(s, key))
+
+  /**
+    * Returns a processor that extracts a single optional value of a command
+    * line option. If the option has multiple values, an error is produced. If
+    * it has a single value only, this value is returned as an option.
+    * Otherwise, result is an undefined ''Option''.
+    *
+    * @param key the option key
+    * @return the processor to extract the optional value
+    */
+  def optionalOptionValue(key: String): CliProcessor[Try[Option[String]]] =
+    optionValue(key) map { values =>
+      Try {
+        if (values.isEmpty) None
+        else if (values.size > 1)
+          throw new IllegalArgumentException(s"$key: only a single value is supported!")
+        else Some(values.head)
+      }
+    }
+
+  /**
+    * Returns a processor that extracts a single optional value of a command
+    * line option of type ''Int''. This is analogous to
+    * ''optionalOptionValue()'', but the resulting option is mapped to an
+    * ''Int'' (with error handling).
+    *
+    * @param key    the option key
+    * @param errMsg an error message in case the conversion fails
+    * @return the processor to extract the optional ''Int'' value
+    */
+  def optionalIntOptionValue(key: String, errMsg: => String): CliProcessor[Try[Option[Int]]] =
+    optionalOptionValue(key) map { strRes =>
+      strRes.map(_.map(toInt(errMsg)))
+    }
+
+  /**
+    * Checks whether all parameters in the given parameters map have been
+    * consumed. This is a test to find out whether invalid parameters have been
+    * specified. During parameter processing, parameters that are recognized and
+    * processed by sub systems are removed from the map with parameters. So if
+    * there are remaining parameters, this means that the user has specified
+    * unknown or superfluous ones. In this case, parameter validation should
+    * fail and no action should be executed.
+    *
+    * @param argsMap the map with parameters to be checked
+    * @return a future with the passed in map if the check succeeds
+    */
+  def checkParametersConsumed(argsMap: Map[String, Iterable[String]]):
+  Future[Map[String, Iterable[String]]] =
+    if (argsMap.isEmpty) Future.successful(argsMap)
+    else Future.failed(new IllegalArgumentException("Found unexpected parameters: " + argsMap))
+
+  /**
+    * A mapping function to convert a string to an integer. If this fails due
+    * to a ''NumberFormatException'', an ''IllegalArgumentException'' is thrown
+    * with a message generated from the passed tag and the original string
+    * value.
+    *
+    * @param tag a tag for generating an error message
+    * @param str the string to be converted
+    * @return the resulting integer value
+    */
+  def toInt(tag: String)(str: String): Int =
+    try str.toInt
+    catch {
+      case e: NumberFormatException =>
+        throw new IllegalArgumentException(s"Invalid $tag: '$str'!", e)
+    }
+
+  /**
+    * Checks whether the given argument string is an option. This is the case
+    * if it starts with the option prefix.
+    *
+    * @param arg the argument to be checked
+    * @return a flag whether this argument is an option
+    */
+  private def isOption(arg: String): Boolean = arg startsWith OptionPrefix
+
+  /**
+    * Creates a combined parameter map from the given source maps. The lists
+    * with the values of parameter options need to be concatenated.
+    *
+    * @param m1 the first map
+    * @param m2 the second map
+    * @return the combined map
+    */
+  private def combineParameterMaps(m1: ParamMap, m2: ParamMap): ParamMap =
+    m2.foldLeft(m1) { (resMap, e) =>
+      val values = resMap.getOrElse(e._1, List.empty)
+      resMap + (e._1 -> (e._2 ::: values))
+    }
+
+  /**
+    * Reads a file with parameters asynchronously and returns its single lines
+    * as a list of strings.
+    *
+    * @param path the path to the parameters
+    * @param mat  the ''ActorMaterializer'' for reading the file
+    * @param ec   the execution context
+    * @return a future with the result of the read operation
+    */
+  private def readParameterFile(path: String)
+                               (implicit mat: ActorMaterializer, ec: ExecutionContext):
+  Future[List[String]] = {
+    val source = FileIO.fromPath(Paths get path)
+    val sink = Sink.fold[List[String], String](List.empty)((lst, line) => line :: lst)
+    source.via(Framing.delimiter(ByteString("\n"), 1024,
+      allowTruncation = true))
+      .map(bs => bs.utf8String.trim)
+      .filter(_.length > 0)
+      .runWith(sink)
+      .map(_.reverse)
+  }
+
+  /**
+    * Reads all parameter files referenced by the provided list. The arguments
+    * they contain are combined to a single sequence of strings.
+    *
+    * @param files list with the files to be read
+    * @param mat   the ''ActorMaterializer'' for reading files
+    * @param ec    the execution context
+    * @return a future with the result of the combined read operation
+    */
+  private def readAllParameterFiles(files: List[String])
+                                   (implicit mat: ActorMaterializer, ec: ExecutionContext):
+  Future[List[String]] =
+    Future.sequence(files.map(readParameterFile)).map(_.flatten)
+
+  /**
+    * Conversion function to convert a string to a boolean. The case does not
+    * matter, but the string must either be "true" or "false".
+    *
+    * @param s   the string to be converted
+    * @param key the option key (to generate the error message)
+    * @return a ''Try'' with the conversion result
+    */
+  private def toBoolean(s: String, key: String): Try[Boolean] = toLower(s) match {
+    case "true" => Success(true)
+    case "false" => Success(false)
+    case _ => Failure(new IllegalArgumentException(s"$key: Not a valid boolean value '$s'."))
+  }
+
+  /**
+    * Converts a string to lower case.
+    *
+    * @param s the string
+    * @return the string in lower case
+    */
+  private def toLower(s: String): String = s.toLowerCase(Locale.ROOT)
+}
