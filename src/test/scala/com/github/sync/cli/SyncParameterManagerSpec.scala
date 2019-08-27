@@ -23,6 +23,7 @@ import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.SyncTypes.SupportedArgument
+import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest._
@@ -116,7 +117,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @param args the list of parameters to be parsed
     * @return the parameters map as result of the parse operation
     */
-  private def parseParameters(args: Seq[String]): Map[String, Iterable[String]] =
+  private def parseParameters(args: Seq[String]): Parameters =
     futureResult(parseParametersFuture(args))
 
   /**
@@ -126,7 +127,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @param args the list of parameters to be parsed
     * @return the ''Future'' with the parse result
     */
-  private def parseParametersFuture(args: Seq[String]): Future[Map[String, Iterable[String]]] = {
+  private def parseParametersFuture(args: Seq[String]): Future[Parameters] = {
     implicit val mat: ActorMaterializer = ActorMaterializer()
     ParameterManager.parseParameters(args)
   }

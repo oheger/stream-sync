@@ -23,6 +23,7 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 import com.github.sync.SyncTypes._
+import com.github.sync.cli.ParameterManager.Parameters
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
@@ -146,8 +147,8 @@ object FilterManager {
     * @return a future with an updated map with arguments and the extracted
     *         ''SyncFilterData''
     */
-  def parseFilters(arguments: Map[String, Iterable[String]])(implicit ec: ExecutionContext):
-  Future[(Map[String, Iterable[String]], SyncFilterData)] = {
+  def parseFilters(arguments: Parameters)(implicit ec: ExecutionContext):
+  Future[(Parameters, SyncFilterData)] = {
     val futCleanedMap = removeFilterParameters(arguments)
     val futCommonFilters =
       parseExpressionsOfFilterOption(arguments.getOrElse(ArgCommonFilter, Nil), Nil)
@@ -303,7 +304,7 @@ object FilterManager {
     * @param ec            the execution context
     * @return a future with the parsed parameters for action filters
     */
-  private def parseFiltersPerActionType(args: Map[String, Iterable[String]],
+  private def parseFiltersPerActionType(args: Parameters,
                                         commonFilters: List[SyncOperationFilter])
                                        (implicit ec: ExecutionContext): Future[ActionFilters] = {
     Future.sequence(ActionFilterParameters map { t =>
@@ -338,7 +339,7 @@ object FilterManager {
     * @param filters the action filters constructed so far
     * @return the updated map of action filters
     */
-  private def parseActionFilter(args: Map[String, Iterable[String]],
+  private def parseActionFilter(args: Parameters,
                                 filters: ActionFilters)
                                (implicit ec: ExecutionContext): Future[ActionFilters] = Future {
     val enabledActionTypes = extractEnabledActionTypes(args)
@@ -357,7 +358,7 @@ object FilterManager {
     * @param args the map with command line arguments
     * @return a set with all enabled action types
     */
-  private def extractEnabledActionTypes(args: Map[String, Iterable[String]]): Set[SyncAction] = {
+  private def extractEnabledActionTypes(args: Parameters): Set[SyncAction] = {
     val actionTypeNames = args.getOrElse(ArgActionFilter, ActionTypeList)
       .flatMap(_.split(ActionTypeSeparator))
       .map(_.trim.toLowerCase(Locale.ROOT))
@@ -377,9 +378,9 @@ object FilterManager {
     * @param args the map with arguments
     * @return a future with the map with filter arguments removed
     */
-  private def removeFilterParameters(args: Map[String, Iterable[String]])
+  private def removeFilterParameters(args: Parameters)
                                     (implicit ec: ExecutionContext):
-  Future[Map[String, Iterable[String]]] = Future {
+  Future[Parameters] = Future {
     args filterNot (AllFilterParameters contains _._1)
   }
 

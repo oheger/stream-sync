@@ -61,6 +61,13 @@ object ParameterManager {
   val FileOption: String = OptionPrefix + "file"
 
   /**
+    * Type definition for the map with resolved parameter values. The array
+    * with command line options is transformed in such a map which allows
+    * direct access to the value(s) assigned to options.
+    */
+  type Parameters = Map[String, Iterable[String]]
+
+  /**
     * A case class representing a processor for command line options.
     *
     * This is a kind of state action. Such processors can be combined to
@@ -70,8 +77,7 @@ object ParameterManager {
     * @param run a function to obtain an option and update the arguments map
     * @tparam A the type of the result of the processor
     */
-  case class CliProcessor[A](run: Map[String, Iterable[String]] =>
-    (A, Map[String, Iterable[String]])) {
+  case class CliProcessor[A](run: Parameters => (A, Parameters)) {
     def flatMap[B](f: A => CliProcessor[B]): CliProcessor[B] = CliProcessor(map => {
       val (a, map1) = run(map)
       f(a).run(map1)
@@ -96,8 +102,7 @@ object ParameterManager {
     * @param mat  an object to materialize streams for reading parameter files
     * @return a future with the parsed map of arguments
     */
-  def parseParameters(args: Seq[String])(implicit ec: ExecutionContext, mat: ActorMaterializer):
-  Future[Map[String, Iterable[String]]] = {
+  def parseParameters(args: Seq[String])(implicit ec: ExecutionContext, mat: ActorMaterializer): Future[Parameters] = {
     def appendOptionValue(argMap: ParamMap, opt: String, value: String):
     ParamMap = {
       val optValues = argMap.getOrElse(opt, List.empty)
@@ -242,8 +247,7 @@ object ParameterManager {
     * @param argsMap the map with parameters to be checked
     * @return a future with the passed in map if the check succeeds
     */
-  def checkParametersConsumed(argsMap: Map[String, Iterable[String]]):
-  Future[Map[String, Iterable[String]]] =
+  def checkParametersConsumed(argsMap: Parameters): Future[Parameters] =
     if (argsMap.isEmpty) Future.successful(argsMap)
     else Future.failed(new IllegalArgumentException("Found unexpected parameters: " + argsMap))
 

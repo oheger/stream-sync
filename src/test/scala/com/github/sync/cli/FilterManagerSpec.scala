@@ -21,6 +21,7 @@ import java.time.{Instant, LocalDateTime, ZoneId}
 import com.github.sync.SyncTypes._
 import com.github.sync._
 import com.github.sync.cli.FilterManager.{SyncFilterData, SyncOperationFilter}
+import com.github.sync.cli.ParameterManager.Parameters
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -151,7 +152,7 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
     * @param acceptedOps options expected to be accepted
     * @param rejectedOps options expected to be rejected
     */
-  private def checkParseFilterArguments(filterArgs: Map[String, Iterable[String]],
+  private def checkParseFilterArguments(filterArgs: Parameters,
                                         acceptedOps: List[SyncOperation],
                                         rejectedOps: List[SyncOperation]): Unit = {
     val otherParam = "foo" -> List("bar")

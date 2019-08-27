@@ -20,7 +20,7 @@ import java.nio.file.{Path, Paths}
 
 import akka.util.Timeout
 import com.github.sync.SyncTypes.SupportedArgument
-import com.github.sync.cli.ParameterManager.CliProcessor
+import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -274,8 +274,8 @@ object SyncParameterManager {
     * @param ec      the execution context
     * @return a future with the extracted config and the updated arguments map
     */
-  def extractSyncConfig(argsMap: Map[String, Iterable[String]])(implicit ec: ExecutionContext):
-  Future[(Map[String, Iterable[String]], SyncConfig)] = Future {
+  def extractSyncConfig(argsMap: Parameters)(implicit ec: ExecutionContext):
+  Future[(Parameters, SyncConfig)] = Future {
     val (triedConfig, map) = syncConfigProcessor().run(argsMap)
     (map, triedConfig.get)
   }
@@ -295,15 +295,15 @@ object SyncParameterManager {
     * @return a future with the extracted arguments and the updated arguments
     *         map
     */
-  def extractSupportedArguments(argsMap: Map[String, Iterable[String]],
+  def extractSupportedArguments(argsMap: Parameters,
                                 args: Iterable[SupportedArgument])
                                (implicit ec: ExecutionContext):
-  Future[(Map[String, Iterable[String]], Map[String, String])] = Future {
-    def handleTriedResult[T](argsMap: Map[String, Iterable[String]],
+  Future[(Parameters, Map[String, String])] = Future {
+    def handleTriedResult[T](argsMap: Parameters,
                              extrArgs: Map[String, String], proc: CliProcessor[Try[T]],
                              errors: List[String])
                             (h: (Map[String, String], T) => Map[String, String]):
-    (Map[String, Iterable[String]], Map[String, String], List[String]) = {
+    (Parameters, Map[String, String], List[String]) = {
       val (res, updArgs) = proc.run(argsMap)
       res match {
         case Success(value) =>
