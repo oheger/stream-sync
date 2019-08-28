@@ -252,6 +252,41 @@ object ParameterManager {
     else Future.failed(new IllegalArgumentException("Found unexpected parameters: " + argsMap))
 
   /**
+    * Returns a collection containing all error messages from the given
+    * components. This is used to create an object representation of a group of
+    * command line arguments. Only if all components could be extracted
+    * successfully, the representation can be created. Otherwise, a list with
+    * all errors is returned. The resulting collection is also an indicator
+    * whether the representation can be created: if it is empty, there are no
+    * errors.
+    *
+    * @param components the single components
+    * @return a collection with error messages extracted from the components
+    */
+  def collectErrorMessages(components: Try[_]*): Iterable[String] =
+    components.collect {
+      case Failure(exception) => exception.getMessage
+    }
+
+  /**
+    * Helper function to create an object representation for a set of
+    * components that have been extracted from command line options. The
+    * function checks whether all components are successful. If so, the given
+    * creator is invoked. Otherwise, result is a failure with an exception
+    * that contains all error messages concatenated.
+    *
+    * @param components the single components
+    * @param creator    the function to create the representation
+    * @tparam T the type of the representation
+    * @return a ''Try'' with the representation or the error messages
+    */
+  def createRepresentation[T](components: Try[_]*)(creator: => T): Try[T] = {
+    val messages = collectErrorMessages(components: _*)
+    if (messages.isEmpty) Success(creator)
+    else Failure(new IllegalArgumentException(messages.mkString(", ")))
+  }
+
+  /**
     * A mapping function to convert a string to an integer. If this fails due
     * to a ''NumberFormatException'', an ''IllegalArgumentException'' is thrown
     * with a message generated from the passed tag and the original string

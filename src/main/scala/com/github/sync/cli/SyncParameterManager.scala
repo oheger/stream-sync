@@ -364,25 +364,15 @@ object SyncParameterManager {
                                triedEncSrcFileNames: Try[Boolean],
                                triedDstPassword: Try[Option[String]],
                                triedEncDstFileNames: Try[Boolean],
-                               triedCryptCacheSize: Try[Int]): Try[SyncConfig] = {
-    def collectErrorMessages(components: Try[_]*): Iterable[String] =
-      components.foldLeft(List.empty[String]) { (lst, c) =>
-        c match {
-          case Failure(exception) => exception.getMessage :: lst
-          case _ => lst
-        }
-      }
-
-    val messages = collectErrorMessages(triedUris, triedApplyMode, triedTimeout, triedLogFile,
+                               triedCryptCacheSize: Try[Int]): Try[SyncConfig] =
+    ParameterManager.createRepresentation(triedUris, triedApplyMode, triedTimeout, triedLogFile,
       triedSyncLog, triedTimeDelta, triedOpsPerSec, triedSrcPassword, triedEncSrcFileNames, triedDstPassword,
-      triedEncDstFileNames, triedCryptCacheSize)
-    if (messages.isEmpty)
-      Success(SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
+      triedEncDstFileNames, triedCryptCacheSize) {
+      SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
         mapPath(triedLogFile.get), mapPath(triedSyncLog.get), triedTimeDelta.get,
         triedSrcPassword.get, triedEncSrcFileNames.get, triedDstPassword.get, triedEncDstFileNames.get,
-        triedCryptCacheSize.get, triedOpsPerSec.get))
-    else Failure(new IllegalArgumentException(messages.mkString(", ")))
-  }
+        triedCryptCacheSize.get, triedOpsPerSec.get)
+    }
 
   /**
     * Converts a timeout string to the corresponding ''Timeout'' value in
