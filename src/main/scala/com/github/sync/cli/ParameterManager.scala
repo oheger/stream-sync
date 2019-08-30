@@ -287,6 +287,23 @@ object ParameterManager {
   }
 
   /**
+    * Generates a ''Try'' for the given expression that contains a meaningful
+    * exception in case of a failure. This function maps the original
+    * exception to an ''IllegalArgumentException'' with a message that contains
+    * the name of the parameter.
+    *
+    * @param key the parameter key
+    * @param f   the expression
+    * @tparam T the result type of the expression
+    * @return a succeeded ''Try'' with the expression value or a failed ''Try''
+    *         with a meaningful exception
+    */
+  def paramTry[T](key: String)(f: => T): Try[T] =
+    Try(f) recover {
+      case ex => throw new IllegalArgumentException(s"$key: ${ex.getMessage}.", ex)
+    }
+
+  /**
     * A mapping function to convert a string to an integer. If this fails due
     * to a ''NumberFormatException'', an ''IllegalArgumentException'' is thrown
     * with a message generated from the passed tag and the original string
