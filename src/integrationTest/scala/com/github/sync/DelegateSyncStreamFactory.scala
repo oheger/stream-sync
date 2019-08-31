@@ -23,7 +23,8 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
 import akka.util.Timeout
-import com.github.sync.SyncTypes.{FsElement, ResultTransformer, StructureType, SupportedArgument, SyncOperation}
+import com.github.sync.SyncTypes._
+import com.github.sync.cli.SyncComponentsFactory.SourceComponentsFactory
 import com.github.sync.impl.SyncStreamFactoryImpl
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -81,4 +82,21 @@ class DelegateSyncStreamFactory(delegate: SyncStreamFactory = SyncStreamFactoryI
                                (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[(Int, Int)]]] =
     delegate.createSyncStream(source, flowProc, logFile)
+}
+
+/**
+  * A special test implementation of ''SourceComponentsFactory'' that
+  * simply delegates to another factory instance.
+  *
+  * This is useful in tests to only override specific methods of the factory
+  * while keeping the default behavior of other methods.
+  *
+  * @param delegate the instance to delegate method calls to
+  */
+class DelegateSourceComponentsFactory(delegate: SourceComponentsFactory) extends SourceComponentsFactory {
+  override def createSource(sourceFactory: SyncTypes.ElementSourceFactory): Source[FsElement, Any] =
+    delegate.createSource(sourceFactory)
+
+  override def createSourceFileProvider(): SourceFileProvider =
+    delegate.createSourceFileProvider()
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync
+package com.github.sync.cli
 
 import java.io.File
 import java.nio.file.attribute.FileTime
@@ -23,7 +23,6 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.NotUsed
 import akka.actor.{ActorIdentity, ActorSystem, Identify}
 import akka.http.scaladsl.model.StatusCodes
 import akka.pattern.AskTimeoutException
@@ -31,13 +30,13 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
-import com.github.sync.SyncTypes.{FsElement, ResultTransformer, SyncOperation}
-import com.github.sync.WireMockSupport._
-import com.github.sync.cli.Sync
+import com.github.sync.WireMockSupport.{Password, _}
+import com.github.sync._
+import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptOpHandler}
 import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.local.LocalUriResolver
-import com.github.sync.util.{LRUCache, UriEncodingHelper}
+import com.github.sync.util.UriEncodingHelper
 import com.github.sync.webdav.{DavConfig, DavSourceFileProvider}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
@@ -146,25 +145,19 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     * @param provider the ''SourceFileProvider'' to be returned
     * @return the factory
     */
-  private def factoryWithMockSourceProvider(provider: SourceFileProvider):
-  DelegateSyncStreamFactory = new DelegateSyncStreamFactory {
-    override def createSourceFileProvider(uri: String)
-                                         (implicit ec: ExecutionContext, system: ActorSystem,
-                                          mat: ActorMaterializer, timeout: Timeout):
-    ArgsFunc[SourceFileProvider] = _ => Future.successful(provider)
-
-    override def createSourceComponents[T](uri: String, optSrcTransformer: Option[ResultTransformer[T]])
-                                          (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
-                                           timeout: Timeout): ArgsFunc[SyncTypes.SyncSourceComponents[FsElement]] = {
-      val orgFunc = super.createSourceComponents(uri, optSrcTransformer)
-      args => {
-        val futComponents = orgFunc(args)
-        futComponents map { components =>
-          components.copy(sourceFileProvider = provider)
+  private def factoryWithMockSourceProvider(provider: SourceFileProvider): SyncComponentsFactory =
+    new SyncComponentsFactory {
+      override def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
+                                                (implicit system: ActorSystem, mat: ActorMaterializer,
+                                                 ec: ExecutionContext):
+      Future[(Parameters, SyncComponentsFactory.SourceComponentsFactory)] =
+        super.createSourceComponentsFactory(uri, timeout, parameters) map { t =>
+          val delegateFactory = new DelegateSourceComponentsFactory(t._2) {
+            override def createSourceFileProvider(): SourceFileProvider = provider
+          }
+          (t._1, delegateFactory)
         }
-      }
     }
-  }
 
   /**
     * Performs a crypt operation on the given data and returns the result.
@@ -202,7 +195,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     futureResult(CryptService.decryptName(CryptStage.keyFromString(key), name))
 
   "Sync" should "synchronize two directory structures" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     createTestFile(srcFolder, "test1.txt")
@@ -212,7 +205,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--filter", "exclude:*.tmp")
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(result.successfulOperations)
     checkFile(dstFolder, "test1.txt")
     checkFileNotPresent(dstFolder, "toBeRemoved.txt")
@@ -220,7 +213,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "apply operations to an alternative target" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val dstFolder2 = Files.createDirectory(createPathInDirectory("dest2"))
@@ -230,14 +223,14 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--apply", "target:" + dstFolder2.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(options))
+    futureResult(Sync.syncProcess(factory, options))
     checkFile(dstFolder2, "new.txt")
     checkFile(dstFolder, "obsolete.dat")
     checkFileNotPresent(dstFolder2, "obsolete.dat")
   }
 
   it should "store sync operations in a log file" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val logFile = createFileReference()
@@ -247,7 +240,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--filter", "exclude:*.tmp", "--log", logFile.toAbsolutePath.toString)
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(2)
     result.successfulOperations should be(2)
     val lines = Files.readAllLines(logFile)
@@ -257,7 +250,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "append an existing log file" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val LogHeader = "This is my log." + System.lineSeparator()
@@ -266,12 +259,12 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--apply", "none", "--log", logFile.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(options))
+    futureResult(Sync.syncProcess(factory, options))
     readDataFile(logFile) should startWith(LogHeader)
   }
 
   it should "support an apply mode 'None'" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     createTestFile(srcFolder, "file1.txt")
@@ -280,7 +273,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--apply", "NonE")
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(3)
     result.totalOperations should be(result.successfulOperations)
     checkFile(dstFolder, "removed.txt")
@@ -288,7 +281,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "execute sync operations from a sync log file" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val NewFolderName = "newFolder"
@@ -306,7 +299,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString)
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(operations.size)
     result.totalOperations should be(result.successfulOperations)
     checkFile(dstFolder, "syncFile.txt")
@@ -317,7 +310,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "ignore invalid sync operations in the sync log file" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val SuccessFile = "successSync.txt"
@@ -329,12 +322,12 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(options))
+    futureResult(Sync.syncProcess(factory, options))
     checkFile(dstFolder, SuccessFile)
   }
 
   it should "skip an operation that cannot be processed" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val SuccessFile = "successSync.txt"
@@ -346,12 +339,12 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--timeout", "2")
 
-    futureResult(Sync.syncProcess(options))
+    futureResult(Sync.syncProcess(factory, options))
     checkFile(dstFolder, SuccessFile)
   }
 
   it should "log only successfully executed sync operations" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val SuccessFile = "successSync.txt"
@@ -366,14 +359,14 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString,
       "--timeout", "2")
 
-    futureResult(Sync.syncProcess(options))
+    futureResult(Sync.syncProcess(factory, options))
     val lines = Files.readAllLines(logFile)
     lines should have size 1
     lines.get(0) should include(SuccessFile)
   }
 
   it should "skip operations in the sync log that are contained in the processed log" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val ProcessedFile = "done.txt"
@@ -388,14 +381,14 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString)
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
     checkFile(dstFolder, NewFile)
     checkFileNotPresent(dstFolder, ProcessedFile)
   }
 
   it should "support a WebDav URI for the source structure" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3.xml")
@@ -404,7 +397,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--src-user", UserId,
       "--src-password", Password)
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
@@ -412,7 +405,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "support a WebDav URI for the destination structure" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3_full.xml")
@@ -421,7 +414,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--dst-user", UserId,
       "--dst-password", Password, "--dst-modified-Property", "Win32LastModifiedTime")
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
@@ -438,23 +431,23 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
         super.shutdown()
       }
     }
-    implicit val factory: SyncStreamFactory = factoryWithMockSourceProvider(provider)
+    val factory = factoryWithMockSourceProvider(provider)
     createTestFile(srcFolder, "test.txt")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(options))
+    futureResult(Sync.syncProcess(factory, options))
     shutdownCount.get() should be(1)
   }
 
   it should "stop the actor for local sync operations after stream processing" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val identifyId = 20190817
     createTestFile(srcFolder, "test.txt")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(options))
+    futureResult(Sync.syncProcess(factory, options))
     val selection = system.actorSelection(s"/user/${SyncStreamFactoryImpl.LocalSyncOpActorName}")
     selection ! Identify(identifyId)
     val identity = expectMsgType[ActorIdentity]
@@ -464,7 +457,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
 
   it should "take the time zone of a local files source into account" in {
     val DeltaHours = 2
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val UnchangedFile = "notChanged.txt"
@@ -480,7 +473,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--log", logFile.toAbsolutePath.toString, "--dst-time-zone", s"UTC+0$DeltaHours:00")
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
     val operations = Files.readAllLines(logFile)
     operations.get(0) should include(ChangedFile)
@@ -490,7 +483,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
 
   it should "ignore a time difference below the configured threshold" in {
     val TimeDeltaThreshold = 10
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val Time1 = Instant.parse("2018-11-19T21:18:04.34Z")
@@ -505,12 +498,12 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--ignore-time-delta", TimeDeltaThreshold.toString)
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(0)
   }
 
   it should "create a correct SourceFileProvider for a WebDav source" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3.xml")
@@ -520,14 +513,14 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--src-user", UserId, "--src-password", Password)
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
     val fileContent = readFileInPath(dstFolder, "file (5).mp3")
     fileContent should startWith(FileTestHelper.TestData take 50)
   }
 
   it should "support sync operations targeting a WebDav server" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val WebDavPath = "/destination"
     val FileName = "testDataFile.dat"
@@ -546,7 +539,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--dst-user", UserId, "--dst-password", Password,
       "--dst-modified-property", ModifiedProperty, "--dst-modified-namespace", ModifiedNamespace)
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
     getAllServeEvents should have size 3
   }
@@ -563,19 +556,19 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
         super.shutdown()
       }
     }
-    implicit val factory: SyncStreamFactory = factoryWithMockSourceProvider(provider)
+    val factory = factoryWithMockSourceProvider(provider)
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     stubFolderRequest(WebDavPath, "empty_folder.xml")
     stubSuccess()
     val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + davConfig.rootUri,
       "--dst-user", UserId, "--dst-password", Password)
 
-    futureResult(Sync.syncProcess(options))
+    futureResult(Sync.syncProcess(factory, options))
     shutdownCount.get() should be(1)
   }
 
   it should "evaluate the timeout for the WebDav file source provider" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val timeout = 1.second
@@ -586,12 +579,12 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--src-user", UserId, "--src-password", Password, "--timeout", timeout.toSeconds.toString)
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(0)
   }
 
   it should "evaluate the timeout for the WebDav element source" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val timeout = 1.second
@@ -602,11 +595,11 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--src-user", UserId, "--src-password", Password, "--timeout", timeout.toSeconds.toString)
 
-    expectFailedFuture[AskTimeoutException](Sync.syncProcess(options))
+    expectFailedFuture[AskTimeoutException](Sync.syncProcess(factory, options))
   }
 
   it should "support encryption of files in a destination structure" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val TestFileName = "TestFileToBeEncrypted.txt"
@@ -614,13 +607,13 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", "!encryptDest!")
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(result.successfulOperations)
     readBinaryFileInPath(srcFolder, TestFileName) should not be readBinaryFileInPath(dstFolder, TestFileName)
   }
 
   it should "support a round-trip with encryption and decryption of files" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder1 = Files.createDirectory(createPathInDirectory("destEnc"))
     val dstFolder2 = Files.createDirectory(createPathInDirectory("destPlain"))
@@ -629,17 +622,17 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     createTestFile(srcFolder, TestFileName)
     val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
       "--dst-encrypt-password", Password)
-    futureResult(Sync.syncProcess(options1))
+    futureResult(Sync.syncProcess(factory, options1))
 
     val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
       "--src-encrypt-password", Password)
-    val result = futureResult(Sync.syncProcess(options2))
+    val result = futureResult(Sync.syncProcess(factory, options2))
     result.totalOperations should be(result.successfulOperations)
     readFileInPath(srcFolder, TestFileName) should be(readFileInPath(dstFolder2, TestFileName))
   }
 
   it should "correctly calculate the sizes of encrypted files" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val TestFileName = "TestFileToBeEncrypted.txt"
@@ -649,16 +642,16 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--dst-encrypt-password", Password)
     val options2 = Array(dstFolder.toAbsolutePath.toString, srcFolder.toAbsolutePath.toString,
       "--src-encrypt-password", Password)
-    futureResult(Sync.syncProcess(options1))
+    futureResult(Sync.syncProcess(factory, options1))
 
-    val result1 = futureResult(Sync.syncProcess(options1))
+    val result1 = futureResult(Sync.syncProcess(factory, options1))
     result1.totalOperations should be(0)
-    val result2 = futureResult(Sync.syncProcess(options2))
+    val result2 = futureResult(Sync.syncProcess(factory, options2))
     result2.totalOperations should be(0)
   }
 
   it should "support encrypted file names in a destination structure" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val TestFileName = "TestFileToBeEncryptedAndScrambled.txt"
@@ -666,7 +659,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", "crYptiC", "--dst-encrypt-names", "true")
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(result.successfulOperations)
     val destFiles = dstFolder.toFile.list()
     destFiles should have length 1
@@ -674,7 +667,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "support other operations on encrypted file names" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val Password = "foo-bar;"
@@ -689,7 +682,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-encrypt-names", "true")
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(result.successfulOperations)
     Files.exists(delFolder) shouldBe false
     val overrideData = ByteString(Files.readAllBytes(pathOverride))
@@ -697,7 +690,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "support a round-trip with encrypted file names" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder1 = Files.createDirectory(createPathInDirectory("destEnc"))
     val dstFolder2 = Files.createDirectory(createPathInDirectory("destPlain"))
@@ -708,19 +701,19 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val Password = "test-privacy"
     val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-encrypt-names", "true")
-    futureResult(Sync.syncProcess(options1))
+    futureResult(Sync.syncProcess(factory, options1))
 
     val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
       "--src-encrypt-password", Password, "--src-encrypt-names", "true")
-    futureResult(Sync.syncProcess(options2))
+    futureResult(Sync.syncProcess(factory, options2))
     checkFile(dstFolder2, "top.txt")
     val options3 = Array(srcFolder.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString)
-    val result = futureResult(Sync.syncProcess(options3))
+    val result = futureResult(Sync.syncProcess(factory, options3))
     result.totalOperations should be(0)
   }
 
   it should "support complex structures when syncing with encrypted file names" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     createTestFile(srcFolder, "originalTestFile.tst")
@@ -731,10 +724,10 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val Password = "Complex?"
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-encrypt-names", "true")
-    futureResult(Sync.syncProcess(options)).successfulOperations should be(5)
+    futureResult(Sync.syncProcess(factory, options)).successfulOperations should be(5)
 
     createTestFile(subSubDir, "deep2.txt")
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
 
     def findDirectory(content: Array[File]): File = {
@@ -765,7 +758,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "support a WebDav source with encrypted file names" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val CryptPassword = Password
     val WebDavPath = "/encrypted"
     stubFolderRequest(WebDavPath, "root_encrypted.xml")
@@ -783,7 +776,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--src-encrypt-password", CryptPassword, "--src-encrypt-names", "true", "--src-user", UserId,
       "--src-password", Password)
 
-    val result = futureResult(Sync.syncProcess(options))
+    val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(result.totalOperations)
     Files.exists(pathDeleted) shouldBe false
     val rootFiles = dstFolder.toFile.listFiles()
@@ -795,7 +788,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "support a WebDav destination with encrypted file names" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val CryptPassword = "secretServer"
     val WebDavPath = "/secret"
     stubSuccess()
@@ -808,7 +801,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--dst-encrypt-password", CryptPassword, "--dst-encrypt-names", "true", "--dst-user", UserId,
       "--dst-password", Password)
 
-    futureResult(Sync.syncProcess(options)).successfulOperations should be(1)
+    futureResult(Sync.syncProcess(factory, options)).successfulOperations should be(1)
     import collection.JavaConverters._
     val events = getAllServeEvents.asScala
     val putRequest = events.find(event => event.getRequest.getMethod == RequestMethod.PUT).get.getRequest
@@ -820,7 +813,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "support an encrypted WebDav destination with a complex structure" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val CryptPassword = Password
     val WebDavPath = "/encrypted"
     stubSuccess()
@@ -837,34 +830,18 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--dst-encrypt-password", CryptPassword, "--dst-encrypt-names", "true", "--dst-user", UserId,
       "--dst-password", Password, "--ignore-time-delta", Int.MaxValue.toString)
 
-    futureResult(Sync.syncProcess(options)).successfulOperations should be(1)
+    futureResult(Sync.syncProcess(factory, options)).successfulOperations should be(1)
   }
 
   it should "evaluate the cache size for encrypted names" in {
     val CacheSize = 444
-    implicit val factory: SyncStreamFactory = new DelegateSyncStreamFactory {
-      override def createSyncSource[T2](sourceSrc: Source[FsElement, Any],
-                                        uriDst: String, optDstTransformer: Option[ResultTransformer[T2]],
-                                        additionalArgs: StructureArgs, ignoreTimeDelta: Int)
-                                       (implicit ec: ExecutionContext, system: ActorSystem,
-                                        mat: ActorMaterializer, timeout: Timeout):
-      Future[Source[SyncOperation, NotUsed]] = {
-        val cache = optDstTransformer.get.initialState.asInstanceOf[LRUCache[String, String]]
-        cache.capacity should be(CacheSize)
-        super.createSyncSource(sourceSrc, uriDst, optDstTransformer, additionalArgs, ignoreTimeDelta)
-      }
-    }
-    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
-    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    createTestFile(srcFolder, "someTestFile.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--dst-encrypt-password", Password, "--dst-encrypt-names", "true", "--crypt-cache-size", CacheSize.toString)
-
-    futureResult(Sync.syncProcess(options)).successfulOperations should be(1)
+    val transformer = Sync.createResultTransformer(Some("secret"), encryptNames = false, CacheSize)
+    val cache = transformer.get.initialState
+    cache.capacity should be(CacheSize)
   }
 
   it should "support restricting the number of operations per second" in {
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     createTestFile(srcFolder, "smallFile1.txt")
@@ -875,7 +852,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--ops-per-second", "1")
 
     intercept[TimeoutException] {
-      val syncFuture = Sync.syncProcess(options)
+      val syncFuture = Sync.syncProcess(factory, options)
       Await.ready(syncFuture, 2.seconds)
     }
   }

@@ -25,77 +25,12 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.github.sync.SourceFileProvider
-import com.github.sync.SyncTypes.{FsElement, ResultTransformer, SyncOperation}
+import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import com.github.sync.local.LocalFsConfig
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
-
-/**
-  * A trait describing a factory for creating the components of a sync stream
-  * that are related to the source structure.
-  */
-trait SourceComponentsFactory {
-  /**
-    * Creates the ''Source''for iterating over the source structure of the sync
-    * process.
-    *
-    * @param optSrcTransformer an optional transformer for the structure
-    * @tparam T the type of the result transformer
-    * @return the source for iterating the source structure
-    */
-  def createSource[T](optSrcTransformer: Option[ResultTransformer[T]]): Source[FsElement, Any]
-
-  /**
-    * Creates a ''SourceFileProvider'' to access files in the source
-    * structure.
-    *
-    * @return the ''SourceFileProvider''
-    */
-  def createSourceFileProvider(): SourceFileProvider
-}
-
-/**
-  * A trait describing a factory for creating the components of a sync stream
-  * that are related to the destination structure.
-  */
-trait DestinationComponentsFactory {
-  /**
-    * Creates the ''Source''for iterating over the destination structure of the sync
-    * process.
-    *
-    * @param optDstTransformer an optional transformer for the structure
-    * @tparam T the type of the result transformer
-    * @return the source for iterating the destination structure
-    */
-  def createDestinationSource[T](optDstTransformer: Option[ResultTransformer[T]]): Source[FsElement, Any]
-
-  /**
-    * Creates a ''Source'' for iterating over the destination structure
-    * starting with a given folder. This is needed for some use cases to
-    * resolve files in the destination structure; e.g. if folder names are
-    * encrypted.
-    *
-    * @param startFolderUri the URI of the start folder of the iteration
-    * @return the source for a partial iteration
-    */
-  def createPartialSource(startFolderUri: String): Source[FsElement, Any]
-
-  /**
-    * Creates the flow stage that interprets sync operations and applies them
-    * to the destination structure. In some constellations, no operations
-    * should be executed (e.g. in dry-run mode). This can be specified using a
-    * boolean flag. In this case, a special flow stage is returned that does
-    * not execute any changes, but does the necessary cleanup.
-    *
-    * @param fileProvider the provider for files from the source structure
-    * @param noop         flag whether no operations should be executed
-    * @return the stage to process sync operations
-    */
-  def createApplyStage(fileProvider: SourceFileProvider, noop: Boolean = false):
-  Flow[SyncOperation, SyncOperation, NotUsed]
-}
 
 object SyncComponentsFactory {
   /**
@@ -162,6 +97,82 @@ object SyncComponentsFactory {
     override val name: String = "dst-"
   }
 
+  /**
+    * A data class collecting information about the apply stage of a sync
+    * stream.
+    *
+    * This class is used by [[DestinationComponentsFactory]] to return multiple
+    * results: the actual stage of the stream plus a function for cleaning up
+    * resources when the stream completes.
+    *
+    * @param stage   the flow to apply sync operations
+    * @param cleanUp a cleanup function
+    */
+  case class ApplyStageData(stage: Flow[SyncOperation, SyncOperation, NotUsed],
+                            cleanUp: () => Unit)
+
+  /**
+    * A trait describing a factory for creating the components of a sync stream
+    * that are related to the source structure.
+    */
+  trait SourceComponentsFactory {
+    /**
+      * Creates the ''Source''for iterating over the source structure of the sync
+      * process.
+      *
+      * @param sourceFactory the factory for creating an element source
+      * @return the source for iterating the source structure
+      */
+    def createSource(sourceFactory: ElementSourceFactory): Source[FsElement, Any]
+
+    /**
+      * Creates a ''SourceFileProvider'' to access files in the source
+      * structure.
+      *
+      * @return the ''SourceFileProvider''
+      */
+    def createSourceFileProvider(): SourceFileProvider
+  }
+
+  /**
+    * A trait describing a factory for creating the components of a sync stream
+    * that are related to the destination structure.
+    */
+  trait DestinationComponentsFactory {
+    /**
+      * Creates the ''Source''for iterating over the destination structure of the sync
+      * process.
+      *
+      * @param sourceFactory the factory for creating an element source
+      * @return the source for iterating the destination structure
+      */
+    def createDestinationSource(sourceFactory: ElementSourceFactory): Source[FsElement, Any]
+
+    /**
+      * Creates a ''Source'' for iterating over the destination structure
+      * starting with a given folder. This is needed for some use cases to
+      * resolve files in the destination structure; e.g. if folder names are
+      * encrypted.
+      *
+      * @param sourceFactory  the factory for creating an element source
+      * @param startFolderUri the URI of the start folder of the iteration
+      * @return the source for a partial iteration
+      */
+    def createPartialSource(sourceFactory: ElementSourceFactory, startFolderUri: String):
+    Source[FsElement, Any]
+
+    /**
+      * Creates the flow stage that interprets sync operations and applies them
+      * to the destination structure and returns a data object with this flow
+      * and a function for cleaning up resources.
+      *
+      * @param targetUri    the target URI of the destination structure
+      * @param fileProvider the provider for files from the source structure
+      * @return the data object about the stage to process sync operations
+      */
+    def createApplyStage(targetUri: String, fileProvider: SourceFileProvider): ApplyStageData
+  }
+
 }
 
 /**
@@ -190,16 +201,16 @@ class SyncComponentsFactory {
     * parameters consumed.
     *
     * @param uri        the URI defining the source structure
+    * @param timeout    a timeout when applying a sync operation
     * @param parameters the object with command line parameters
     * @param system     the actor system
     * @param mat        the object to materialize streams
     * @param ec         the execution context
-    * @param timeout    a timeout when applying a sync operation
     * @return updated parameters and the factory for creating source components
     */
-  def createSourceComponentsFactory(uri: String, parameters: Parameters)
+  def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
                                    (implicit system: ActorSystem, mat: ActorMaterializer,
-                                    ec: ExecutionContext, timeout: Timeout):
+                                    ec: ExecutionContext):
   Future[(Parameters, SourceComponentsFactory)] =
     extractLocalFsConfig(uri, parameters, SourceStructureType)
       .map(t => (t._1, new LocalFsSourceComponentsFactory(t._2)))
@@ -211,19 +222,19 @@ class SyncComponentsFactory {
     * parameters consumed.
     *
     * @param uri        the URI defining the source structure
+    * @param timeout    a timeout when applying a sync operation
     * @param parameters the object with command line parameters
     * @param system     the actor system
     * @param mat        the object to materialize streams
     * @param ec         the execution context
-    * @param timeout    a timeout when applying a sync operation
     * @return updated parameters and the factory for creating dest components
     */
-  def createDestinationComponentsFactory(uri: String, parameters: Parameters)
+  def createDestinationComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
                                         (implicit system: ActorSystem, mat: ActorMaterializer,
-                                         ec: ExecutionContext, timeout: Timeout):
+                                         ec: ExecutionContext):
   Future[(Parameters, DestinationComponentsFactory)] =
     extractLocalFsConfig(uri, parameters, DestinationStructureType)
-      .map(t => (t._1, new LocalFsDestinationComponentsFactory(t._2)))
+      .map(t => (t._1, new LocalFsDestinationComponentsFactory(t._2, timeout)))
 
   /**
     * Extracts the configuration for the local file system from the given

@@ -16,22 +16,22 @@
 
 package com.github.sync.cli
 
-import java.nio.file.Path
+import java.nio.file.{Path, StandardOpenOption}
 
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream._
-import akka.stream.scaladsl.{Flow, Source}
-import akka.util.Timeout
-import com.github.sync.{SourceFileProvider, SyncStreamFactory}
-import com.github.sync.SyncTypes.{DestinationStructureType, ResultTransformer, SourceStructureType, SyncOperation, SyncSourceComponents}
+import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
+import com.github.sync.SourceFileProvider
+import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, IterateFunc, ResultTransformer, SyncFolderData, SyncOperation}
 import com.github.sync.cli.FilterManager.SyncFilterData
+import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.crypt.{CryptService, CryptStage}
-import com.github.sync.impl.{CryptAwareSourceFileProvider, StatefulStage, SyncStreamFactoryImpl}
-import com.github.sync.log.SerializerStreamHelper
+import com.github.sync.impl.{CleanupStage, CryptAwareSourceFileProvider, ElementSource, StatefulStage, SyncStage}
+import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
 import com.github.sync.util.LRUCache
 
 import scala.concurrent.duration._
@@ -59,9 +59,9 @@ object Sync {
   def main(args: Array[String]): Unit = {
     implicit val system: ActorSystem = ActorSystem("stream-sync")
     implicit val ec: ExecutionContext = system.dispatcher
-    implicit val factory: SyncStreamFactory = SyncStreamFactoryImpl
+    val factory = new SyncComponentsFactory
     val futResult = for {
-      msg <- syncWithResultMessage(args)
+      msg <- syncWithResultMessage(factory, args)
       _ <- Http().shutdownAllConnectionPools()
       _ <- system.terminate()
     } yield msg
@@ -76,12 +76,12 @@ object Sync {
     * of sync operations that have been executed; the second element is the
     * number of successful sync operations.
     *
+    * @param factory the factory for the sync stream
     * @param args    the array with command line arguments
     * @param system  the actor system
-    * @param factory the factory for the sync stream
     * @return a future with information about the result of the process
     */
-  def syncProcess(args: Array[String])(implicit system: ActorSystem, factory: SyncStreamFactory):
+  def syncProcess(factory: SyncComponentsFactory, args: Array[String])(implicit system: ActorSystem):
   Future[SyncResult] = {
     val decider: Supervision.Decider = _ => Supervision.Resume
     implicit val materializer: ActorMaterializer =
@@ -91,37 +91,35 @@ object Sync {
     for {argsMap <- ParameterManager.parseParameters(args)
          (argsMap1, config) <- SyncParameterManager.extractSyncConfig(argsMap)
          (argsMap2, filterData) <- FilterManager.parseFilters(argsMap1)
-         srcArgs <- factory.additionalArguments(config.syncUris._1, SourceStructureType)
-         dstArgs <- factory.additionalArguments(config.syncUris._2, DestinationStructureType)
-         (argsMap3, addArgs) <- SyncParameterManager.extractSupportedArguments(argsMap2,
-           srcArgs ++ dstArgs)
-         _ <- ParameterManager.checkParametersConsumed(argsMap3)
-         result <- runSync(config, filterData, addArgs)
+         (argsMap3, srcFactory) <- factory.createSourceComponentsFactory(
+           config.syncUris._1, config.timeout, argsMap2)
+         (argsMap4, dstFactory) <- factory.createDestinationComponentsFactory(
+           config.syncUris._2, config.timeout, argsMap3)
+         _ <- ParameterManager.checkParametersConsumed(argsMap4)
+         result <- runSync(config, filterData, srcFactory, dstFactory)
          } yield result
   }
 
   /**
     * Runs the stream that represents the sync process.
     *
-    * @param config         the ''SyncConfig''
-    * @param filterData     data about the current filter definition
-    * @param additionalArgs a map with additional arguments
-    * @param system         the actor system
-    * @param mat            the object to materialize streams
-    * @param factory        the factory for the sync stream
+    * @param config     the ''SyncConfig''
+    * @param filterData data about the current filter definition
+    * @param srcFactory the factory for creating source components
+    * @param dstFactory the factory for creating destination components
+    * @param system     the actor system
+    * @param mat        the object to materialize streams
     * @return a future with information about the result of the process
     */
   private def runSync(config: SyncConfig, filterData: SyncFilterData,
-                      additionalArgs: Map[String, String])
-                     (implicit system: ActorSystem, mat: ActorMaterializer,
-                      factory: SyncStreamFactory): Future[SyncResult] = {
+                      srcFactory: SourceComponentsFactory, dstFactory: DestinationComponentsFactory)
+                     (implicit system: ActorSystem, mat: ActorMaterializer): Future[SyncResult] = {
     import system.dispatcher
-    implicit val timeout: Timeout = config.timeout
     for {
-      srcComponents <- createSyncSource(config, additionalArgs)
-      decoratedSource <- decorateSource(srcComponents.elementSource, config, filterData)
-      stage <- createApplyStage(config, additionalArgs, srcComponents.sourceFileProvider)
-      g <- factory.createSyncStream(decoratedSource, stage, config.logFilePath)
+      source <- createSyncSource(config, srcFactory, dstFactory)
+      decoratedSource <- decorateSource(source, config, filterData)
+      stage <- createApplyStage(config, srcFactory, dstFactory)
+      g <- createSyncStream(decoratedSource, stage, config.logFilePath)
       res <- g.run()
     } yield SyncResult(res._1, res._2)
   }
@@ -132,32 +130,47 @@ object Sync {
     * structures. If however a sync log is provided, a source reading this file
     * is returned.
     *
-    * @param config         the sync configuration
-    * @param additionalArgs the map with additional arguments
-    * @param ec             the execution context
-    * @param mat            the object to materialize streams
-    * @param factory        the factory for the sync stream
-    * @param timeout        a general timeout for requests
+    * @param config     the sync configuration
+    * @param srcFactory the factory for creating source components
+    * @param dstFactory the factory for creating destination components
+    * @param ec         the execution context
+    * @param mat        the object to materialize streams
     * @return the source for the sync process
     */
-  private def createSyncSource(config: SyncConfig, additionalArgs: Map[String, String])
-                              (implicit ec: ExecutionContext, system: ActorSystem,
-                               mat: ActorMaterializer, factory: SyncStreamFactory, timeout: Timeout):
-  Future[SyncSourceComponents[SyncOperation]] = config.syncLogPath match {
+  private def createSyncSource(config: SyncConfig, srcFactory: SourceComponentsFactory,
+                               dstFactory: DestinationComponentsFactory)
+                              (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[Source[SyncOperation, Any]] = config.syncLogPath match {
     case Some(path) =>
-      for {src <- createSyncSourceFromLog(config, path)
-           provider <- createSourceFileProvider(config, additionalArgs)
-           } yield SyncSourceComponents(src, provider)
+      createSyncSourceFromLog(config, path)
     case None =>
-      for {srcComponents <- factory.createSourceComponents(config.syncUris._1,
-        createResultTransformer(config.srcPassword, config.srcFileNamesEncrypted, config.cryptCacheSize))
-        .apply(additionalArgs)
-           source <- factory.createSyncSource(srcComponents.elementSource,
-             config.syncUris._2,
-             createResultTransformer(config.dstPassword, config.dstFileNamesEncrypted, config.cryptCacheSize),
-             additionalArgs, config.ignoreTimeDelta getOrElse 1)
-           } yield SyncSourceComponents(source, decorateSourceFileProvider(srcComponents.sourceFileProvider, config))
+      val srcSource = srcFactory.createSource(createElementSourceFactory(createResultTransformer(config.srcPassword,
+        config.srcFileNamesEncrypted, config.cryptCacheSize)))
+      val dstSource = dstFactory.createDestinationSource(createElementSourceFactory(
+        createResultTransformer(config.dstPassword, config.dstFileNamesEncrypted, config.cryptCacheSize)))
+      Future.successful(createGraphForSyncSource(srcSource, dstSource, config.ignoreTimeDelta getOrElse 1))
   }
+
+  /**
+    * Creates a ''Source'' that produces ''SyncOperation'' objects to sync the
+    * input sources provided.
+    *
+    * @param srcSource       the source for the source structure
+    * @param dstSource       the source for the destination structure
+    * @param ignoreTimeDelta the time delta between two files to ignore
+    * @return the sync source
+    */
+  private def createGraphForSyncSource(srcSource: Source[FsElement, Any],
+                                       dstSource: Source[FsElement, Any],
+                                       ignoreTimeDelta: Int): Source[SyncOperation, NotUsed] =
+    Source.fromGraph(GraphDSL.create() {
+      implicit builder =>
+        import GraphDSL.Implicits._
+        val syncStage = builder.add(new SyncStage(ignoreTimeDelta))
+        srcSource ~> syncStage.in0
+        dstSource ~> syncStage.in1
+        SourceShape(syncStage.out)
+    })
 
   /**
     * Applies some further configuration options to the source of the sync
@@ -191,12 +204,31 @@ object Sync {
     * @param mat            the object to materialize streams
     * @return the ''ResultTransformer'' for these parameters
     */
-  private def createResultTransformer(optCryptPwd: Option[String], encryptNames: Boolean, cryptCacheSize: Int)
-                                     (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  private[cli] def createResultTransformer(optCryptPwd: Option[String], encryptNames: Boolean, cryptCacheSize: Int)
+                                          (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Option[ResultTransformer[LRUCache[String, String]]] =
     optCryptPwd.map { pwd =>
       val optNameKey = if (encryptNames) Some(CryptStage.keyFromString(pwd)) else None
       CryptService.cryptTransformer(optNameKey, cryptCacheSize)
+    }
+
+  /**
+    * Creates a factory for creating an element source. This factory is needed
+    * for creating the concrete sources of the sync process.
+    *
+    * @param optTransformer an optional result transformer
+    * @param ec             the execution context
+    * @return the ''ElementSourceFactory''
+    */
+  private def createElementSourceFactory[T](optTransformer: Option[ResultTransformer[T]])
+                                           (implicit ec: ExecutionContext): ElementSourceFactory =
+    new ElementSourceFactory {
+      override def createElementSource[F, S](initState: S, initFolder: SyncFolderData[F],
+                                             optCompletionFunc: Option[CompletionFunc[S]])
+                                            (iterateFunc: IterateFunc[F, S]):
+      Graph[SourceShape[FsElement], NotUsed] =
+        new ElementSource[F, S, T](initState, initFolder, optCompleteFunc = optCompletionFunc,
+          optTransformFunc = optTransformer)(iterateFunc)
     }
 
   /**
@@ -223,28 +255,26 @@ object Sync {
     * sync config. If the apply mode does not require any actions, a dummy flow
     * is returned that passes all operations through.
     *
-    * @param config             the sync configuration
-    * @param additionalArgs     the map with additional arguments
-    * @param sourceFileProvider the ''SourceFileProvider''
-    * @param ec                 the execution context
-    * @param system             the actor system
-    * @param mat                the object to materialize streams
-    * @param factory            the factory for the sync stream
-    * @param timeout            a general timeout for requests
+    * @param config     the sync configuration
+    * @param srcFactory the factory for creating source components
+    * @param dstFactory the factory for creating destination components
+    * @param ec         the execution context
+    * @param mat        the object to materialize streams
     * @return a future with the flow to apply sync operations
     */
-  private def createApplyStage(config: SyncConfig, additionalArgs: Map[String, String],
-                               sourceFileProvider: SourceFileProvider)
-                              (implicit ec: ExecutionContext, system: ActorSystem,
-                               mat: ActorMaterializer, factory: SyncStreamFactory, timeout: Timeout):
-  Future[Flow[SyncOperation, SyncOperation, NotUsed]] = {
+  private def createApplyStage(config: SyncConfig, srcFactory: SourceComponentsFactory,
+                               dstFactory: DestinationComponentsFactory)
+                              (implicit ec: ExecutionContext,
+                               mat: ActorMaterializer):
+  Future[Flow[SyncOperation, SyncOperation, NotUsed]] = Future {
     config.applyMode match {
       case SyncParameterManager.ApplyModeTarget(targetUri) =>
-        factory.createApplyStage(targetUri, sourceFileProvider).apply(additionalArgs)
-          .map(stage => decorateApplyStage(config, additionalArgs, stage))
+        val sourceFileProvider = decorateSourceFileProvider(srcFactory.createSourceFileProvider(), config)
+        val stageData = dstFactory.createApplyStage(targetUri, sourceFileProvider)
+        addCleanUp(decorateApplyStage(config, dstFactory, stageData.stage), stageData, sourceFileProvider)
 
       case SyncParameterManager.ApplyModeNone =>
-        factory.createApplyStage(config.syncUris._2, sourceFileProvider, noop = true).apply(additionalArgs)
+        Flow[SyncOperation].map(identity)
     }
   }
 
@@ -253,27 +283,22 @@ object Sync {
     * necessary, special preparation stages are added before the apply stage
     * to transform the operations to be processed accordingly.
     *
-    * @param config         the sync configuration
-    * @param additionalArgs the map with additional arguments
-    * @param stage          the apply stage to be decorated
-    * @param ec             the execution context
-    * @param system         the actor system
-    * @param mat            the object to materialize streams
-    * @param factory        the factory for the sync stream
-    * @param timeout        a general timeout for requests
+    * @param config     the sync configuration
+    * @param dstFactory the factory for creating destination components
+    * @param stage      the apply stage to be decorated
+    * @param ec         the execution context
+    * @param mat        the object to materialize streams
     * @return the decorated apply stage
     */
-  private def decorateApplyStage(config: SyncConfig, additionalArgs: Map[String, String],
+  private def decorateApplyStage(config: SyncConfig, dstFactory: DestinationComponentsFactory,
                                  stage: Flow[SyncOperation, SyncOperation, NotUsed])
-                                (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
-                                 factory: SyncStreamFactory, timeout: Timeout):
+                                (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Flow[SyncOperation, SyncOperation, NotUsed] =
     if (config.dstPassword.isEmpty || !config.dstFileNamesEncrypted) stage
     else {
+      val sourceFactory = createElementSourceFactory(None)
       val srcFunc: IterateSourceFunc = startFolderUri => {
-        val inpSrcFunc = factory.createSyncInputSource(config.syncUris._2, None, DestinationStructureType,
-          startFolderUri)
-        inpSrcFunc(additionalArgs)
+        Future.successful(dstFactory.createPartialSource(sourceFactory, startFolderUri))
       }
       val cryptFunc = CryptService.mapOperationFunc(CryptStage.keyFromString(config.dstPassword.get), srcFunc)
       val cryptStage = new StatefulStage[SyncOperation, SyncOperation,
@@ -282,25 +307,23 @@ object Sync {
     }
 
   /**
-    * Creates the source file provider. A basic provider can be obtained from
-    * the factory. Then support for encryption might need to be added if an
-    * encryption password has been provided.
+    * Appends a [[CleanupStage]] to the given flow for the apply stage. This
+    * ensures that all resources used by the apply stage are released when the
+    * stream completes. The source file provider is shutdown as well.
     *
-    * @param config         the sync configuration
-    * @param additionalArgs the map with additional arguments
-    * @param ec             the execution context
-    * @param system         the actor system
-    * @param mat            the object to materialize streams
-    * @param factory        the factory for the sync stream
-    * @param timeout        a general timeout for requests
-    * @return a ''Future'' with the source file provider
+    * @param stage              the (decorated) apply stage
+    * @param stageData          the data object about the apply stage
+    * @param sourceFileProvider the source file provider
+    * @return the apply stage with the cleanup stage appended
     */
-  private def createSourceFileProvider(config: SyncConfig, additionalArgs: Map[String, String])
-                                      (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
-                                       factory: SyncStreamFactory, timeout: Timeout): Future[SourceFileProvider] =
-    factory.createSourceFileProvider(config.syncUris._1).apply(additionalArgs) map { provider =>
-      decorateSourceFileProvider(provider, config)
+  private def addCleanUp(stage: Flow[SyncOperation, SyncOperation, NotUsed], stageData: ApplyStageData,
+                         sourceFileProvider: SourceFileProvider): Flow[SyncOperation, SyncOperation, NotUsed] = {
+    val cleanUp = () => {
+      stageData.cleanUp()
+      sourceFileProvider.shutdown()
     }
+    stage.via(new CleanupStage[SyncOperation](cleanUp))
+  }
 
   /**
     * Decorates the given ''SourceFileProvider'' if necessary to support
@@ -316,6 +339,86 @@ object Sync {
     if (config.srcPassword.nonEmpty || config.dstPassword.nonEmpty)
       CryptAwareSourceFileProvider(provider, config.srcPassword, config.dstPassword)
     else provider
+
+  /**
+    * Creates a ''RunnableGraph'' representing the stream for a sync process.
+    * The source for the ''SyncOperation'' objects to be processed is passed
+    * in. The stream has three sinks that also determine the materialized
+    * values of the graph: one sink counts all sync operations that need to be
+    * executed; the second sink counts the sync operations that have been
+    * processed successfully by the processing flow; the third sink is used to
+    * write a log file, which contains all successfully executed sync
+    * operations (it is active only if a path to a log file is provided).
+    *
+    * @param source   the source producing ''SyncOperation'' objects
+    * @param flowProc the flow that processes sync operations
+    * @param logFile  an optional path to a log file to write
+    * @param ec       the execution context
+    * @return a future with the runnable graph
+    */
+  def createSyncStream(source: Source[SyncOperation, Any],
+                       flowProc: Flow[SyncOperation, SyncOperation, Any],
+                       logFile: Option[Path])
+                      (implicit ec: ExecutionContext):
+  Future[RunnableGraph[Future[(Int, Int)]]] = Future {
+    val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
+    val sinkLogFile = createLogSink(logFile)
+    RunnableGraph.fromGraph(GraphDSL.create(sinkCount, sinkCount, sinkLogFile)(combineMat) {
+      implicit builder =>
+        (sinkTotal, sinkSuccess, sinkLog) =>
+          import GraphDSL.Implicits._
+          val broadcastSink = builder.add(Broadcast[SyncOperation](2))
+          val broadcastSuccess = builder.add(Broadcast[SyncOperation](2))
+          source ~> broadcastSink ~> sinkTotal.in
+          broadcastSink ~> flowProc ~> broadcastSuccess ~> sinkSuccess.in
+          broadcastSuccess ~> sinkLog
+          ClosedShape
+    })
+  }
+
+  /**
+    * Generates the sink to write sync operations to a log file if a log file
+    * path is specified. Otherwise, a dummy sink that ignores all data is
+    * returned.
+    *
+    * @param logFile the option with the path to the log file
+    * @return a sink to write a log file
+    */
+  private def createLogSink(logFile: Option[Path]): Sink[SyncOperation, Future[Any]] =
+    logFile.map(createLogFileSink).getOrElse(Sink.ignore)
+
+  /**
+    * Generates the sink to write sync operations to a log file.
+    *
+    * @param logFile the path to the log file
+    * @return the sink to write the log file
+    */
+  private def createLogFileSink(logFile: Path): Sink[SyncOperation, Future[Any]] = {
+    val sink = FileIO.toPath(logFile, options = Set(StandardOpenOption.WRITE,
+      StandardOpenOption.CREATE, StandardOpenOption.APPEND))
+    val serialize = Flow[SyncOperation].map(ElementSerializer.serializeOperation)
+    serialize.toMat(sink)(Keep.right)
+  }
+
+  /**
+    * A function to combine the materialized values of the runnable graph for
+    * the sync operation. The sinks used by the graph produce 3 future results.
+    * This function converts this to a single future for a tuple of the
+    * relevant values.
+    *
+    * @param futTotal   the future with the total number of operations
+    * @param futSuccess the future with the number of successful operations
+    * @param futLog     the future with the result of the log sink
+    * @param ec         the execution context
+    * @return a future with the results of the count sinks
+    */
+  private def combineMat(futTotal: Future[Int], futSuccess: Future[Int], futLog: Future[Any])
+                        (implicit ec: ExecutionContext):
+  Future[(Int, Int)] = for {
+    total <- futTotal
+    success <- futSuccess
+    _ <- futLog
+  } yield (total, success)
 
   /**
     * Generates a predicate that filters out undesired sync operations based on
@@ -355,16 +458,15 @@ object Sync {
     * this function never fails; if the sync process fails, it is completed
     * with a corresponding error message.
     *
+    * @param factory the factory for creating stream components
     * @param args    the array with command line arguments
     * @param system  the actor system
-    * @param factory the factory for creating stream components
     * @param ec      the execution context
     * @return a ''Future'' with a result message
     */
-  private def syncWithResultMessage(args: Array[String])
-                                   (implicit system: ActorSystem, factory: SyncStreamFactory,
-                                    ec: ExecutionContext): Future[String] =
-    syncProcess(args)
+  private def syncWithResultMessage(factory: SyncComponentsFactory, args: Array[String])
+                                   (implicit system: ActorSystem, ec: ExecutionContext): Future[String] =
+    syncProcess(factory, args)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
       .recover {
         case ex => errorMessage(ex)

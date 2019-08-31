@@ -16,37 +16,100 @@
 
 package com.github.sync.cli
 
+import java.nio.file.Paths
+
 import akka.NotUsed
+import akka.actor.{ActorSystem, PoisonPill, Props}
+import akka.pattern.ask
 import akka.stream.scaladsl.{Flow, Source}
+import akka.util.Timeout
 import com.github.sync.SourceFileProvider
-import com.github.sync.SyncTypes.{FsElement, ResultTransformer, SyncOperation}
-import com.github.sync.local.LocalFsConfig
+import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
+import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
+import com.github.sync.impl.FolderSortStage
+import com.github.sync.local.{LocalFsConfig, LocalFsElementSource, LocalSyncOperationActor, LocalUriResolver}
+
+import scala.concurrent.ExecutionContext
+
+/**
+  * A base trait for component factories targeting the local file system.
+  *
+  * Here common functionality required for both source and destination
+  * components is defined.
+  */
+trait LocalFsComponentsFactory {
+
+  /**
+    * Creates the element source for the local file system.
+    *
+    * @param config         the configuration for the local file system
+    * @param factory        the ''ElementSourceFactory''
+    * @param startFolderUri the URI of the start folder for the iteration
+    * @param ec             the execution context
+    * @return the element source for the local file system
+    */
+  def createLocalFsElementSource(config: LocalFsConfig, factory: ElementSourceFactory,
+                                 startFolderUri: String = "")
+                                (implicit ec: ExecutionContext): Source[FsElement, NotUsed] =
+    LocalFsElementSource(config, startDirectory = startFolderUri)(factory).via(new FolderSortStage)
+}
 
 /**
   * A special factory implementation for source components if the source
   * structure is a local file system.
   *
   * @param config the file system configuration
+  * @param ec     the execution context
   */
-private class LocalFsSourceComponentsFactory(val config: LocalFsConfig) extends SourceComponentsFactory {
-  override def createSource[T](optSrcTransformer: Option[ResultTransformer[T]]):
-  Source[FsElement, Any] = ???
+private class LocalFsSourceComponentsFactory(val config: LocalFsConfig)(implicit ec: ExecutionContext)
+  extends SourceComponentsFactory with LocalFsComponentsFactory {
+  override def createSource(sourceFactory: ElementSourceFactory): Source[FsElement, Any] =
+    createLocalFsElementSource(config, sourceFactory)
 
-  override def createSourceFileProvider(): SourceFileProvider = ???
+  override def createSourceFileProvider(): SourceFileProvider =
+    new LocalUriResolver(config.rootPath)
+}
+
+object LocalFsDestinationComponentsFactory {
+  /** The name of the actor for local sync operations. */
+  val LocalSyncOpActorName = "localSyncOperationActor"
+
+  /** The name of the blocking dispatcher. */
+  private val BlockingDispatcherName = "blocking-dispatcher"
 }
 
 /**
   * A special factory implementation for destination components if the
   * destination structure is a local file system.
   *
-  * @param config the file system configuration
+  * @param config  the file system configuration
+  * @param timeout a timeout for operations
+  * @param ec      the execution context
+  * @param system  the actor system
   */
-private class LocalFsDestinationComponentsFactory(val config: LocalFsConfig) extends DestinationComponentsFactory {
-  override def createDestinationSource[T](optDstTransformer: Option[ResultTransformer[T]]):
-  Source[FsElement, Any] = ???
+private class LocalFsDestinationComponentsFactory(val config: LocalFsConfig, val timeout: Timeout)
+                                                 (implicit ec: ExecutionContext, system: ActorSystem)
+  extends DestinationComponentsFactory with LocalFsComponentsFactory {
 
-  override def createPartialSource(startFolderUri: String): Source[FsElement, Any] = ???
+  import LocalFsDestinationComponentsFactory._
 
-  override def createApplyStage(fileProvider: SourceFileProvider, noop: Boolean):
-  Flow[SyncOperation, SyncOperation, NotUsed] = ???
+  override def createDestinationSource(sourceFactory: ElementSourceFactory): Source[FsElement, Any] =
+    createLocalFsElementSource(config, sourceFactory)
+
+  override def createPartialSource(sourceFactory: ElementSourceFactory, startFolderUri: String):
+  Source[FsElement, Any] =
+    createLocalFsElementSource(config, sourceFactory, startFolderUri = startFolderUri)
+
+  override def createApplyStage(targetUri: String, fileProvider: SourceFileProvider): ApplyStageData = {
+    implicit val askTimeout: Timeout = timeout
+    val configWithTargetUri = config.copy(rootPath = Paths.get(targetUri))
+    val operationActor = system.actorOf(Props(classOf[LocalSyncOperationActor],
+      fileProvider, configWithTargetUri, BlockingDispatcherName), LocalSyncOpActorName)
+    val flow = Flow[SyncOperation].mapAsync(1) { op =>
+      val futWrite = operationActor ? op
+      futWrite.mapTo[SyncOperation]
+    }
+    val cleanUp = () => operationActor ! PoisonPill
+    ApplyStageData(flow, cleanUp)
+  }
 }

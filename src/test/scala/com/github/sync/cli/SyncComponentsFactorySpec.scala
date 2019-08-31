@@ -24,15 +24,15 @@ import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.AsyncTestHelper
-import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, SourceStructureType}
+import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, SourceComponentsFactory, SourceStructureType}
 import com.github.sync.local.LocalFsConfig
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.duration._
 
 object SyncComponentsFactorySpec {
-  /** A timeout value which is required as implicit parameter. */
-  implicit val TestTimeout: Timeout = Timeout(10.seconds)
+  /** A timeout value which is required to create sub factories. */
+  val TestTimeout: Timeout = Timeout(10.seconds)
 }
 
 /**
@@ -74,7 +74,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       List(TimeZoneId))
     val syncFactory = new SyncComponentsFactory
 
-    val (processedArgs, sourceFactory) = futureResult(syncFactory.createSourceComponentsFactory(uri, args))
+    val (processedArgs, sourceFactory) =
+      futureResult(syncFactory.createSourceComponentsFactory(uri, TestTimeout, args))
     processedArgs.size should be(0)
     extractLocalFsSourceConfig(sourceFactory) should be(new LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
   }
@@ -83,7 +84,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val uri = "/my/sync/dir"
     val syncFactory = new SyncComponentsFactory
 
-    val (processedArgs, sourceFactory) = futureResult(syncFactory.createSourceComponentsFactory(uri, Map.empty))
+    val (processedArgs, sourceFactory) =
+      futureResult(syncFactory.createSourceComponentsFactory(uri, TestTimeout, Map.empty))
     processedArgs.size should be(0)
     extractLocalFsSourceConfig(sourceFactory) should be(new LocalFsConfig(Paths.get(uri), None))
   }
@@ -94,7 +96,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val syncFactory = new SyncComponentsFactory
 
     val exception =
-      expectFailedFuture[IllegalArgumentException](syncFactory.createSourceComponentsFactory("\u0000", args))
+      expectFailedFuture[IllegalArgumentException] {
+        syncFactory.createSourceComponentsFactory("\u0000", TestTimeout, args)
+      }
     exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropLocalFsPath))
     exception.getMessage should include(SourceStructureType.configPropertyName(
       SyncComponentsFactory.PropLocalFsTimeZone))
@@ -107,11 +111,13 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       List(TimeZoneId))
     val syncFactory = new SyncComponentsFactory
 
-    val (processedArgs, destFactory) = futureResult(syncFactory.createDestinationComponentsFactory(uri, args))
+    val (processedArgs, destFactory) =
+      futureResult(syncFactory.createDestinationComponentsFactory(uri, TestTimeout, args))
     processedArgs.size should be(0)
     destFactory match {
       case localFactory: LocalFsDestinationComponentsFactory =>
         localFactory.config should be(new LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
+        localFactory.timeout should be(TestTimeout)
       case r => fail("Unexpected result: " + r)
     }
   }
