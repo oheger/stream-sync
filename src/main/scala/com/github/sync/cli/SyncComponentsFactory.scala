@@ -21,6 +21,7 @@ import java.time.ZoneId
 
 import akka.NotUsed
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.Uri
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
@@ -28,11 +29,15 @@ import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import com.github.sync.local.LocalFsConfig
+import com.github.sync.webdav.DavConfig
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 object SyncComponentsFactory {
+  /** URI prefix indicating a WebDav structure. */
+  val PrefixWebDav = "dav:"
+
   /**
     * Property for the time zone to be applied to the last-modified timestamps
     * of files encountered on the local FS. This property is optional. If it is
@@ -49,6 +54,51 @@ object SyncComponentsFactory {
     * Property name for the root path of a local file system.
     */
   val PropLocalFsPath = "path"
+
+  /**
+    * Property for the URI of a WebDav server. This is used to generate an
+    * error message if the URI is invalid.
+    */
+  val PropDavUri = "uri"
+
+  /**
+    * Property for the Dav user name. This is used to authenticate against the
+    * WebDav server.
+    */
+  val PropDavUser = "user"
+
+  /**
+    * Property for the Dav password of the user. This is used to authenticate
+    * against the WebDav server.
+    */
+  val PropDavPassword = "password"
+
+  /**
+    * Property for the name of the WebDav property defining the last modified
+    * time of an element. This is optional; if unspecified, the default WebDav
+    * property for the last modified time is used.
+    */
+  val PropDavModifiedProperty = "modified-property"
+
+  /**
+    * Property for the name of the WebDav property that defines a namespace for
+    * the property with the last modified time. If this property is defined, in
+    * patch requests to the WebDav server to update the modified time of a file
+    * this namespace will be used. Note that this property has an effect only
+    * if a custom modified property is set.
+    */
+  val PropDavModifiedNamespace = "modified-namespace"
+
+  /**
+    * Property to determine whether a file to be overridden should be deleted
+    * before it is uploaded. This may be necessary for some servers to have a
+    * reliable behavior. The value of the property is a string that is
+    * interpreted as a boolean value (in terms of ''Boolean.parseBoolean()'').
+    */
+  val PropDavDeleteBeforeOverride = "delete-before-override"
+
+  /** Regular expression for parsing a WebDav URI. */
+  private val RegDavUri = (PrefixWebDav + "(.+)").r
 
   /**
     * A trait defining the type of a structure to be synced.
@@ -173,68 +223,22 @@ object SyncComponentsFactory {
     def createApplyStage(targetUri: String, fileProvider: SourceFileProvider): ApplyStageData
   }
 
-}
-
-/**
-  * A factory class for creating the single components of a sync stream based
-  * on command line arguments.
-  *
-  * This factory handles the construction of the parts of the sync stream that
-  * depend on the types of the structures to be synced, as identified by the
-  * concrete URIs for the source and destination structures.
-  *
-  * The usage scenario is that the command line arguments have already been
-  * pre-processed. The URIs representing the source and destination structures
-  * determine, which additional parameters are required to fully define these
-  * structures. These parameters are extracted and removed from the
-  * ''Parameters'' object. That way a verification of all input parameters is
-  * possible.
-  */
-class SyncComponentsFactory {
-
-  import SyncComponentsFactory._
-
   /**
-    * Creates a factory for creating the stream components related to the
-    * source structure of the sync process. The passed in parameters are
-    * processed in order to create the factory and updated by removing the
-    * parameters consumed.
+    * Extracts a configuration object of a specific type from command line
+    * arguments with the help of a ''CliProcessor''. The processor is run, and
+    * its result is mapped to a correct ''Future''.
     *
-    * @param uri        the URI defining the source structure
-    * @param timeout    a timeout when applying a sync operation
-    * @param parameters the object with command line parameters
-    * @param system     the actor system
-    * @param mat        the object to materialize streams
+    * @param parameters the object with command line arguments
+    * @param processor  the ''CliProcessor'' defining the configuration
     * @param ec         the execution context
-    * @return updated parameters and the factory for creating source components
+    * @tparam C the type of the configuration object
+    * @return a ''Future'' with the updated parameters and the configuration
     */
-  def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
-                                   (implicit system: ActorSystem, mat: ActorMaterializer,
-                                    ec: ExecutionContext):
-  Future[(Parameters, SourceComponentsFactory)] =
-    extractLocalFsConfig(uri, parameters, SourceStructureType)
-      .map(t => (t._1, new LocalFsSourceComponentsFactory(t._2)))
-
-  /**
-    * Creates a factory for creating the stream components related to the
-    * destination structure of the sync process. The passed in parameters are
-    * processed in order to create the factory and updated by removing the
-    * parameters consumed.
-    *
-    * @param uri        the URI defining the source structure
-    * @param timeout    a timeout when applying a sync operation
-    * @param parameters the object with command line parameters
-    * @param system     the actor system
-    * @param mat        the object to materialize streams
-    * @param ec         the execution context
-    * @return updated parameters and the factory for creating dest components
-    */
-  def createDestinationComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
-                                        (implicit system: ActorSystem, mat: ActorMaterializer,
-                                         ec: ExecutionContext):
-  Future[(Parameters, DestinationComponentsFactory)] =
-    extractLocalFsConfig(uri, parameters, DestinationStructureType)
-      .map(t => (t._1, new LocalFsDestinationComponentsFactory(t._2, timeout)))
+  private def extractConfig[C](parameters: Parameters, processor: CliProcessor[Try[C]])
+                              (implicit ec: ExecutionContext): Future[(Parameters, C)] = {
+    val (triedConfig, nextParams) = processor.run(parameters)
+    Future.fromTry(triedConfig) map ((nextParams, _))
+  }
 
   /**
     * Extracts the configuration for the local file system from the given
@@ -285,5 +289,140 @@ class SyncComponentsFactory {
     ParameterManager.createRepresentation(triedPath, triedZone) {
       new LocalFsConfig(triedPath.get, triedZone.get)
     }
+  }
+
+  /**
+    * Extracts the configuration for a WebDav server from the given parameters.
+    * Errors are handled, and the map with parameters is updated.
+    *
+    * @param uri           the URI of the WebDav server
+    * @param timeout       the timeout for requests
+    * @param parameters    the parameters object
+    * @param structureType the structure type
+    * @param ec            the execution context
+    * @return a ''Future'' with the extracted configuration and updated
+    *         parameters
+    */
+  private def extractDavConfig(uri: String, timeout: Timeout, parameters: Parameters, structureType: StructureType)
+                              (implicit ec: ExecutionContext): Future[(Parameters, DavConfig)] =
+    extractConfig(parameters, davConfigProcessor(uri, timeout, structureType))
+
+  /**
+    * Returns a ''CliProcessor'' that extracts the configuration for a WebDav
+    * server from the current command line arguments.
+    *
+    * @param uri           the URI of the WebDav server
+    * @param timeout       the timeout for requests
+    * @param structureType the structure type
+    * @return the ''CliProcessor'' for the WebDav configuration
+    */
+  private def davConfigProcessor(uri: String, timeout: Timeout, structureType: StructureType):
+  CliProcessor[Try[DavConfig]] = for {
+    triedUser <- ParameterManager.singleOptionValue(structureType.configPropertyName(PropDavUser))
+    triedPassword <- ParameterManager.singleOptionValue(structureType.configPropertyName(PropDavPassword))
+    triedModProp <- ParameterManager.optionalOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
+    triedModNs <- ParameterManager.optionalOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
+    triedDel <- ParameterManager.booleanOptionValue(structureType.configPropertyName(PropDavDeleteBeforeOverride))
+  } yield createDavConfig(uri, timeout, structureType, triedUser, triedPassword, triedModProp,
+    triedModNs, triedDel)
+
+  /**
+    * Creates a ''DavConfig'' object from the given components. Errors are
+    * aggregated in the resulting ''Try''.
+    *
+    * @param uri                       the URI of the Dav server
+    * @param timeout                   the timeout for requests
+    * @param structureType             the structure type
+    * @param triedUser                 the user name component
+    * @param triedPassword             the password component
+    * @param triedOptModifiedProp      the component for the modified property
+    * @param triedOptModifiedNamespace the component for the modified namespace
+    * @param triedDelBeforeOverride    the component for the delete before
+    *                                  override flag
+    * @return a ''Try'' with the configuration for a Dav server
+    */
+  private def createDavConfig(uri: String, timeout: Timeout, structureType: StructureType, triedUser: Try[String],
+                              triedPassword: Try[String], triedOptModifiedProp: Try[Option[String]],
+                              triedOptModifiedNamespace: Try[Option[String]],
+                              triedDelBeforeOverride: Try[Boolean]): Try[DavConfig] = {
+    val triedUri = ParameterManager.paramTry(structureType.configPropertyName(PropDavUri))(Uri(uri))
+    ParameterManager.createRepresentation(triedUser, triedPassword, triedOptModifiedProp, triedOptModifiedNamespace,
+      triedDelBeforeOverride, triedUri) {
+      DavConfig(triedUri.get, triedUser.get, triedPassword.get, triedOptModifiedProp.get,
+        triedOptModifiedNamespace.get, triedDelBeforeOverride.get, timeout)
+    }
+  }
+
+}
+
+/**
+  * A factory class for creating the single components of a sync stream based
+  * on command line arguments.
+  *
+  * This factory handles the construction of the parts of the sync stream that
+  * depend on the types of the structures to be synced, as identified by the
+  * concrete URIs for the source and destination structures.
+  *
+  * The usage scenario is that the command line arguments have already been
+  * pre-processed. The URIs representing the source and destination structures
+  * determine, which additional parameters are required to fully define these
+  * structures. These parameters are extracted and removed from the
+  * ''Parameters'' object. That way a verification of all input parameters is
+  * possible.
+  */
+class SyncComponentsFactory {
+
+  import SyncComponentsFactory._
+
+  /**
+    * Creates a factory for creating the stream components related to the
+    * source structure of the sync process. The passed in parameters are
+    * processed in order to create the factory and updated by removing the
+    * parameters consumed.
+    *
+    * @param uri        the URI defining the source structure
+    * @param timeout    a timeout when applying a sync operation
+    * @param parameters the object with command line parameters
+    * @param system     the actor system
+    * @param mat        the object to materialize streams
+    * @param ec         the execution context
+    * @return updated parameters and the factory for creating source components
+    */
+  def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
+                                   (implicit system: ActorSystem, mat: ActorMaterializer,
+                                    ec: ExecutionContext):
+  Future[(Parameters, SourceComponentsFactory)] = uri match {
+    case RegDavUri(davUri) =>
+      extractDavConfig(davUri, timeout, parameters, SourceStructureType)
+        .map(t => (t._1, new DavComponentsSourceFactory(t._2)))
+    case _ =>
+      extractLocalFsConfig(uri, parameters, SourceStructureType)
+        .map(t => (t._1, new LocalFsSourceComponentsFactory(t._2)))
+  }
+
+  /**
+    * Creates a factory for creating the stream components related to the
+    * destination structure of the sync process. The passed in parameters are
+    * processed in order to create the factory and updated by removing the
+    * parameters consumed.
+    *
+    * @param uri        the URI defining the source structure
+    * @param timeout    a timeout when applying a sync operation
+    * @param parameters the object with command line parameters
+    * @param system     the actor system
+    * @param mat        the object to materialize streams
+    * @param ec         the execution context
+    * @return updated parameters and the factory for creating dest components
+    */
+  def createDestinationComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
+                                        (implicit system: ActorSystem, mat: ActorMaterializer,
+                                         ec: ExecutionContext):
+  Future[(Parameters, DestinationComponentsFactory)] = uri match {
+    case RegDavUri(davUri) =>
+      extractDavConfig(davUri, timeout, parameters, DestinationStructureType)
+        .map(t => (t._1, new DavComponentsDestinationFactory(t._2)))
+    case _ =>
+      extractLocalFsConfig(uri, parameters, DestinationStructureType)
+        .map(t => (t._1, new LocalFsDestinationComponentsFactory(t._2, timeout)))
   }
 }

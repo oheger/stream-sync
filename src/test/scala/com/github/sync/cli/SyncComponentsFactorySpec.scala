@@ -20,19 +20,51 @@ import java.nio.file.Paths
 import java.time.ZoneId
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.Uri
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.AsyncTestHelper
+import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, SourceComponentsFactory, SourceStructureType}
 import com.github.sync.local.LocalFsConfig
+import com.github.sync.webdav.DavConfig
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.duration._
+import scala.language.implicitConversions
 
 object SyncComponentsFactorySpec {
   /** A timeout value which is required to create sub factories. */
-  val TestTimeout: Timeout = Timeout(10.seconds)
+  private val TestTimeout: Timeout = Timeout(10.seconds)
+
+  /** Test URI for a WebDav server. */
+  private val DavRootUri = "https://my-test-server.org"
+
+  /** The URI of the test WebDav server with the prefix indicating a Dav URI. */
+  private val PrefixDavRootUri = SyncComponentsFactory.PrefixWebDav + DavRootUri
+
+  /** Test user name. */
+  private val User = "scott"
+
+  /** Test password. */
+  private val Password = "tiger"
+
+  /** Test last-modified property. */
+  private val LastModifiedProperty = "lastModifiedProp"
+
+  /** Test namespace for the last-modified property. */
+  private val LastModifiedNamespace = "testNamespace"
+
+  /**
+    * A conversion function for parameter maps. This makes it possible to use
+    * simple maps (with only one value per parameter).
+    *
+    * @param argsMap the simple map with arguments
+    * @return the parameters map
+    */
+  implicit def toParameters(argsMap: Map[String, String]): Parameters =
+    argsMap map (e => (e._1, List(e._2)))
 }
 
 /**
@@ -71,7 +103,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val TimeZoneId = "UTC+02:00"
     val uri = "/my/sync/dir"
     val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
-      List(TimeZoneId))
+      TimeZoneId)
     val syncFactory = new SyncComponentsFactory
 
     val (processedArgs, sourceFactory) =
@@ -92,7 +124,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "generate failure messages for all invalid parameters of a local FS config" in {
     val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
-      List("invalid zone ID!"))
+      "invalid zone ID!")
     val syncFactory = new SyncComponentsFactory
 
     val exception =
@@ -108,7 +140,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val TimeZoneId = "UTC-02:00"
     val uri = "/my/sync/target"
     val args = Map(DestinationStructureType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
-      List(TimeZoneId))
+      TimeZoneId)
     val syncFactory = new SyncComponentsFactory
 
     val (processedArgs, destFactory) =
@@ -118,6 +150,90 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       case localFactory: LocalFsDestinationComponentsFactory =>
         localFactory.config should be(new LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
         localFactory.timeout should be(TestTimeout)
+      case r => fail("Unexpected result: " + r)
+    }
+  }
+
+  it should "create a correct DavConfig for the source structure if all properties are defined" in {
+    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true")
+    val syncFactory = new SyncComponentsFactory
+
+    val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
+      TestTimeout, args))
+    processedArgs.size should be(0)
+    srcFactory match {
+      case davFactory: DavComponentsSourceFactory =>
+        davFactory.config.rootUri should be(Uri(DavRootUri))
+        davFactory.config.user should be(User)
+        davFactory.config.password should be(Password)
+        davFactory.config.lastModifiedProperty should be(LastModifiedProperty)
+        davFactory.config.lastModifiedNamespace should be(Some(LastModifiedNamespace))
+        davFactory.config.deleteBeforeOverride shouldBe true
+        davFactory.config.timeout should be(TestTimeout)
+      case r => fail("Unexpected result: " + r)
+    }
+  }
+
+  it should "create a correct DavConfig for the source structure with defaults" in {
+    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
+    val syncFactory = new SyncComponentsFactory
+
+    val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
+      TestTimeout, args))
+    processedArgs.size should be(0)
+    srcFactory match {
+      case davFactory: DavComponentsSourceFactory =>
+        davFactory.config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
+        davFactory.config.lastModifiedNamespace should be(None)
+        davFactory.config.deleteBeforeOverride shouldBe false
+      case r => fail("Unexpected result: " + r)
+    }
+  }
+
+  it should "generate failure messages for all invalid parameters of a DavConfig" in {
+    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "xx",
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace)
+    val DavUri = SyncComponentsFactory.PrefixWebDav + "?not a Valid URI!"
+    val syncFactory = new SyncComponentsFactory
+
+    val exception =
+      expectFailedFuture[IllegalArgumentException] {
+        syncFactory.createSourceComponentsFactory(DavUri, TestTimeout, args)
+      }
+    exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUri))
+    exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser))
+    exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword))
+    exception.getMessage should include(SourceStructureType.configPropertyName(
+      SyncComponentsFactory.PropDavDeleteBeforeOverride))
+  }
+
+  it should "create a correct DavConfig for the destination structure" in {
+    val args = Map(DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
+      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) ->
+        LastModifiedProperty,
+      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) ->
+        LastModifiedNamespace,
+      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true")
+    val syncFactory = new SyncComponentsFactory
+
+    val (processedArgs, srcFactory) = futureResult(syncFactory.createDestinationComponentsFactory(PrefixDavRootUri,
+      TestTimeout, args))
+    processedArgs.size should be(0)
+    srcFactory match {
+      case davFactory: DavComponentsDestinationFactory =>
+        davFactory.config.rootUri should be(Uri(DavRootUri))
+        davFactory.config.user should be(User)
+        davFactory.config.password should be(Password)
+        davFactory.config.lastModifiedProperty should be(LastModifiedProperty)
+        davFactory.config.lastModifiedNamespace should be(Some(LastModifiedNamespace))
+        davFactory.config.deleteBeforeOverride shouldBe true
+        davFactory.config.timeout should be(TestTimeout)
       case r => fail("Unexpected result: " + r)
     }
   }
