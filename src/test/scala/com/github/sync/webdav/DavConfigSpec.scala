@@ -28,12 +28,28 @@ import scala.concurrent.duration._
 object DavConfigSpec {
   /** A timeout value. */
   private val DavTimeout = Timeout(11.seconds)
+
+  /** Test URI of a Dav server. */
+  private val DavUri = "https://test.webdav.tst/"
+
+  /** Test user name. */
+  private val User = "scott"
+
+  /** Test password. */
+  private val Password = "tiger"
+
+  /** Test modified property name. */
+  private val ModifiedProp = "myModifiedTime"
+
+  /** Test modified namespace. */
+  private val ModifiedNamespace = "urn:schemas-test-org:"
 }
 
 /**
   * Test class for ''DavConfig''.
   */
 class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
+
   import DavConfigSpec._
 
   /**
@@ -66,56 +82,48 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
       "--" + DestinationStructureType.name + DavConfig.PropDeleteBeforeOverride -> "false")
 
   "DavConfig" should "return supported arguments for the source structure" in {
+    //TODO will become obsolete
     checkSupportedArguments(SourceStructureType)
   }
 
   it should "return supported arguments for the destination structure" in {
+    //TODO will become obsolete
     checkSupportedArguments(DestinationStructureType)
   }
 
   it should "create a new config instance" in {
-    val uri = "https://test.webdav.tst/"
-    val user = "scott"
-    val password = "tiger"
-    val modifiedProp = "myModifiedTime"
-    val modifiedNamespace = "urn:schemas-test-org:"
-    val args = Map("--" + SourceStructureType.name + DavConfig.PropUser -> user,
-      "--" + SourceStructureType.name + DavConfig.PropPassword -> password,
-      "--" + SourceStructureType.name + DavConfig.PropModifiedProperty -> modifiedProp,
-      "--" + SourceStructureType.name + DavConfig.PropModifiedNamespace -> modifiedNamespace,
+    //TODO will become obsolete
+    val args = Map("--" + SourceStructureType.name + DavConfig.PropUser -> User,
+      "--" + SourceStructureType.name + DavConfig.PropPassword -> Password,
+      "--" + SourceStructureType.name + DavConfig.PropModifiedProperty -> ModifiedProp,
+      "--" + SourceStructureType.name + DavConfig.PropModifiedNamespace -> ModifiedNamespace,
       "--" + SourceStructureType.name + DavConfig.PropDeleteBeforeOverride -> "true",
       "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
-    val expConfig = DavConfig(uri, user, password, modifiedProp, Some(modifiedNamespace),
+    val expConfig = DavConfig(DavUri, User, Password, ModifiedProp, Some(ModifiedNamespace),
       deleteBeforeOverride = true,
-      modifiedProperties = List(modifiedProp, DavConfig.DefaultModifiedProperty), DavTimeout)
+      modifiedProperties = List(ModifiedProp, DavConfig.DefaultModifiedProperty), DavTimeout)
 
-    val config = futureResult(DavConfig(SourceStructureType, uri, DavTimeout, args))
+    val config = futureResult(DavConfig(SourceStructureType, DavUri, DavTimeout, args))
     config should be(expConfig)
   }
 
   it should "fill the list of modified properties correctly" in {
-    val args = Map("--" + SourceStructureType.name + DavConfig.PropUser -> "user",
-      "--" + SourceStructureType.name + DavConfig.PropPassword -> "password",
-      "--" + SourceStructureType.name + DavConfig.PropDeleteBeforeOverride -> "true",
-      "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
+    val expModifiedProperties = List(ModifiedProp, DavConfig.DefaultModifiedProperty)
+    val config = DavConfig(DavUri, User, Password, Some(ModifiedProp), Some(ModifiedNamespace),
+      deleteBeforeOverride = true, DavTimeout)
 
-    val config = futureResult(DavConfig(SourceStructureType, "someUri", DavTimeout, args))
-    config.modifiedProperties should contain only DavConfig.DefaultModifiedProperty
+    config.modifiedProperties should contain theSameElementsInOrderAs expModifiedProperties
   }
 
   it should "eliminate duplicates in the list of modified properties" in {
-    val args = Map("--" + SourceStructureType.name + DavConfig.PropUser -> "user",
-      "--" + SourceStructureType.name + DavConfig.PropPassword -> "password",
-      "--" + SourceStructureType.name + DavConfig.PropModifiedProperty ->
-        DavConfig.DefaultModifiedProperty,
-      "--" + SourceStructureType.name + DavConfig.PropDeleteBeforeOverride -> "true",
-      "--" + DestinationStructureType.name + DavConfig.PropUser -> "otherUser")
+    val config = DavConfig(DavUri, User, Password, Some(DavConfig.DefaultModifiedProperty), Some(ModifiedNamespace),
+      deleteBeforeOverride = true, DavTimeout)
 
-    val config = futureResult(DavConfig(SourceStructureType, "someUri", DavTimeout, args))
     config.modifiedProperties should contain only DavConfig.DefaultModifiedProperty
   }
 
   it should "return a failed future if a mandatory property is missing" in {
+    //TODO will become obsolete
     val args = Map(SourceStructureType.name + DavConfig.PropUser -> "user",
       DestinationStructureType.name + DavConfig.PropPassword -> "pwd",
       DestinationStructureType.name + DavConfig.PropModifiedProperty -> "mod")
@@ -124,13 +132,13 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
   }
 
   it should "set the default last modified property if undefined" in {
-    val args = minimumParametersMap()
+    val config = DavConfig(DavUri, User, Password, None, None, deleteBeforeOverride = false, DavTimeout)
 
-    val config = futureResult(DavConfig(DestinationStructureType, "root", DavTimeout, args))
     config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
   }
 
   it should "set an undefined namespace if this property is not set" in {
+    //TODO will become obsolete
     val args = minimumParametersMap()
 
     val config = futureResult(DavConfig(DestinationStructureType, "root", DavTimeout, args))
@@ -138,6 +146,7 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
   }
 
   it should "interpret an arbitrary value for the delete-before-override property" in {
+    //TODO will become obsolete
     val args = minimumParametersMap() + (DavConfig.PropDeleteBeforeOverride -> "unknown")
 
     val config = futureResult(DavConfig(DestinationStructureType, "root", DavTimeout, args))
@@ -145,6 +154,7 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
   }
 
   it should "return a failed future for an invalid URI" in {
+    //TODO will become obsolete
     val args = Map(SourceStructureType.name + DavConfig.PropUser -> "user",
       SourceStructureType.name + DavConfig.PropPassword -> "pwd",
       SourceStructureType.name + DavConfig.PropModifiedProperty -> "mod")

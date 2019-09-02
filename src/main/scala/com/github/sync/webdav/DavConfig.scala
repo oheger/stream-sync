@@ -97,6 +97,27 @@ object DavConfig {
   }
 
   /**
+    * Creates a ''DavConfig'' from the passed in settings.
+    *
+    * @param rootUri              the root URI of the WebDav structure
+    * @param user                 the user name
+    * @param password             the password
+    * @param optModifiedProperty  an option for the property containing the
+    *                             last-modified timestamp
+    * @param optModifiedNamespace namespace to use for the last modified
+    *                             property
+    * @param deleteBeforeOverride flag whether a delete operation should be
+    *                             issued before a file override
+    * @param timeout              a timeout for requests to the DAV server
+    * @return the ''DavConfig'' object
+    */
+  def apply(rootUri: Uri, user: String, password: String, optModifiedProperty: Option[String],
+            optModifiedNamespace: Option[String], deleteBeforeOverride: Boolean,
+            timeout: Timeout): DavConfig =
+    new DavConfig(rootUri, user, password, optModifiedProperty getOrElse DefaultModifiedProperty,
+      optModifiedNamespace, deleteBeforeOverride, createModifiedProperties(optModifiedProperty), timeout)
+
+  /**
     * Returns a collection of ''SupportedArgument'' objects for the given
     * structure type. This information is used to obtain the corresponding
     * options from the command line.
