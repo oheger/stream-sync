@@ -18,7 +18,7 @@ package com.github.sync.webdav
 
 import akka.actor.{Actor, ActorRef, PoisonPill}
 import akka.http.scaladsl.model.HttpRequest
-import com.github.sync.webdav.HttpExtensionActor.Release
+import com.github.sync.webdav.HttpExtensionActor.{RegisterClient, Release}
 import com.github.sync.webdav.HttpRequestActor.SendRequest
 
 object HttpExtensionActor {
@@ -29,6 +29,14 @@ object HttpExtensionActor {
     * its clients, it is stopped, and also the wrapped HTTP actor.
     */
   case object Release
+
+  /**
+    * A message processed by [[HttpExtensionActor]] that tells the actor that
+    * it is assigned to another client. This increases the internal client
+    * count; so the actor will only be stopped when the corresponding number of
+    * [[Release]] messages has been received.
+    */
+  case object RegisterClient
 
 }
 
@@ -56,11 +64,19 @@ trait HttpExtensionActor {
   protected val httpActor: ActorRef
 
   /**
-    * The number of clients of this actor. This is used when handling
+    * The (initial) number of clients of this actor. This is used when handling
     * ''Release'' messages. When all clients have sent a ''Release'' message
     * the actor can be stopped.
     */
   protected val clientCount: Int
+
+  /**
+    * A counter for additional clients that have been registered later. This is
+    * used in cases when the exact number of clients is not known at creation
+    * time of the actor. The counter can be increased dynamically by sending
+    * the actor ''RegisterClient'' messages.
+    */
+  private var additionalClientCount = 0
 
   /** A counter for the Release message that have been received. */
   private var releaseCount = 0
@@ -101,9 +117,12 @@ trait HttpExtensionActor {
   private def commonReceive: Receive = {
     case Release =>
       releaseCount += 1
-      if (releaseCount >= clientCount) {
+      if (releaseCount >= clientCount + additionalClientCount) {
         httpActor ! PoisonPill
         context stop self
       }
+
+    case RegisterClient =>
+      additionalClientCount += 1
   }
 }

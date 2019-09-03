@@ -21,7 +21,7 @@ import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.util.Timeout
-import com.github.sync.webdav.HttpExtensionActor.Release
+import com.github.sync.webdav.HttpExtensionActor.{RegisterClient, Release}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.duration._
@@ -102,6 +102,18 @@ class HttpBasicAuthActorSpec(testSystem: ActorSystem) extends TestKit(testSystem
     authActor ! Release
 
     authActor ! HttpRequestActor.SendRequest(HttpRequest(uri = "/foo"), "test")
+    probeHttp.expectMsgType[HttpRequestActor.SendRequest]
+    authActor ! Release
+    checkStopped(probeHttp.ref)
+  }
+
+  it should "support registering clients dynamically" in {
+    val probeHttp = TestProbe()
+    val authActor = system.actorOf(HttpBasicAuthActor(probeHttp.ref, TestDavConfig))
+
+    authActor ! RegisterClient
+    authActor ! Release
+    authActor ! HttpRequestActor.SendRequest(HttpRequest(uri = "/alive"), "test")
     probeHttp.expectMsgType[HttpRequestActor.SendRequest]
     authActor ! Release
     checkStopped(probeHttp.ref)
