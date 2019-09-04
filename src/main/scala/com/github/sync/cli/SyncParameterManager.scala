@@ -19,12 +19,11 @@ package com.github.sync.cli
 import java.nio.file.{Path, Paths}
 
 import akka.util.Timeout
-import com.github.sync.SyncTypes.SupportedArgument
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 /**
   * A service responsible for parsing command line arguments.
@@ -278,59 +277,6 @@ object SyncParameterManager {
   Future[(Parameters, SyncConfig)] = Future {
     val (triedConfig, map) = syncConfigProcessor().run(argsMap)
     (map, triedConfig.get)
-  }
-
-  /**
-    * Extracts the values of additional supported parameters from the given map
-    * with command line arguments. This method is used to obtain the argument
-    * options required to access the source and destination structures. (These
-    * options are specific to the concrete structures to be synced.) Based on
-    * the description objects for supported arguments, the values are extracted
-    * from the map with arguments (and removed in the returned map). Result is
-    * a map with the argument keys and their extracted values.
-    *
-    * @param argsMap the map with arguments
-    * @param args    the arguments to be extracted
-    * @param ec      the execution context
-    * @return a future with the extracted arguments and the updated arguments
-    *         map
-    */
-  def extractSupportedArguments(argsMap: Parameters,
-                                args: Iterable[SupportedArgument])
-                               (implicit ec: ExecutionContext):
-  Future[(Parameters, Map[String, String])] = Future {
-    def handleTriedResult[T](argsMap: Parameters,
-                             extrArgs: Map[String, String], proc: CliProcessor[Try[T]],
-                             errors: List[String])
-                            (h: (Map[String, String], T) => Map[String, String]):
-    (Parameters, Map[String, String], List[String]) = {
-      val (res, updArgs) = proc.run(argsMap)
-      res match {
-        case Success(value) =>
-          (updArgs, h(extrArgs, value), errors)
-        case Failure(exception) =>
-          (updArgs, Map.empty, exception.getMessage :: errors)
-      }
-    }
-
-    val result = args.foldLeft((argsMap, Map.empty[String, String],
-      List.empty[String])) { (state, arg) =>
-      arg match {
-        case SupportedArgument(key, false, _) =>
-          val proc = ParameterManager.optionalOptionValue(key)
-          handleTriedResult(state._1, state._2, proc, state._3) { (map, res) =>
-            res.map(v => map + (key -> v)).getOrElse(map)
-          }
-        case SupportedArgument(key, true, defaultValue) =>
-          val proc = ParameterManager.singleOptionValue(key, defaultValue)
-          handleTriedResult(state._1, state._2, proc, state._3) { (map, res) =>
-            map + (key -> res)
-          }
-      }
-    }
-    if (result._3.nonEmpty)
-      throw new IllegalArgumentException(result._3.mkString(", "))
-    (result._1, result._2)
   }
 
   /**
