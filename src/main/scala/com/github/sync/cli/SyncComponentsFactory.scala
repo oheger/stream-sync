@@ -297,7 +297,7 @@ object SyncComponentsFactory {
   Try[LocalFsConfig] = {
     val triedPath = ParameterManager.paramTry(structureType.configPropertyName(PropLocalFsPath))(Paths get uri)
     ParameterManager.createRepresentation(triedPath, triedZone) {
-      new LocalFsConfig(triedPath.get, triedZone.get)
+      LocalFsConfig(triedPath.get, triedZone.get)
     }
   }
 
