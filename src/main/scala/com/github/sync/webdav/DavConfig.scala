@@ -18,9 +18,6 @@ package com.github.sync.webdav
 
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
-import com.github.sync.SyncTypes.{StructureType, SupportedArgument}
-
-import scala.concurrent.{ExecutionContext, Future}
 
 object DavConfig {
   /**
@@ -71,32 +68,6 @@ object DavConfig {
   val DefaultDeleteBeforeOverride = "false"
 
   /**
-    * Creates a ''Future'' with a new ''DavConfig'' from the specified
-    * arguments. The arguments corresponding to the specified structure type
-    * are extracted from the passed in map and returned as a config object. If
-    * this fails, a failed future is returned.
-    *
-    * @param structType the structure type (determines, which arguments are
-    *                   read from the map)
-    * @param rootUri    the root URI of the WebDav structure
-    * @param timeout    a timeout for requests to the DAV server
-    * @param properties a map with properties
-    * @param ec         the execution context
-    * @return a ''Future'' with the resulting ''DavConfig''
-    */
-  def apply(structType: StructureType, rootUri: String, timeout: Timeout,
-            properties: Map[String, String])(implicit ec: ExecutionContext):
-  Future[DavConfig] = Future {
-    val optPropModified = properties get propName(structType, PropModifiedProperty)
-    DavConfig(rootUri, properties(propName(structType, PropUser)),
-      properties(propName(structType, PropPassword)),
-      optPropModified getOrElse DefaultModifiedProperty,
-      properties get propName(structType, PropModifiedNamespace),
-      java.lang.Boolean.parseBoolean(properties(propName(structType, PropDeleteBeforeOverride))),
-      createModifiedProperties(optPropModified), timeout)
-  }
-
-  /**
     * Creates a ''DavConfig'' from the passed in settings.
     *
     * @param rootUri              the root URI of the WebDav structure
@@ -116,32 +87,6 @@ object DavConfig {
             timeout: Timeout): DavConfig =
     new DavConfig(rootUri, user, password, optModifiedProperty getOrElse DefaultModifiedProperty,
       optModifiedNamespace, deleteBeforeOverride, createModifiedProperties(optModifiedProperty), timeout)
-
-  /**
-    * Returns a collection of ''SupportedArgument'' objects for the given
-    * structure type. This information is used to obtain the corresponding
-    * options from the command line.
-    *
-    * @param structType the structure type
-    * @return a sequence with ''SupportedArgument'' objects
-    */
-  def supportedArgumentsFor(structType: StructureType): Iterable[SupportedArgument] =
-    List(SupportedArgument(propName(structType, PropUser), mandatory = true),
-      SupportedArgument(propName(structType, PropPassword), mandatory = true),
-      SupportedArgument(propName(structType, PropModifiedProperty), mandatory = false),
-      SupportedArgument(propName(structType, PropModifiedNamespace), mandatory = false),
-      SupportedArgument(propName(structType, PropDeleteBeforeOverride), mandatory = true,
-        defaultValue = Some(DefaultDeleteBeforeOverride)))
-
-  /**
-    * Generates a property name based on the given structure type.
-    *
-    * @param structType the structure type
-    * @param prop       the property name
-    * @return the resulting qualified property name
-    */
-  private def propName(structType: StructureType, prop: String): String =
-    structType.configPropertyName(prop)
 
   /**
     * Generates the list of modified properties. If a custom modified property
