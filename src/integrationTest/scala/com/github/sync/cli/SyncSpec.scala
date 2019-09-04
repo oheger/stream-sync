@@ -421,6 +421,20 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     lines.get(0) should be("REMOVE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
   }
 
+  it should "do proper cleanup for a Dav source when using a log file source and apply mode NONE" in {
+    val factory = new SyncComponentsFactory
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val procLog = createPathInDirectory("processed.log")
+    val operations = List(s"CREATE 0 FILE /syncFile.txt 0 2019-09-04T21:30:23.00Z 42")
+    val syncLogFile = createDataFile(content = operations.mkString("\n"))
+    val options = Array("dav:http://irrelevant.host.org/test", dstFolder.toAbsolutePath.toString,
+      "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString,
+      "--apply", "none", "--src-user", UserId, "--src-password", Password)
+
+    val result = futureResult(Sync.syncProcess(factory, options))
+    result.successfulOperations should be(operations.size)
+  }
+
   it should "make sure that an element source for local files is shutdown" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))

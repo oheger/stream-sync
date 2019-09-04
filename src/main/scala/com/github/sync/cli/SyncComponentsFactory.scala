@@ -148,6 +148,16 @@ object SyncComponentsFactory {
   }
 
   /**
+    * Type definition for a function that does cleanup for a components
+    * factory. Resources created by the factory, such as actors, can be freed
+    * by invoking this function.
+    */
+  type CleanupFunction = () => Unit
+
+  /** Constant for a cleanup function that does nothing. */
+  val EmptyCleanupFunction: CleanupFunction = () => {}
+
+  /**
     * A data class collecting information about the apply stage of a sync
     * stream.
     *
@@ -159,7 +169,7 @@ object SyncComponentsFactory {
     * @param cleanUp a cleanup function
     */
   case class ApplyStageData(stage: Flow[SyncOperation, SyncOperation, NotUsed],
-                            cleanUp: () => Unit)
+                            cleanUp: CleanupFunction = EmptyCleanupFunction)
 
   /**
     * A trait describing a factory for creating the components of a sync stream
