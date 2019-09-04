@@ -34,7 +34,6 @@ import com.github.sync.WireMockSupport.{Password, _}
 import com.github.sync._
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptOpHandler}
-import com.github.sync.impl.SyncStreamFactoryImpl
 import com.github.sync.local.LocalUriResolver
 import com.github.sync.util.UriEncodingHelper
 import com.github.sync.webdav.{DavConfig, DavSourceFileProvider}
@@ -462,7 +461,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString)
 
     futureResult(Sync.syncProcess(factory, options))
-    val selection = system.actorSelection(s"/user/${SyncStreamFactoryImpl.LocalSyncOpActorName}")
+    val selection = system.actorSelection(s"/user/${LocalFsDestinationComponentsFactory.LocalSyncOpActorName}")
     selection ! Identify(identifyId)
     val identity = expectMsgType[ActorIdentity]
     identity.correlationId should be(identifyId)
