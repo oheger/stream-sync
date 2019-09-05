@@ -16,6 +16,7 @@
 
 package com.github.sync.cli
 
+import java.io.{ByteArrayOutputStream, StringReader}
 import java.nio.file.Paths
 import java.time.ZoneId
 
@@ -99,6 +100,18 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       case f => fail("Unexpected source factory: " + f)
     }
 
+  /**
+    * Returns the DAV config from a source factory.
+    *
+    * @param sourceFactory the source factory
+    * @return the DAV config from this factory
+    */
+  private def extractDavSourceConfig(sourceFactory: SourceComponentsFactory): DavConfig =
+    sourceFactory match {
+      case davFactory: DavComponentsSourceFactory => davFactory.config
+      case f => fail("Unexpected source factory: " + f)
+    }
+
   "SyncComponentsFactory" should "create a correct file system config for the source structure" in {
     val TimeZoneId = "UTC+02:00"
     val uri = "/my/sync/dir"
@@ -109,7 +122,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val (processedArgs, sourceFactory) =
       futureResult(syncFactory.createSourceComponentsFactory(uri, TestTimeout, args))
     processedArgs.size should be(0)
-    extractLocalFsSourceConfig(sourceFactory) should be(new LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
+    extractLocalFsSourceConfig(sourceFactory) should be(LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
   }
 
   it should "create a correct file system config for the source structure with defaults" in {
@@ -119,7 +132,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val (processedArgs, sourceFactory) =
       futureResult(syncFactory.createSourceComponentsFactory(uri, TestTimeout, Map.empty))
     processedArgs.size should be(0)
-    extractLocalFsSourceConfig(sourceFactory) should be(new LocalFsConfig(Paths.get(uri), None))
+    extractLocalFsSourceConfig(sourceFactory) should be(LocalFsConfig(Paths.get(uri), None))
   }
 
   it should "generate failure messages for all invalid parameters of a local FS config" in {
@@ -148,7 +161,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     processedArgs.size should be(0)
     destFactory match {
       case localFactory: LocalFsDestinationComponentsFactory =>
-        localFactory.config should be(new LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
+        localFactory.config should be(LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
         localFactory.timeout should be(TestTimeout)
       case r => fail("Unexpected result: " + r)
     }
@@ -165,17 +178,14 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
       TestTimeout, args))
     processedArgs.size should be(0)
-    srcFactory match {
-      case davFactory: DavComponentsSourceFactory =>
-        davFactory.config.rootUri should be(Uri(DavRootUri))
-        davFactory.config.user should be(User)
-        davFactory.config.password should be(Password)
-        davFactory.config.lastModifiedProperty should be(LastModifiedProperty)
-        davFactory.config.lastModifiedNamespace should be(Some(LastModifiedNamespace))
-        davFactory.config.deleteBeforeOverride shouldBe true
-        davFactory.config.timeout should be(TestTimeout)
-      case r => fail("Unexpected result: " + r)
-    }
+    val config = extractDavSourceConfig(srcFactory)
+    config.rootUri should be(Uri(DavRootUri))
+    config.user should be(User)
+    config.password should be(Password)
+    config.lastModifiedProperty should be(LastModifiedProperty)
+    config.lastModifiedNamespace should be(Some(LastModifiedNamespace))
+    config.deleteBeforeOverride shouldBe true
+    config.timeout should be(TestTimeout)
   }
 
   it should "create a correct DavConfig for the source structure with defaults" in {
@@ -186,18 +196,16 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
       TestTimeout, args))
     processedArgs.size should be(0)
-    srcFactory match {
-      case davFactory: DavComponentsSourceFactory =>
-        davFactory.config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
-        davFactory.config.lastModifiedNamespace should be(None)
-        davFactory.config.deleteBeforeOverride shouldBe false
-      case r => fail("Unexpected result: " + r)
-    }
+    val config = extractDavSourceConfig(srcFactory)
+    config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
+    config.lastModifiedNamespace should be(None)
+    config.deleteBeforeOverride shouldBe false
   }
 
   it should "generate failure messages for all invalid parameters of a DavConfig" in {
     val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "xx",
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace)
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
     val DavUri = SyncComponentsFactory.PrefixWebDav + "?not a Valid URI!"
     val syncFactory = new SyncComponentsFactory
 
@@ -207,7 +215,6 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       }
     exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUri))
     exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser))
-    exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword))
     exception.getMessage should include(SourceStructureType.configPropertyName(
       SyncComponentsFactory.PropDavDeleteBeforeOverride))
   }
@@ -236,5 +243,26 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
         davFactory.config.timeout should be(TestTimeout)
       case r => fail("Unexpected result: " + r)
     }
+  }
+
+  it should "read the Dav password from the console if it is not specified" in {
+    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User)
+    val userInput = new StringReader(s"$Password\n")
+    val capturePrompt = new ByteArrayOutputStream
+    val syncFactory = new SyncComponentsFactory
+
+    Console.withIn(userInput) {
+      Console.withOut(capturePrompt) {
+        val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
+          TestTimeout, args))
+        processedArgs.size should be(0)
+        val config = extractDavSourceConfig(srcFactory)
+        config.user should be(User)
+        config.password should be(Password)
+      }
+    }
+    val prompt = new String(capturePrompt.toByteArray)
+    prompt should startWith(SyncComponentsFactory.SourceStructureType.configPropertyName(
+      SyncComponentsFactory.PropDavPassword))
   }
 }

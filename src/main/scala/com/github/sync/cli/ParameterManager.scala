@@ -25,6 +25,7 @@ import akka.util.ByteString
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
+import scala.io.StdIn
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -233,6 +234,28 @@ object ParameterManager {
   def optionalIntOptionValue(key: String, errMsg: => String): CliProcessor[Try[Option[Int]]] =
     optionalOptionValue(key) map { strRes =>
       strRes.map(_.map(toInt(errMsg)))
+    }
+
+  /**
+    * Returns a processor that prompts the user to enter a value for an option
+    * if it is not already defined in the command line arguments. This is
+    * useful for instance to enter passwords. The processor first checks
+    * whether the corresponding command line option has been set. If so, the
+    * value is returned. Otherwise, the option key is written to stdout as a
+    * prompt, and a string is read from the console. This becomes the value of
+    * the option.
+    *
+    * @param key the option key
+    * @return the processor that reads the option from the command line
+    */
+  def consoleInputOption(key: String): CliProcessor[Try[String]] =
+    ParameterManager.optionalOptionValue(key) map { triedOption =>
+      triedOption.map {
+        case Some(data) => data
+        case None =>
+          print(s"$key: ")
+          StdIn.readLine()
+      }
     }
 
   /**
