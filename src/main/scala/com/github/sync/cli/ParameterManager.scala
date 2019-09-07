@@ -26,6 +26,7 @@ import akka.util.ByteString
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
 import scala.io.StdIn
+import scala.language.implicitConversions
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -66,7 +67,61 @@ object ParameterManager {
     * with command line options is transformed in such a map which allows
     * direct access to the value(s) assigned to options.
     */
-  type Parameters = Map[String, Iterable[String]]
+  type ParametersMap = Map[String, Iterable[String]]
+
+  /**
+    * A data class storing the information required for extracting command
+    * line options.
+    *
+    * This class is used by ''ParameterManager'' to represent parsed command
+    * line arguments and to keep track about the option keys that have been
+    * read by the application. (This is needed to find additional options
+    * provided by the user that are not supported by the application.)
+    *
+    * @param parametersMap      the map with the options and their values
+    * @param accessedParameters a set with the option keys that were queried
+    */
+  case class Parameters(parametersMap: ParametersMap, accessedParameters: Set[String]) {
+    /**
+      * Returns a new instance of ''Parameters'' that has the given key marked
+      * as accessed.
+      *
+      * @param key the key affected
+      * @return the updated ''Parameters'' instance
+      */
+    def keyAccessed(key: String): Parameters =
+      if (accessedParameters contains key) this
+      else copy(accessedParameters = accessedParameters + key)
+
+    /**
+      * Returns a new instance of ''Parameters'' that has the given keys marked
+      * as accessed.
+      *
+      * @param keys the collection with keys affected
+      * @return the updated ''Parameters'' instance
+      */
+    def keysAccessed(keys: Iterable[String]): Parameters =
+      copy(accessedParameters = accessedParameters ++ keys)
+
+    /**
+      * Returns a flag whether all keys in the parameter maps have been
+      * accessed. If this property is '''false''' at the end of command line
+      * processing, this means that the command line contained unsupported
+      * options.
+      *
+      * @return a flag whether all option keys have been accessed
+      */
+    def allKeysAccessed: Boolean =
+      parametersMap.keySet.forall(accessedParameters.contains)
+
+    /**
+      * Returns a set with the option keys that are present, but have not been
+      * accessed during command line processing.
+      *
+      * @return a set with the keys that have not been accessed
+      */
+    def notAccessedKeys: Set[String] = parametersMap.keySet -- accessedParameters
+  }
 
   /**
     * A case class representing a processor for command line options.
@@ -89,10 +144,20 @@ object ParameterManager {
   }
 
   /**
+    * An implicit conversion to create a ''Parameters'' object from a map of
+    * parsed command line options.
+    *
+    * @param map the map
+    * @return the resulting ''Parameters''
+    */
+  implicit def mapToParameters(map: ParametersMap): Parameters =
+    Parameters(map, Set.empty)
+
+  /**
     * Type definition for an internal map type used during processing of
     * command line arguments.
     */
-  private type ParamMap = Map[String, List[String]]
+  private type InternalParamMap = Map[String, List[String]]
 
   /**
     * Parses the command line arguments and converts them into a map keyed by
@@ -104,14 +169,14 @@ object ParameterManager {
     * @return a future with the parsed map of arguments
     */
   def parseParameters(args: Seq[String])(implicit ec: ExecutionContext, mat: ActorMaterializer): Future[Parameters] = {
-    def appendOptionValue(argMap: ParamMap, opt: String, value: String):
-    ParamMap = {
+    def appendOptionValue(argMap: InternalParamMap, opt: String, value: String):
+    InternalParamMap = {
       val optValues = argMap.getOrElse(opt, List.empty)
       argMap + (opt -> (value :: optValues))
     }
 
-    @tailrec def doParseParameters(argsList: Seq[String], argsMap: ParamMap):
-    ParamMap = argsList match {
+    @tailrec def doParseParameters(argsList: Seq[String], argsMap: InternalParamMap):
+    InternalParamMap = argsList match {
       case opt :: value :: tail if isOption(opt) =>
         doParseParameters(tail, appendOptionValue(argsMap, toLower(opt), value))
       case h :: t if !isOption(h) =>
@@ -122,11 +187,11 @@ object ParameterManager {
         argsMap
     }
 
-    def parseParameterSeq(argList: Seq[String]): ParamMap =
+    def parseParameterSeq(argList: Seq[String]): InternalParamMap =
       doParseParameters(argList, Map.empty)
 
-    def parseParametersWithFiles(argList: Seq[String], currentParams: ParamMap,
-                                 processedFiles: Set[String]): Future[ParamMap] = Future {
+    def parseParametersWithFiles(argList: Seq[String], currentParams: InternalParamMap,
+                                 processedFiles: Set[String]): Future[InternalParamMap] = Future {
       combineParameterMaps(currentParams, parseParameterSeq(argList))
     } flatMap { argMap =>
       argMap get FileOption match {
@@ -140,7 +205,7 @@ object ParameterManager {
       }
     }
 
-    parseParametersWithFiles(args.toList, Map.empty, Set.empty)
+    parseParametersWithFiles(args.toList, Map.empty, Set.empty).map(mapToParameters)
   }
 
   /**
@@ -149,9 +214,9 @@ object ParameterManager {
     * @param key the key of the option
     * @return the processor to extract the option values
     */
-  def optionValue(key: String): CliProcessor[Iterable[String]] = CliProcessor(map => {
-    val values = map.getOrElse(key, Nil)
-    (values, map - key)
+  def optionValue(key: String): CliProcessor[Iterable[String]] = CliProcessor(params => {
+    val values = params.parametersMap.getOrElse(key, Nil)
+    (values, params keyAccessed key)
   })
 
   /**
@@ -267,12 +332,12 @@ object ParameterManager {
     * unknown or superfluous ones. In this case, parameter validation should
     * fail and no action should be executed.
     *
-    * @param argsMap the map with parameters to be checked
+    * @param params the object with parameters to be checked
     * @return a future with the passed in map if the check succeeds
     */
-  def checkParametersConsumed(argsMap: Parameters): Future[Parameters] =
-    if (argsMap.isEmpty) Future.successful(argsMap)
-    else Future.failed(new IllegalArgumentException("Found unexpected parameters: " + argsMap))
+  def checkParametersConsumed(params: Parameters): Future[Parameters] =
+    if (params.allKeysAccessed) Future.successful(params)
+    else Future.failed(new IllegalArgumentException("Found unexpected parameters: " + params.notAccessedKeys))
 
   /**
     * Returns a collection containing all error messages from the given
@@ -360,7 +425,7 @@ object ParameterManager {
     * @param m2 the second map
     * @return the combined map
     */
-  private def combineParameterMaps(m1: ParamMap, m2: ParamMap): ParamMap =
+  private def combineParameterMaps(m1: InternalParamMap, m2: InternalParamMap): InternalParamMap =
     m2.foldLeft(m1) { (resMap, e) =>
       val values = resMap.getOrElse(e._1, List.empty)
       resMap + (e._1 -> (e._2 ::: values))

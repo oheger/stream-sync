@@ -132,17 +132,19 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   "ParameterManager" should "parse an empty sequence of arguments" in {
-    val argMap = parseParameters(Nil)
+    val params = parseParameters(Nil)
 
-    argMap should have size 0
+    params.parametersMap should have size 0
+    params.accessedParameters should have size 0
   }
 
   it should "correctly parse non-option parameters" in {
     val syncUris = List("uri1", "uri2")
     val expArgMap = Map(ParameterManager.InputOption -> syncUris.reverse)
 
-    val argMap = parseParameters(syncUris)
-    argMap should be(expArgMap)
+    val params = parseParameters(syncUris)
+    params.parametersMap should be(expArgMap)
+    params.accessedParameters should have size 0
   }
 
   it should "correctly parse arguments with options" in {
@@ -150,8 +152,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val expArgMap = Map("--opt1" -> List("opt1Val2", "opt1Val1"),
       "--opt2" -> List("opt2Val1"))
 
-    val argMap = parseParameters(args)
-    argMap should be(expArgMap)
+    val params = parseParameters(args)
+    params.parametersMap should be(expArgMap)
   }
 
   it should "fail with a correct message if an option is the last argument" in {
@@ -167,21 +169,27 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       "--foo" -> List("BAR"),
       ParameterManager.InputOption -> List("testUri"))
 
-    val argMap = parseParameters(args)
-    argMap should be(expArgMap)
+    val params = parseParameters(args)
+    params.parametersMap should be(expArgMap)
   }
 
-  it should "validate a map with all parameters consumed" in {
-    val result = futureResult(ParameterManager.checkParametersConsumed(Map.empty))
+  it should "validate a Parameters object with all parameters consumed" in {
+    val argsMap = Map("--foo" -> List("v1"), "--bar" -> List("v2", "v3"))
+    val accessed = Set("--foo", "--bar")
+    val params = Parameters(argsMap, accessed)
+    val result = futureResult(ParameterManager.checkParametersConsumed(params))
 
-    result should have size 0
+    result should be(params)
   }
 
   it should "fail the check for consumed parameters if there are remaining parameters" in {
-    val argsMap = Map("foo" -> List("bar"))
+    val argsMap = Map("foo" -> List("bar"), "bar" -> List("v"), "baz" -> List("vv"))
+    val accessed = Set("baz")
 
-    expectFailedFuture(ParameterManager.checkParametersConsumed(argsMap),
-      "unexpected parameters: " + argsMap)
+    val ex = expectFailedFuture[IllegalArgumentException](
+      ParameterManager.checkParametersConsumed(Parameters(argsMap, accessed)))
+    ex.getMessage should include("foo")
+    ex.getMessage should include("bar")
   }
 
   it should "add the content of parameter files to command line options" in {
@@ -196,7 +204,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       appendFileParameter(createParameterFile(OptionName2, Opt2Val),
         OptionName1 :: Opt1Val2 :: uri2 :: Nil))
 
-    val argsMap = parseParameters(args)
+    val argsMap = parseParameters(args).parametersMap
     argsMap(OptionName1) should contain only(Opt1Val1, Opt1Val2)
     argsMap(OptionName2) should contain only Opt2Val
     argsMap.keys should not contain ParameterManager.FileOption
@@ -220,7 +228,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       OptionName2 -> List(Option2Value),
       OptionName3 -> List(Option3Value))
 
-    val argsMap = parseParameters(args)
+    val argsMap = parseParameters(args).parametersMap
     argsMap should be(expArgs)
   }
 
@@ -233,7 +241,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val args = appendFileParameter(file1, Nil)
     val expArgs = Map("--op1" -> List("v1"), "--op2" -> List("v2"), "--op3" -> List("v3"))
 
-    val argsMap = parseParameters(args)
+    val argsMap = parseParameters(args).parametersMap
     argsMap should be(expArgs)
   }
 
@@ -241,15 +249,15 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val args = appendFileParameter(createParameterFile("--foo", "bar", "", "--foo", "baz"),
       "--test" :: "true" :: Nil)
 
-    val argsMap = parseParameters(args)
+    val argsMap = parseParameters(args).parametersMap
     argsMap.keys should contain only("--foo", "--test")
   }
 
   it should "extract URI parameters if they are present" in {
-    val (map, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
+    val (params, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.syncUris._1 should be(SourceUri)
     config.syncUris._2 should be(DestinationUri)
-    map should have size 0
+    params.accessedParameters should contain allElementsOf ArgsMap.keySet
   }
 
   it should "reject URI parameters if there are more than 2" in {
@@ -470,13 +478,17 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       "Crypt cache size must be greater or equal " + SyncParameterManager.MinCryptCacheSize)
   }
 
-  it should "remove all options contained in the sync config" in {
+  it should "mark all options contained in the sync config as accessed" in {
     val otherOptions = Map("foo" -> List("v1"), "bar" -> List("v2", "v3"))
     val argsMap = ArgsMap ++ otherOptions +
       (SyncParameterManager.IgnoreTimeDeltaOption -> List("1"))
 
     val (updArgs, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
-    updArgs should be(otherOptions)
+    updArgs.accessedParameters should contain allOf(SyncParameterManager.ApplyModeOption,
+      SyncParameterManager.TimeoutOption, SyncParameterManager.LogFileOption, SyncParameterManager.SyncLogOption,
+    SyncParameterManager.IgnoreTimeDeltaOption, SyncParameterManager.OpsPerSecondOption,
+    SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption,
+    SyncParameterManager.EncryptSourceFileNamesOption, SyncParameterManager.EncryptDestFileNamesOption)
   }
 
   it should "combine multiple error messages when parsing the sync config" in {

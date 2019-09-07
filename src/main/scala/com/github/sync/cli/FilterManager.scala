@@ -149,14 +149,14 @@ object FilterManager {
     */
   def parseFilters(arguments: Parameters)(implicit ec: ExecutionContext):
   Future[(Parameters, SyncFilterData)] = {
-    val futCleanedMap = removeFilterParameters(arguments)
+    val futCleanedMap = markFilterParametersAccessed(arguments)
     val futCommonFilters =
-      parseExpressionsOfFilterOption(arguments.getOrElse(ArgCommonFilter, Nil), Nil)
+      parseExpressionsOfFilterOption(arguments.parametersMap.getOrElse(ArgCommonFilter, Nil), Nil)
     for {cleanedMap <- futCleanedMap
          commonFilters <- futCommonFilters
          filterData1 <- parseFiltersPerActionType(arguments, commonFilters)
          filterData <- parseActionFilter(arguments, filterData1)
-    } yield (cleanedMap, SyncFilterData(filterData))
+         } yield (cleanedMap, SyncFilterData(filterData))
   }
 
   /**
@@ -308,7 +308,7 @@ object FilterManager {
                                         commonFilters: List[SyncOperationFilter])
                                        (implicit ec: ExecutionContext): Future[ActionFilters] = {
     Future.sequence(ActionFilterParameters map { t =>
-      parseFilterOption(args.getOrElse(t._1, Nil), t._2, commonFilters)
+      parseFilterOption(args.parametersMap.getOrElse(t._1, Nil), t._2, commonFilters)
     }) map (lst => lst.reduce(_ ++ _))
   }
 
@@ -359,7 +359,7 @@ object FilterManager {
     * @return a set with all enabled action types
     */
   private def extractEnabledActionTypes(args: Parameters): Set[SyncAction] = {
-    val actionTypeNames = args.getOrElse(ArgActionFilter, ActionTypeList)
+    val actionTypeNames = args.parametersMap.getOrElse(ArgActionFilter, ActionTypeList)
       .flatMap(_.split(ActionTypeSeparator))
       .map(_.trim.toLowerCase(Locale.ROOT))
     val invalidActionTypes = actionTypeNames filterNot ActionTypeNameMapping.contains
@@ -372,16 +372,16 @@ object FilterManager {
   }
 
   /**
-    * Removes all parameters supported by the filter manager from the given
-    * map with arguments.
+    * Marks all parameters supported by the filter manager as accessed in the
+    * given ''Parameters'' object.
     *
-    * @param args the map with arguments
-    * @return a future with the map with filter arguments removed
+    * @param args the original ''Parameters'' object
+    * @return a future with the updated ''Parameters'' object
     */
-  private def removeFilterParameters(args: Parameters)
-                                    (implicit ec: ExecutionContext):
+  private def markFilterParametersAccessed(args: Parameters)
+                                          (implicit ec: ExecutionContext):
   Future[Parameters] = Future {
-    args filterNot (AllFilterParameters contains _._1)
+    args keysAccessed AllFilterParameters
   }
 
   /**

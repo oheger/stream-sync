@@ -121,7 +121,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
     val (processedArgs, sourceFactory) =
       futureResult(syncFactory.createSourceComponentsFactory(uri, TestTimeout, args))
-    processedArgs.size should be(0)
+    processedArgs.accessedParameters should contain only SourceStructureType.configPropertyName(
+      SyncComponentsFactory.PropLocalFsTimeZone)
     extractLocalFsSourceConfig(sourceFactory) should be(LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
   }
 
@@ -130,8 +131,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val syncFactory = new SyncComponentsFactory
 
     val (processedArgs, sourceFactory) =
-      futureResult(syncFactory.createSourceComponentsFactory(uri, TestTimeout, Map.empty))
-    processedArgs.size should be(0)
+      futureResult(syncFactory.createSourceComponentsFactory(uri, TestTimeout, Map.empty[String, Iterable[String]]))
+    processedArgs.accessedParameters should contain only SourceStructureType.configPropertyName(
+      SyncComponentsFactory.PropLocalFsTimeZone)
     extractLocalFsSourceConfig(sourceFactory) should be(LocalFsConfig(Paths.get(uri), None))
   }
 
@@ -158,7 +160,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
     val (processedArgs, destFactory) =
       futureResult(syncFactory.createDestinationComponentsFactory(uri, TestTimeout, args))
-    processedArgs.size should be(0)
+    processedArgs.accessedParameters should contain only DestinationStructureType.configPropertyName(
+      SyncComponentsFactory.PropLocalFsTimeZone)
     destFactory match {
       case localFactory: LocalFsDestinationComponentsFactory =>
         localFactory.config should be(LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
@@ -177,7 +180,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
     val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
       TestTimeout, args))
-    processedArgs.size should be(0)
+    processedArgs.accessedParameters should be(args.keySet)
     val config = extractDavSourceConfig(srcFactory)
     config.rootUri should be(Uri(DavRootUri))
     config.user should be(User)
@@ -193,9 +196,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
     val syncFactory = new SyncComponentsFactory
 
-    val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
+    val (_, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
       TestTimeout, args))
-    processedArgs.size should be(0)
     val config = extractDavSourceConfig(srcFactory)
     config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
     config.lastModifiedNamespace should be(None)
@@ -231,7 +233,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
     val (processedArgs, srcFactory) = futureResult(syncFactory.createDestinationComponentsFactory(PrefixDavRootUri,
       TestTimeout, args))
-    processedArgs.size should be(0)
+    processedArgs.accessedParameters should be(args.keySet)
     srcFactory match {
       case davFactory: DavComponentsDestinationFactory =>
         davFactory.config.rootUri should be(Uri(DavRootUri))
@@ -255,7 +257,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       Console.withOut(capturePrompt) {
         val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
           TestTimeout, args))
-        processedArgs.size should be(0)
+        processedArgs.accessedParameters should contain(SourceStructureType.configPropertyName(
+          SyncComponentsFactory.PropDavPassword))
         val config = extractDavSourceConfig(srcFactory)
         config.user should be(User)
         config.password should be(Password)

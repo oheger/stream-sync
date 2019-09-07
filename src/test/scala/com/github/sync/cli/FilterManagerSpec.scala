@@ -20,7 +20,7 @@ import java.time.{Instant, LocalDateTime, ZoneId}
 
 import com.github.sync.SyncTypes._
 import com.github.sync._
-import com.github.sync.cli.FilterManager.{SyncFilterData, SyncOperationFilter}
+import com.github.sync.cli.FilterManager.{ArgActionFilter, ArgCommonFilter, ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter, SyncFilterData, SyncOperationFilter}
 import com.github.sync.cli.ParameterManager.Parameters
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -152,16 +152,16 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
     * @param acceptedOps options expected to be accepted
     * @param rejectedOps options expected to be rejected
     */
-  private def checkParseFilterArguments(filterArgs: Parameters,
+  private def checkParseFilterArguments(filterArgs: ParameterManager.ParametersMap,
                                         acceptedOps: List[SyncOperation],
                                         rejectedOps: List[SyncOperation]): Unit = {
     val otherParam = "foo" -> List("bar")
     val args = filterArgs + otherParam
-    val expNextArgs = Map(otherParam)
     val (nextArgs, filterData) = futureResult(FilterManager.parseFilters(args))
     acceptedOps foreach (op => FilterManager.applyFilter(op, filterData) shouldBe true)
     rejectedOps foreach (op => FilterManager.applyFilter(op, filterData) shouldBe false)
-    nextArgs should be(expNextArgs)
+    nextArgs.accessedParameters should contain only(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter,
+      ArgCommonFilter, ArgActionFilter)
   }
 
   "FilterManager" should "parse an empty list of filter definitions" in {
@@ -279,7 +279,8 @@ class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
   it should "parse arguments without filter expressions" in {
     val expData = SyncFilterData(Map(ActionCreate -> Nil, ActionOverride -> Nil,
       ActionRemove -> Nil))
-    val (_, filterData) = futureResult(FilterManager.parseFilters(Map.empty))
+    val params = Parameters(Map.empty, Set.empty)
+    val (_, filterData) = futureResult(FilterManager.parseFilters(params))
 
     filterData should be(expData)
   }
