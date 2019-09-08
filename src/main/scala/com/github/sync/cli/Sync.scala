@@ -27,7 +27,7 @@ import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, IterateFunc, ResultTransformer, SyncFolderData, SyncOperation}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
-import com.github.sync.cli.SyncParameterManager.SyncConfig
+import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
 import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.crypt.{CryptService, CryptStage}
 import com.github.sync.impl.{CleanupStage, CryptAwareSourceFileProvider, ElementSource, StatefulStage, SyncStage}
@@ -145,9 +145,9 @@ object Sync {
       createSyncSourceFromLog(config, path)
     case None =>
       val srcSource = srcFactory.createSource(createElementSourceFactory(createResultTransformer(config.srcPassword,
-        config.srcFileNamesEncrypted, config.cryptCacheSize)))
+        config.srcCryptMode, config.cryptCacheSize)))
       val dstSource = dstFactory.createDestinationSource(createElementSourceFactory(
-        createResultTransformer(config.dstPassword, config.dstFileNamesEncrypted, config.cryptCacheSize)))
+        createResultTransformer(config.dstPassword, config.dstCryptMode, config.cryptCacheSize)))
       Future.successful(createGraphForSyncSource(srcSource, dstSource, config.ignoreTimeDelta getOrElse 1))
   }
 
@@ -198,17 +198,18 @@ object Sync {
     * element source are compatible with the parameters passed in.
     *
     * @param optCryptPwd    the optional encryption password
-    * @param encryptNames   flag whether file names are encrypted
+    * @param cryptMode      the crypt mode
     * @param cryptCacheSize size of the cache for encrypted names
     * @param ec             the execution context
     * @param mat            the object to materialize streams
     * @return the ''ResultTransformer'' for these parameters
     */
-  private[cli] def createResultTransformer(optCryptPwd: Option[String], encryptNames: Boolean, cryptCacheSize: Int)
+  private[cli] def createResultTransformer(optCryptPwd: Option[String], cryptMode: CryptMode.Value,
+                                           cryptCacheSize: Int)
                                           (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Option[ResultTransformer[LRUCache[String, String]]] =
     optCryptPwd.map { pwd =>
-      val optNameKey = if (encryptNames) Some(CryptStage.keyFromString(pwd)) else None
+      val optNameKey = if (cryptMode == CryptMode.FilesAndNames) Some(CryptStage.keyFromString(pwd)) else None
       CryptService.cryptTransformer(optNameKey, cryptCacheSize)
     }
 
@@ -294,7 +295,7 @@ object Sync {
                                  stage: Flow[SyncOperation, SyncOperation, NotUsed])
                                 (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Flow[SyncOperation, SyncOperation, NotUsed] =
-    if (config.dstPassword.isEmpty || !config.dstFileNamesEncrypted) stage
+    if (config.dstPassword.isEmpty || config.dstCryptMode != CryptMode.FilesAndNames) stage
     else {
       val sourceFactory = createElementSourceFactory(None)
       val srcFunc: IterateSourceFunc = startFolderUri => {

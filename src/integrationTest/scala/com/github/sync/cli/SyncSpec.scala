@@ -33,6 +33,7 @@ import akka.util.{ByteString, Timeout}
 import com.github.sync.WireMockSupport.{Password, _}
 import com.github.sync._
 import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.SyncParameterManager.CryptMode
 import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptOpHandler}
 import com.github.sync.local.LocalUriResolver
 import com.github.sync.util.UriEncodingHelper
@@ -670,7 +671,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val TestFileName = "TestFileToBeEncryptedAndScrambled.txt"
     createTestFile(srcFolder, TestFileName)
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--dst-encrypt-password", "crYptiC", "--dst-encrypt-names", "true")
+      "--dst-encrypt-password", "crYptiC", "--dst-crypt-mode", "FilesAndNames")
 
     val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(result.successfulOperations)
@@ -693,7 +694,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val delFolder = Files.createDirectory(dstFolder.resolve(delFolderName))
     createTestFile(delFolder, delFileName)
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--dst-encrypt-password", Password, "--dst-encrypt-names", "true")
+      "--dst-encrypt-password", Password, "--dst-crypt-mode", "filesAndNames")
 
     val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(result.successfulOperations)
@@ -713,11 +714,11 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     createTestFile(subDir, "anotherSub.txt")
     val Password = "test-privacy"
     val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
-      "--dst-encrypt-password", Password, "--dst-encrypt-names", "true")
+      "--dst-encrypt-password", Password, "--dst-crypt-mode", "filesAndNames")
     futureResult(Sync.syncProcess(factory, options1))
 
     val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
-      "--src-encrypt-password", Password, "--src-encrypt-names", "true")
+      "--src-encrypt-password", Password, "--src-crypt-mode", "filesAndNames")
     futureResult(Sync.syncProcess(factory, options2))
     checkFile(dstFolder2, "top.txt")
     val options3 = Array(srcFolder.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString)
@@ -736,7 +737,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     createTestFile(subSubDir, "deep1.txt")
     val Password = "Complex?"
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--dst-encrypt-password", Password, "--dst-encrypt-names", "true")
+      "--dst-encrypt-password", Password, "--dst-crypt-mode", "filesAndNames")
     futureResult(Sync.syncProcess(factory, options)).successfulOperations should be(5)
 
     createTestFile(subSubDir, "deep2.txt")
@@ -786,7 +787,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     createTestFile(dstFolder, "foo.txt", content = Some("Test file content"))
     val pathDeleted = createTestFile(dstFolder, "toDelete.txt")
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
-      "--src-encrypt-password", CryptPassword, "--src-encrypt-names", "true", "--src-user", UserId,
+      "--src-encrypt-password", CryptPassword, "--src-crypt-mode", "filesAndNames", "--src-user", UserId,
       "--src-password", Password)
 
     val result = futureResult(Sync.syncProcess(factory, options))
@@ -811,7 +812,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val Content = "This is the content of the test file ;-)"
     createTestFile(srcFolder, FileName, content = Some(Content))
     val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
-      "--dst-encrypt-password", CryptPassword, "--dst-encrypt-names", "true", "--dst-user", UserId,
+      "--dst-encrypt-password", CryptPassword, "--dst-crypt-mode", "filesAndNames", "--dst-user", UserId,
       "--dst-password", Password)
 
     futureResult(Sync.syncProcess(factory, options)).successfulOperations should be(1)
@@ -840,7 +841,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     createTestFile(subFolder, "anotherSubFile.dat")
     createTestFile(subFolder, "newSubFile.doc")
     val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
-      "--dst-encrypt-password", CryptPassword, "--dst-encrypt-names", "true", "--dst-user", UserId,
+      "--dst-encrypt-password", CryptPassword, "--dst-crypt-mode", "filesAndNames", "--dst-user", UserId,
       "--dst-password", Password, "--ignore-time-delta", Int.MaxValue.toString)
 
     futureResult(Sync.syncProcess(factory, options)).successfulOperations should be(1)
@@ -848,7 +849,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
 
   it should "evaluate the cache size for encrypted names" in {
     val CacheSize = 444
-    val transformer = Sync.createResultTransformer(Some("secret"), encryptNames = false, CacheSize)
+    val transformer = Sync.createResultTransformer(Some("secret"), cryptMode = CryptMode.Files, CacheSize)
     val cache = transformer.get.initialState
     cache.capacity should be(CacheSize)
   }

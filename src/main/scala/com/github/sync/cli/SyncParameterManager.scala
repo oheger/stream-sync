@@ -23,7 +23,8 @@ import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
+import scala.language.implicitConversions
+import scala.util.{Failure, Success, Try}
 
 /**
   * A service responsible for parsing command line arguments.
@@ -82,18 +83,17 @@ object SyncParameterManager {
   val DestPasswordOption: String = ParameterManager.OptionPrefix + "dst-encrypt-password"
 
   /**
-    * Name of the option that determines that the file names in the source
-    * structure are encrypted. This is evaluated only if a source password is
-    * set.
+    * Name of the option that determines te encryption mode for the source
+    * structure. This also determines whether a password must be present.
     */
-  val EncryptSourceFileNamesOption: String = ParameterManager.OptionPrefix + "src-encrypt-names"
+  val SourceCryptModeOption: String = ParameterManager.OptionPrefix + "src-crypt-mode"
 
   /**
-    * Name of the option that determines that the file names in the destination
-    * structure are encrypted. This is evaluated only if a destination password
-    * is set.
+    * Name of the option that determines the encryption mode for the
+    * destination structure. This also determines whether a password must be
+    * present.
     */
-  val EncryptDestFileNamesOption: String = ParameterManager.OptionPrefix + "dst-encrypt-names"
+  val DestCryptModeOption: String = ParameterManager.OptionPrefix + "dst-crypt-mode"
 
   /**
     * Name of the option that defines the size of the cache for encrypted
@@ -137,30 +137,53 @@ object SyncParameterManager {
   case object ApplyModeNone extends ApplyMode
 
   /**
+    * An enumeration defining the usage of encryption for a structure.
+    *
+    * With a value of this enumeration it is determined if and which parts of
+    * a structure are encrypted.
+    */
+  object CryptMode extends Enumeration {
+
+    protected case class Val(requiresPassword: Boolean = true) extends super.Val
+
+    implicit def valueToCryptModeVal(x: Value): Val = x.asInstanceOf[Val]
+
+    /** Crypt mode indicating that encryption is disabled. */
+    val None = Val(requiresPassword = false)
+
+    /** Crypt mode indicating that the content of files is encrypted. */
+    val Files = Val()
+
+    /**
+      * Crypt mode indicating that both the content of files and the names of
+      * folders and files are encrypted.
+      */
+    val FilesAndNames = Val()
+  }
+
+  /**
     * A class that holds the configuration options for a sync process.
     *
     * An instance of this class is created from the command line options passed
     * to the program.
     *
-    * @param syncUris              the URIs to be synced (source and destination)
-    * @param applyMode             the apply mode
-    * @param timeout               a timeout for sync operations
-    * @param logFilePath           an option with the path to the log file if defined
-    * @param syncLogPath           an option with the path to a file containing sync
-    *                              operations to be executed
-    * @param ignoreTimeDelta       optional threshold for a time difference between
-    *                              two files that should be ignored
-    * @param srcPassword           an option with the password for the sync source;
-    *                              if set, files from the source are encrypted
-    * @param srcFileNamesEncrypted flag whether file names in the source are
-    *                              encrypted
-    * @param dstPassword           an option with the password for the sync dest;
-    *                              if set, files written to dest get encrypted
-    * @param dstFileNamesEncrypted flag whether file names in the destination
-    *                              should be encrypted
-    * @param cryptCacheSize        the size of the cache for encrypted names
-    * @param opsPerSecond          optional restriction for the number of sync
-    *                              operations per second
+    * @param syncUris        the URIs to be synced (source and destination)
+    * @param applyMode       the apply mode
+    * @param timeout         a timeout for sync operations
+    * @param logFilePath     an option with the path to the log file if defined
+    * @param syncLogPath     an option with the path to a file containing sync
+    *                        operations to be executed
+    * @param ignoreTimeDelta optional threshold for a time difference between
+    *                        two files that should be ignored
+    * @param srcPassword     an option with the password for the sync source;
+    *                        if set, files from the source are encrypted
+    * @param srcCryptMode    the crypt mode for the source structure
+    * @param dstPassword     an option with the password for the sync dest;
+    *                        if set, files written to dest get encrypted
+    * @param dstCryptMode    the crypt mode for the destination structure
+    * @param cryptCacheSize  the size of the cache for encrypted names
+    * @param opsPerSecond    optional restriction for the number of sync
+    *                        operations per second
     */
   case class SyncConfig(syncUris: (String, String),
                         applyMode: ApplyMode,
@@ -169,9 +192,9 @@ object SyncParameterManager {
                         syncLogPath: Option[Path],
                         ignoreTimeDelta: Option[Int],
                         srcPassword: Option[String],
-                        srcFileNamesEncrypted: Boolean,
+                        srcCryptMode: CryptMode.Value,
                         dstPassword: Option[String],
-                        dstFileNamesEncrypted: Boolean,
+                        dstCryptMode: CryptMode.Value,
                         cryptCacheSize: Int,
                         opsPerSecond: Option[Int])
 
@@ -239,6 +262,20 @@ object SyncParameterManager {
       )
 
   /**
+    * Returns a processor that extracts a crypt mode value from a command line
+    * option.
+    *
+    * @param key the key of the option
+    * @return the processor to extract the crypt mode
+    */
+  def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
+    ParameterManager.singleOptionValue(key, Some(CryptMode.None.toString())) map (_.flatMap { name =>
+      val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
+      mode.fold[Try[CryptMode.Value]](Failure(
+        new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!")))(Success(_))
+    })
+
+  /**
     * Returns a processor that extracts the ''SyncConfig'' from the command
     * line options.
     *
@@ -255,11 +292,11 @@ object SyncParameterManager {
     opsPerSec <- opsPerSecondOption()
     srcPwd <- ParameterManager.optionalOptionValue(SourcePasswordOption)
     dstPwd <- ParameterManager.optionalOptionValue(DestPasswordOption)
-    srcEncFiles <- ParameterManager.booleanOptionValue(EncryptSourceFileNamesOption)
-    dstEncFiles <- ParameterManager.booleanOptionValue(EncryptDestFileNamesOption)
+    srcCrypt <- cryptModeProcessor(SourceCryptModeOption)
+    dstCrypt <- cryptModeProcessor(DestCryptModeOption)
     cacheSize <- cryptCacheSizeOption()
   } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta, opsPerSec,
-    srcPwd, srcEncFiles, dstPwd, dstEncFiles, cacheSize)
+    srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
 
   /**
     * Extracts an object with configuration options for the sync process from
@@ -285,18 +322,18 @@ object SyncParameterManager {
     * created. Otherwise, all error messages are collected and returned in a
     * failed ''Try''.
     *
-    * @param triedUris            the sync URIs component
-    * @param triedApplyMode       the apply mode component
-    * @param triedTimeout         the timeout component
-    * @param triedLogFile         the log file component
-    * @param triedSyncLog         the sync log component
-    * @param triedTimeDelta       the ignore file time delta component
-    * @param triedOpsPerSec       the ops per second component
-    * @param triedSrcPassword     the source password component
-    * @param triedEncSrcFileNames the source files encrypted component
-    * @param triedDstPassword     the destination password component
-    * @param triedEncDstFileNames the destination files encrypted component
-    * @param triedCryptCacheSize  the crypt cache size component
+    * @param triedUris           the sync URIs component
+    * @param triedApplyMode      the apply mode component
+    * @param triedTimeout        the timeout component
+    * @param triedLogFile        the log file component
+    * @param triedSyncLog        the sync log component
+    * @param triedTimeDelta      the ignore file time delta component
+    * @param triedOpsPerSec      the ops per second component
+    * @param triedSrcPassword    the source password component
+    * @param triedSrcCryptMode   the source files crypt mode component
+    * @param triedDstPassword    the destination password component
+    * @param triedDstCryptMode   the destination crypt mode component
+    * @param triedCryptCacheSize the crypt cache size component
     * @return a ''Try'' with the config
     */
   private def createSyncConfig(triedUris: Try[(String, String)],
@@ -307,16 +344,16 @@ object SyncParameterManager {
                                triedTimeDelta: Try[Option[Int]],
                                triedOpsPerSec: Try[Option[Int]],
                                triedSrcPassword: Try[Option[String]],
-                               triedEncSrcFileNames: Try[Boolean],
+                               triedSrcCryptMode: Try[CryptMode.Value],
                                triedDstPassword: Try[Option[String]],
-                               triedEncDstFileNames: Try[Boolean],
+                               triedDstCryptMode: Try[CryptMode.Value],
                                triedCryptCacheSize: Try[Int]): Try[SyncConfig] =
     ParameterManager.createRepresentation(triedUris, triedApplyMode, triedTimeout, triedLogFile,
-      triedSyncLog, triedTimeDelta, triedOpsPerSec, triedSrcPassword, triedEncSrcFileNames, triedDstPassword,
-      triedEncDstFileNames, triedCryptCacheSize) {
+      triedSyncLog, triedTimeDelta, triedOpsPerSec, triedSrcPassword, triedSrcCryptMode, triedDstPassword,
+      triedDstCryptMode, triedCryptCacheSize) {
       SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
         mapPath(triedLogFile.get), mapPath(triedSyncLog.get), triedTimeDelta.get,
-        triedSrcPassword.get, triedEncSrcFileNames.get, triedDstPassword.get, triedEncDstFileNames.get,
+        triedSrcPassword.get, triedSrcCryptMode.get, triedDstPassword.get, triedDstCryptMode.get,
         triedCryptCacheSize.get, triedOpsPerSec.get)
     }
 

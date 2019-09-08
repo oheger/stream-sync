@@ -23,7 +23,7 @@ import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.Parameters
-import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget}
+import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptMode}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest._
 
@@ -430,9 +430,9 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
 
     config.srcPassword should be(None)
-    config.srcFileNamesEncrypted shouldBe false
+    config.srcCryptMode shouldBe CryptMode.None
     config.dstPassword should be(None)
-    config.dstFileNamesEncrypted shouldBe false
+    config.dstCryptMode shouldBe CryptMode.None
     config.cryptCacheSize should be(SyncParameterManager.DefaultCryptCacheSize)
   }
 
@@ -442,25 +442,25 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val CacheSize = 555
     val argsMap = ArgsMap + (SyncParameterManager.SourcePasswordOption -> List(SrcPwd)) +
       (SyncParameterManager.DestPasswordOption -> List(DstPwd)) +
-      (SyncParameterManager.EncryptSourceFileNamesOption -> List("true")) +
-      (SyncParameterManager.EncryptDestFileNamesOption -> List("FaLSE")) +
+      (SyncParameterManager.SourceCryptModeOption -> List("files")) +
+      (SyncParameterManager.DestCryptModeOption -> List("FilesAndNAMEs")) +
       (SyncParameterManager.CryptCacheSizeOption -> List(CacheSize.toString))
 
     val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.srcPassword should be(Some(SrcPwd))
     config.dstPassword should be(Some(DstPwd))
-    config.srcFileNamesEncrypted shouldBe true
-    config.dstFileNamesEncrypted shouldBe false
+    config.srcCryptMode shouldBe CryptMode.Files
+    config.dstCryptMode shouldBe CryptMode.FilesAndNames
     config.cryptCacheSize should be(CacheSize)
   }
 
-  it should "handle invalid boolean values for encryption-related flags" in {
-    val argsMap = ArgsMap + (SyncParameterManager.EncryptSourceFileNamesOption -> List("of course")) +
-      (SyncParameterManager.EncryptDestFileNamesOption -> List("be it"))
+  it should "handle invalid enum values for encryption-related flags" in {
+    val argsMap = ArgsMap + (SyncParameterManager.SourceCryptModeOption -> List("of course")) +
+      (SyncParameterManager.DestCryptModeOption -> List("full encryption"))
 
     val msg = expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      SyncParameterManager.EncryptSourceFileNamesOption)
-    msg should include(SyncParameterManager.EncryptDestFileNamesOption)
+      SyncParameterManager.SourceCryptModeOption)
+    msg should include(SyncParameterManager.DestCryptModeOption)
   }
 
   it should "handle invalid integer values for the crypt cache size option" in {
@@ -486,9 +486,9 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val (updArgs, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     updArgs.accessedParameters should contain allOf(SyncParameterManager.ApplyModeOption,
       SyncParameterManager.TimeoutOption, SyncParameterManager.LogFileOption, SyncParameterManager.SyncLogOption,
-    SyncParameterManager.IgnoreTimeDeltaOption, SyncParameterManager.OpsPerSecondOption,
-    SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption,
-    SyncParameterManager.EncryptSourceFileNamesOption, SyncParameterManager.EncryptDestFileNamesOption)
+      SyncParameterManager.IgnoreTimeDeltaOption, SyncParameterManager.OpsPerSecondOption,
+      SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption,
+      SyncParameterManager.SourceCryptModeOption, SyncParameterManager.DestCryptModeOption)
   }
 
   it should "combine multiple error messages when parsing the sync config" in {
