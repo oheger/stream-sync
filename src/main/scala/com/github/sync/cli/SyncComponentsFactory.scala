@@ -238,17 +238,16 @@ object SyncComponentsFactory {
     * arguments with the help of a ''CliProcessor''. The processor is run, and
     * its result is mapped to a correct ''Future''.
     *
-    * @param parameters the object with command line arguments
-    * @param processor  the ''CliProcessor'' defining the configuration
-    * @param ec         the execution context
+    * @param processor     the ''CliProcessor'' defining the configuration
+    * @param parameters    the object with command line arguments
+    * @param ec            the execution context
+    * @param consoleReader the object for reading from the console
     * @tparam C the type of the configuration object
     * @return a ''Future'' with the updated parameters and the configuration
     */
-  private def extractConfig[C](parameters: Parameters, processor: CliProcessor[Try[C]])
-                              (implicit ec: ExecutionContext): Future[(Parameters, C)] = {
-    val (triedConfig, nextParams) = processor.run(parameters)
-    Future.fromTry(triedConfig) map ((nextParams, _))
-  }
+  private def extractConfig[C](processor: CliProcessor[Try[C]], parameters: Parameters)
+                              (implicit ec: ExecutionContext, consoleReader: ConsoleReader): Future[(C, Parameters)] =
+    Future.fromTry(ParameterManager.tryProcessor(processor, parameters))
 
   /**
     * Extracts the configuration for the local file system from the given
@@ -258,15 +257,14 @@ object SyncComponentsFactory {
     * @param parameters    the object with command line parameters
     * @param structureType the structure type
     * @param ec            the execution context
+    * @param consoleReader the object for reading from the console
     * @return a ''Future'' with the extracted file system configuration
     */
   private def extractLocalFsConfig(uri: String, parameters: Parameters, structureType: StructureType)
-                                  (implicit ec: ExecutionContext):
-  Future[(Parameters, LocalFsConfig)] = {
+                                  (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
+  Future[(LocalFsConfig, Parameters)] = {
     val processor = localFsConfigProcessor(uri, structureType)
-    val (triedFsConfig, nextParams) = processor.run(parameters)
-    Future.fromTry(triedFsConfig)
-      .map((nextParams, _))
+    extractConfig(processor, parameters)
   }
 
   /**
@@ -310,12 +308,14 @@ object SyncComponentsFactory {
     * @param parameters    the parameters object
     * @param structureType the structure type
     * @param ec            the execution context
+    * @param consoleReader the object for reading from the console
     * @return a ''Future'' with the extracted configuration and updated
     *         parameters
     */
   private def extractDavConfig(uri: String, timeout: Timeout, parameters: Parameters, structureType: StructureType)
-                              (implicit ec: ExecutionContext): Future[(Parameters, DavConfig)] =
-    extractConfig(parameters, davConfigProcessor(uri, timeout, structureType))
+                              (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
+  Future[(DavConfig, Parameters)] =
+    extractConfig(davConfigProcessor(uri, timeout, structureType), parameters)
 
   /**
     * Returns a ''CliProcessor'' that extracts the configuration for a WebDav
@@ -390,24 +390,25 @@ class SyncComponentsFactory {
     * processed in order to create the factory and updated by removing the
     * parameters consumed.
     *
-    * @param uri        the URI defining the source structure
-    * @param timeout    a timeout when applying a sync operation
-    * @param parameters the object with command line parameters
-    * @param system     the actor system
-    * @param mat        the object to materialize streams
-    * @param ec         the execution context
+    * @param uri           the URI defining the source structure
+    * @param timeout       a timeout when applying a sync operation
+    * @param parameters    the object with command line parameters
+    * @param system        the actor system
+    * @param mat           the object to materialize streams
+    * @param ec            the execution context
+    * @param consoleReader the object for reading from the console
     * @return updated parameters and the factory for creating source components
     */
   def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
                                    (implicit system: ActorSystem, mat: ActorMaterializer,
-                                    ec: ExecutionContext):
+                                    ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(Parameters, SourceComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
       extractDavConfig(davUri, timeout, parameters, SourceStructureType)
-        .map(t => (t._1, new DavComponentsSourceFactory(t._2)))
+        .map(t => (t._2, new DavComponentsSourceFactory(t._1)))
     case _ =>
       extractLocalFsConfig(uri, parameters, SourceStructureType)
-        .map(t => (t._1, new LocalFsSourceComponentsFactory(t._2)))
+        .map(t => (t._2, new LocalFsSourceComponentsFactory(t._1)))
   }
 
   /**
@@ -416,23 +417,24 @@ class SyncComponentsFactory {
     * processed in order to create the factory and updated by removing the
     * parameters consumed.
     *
-    * @param uri        the URI defining the source structure
-    * @param timeout    a timeout when applying a sync operation
-    * @param parameters the object with command line parameters
-    * @param system     the actor system
-    * @param mat        the object to materialize streams
-    * @param ec         the execution context
+    * @param uri           the URI defining the source structure
+    * @param timeout       a timeout when applying a sync operation
+    * @param parameters    the object with command line parameters
+    * @param system        the actor system
+    * @param mat           the object to materialize streams
+    * @param ec            the execution context
+    * @param consoleReader the object for reading from the console
     * @return updated parameters and the factory for creating dest components
     */
   def createDestinationComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
                                         (implicit system: ActorSystem, mat: ActorMaterializer,
-                                         ec: ExecutionContext):
+                                         ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(Parameters, DestinationComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
       extractDavConfig(davUri, timeout, parameters, DestinationStructureType)
-        .map(t => (t._1, new DavComponentsDestinationFactory(t._2)))
+        .map(t => (t._2, new DavComponentsDestinationFactory(t._1)))
     case _ =>
       extractLocalFsConfig(uri, parameters, DestinationStructureType)
-        .map(t => (t._1, new LocalFsDestinationComponentsFactory(t._2, timeout)))
+        .map(t => (t._2, new LocalFsDestinationComponentsFactory(t._1, timeout)))
   }
 }

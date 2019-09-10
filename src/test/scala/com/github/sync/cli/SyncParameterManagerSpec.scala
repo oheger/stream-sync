@@ -26,6 +26,7 @@ import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptMode}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest._
+import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -51,7 +52,7 @@ object SyncParameterManagerSpec {
   * functionality of the generic ''ParameterManager'' class.
   */
 class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
-  with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper
+  with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper with MockitoSugar
   with AsyncTestHelper {
   def this() = this(ActorSystem("SyncParameterManagerSpec"))
 
@@ -64,6 +65,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   import SyncParameterManagerSpec._
+
+  private implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
 
   /**
     * Expects a failed future from a parsing operation. It is checked whether

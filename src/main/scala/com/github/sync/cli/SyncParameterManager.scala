@@ -306,15 +306,14 @@ object SyncParameterManager {
     * updated map; that way it can be found out whether the user has provided
     * unknown options.
     *
-    * @param argsMap the map with arguments
-    * @param ec      the execution context
+    * @param argsMap       the map with arguments
+    * @param ec            the execution context
+    * @param consoleReader the object for reading from the console
     * @return a future with the extracted config and the updated arguments map
     */
-  def extractSyncConfig(argsMap: Parameters)(implicit ec: ExecutionContext):
-  Future[(Parameters, SyncConfig)] = Future {
-    val (triedConfig, map) = syncConfigProcessor().run(argsMap)
-    (map, triedConfig.get)
-  }
+  def extractSyncConfig(argsMap: Parameters)(implicit ec: ExecutionContext, consoleReader: ConsoleReader):
+  Future[(Parameters, SyncConfig)] =
+    Future.fromTry(ParameterManager.tryProcessor(syncConfigProcessor(), argsMap).map(_.swap))
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all

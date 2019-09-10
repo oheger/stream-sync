@@ -149,7 +149,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     new SyncComponentsFactory {
       override def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
                                                 (implicit system: ActorSystem, mat: ActorMaterializer,
-                                                 ec: ExecutionContext):
+                                                 ec: ExecutionContext, consoleReader: ConsoleReader):
       Future[(Parameters, SyncComponentsFactory.SourceComponentsFactory)] =
         super.createSourceComponentsFactory(uri, timeout, parameters) map { t =>
           val delegateFactory = new DelegateSourceComponentsFactory(t._2) {

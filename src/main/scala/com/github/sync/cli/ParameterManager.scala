@@ -124,16 +124,38 @@ object ParameterManager {
   }
 
   /**
+    * A data class storing all the information required for the processing of
+    * command line arguments.
+    *
+    * An instance of this class stores the actual [[Parameters]] plus some
+    * helper objects that may be needed to extract meaningful data.
+    *
+    * @param parameters the parameters to be processed
+    * @param reader     an object to read data from the console
+    */
+  case class ParameterContext(parameters: Parameters, reader: ConsoleReader) {
+    /**
+      * Returns a new ''ParameterContext'' object that was updated with the
+      * given ''Parameters''. All other properties remain constant.
+      *
+      * @param nextParameters the ''Parameters'' to replace the current ones
+      * @return the updated ''ParameterContext''
+      */
+    def update(nextParameters: Parameters): ParameterContext =
+      copy(parameters = nextParameters)
+  }
+
+  /**
     * A case class representing a processor for command line options.
     *
     * This is a kind of state action. Such processors can be combined to
-    * extract multiple options from the command line and to remove the
-    * corresponding option keys from the map with arguments.
+    * extract multiple options from the command line and to mark the
+    * corresponding option keys as accessed.
     *
     * @param run a function to obtain an option and update the arguments map
     * @tparam A the type of the result of the processor
     */
-  case class CliProcessor[A](run: Parameters => (A, Parameters)) {
+  case class CliProcessor[A](run: ParameterContext => (A, ParameterContext)) {
     def flatMap[B](f: A => CliProcessor[B]): CliProcessor[B] = CliProcessor(map => {
       val (a, map1) = run(map)
       f(a).run(map1)
@@ -214,9 +236,9 @@ object ParameterManager {
     * @param key the key of the option
     * @return the processor to extract the option values
     */
-  def optionValue(key: String): CliProcessor[Iterable[String]] = CliProcessor(params => {
-    val values = params.parametersMap.getOrElse(key, Nil)
-    (values, params keyAccessed key)
+  def optionValue(key: String): CliProcessor[Iterable[String]] = CliProcessor(context => {
+    val values = context.parameters.parametersMap.getOrElse(key, Nil)
+    (values, context.update(context.parameters keyAccessed key))
   })
 
   /**
@@ -372,6 +394,41 @@ object ParameterManager {
     val messages = collectErrorMessages(components: _*)
     if (messages.isEmpty) Success(creator)
     else Failure(new IllegalArgumentException(messages.mkString(", ")))
+  }
+
+  /**
+    * Executes the given ''CliProcessor'' on the parameters specified and
+    * returns its result and the updated ''Parameters'' object.
+    *
+    * @param processor     the processor to be executed
+    * @param parameters    the current ''Parameters''
+    * @param consoleReader the object to read from the console
+    * @tparam T the result type of the ''CliProcessor''
+    * @return a tuple with the result and the updated parameters
+    */
+  def runProcessor[T](processor: CliProcessor[T], parameters: Parameters)
+                     (implicit consoleReader: ConsoleReader): (T, Parameters) = {
+    val context = ParameterContext(parameters, consoleReader)
+    val (result, nextContext) = processor.run(context)
+    (result, nextContext.parameters)
+  }
+
+  /**
+    * Executes the given ''CliProcessor'' that may fail on the parameters
+    * specified. Result is a ''Try'' with the processor's result and the
+    * updated ''Parameters'' object. This function is useful if a failed
+    * processor should cause the whole operation to fail.
+    *
+    * @param processor     the processor to be executed
+    * @param parameters    the current ''Parameters'' object
+    * @param consoleReader the object to read from the console
+    * @tparam T the result type of the ''CliProcessor''
+    * @return a ''Try'' of a tuple with the result and the updated parameters
+    */
+  def tryProcessor[T](processor: CliProcessor[Try[T]], parameters: Parameters)
+                     (implicit consoleReader: ConsoleReader): Try[(T, Parameters)] = {
+    val (triedRes, next) = runProcessor(processor, parameters)
+    triedRes map ((_, next))
   }
 
   /**

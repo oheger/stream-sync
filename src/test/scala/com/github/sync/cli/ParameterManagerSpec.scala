@@ -16,16 +16,32 @@
 
 package com.github.sync.cli
 
+import com.github.sync.cli.ParameterManager.Parameters
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.mockito.MockitoSugar
+
+import scala.util.{Failure, Success, Try}
+
+object ParameterManagerSpec {
+  /** A test Parameters object for testing CLI processors. */
+  private val TestParameters: Parameters = Map("foo" -> List("v1"))
+
+  /** Another test Parameters object representing updated parameters. */
+  private val NextParameters = Parameters(Map("bar" -> List("v2", "v3")), Set("x", "y"))
+
+  /** A result of a test CLI processor. */
+  val ProcessorResult = 42
+}
 
 /**
   * Test class for ''ParameterManager''. Note that the major part of the
   * functionality provided by ''ParameterManager'' is tested together with the
   * Sync-specific functionality.
   */
-class ParameterManagerSpec extends FlatSpec with Matchers {
+class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
 
   import ParameterManager._
+  import ParameterManagerSpec._
 
   "Parameters" should "be creatable from a parameters map" in {
     val paramMap = Map("foo" -> List("v1", "v2"), "bar" -> List("v3"))
@@ -70,5 +86,47 @@ class ParameterManagerSpec extends FlatSpec with Matchers {
 
     val params2 = params.keyAccessed("bar")
     params2 should be theSameInstanceAs params
+  }
+
+  "ParametersManager" should "support running a CliProcessor" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val proc = CliProcessor(context => {
+      context.parameters should be(TestParameters)
+      context.reader should be(consoleReader)
+      (ProcessorResult, context.update(NextParameters))
+    })
+
+    val (res, next) = ParameterManager.runProcessor(proc, TestParameters)
+    res should be(ProcessorResult)
+    next should be(NextParameters)
+  }
+
+  it should "run a processor yielding a Try if execution is successful" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val proc = CliProcessor[Try[Int]](context => {
+      context.parameters should be(TestParameters)
+      (Success(ProcessorResult), context.update(NextParameters))
+    })
+
+    ParameterManager.tryProcessor(proc, TestParameters) match {
+      case Success((res, next)) =>
+        res should be(ProcessorResult)
+        next should be(NextParameters)
+      case f => fail("Unexpected result: " + f)
+    }
+  }
+
+  it should "run a processor yielding a Try if execution fails" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val exception = new IllegalArgumentException("Wrong parameters")
+    val proc = CliProcessor[Try[Int]](context => {
+      (Failure(exception), context.update(NextParameters))
+    })
+
+    ParameterManager.tryProcessor(proc, TestParameters) match {
+      case Failure(ex) =>
+        ex should be(exception)
+      case s => fail("Unexpected result: " + s)
+    }
   }
 }

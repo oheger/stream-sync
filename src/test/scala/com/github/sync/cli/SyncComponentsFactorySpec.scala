@@ -31,6 +31,7 @@ import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, Sour
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.webdav.DavConfig
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.duration._
 import scala.language.implicitConversions
@@ -74,7 +75,7 @@ object SyncComponentsFactorySpec {
   * tested by integration tests.
   */
 class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
-  with BeforeAndAfterAll with Matchers with AsyncTestHelper {
+  with BeforeAndAfterAll with Matchers with AsyncTestHelper with MockitoSugar {
   def this() = this(ActorSystem("SyncComponentsFactorySpec"))
 
   override protected def afterAll(): Unit = {
@@ -87,6 +88,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   /** An object to materialize streams; needed as implicit parameter. */
   implicit val mat: ActorMaterializer = ActorMaterializer()
+
+  /** A mock for a console reader; needed as implicit parameter. */
+  implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
 
   /**
     * Returns the local file system config from a source factory.
