@@ -63,11 +63,18 @@ object ParameterManager {
   val FileOption: String = OptionPrefix + "file"
 
   /**
+    * Type definition for the base type of a command line option. Values are
+    * strings, but options can be repeated; therefore, the type is an
+    * ''Iterable'' of strings.
+    */
+  type OptionValue = Iterable[String]
+
+  /**
     * Type definition for the map with resolved parameter values. The array
     * with command line options is transformed in such a map which allows
     * direct access to the value(s) assigned to options.
     */
-  type ParametersMap = Map[String, Iterable[String]]
+  type ParametersMap = Map[String, OptionValue]
 
   /**
     * A data class storing the information required for extracting command
@@ -231,12 +238,36 @@ object ParameterManager {
   }
 
   /**
+    * Returns a ''CliProcessor'' that always returns the given constant value
+    * as result without manipulating the parameter context. This processor is
+    * mainly useful for building up complex processors, e.g. together with
+    * conditions or default values for optional parameters.
+    *
+    * @param a the constant value to be returned
+    * @tparam A the type of the value
+    * @return the ''CliProcessor'' returning this constant value
+    */
+  def constantProcessor[A](a: A): CliProcessor[A] = CliProcessor(context => (a, context))
+
+  /**
+    * Returns a ''CliProcessor'' that returns a constant collection of option
+    * values. This is a special case of a constant processor that operates on
+    * the base type of command line arguments.
+    *
+    * @param first the first value
+    * @param items a sequence of additional values
+    * @return the ''CliProcessor'' returning this constant ''OptionValue''
+    */
+  def constantOptionValue(first: String, items: String*): CliProcessor[OptionValue] =
+    constantProcessor(first :: items.toList)
+
+  /**
     * Returns a processor that extracts all values of the specified option key.
     *
     * @param key the key of the option
     * @return the processor to extract the option values
     */
-  def optionValue(key: String): CliProcessor[Iterable[String]] = CliProcessor(context => {
+  def optionValue(key: String): CliProcessor[OptionValue] = CliProcessor(context => {
     val values = context.parameters.parametersMap.getOrElse(key, Nil)
     (values, context.update(context.parameters keyAccessed key))
   })

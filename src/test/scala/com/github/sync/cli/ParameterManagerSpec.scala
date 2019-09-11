@@ -129,4 +129,32 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
       case s => fail("Unexpected result: " + s)
     }
   }
+
+  it should "provide a constant processor" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.constantProcessor(ProcessorResult)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    res should be(ProcessorResult)
+    next should be(TestParameters)
+  }
+
+  it should "provide a processor returning a constant option value with only a single value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.constantOptionValue(ProcessorResult.toString)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(TestParameters)
+    res should contain only ProcessorResult.toString
+  }
+
+  it should "provide a processor returning a constant option value with multiple values" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val items = List("foo", "bar", "baz", "more")
+    val processor = ParameterManager.constantOptionValue(items.head, items.tail: _*)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(TestParameters)
+    res should be(items)
+  }
 }
