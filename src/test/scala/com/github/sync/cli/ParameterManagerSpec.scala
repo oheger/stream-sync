@@ -34,6 +34,9 @@ object ParameterManagerSpec {
 
   /** A test option value containing the test result. */
   private val ResultOptionValue: OptionValue = List(ProcessorResult.toString)
+
+  /** A test option key. */
+  private val Key = "--my-test-option"
 }
 
 /**
@@ -174,7 +177,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
   it should "provide a fallback processor if the first processor yields a value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val proc1 = testProcessor(ResultOptionValue)
-    val proc2 = CliProcessor[OptionValue](context => throw new IllegalArgumentException("Unexpected call!"))
+    val proc2 = CliProcessor[OptionValue](_ => throw new IllegalArgumentException("Unexpected call!"))
     val processor = ParameterManager.fallback(proc1, proc2)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
@@ -192,5 +195,44 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(nextNextParameters)
     res should be(ResultOptionValue)
+  }
+
+  it should "provide a processor to extract a single option value if there is exactly one value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val proc = testProcessor(ResultOptionValue)
+    val processor = ParameterManager.singleOptionValue(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(Success(Some(ProcessorResult.toString)))
+  }
+
+  it should "provide a processor to extract a single option value if the value is undefined" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val EmptyValue: OptionValue = Nil
+    val proc = testProcessor(EmptyValue)
+    val processor = ParameterManager.singleOptionValue(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(Success(None))
+  }
+
+  it should "provide a processor to extract a single option value if there are multiple values" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val MultiValue: OptionValue = List("v1", "v2")
+    val proc = testProcessor(MultiValue)
+    val processor = ParameterManager.singleOptionValue(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res match {
+      case Failure(exception) =>
+        exception.getMessage should include(Key)
+        exception.getMessage should include("multiple values")
+        exception.getMessage should include(MultiValue.toString())
+        exception shouldBe a[IllegalArgumentException]
+      case s => fail("Unexpected result: " + s)
+    }
   }
 }

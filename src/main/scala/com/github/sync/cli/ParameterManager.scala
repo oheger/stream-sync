@@ -70,6 +70,15 @@ object ParameterManager {
   type OptionValue = Iterable[String]
 
   /**
+    * Type definition for the value of an option that accepts a single value at
+    * most. Parsing the option may cause an error if there are multiple values
+    * (because the option key had been repeated); therefore a ''Try'' is used.
+    * As the value may be undefined, there is also an ''Option'' included. Some
+    * mapping processors operate on this type.
+    */
+  type SingleOptionValue[A] = Try[Option[A]]
+
+  /**
     * Type definition for the map with resolved parameter values. The array
     * with command line options is transformed in such a map which allows
     * direct access to the value(s) assigned to options.
@@ -289,6 +298,22 @@ object ParameterManager {
     }
 
   /**
+    * Returns a processor that extracts a single option value from the result
+    * of the given processor. It is an error if the result contains multiple
+    * values; however, an undefined value is accepted.
+    *
+    * @param key  the key of the option (to generate an error message)
+    * @param proc the processor to be decorated
+    * @return the processor extracting the single option value
+    */
+  def singleOptionValue(key: String, proc: CliProcessor[OptionValue]): CliProcessor[SingleOptionValue[String]] =
+    proc map { optionValue =>
+      if (optionValue.size > 1)
+        Failure(paramException(key, s"should have a single value, but has multiple values - $optionValue"))
+      else Success(optionValue.headOption)
+    }
+
+  /**
     * Returns a processor that extracts a single value of a command line
     * option. If the option has multiple values, a failure is generated. An
     * option with a default value can be specified.
@@ -492,7 +517,7 @@ object ParameterManager {
     */
   def paramTry[T](key: String)(f: => T): Try[T] =
     Try(f) recover {
-      case ex => throw new IllegalArgumentException(s"$key: ${ex.getMessage}.", ex)
+      case ex => throw paramException(key, ex.getMessage, ex)
     }
 
   /**
@@ -592,4 +617,16 @@ object ParameterManager {
     * @return the string in lower case
     */
   private def toLower(s: String): String = s.toLowerCase(Locale.ROOT)
+
+  /**
+    * Generates an exception that reports a problem with a specific command
+    * line option. Makes sure that such exceptions have a uniform format.
+    *
+    * @param key     the option key
+    * @param message the error message
+    * @param cause   an option cause of the error
+    * @return the resulting exception
+    */
+  private def paramException(key: String, message: String, cause: Throwable = null): Throwable =
+    new IllegalArgumentException(s"$key: $message", cause)
 }
