@@ -273,6 +273,22 @@ object ParameterManager {
   })
 
   /**
+    * Returns a processor that can apply a fallback (or default) value to
+    * another processor. The resulting processor invokes the first processor.
+    * If this yields a defined result, this result is returned. Otherwise, the
+    * fallback processor is returned.
+    *
+    * @param proc         the first processor to be invoked
+    * @param fallbackProc the fallback processor
+    * @return the resulting processor applying a fallback value
+    */
+  def fallback(proc: CliProcessor[OptionValue], fallbackProc: CliProcessor[OptionValue]): CliProcessor[OptionValue] =
+    proc flatMap { result =>
+      if (result.nonEmpty) constantProcessor(result)
+      else fallbackProc
+    }
+
+  /**
     * Returns a processor that extracts a single value of a command line
     * option. If the option has multiple values, a failure is generated. An
     * option with a default value can be specified.

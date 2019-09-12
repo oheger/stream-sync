@@ -16,7 +16,7 @@
 
 package com.github.sync.cli
 
-import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.ParameterManager.{OptionValue, Parameters}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -30,7 +30,10 @@ object ParameterManagerSpec {
   private val NextParameters = Parameters(Map("bar" -> List("v2", "v3")), Set("x", "y"))
 
   /** A result of a test CLI processor. */
-  val ProcessorResult = 42
+  private val ProcessorResult = 42
+
+  /** A test option value containing the test result. */
+  private val ResultOptionValue: OptionValue = List(ProcessorResult.toString)
 }
 
 /**
@@ -88,13 +91,28 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     params2 should be theSameInstanceAs params
   }
 
+  /**
+    * Creates a generic test Cli processor that checks the context passed to it
+    * and returns a defined result.
+    *
+    * @param value          the value to be returned by the processor
+    * @param expParameters  the expected parameters
+    * @param nextParameters the updated parameters
+    * @param expReader      the expected console reader
+    * @tparam A the type of the value
+    * @return the test processor
+    */
+  private def testProcessor[A](value: A, expParameters: Parameters = TestParameters,
+                               nextParameters: Parameters = NextParameters)
+                              (implicit expReader: ConsoleReader): CliProcessor[A] = CliProcessor(context => {
+    context.parameters should be(expParameters)
+    context.reader should be(expReader)
+    (value, context.update(nextParameters))
+  })
+
   "ParametersManager" should "support running a CliProcessor" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val proc = CliProcessor(context => {
-      context.parameters should be(TestParameters)
-      context.reader should be(consoleReader)
-      (ProcessorResult, context.update(NextParameters))
-    })
+    val proc = testProcessor(ProcessorResult)
 
     val (res, next) = ParameterManager.runProcessor(proc, TestParameters)
     res should be(ProcessorResult)
@@ -103,10 +121,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
 
   it should "run a processor yielding a Try if execution is successful" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val proc = CliProcessor[Try[Int]](context => {
-      context.parameters should be(TestParameters)
-      (Success(ProcessorResult), context.update(NextParameters))
-    })
+    val proc = testProcessor[Try[Int]](Success(ProcessorResult))
 
     ParameterManager.tryProcessor(proc, TestParameters) match {
       case Success((res, next)) =>
@@ -119,9 +134,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
   it should "run a processor yielding a Try if execution fails" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val exception = new IllegalArgumentException("Wrong parameters")
-    val proc = CliProcessor[Try[Int]](context => {
-      (Failure(exception), context.update(NextParameters))
-    })
+    val proc = testProcessor[Try[Int]](Failure(exception))
 
     ParameterManager.tryProcessor(proc, TestParameters) match {
       case Failure(ex) =>
@@ -156,5 +169,28 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(TestParameters)
     res should be(items)
+  }
+
+  it should "provide a fallback processor if the first processor yields a value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val proc1 = testProcessor(ResultOptionValue)
+    val proc2 = CliProcessor[OptionValue](context => throw new IllegalArgumentException("Unexpected call!"))
+    val processor = ParameterManager.fallback(proc1, proc2)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(ResultOptionValue)
+  }
+
+  it should "provide a fallback processor if the first processor yields an empty value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
+    val proc1 = testProcessor[OptionValue](List.empty)
+    val proc2 = testProcessor(ResultOptionValue, expParameters = NextParameters, nextParameters = nextNextParameters)
+    val processor = ParameterManager.fallback(proc1, proc2)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(nextNextParameters)
+    res should be(ResultOptionValue)
   }
 }
