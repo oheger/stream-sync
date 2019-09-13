@@ -235,4 +235,54 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
       case s => fail("Unexpected result: " + s)
     }
   }
+
+  it should "provide a mapping processor that handles a failed result" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val FailedValue: SingleOptionValue[String] = Failure(new Exception("Failed"))
+    val proc = testProcessor(FailedValue)
+    val processor = ParameterManager.mapValue(Key, proc)(_.toInt)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(FailedValue)
+  }
+
+  it should "provide a mapping processor that handles an empty result" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val EmptyResult: SingleOptionValue[String] = Success(None)
+    val proc = testProcessor(EmptyResult)
+    val processor = ParameterManager.mapValue(Key, proc)(_ => throw new IllegalArgumentException("Nope"))
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(EmptyResult)
+  }
+
+  it should "prove a mapping processor that handles a defined result" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val Result: SingleOptionValue[String] = Success(Some(ProcessorResult.toString))
+    val proc = testProcessor(Result)
+    val processor = ParameterManager.mapValue(Key, proc)(_.toInt)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(Success(Some(ProcessorResult)))
+  }
+
+  it should "provide a mapping processor that handles an exception thrown by the mapping function" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val Result: SingleOptionValue[String] = Success(Some("Not a number!"))
+    val proc = testProcessor(Result)
+    val processor = ParameterManager.mapValue(Key, proc)(_.toInt)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(Key)
+        exception.getCause shouldBe a[NumberFormatException]
+      case s => fail("Unexpected result: " + s)
+    }
+  }
 }

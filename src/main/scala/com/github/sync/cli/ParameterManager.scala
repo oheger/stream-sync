@@ -314,6 +314,26 @@ object ParameterManager {
     }
 
   /**
+    * Returns a processor that modifies the result of another processor by
+    * applying a mapping function. While mapping is supported by processors in
+    * general, this function simplifies this for ''SingleOptionValue'' results.
+    * The mapping function operates on the result type, and it is called only
+    * if the ''Try'' and the ''Option'' are defined. The mapping function can
+    * throw an exception; this is handled automatically by causing the result
+    * to fail.
+    *
+    * @param key  the key of the option (to generate an error message)
+    * @param proc the processor to be decorated
+    * @param f    the mapping function to be applied
+    * @tparam A the original result type
+    * @tparam B the mapped result type
+    * @return the processor applying the mapping function
+    */
+  def mapValue[A, B](key: String, proc: CliProcessor[SingleOptionValue[A]])(f: A => B):
+  CliProcessor[SingleOptionValue[B]] =
+    proc.map(triedResult => triedResult.flatMap(o => paramTry(key)(o.map(f))))
+
+  /**
     * Returns a processor that extracts a single value of a command line
     * option. If the option has multiple values, a failure is generated. An
     * option with a default value can be specified.
