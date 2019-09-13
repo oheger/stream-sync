@@ -334,6 +334,36 @@ object ParameterManager {
     proc.map(triedResult => triedResult.flatMap(o => paramTry(key)(o.map(f))))
 
   /**
+    * Returns a processor that converts a command line argument to an int
+    * number. If the option has a defined string value, it is converted to a
+    * number including error handling. Undefined values are ignored.
+    *
+    * @param key  the key of the option (to generate an error message)
+    * @param proc the processor providing the original option value
+    * @return the processor converting the value to a number
+    */
+  def intOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
+  CliProcessor[SingleOptionValue[Int]] = mapValue(key, proc)(_.toInt)
+
+  /**
+    * Returns a processor that converts a command line argument to a boolean
+    * value. If the option has a defined string value, it is converted to a
+    * boolean including error handling. Undefined values are ignored.
+    *
+    * @param key  the key of the option (to generate an error message)
+    * @param proc the processor providing the original option value
+    * @return the processor converting the value to a boolean
+    */
+  def booleanOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
+  CliProcessor[SingleOptionValue[Boolean]] = mapValue(key, proc) { s =>
+    toLower(s) match {
+      case "true" => true
+      case "false" => false
+      case s => throw new IllegalArgumentException(s"'$s' cannot be converted to a boolean")
+    }
+  }
+
+  /**
     * Returns a processor that extracts a single value of a command line
     * option. If the option has multiple values, a failure is generated. An
     * option with a default value can be specified.

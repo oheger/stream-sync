@@ -285,4 +285,78 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
       case s => fail("Unexpected result: " + s)
     }
   }
+
+  it should "provide a processor that converts an option value to int" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val StrValue: SingleOptionValue[String] = Try(Some(ProcessorResult.toString))
+    val proc = testProcessor(StrValue)
+    val processor = ParameterManager.intOptionValue(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(Success(Some(ProcessorResult)))
+  }
+
+  it should "provide a processor that convers an option value to int and handles errors" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val StrValue: SingleOptionValue[String] = Try(Some("not a valid number"))
+    val proc = testProcessor(StrValue)
+    val processor = ParameterManager.intOptionValue(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(Key)
+        exception.getCause shouldBe a[NumberFormatException]
+      case s => fail("Unexpected result: " + s)
+    }
+  }
+
+  /**
+    * Helper method for testing a boolean conversion.
+    * @param value the original string option value
+    * @param expResult the expected result
+    */
+  private def checkBooleanConversion(value: String, expResult: Boolean): Unit = {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val StrValue: SingleOptionValue[String] = Try(Some(value))
+    val proc = testProcessor(StrValue)
+    val processor = ParameterManager.booleanOptionValue(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(Success(Some(expResult)))
+  }
+
+  it should "provide a processor that converts an option to boolean if the result is true" in {
+    checkBooleanConversion("true", expResult = true)
+  }
+
+  it should "provide a processor that converts an option to boolean if the result is false" in {
+    checkBooleanConversion("false", expResult = false)
+  }
+
+  it should "provide a processor that converts an option to boolean ignoring case" in {
+    checkBooleanConversion("TruE", expResult = true)
+  }
+
+  it should "provide a processor that converts an option to boolean and handles errors" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val StrValue = "not a valid boolean"
+    val ValueOption: SingleOptionValue[String] = Try(Some(StrValue))
+    val proc = testProcessor(ValueOption)
+    val processor = ParameterManager.booleanOptionValue(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(Key)
+        exception.getMessage should include(StrValue)
+      case s => fail("Unexpected result: " + s)
+    }
+  }
 }
