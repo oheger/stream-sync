@@ -316,7 +316,8 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
 
   /**
     * Helper method for testing a boolean conversion.
-    * @param value the original string option value
+    *
+    * @param value     the original string option value
     * @param expResult the expected result
     */
   private def checkBooleanConversion(value: String, expResult: Boolean): Unit = {
@@ -356,6 +357,34 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
         exception shouldBe a[IllegalArgumentException]
         exception.getMessage should include(Key)
         exception.getMessage should include(StrValue)
+      case s => fail("Unexpected result: " + s)
+    }
+  }
+
+  it should "provide a processor that returns a mandatory value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val ValueOption: SingleOptionValue[Int] = Success(Some(ProcessorResult))
+    val proc = testProcessor(ValueOption)
+    val processor = ParameterManager.mandatory(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(Success(ProcessorResult))
+  }
+
+  it should "provide a processor that fails if an option does not have a value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val ValueOption: SingleOptionValue[Int] = Success(None)
+    val proc = testProcessor(ValueOption)
+    val processor = ParameterManager.mandatory(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(Key)
+        exception.getMessage should include("no value")
       case s => fail("Unexpected result: " + s)
     }
   }

@@ -314,6 +314,22 @@ object ParameterManager {
     }
 
   /**
+    * Returns a processor that enforces an option to have a defined value. If
+    * the provided processor yields a ''Try'' with an undefined option, a
+    * failure is generated. Otherwise, the option value is unwrapped.
+    *
+    * @param key  the key of the option (to generate an error message)
+    * @param proc the processor providing the original value
+    * @tparam A the result type
+    * @return the processor returning a mandatory value
+    */
+  def mandatory[A](key: String, proc: CliProcessor[SingleOptionValue[A]]): CliProcessor[Try[A]] =
+    proc.map(_.flatMap {
+      case Some(v) => Success(v)
+      case None => Failure(paramException(key, "mandatory option has no value"))
+    })
+
+  /**
     * Returns a processor that modifies the result of another processor by
     * applying a mapping function. While mapping is supported by processors in
     * general, this function simplifies this for ''SingleOptionValue'' results.
