@@ -299,6 +299,20 @@ object ParameterManager {
     }
 
   /**
+    * Returns a processor that prompts the user for entering the value of an
+    * option. This is done by delegating to the [[ConsoleReader]] in the
+    * parameter context passed to the processor. This function can be used for
+    * instance together with ''withFallback()'' to let the user enter a value
+    * if it has not been provided on the command line.
+    *
+    * @param key      the key of the option
+    * @param password a flag whether a password is to be entered
+    * @return the processor that reads from the console
+    */
+  def consoleReaderValue(key: String, password: Boolean = true): CliProcessor[OptionValue] =
+    CliProcessor(context => (List(context.reader.readOption(key, password)), context))
+
+  /**
     * Returns a processor that extracts a single option value from the result
     * of the given processor. It is an error if the result contains multiple
     * values; however, an undefined value is accepted.

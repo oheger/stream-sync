@@ -17,6 +17,7 @@
 package com.github.sync.cli
 
 import com.github.sync.cli.ParameterManager.{OptionValue, Parameters}
+import org.mockito.Mockito._
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -466,5 +467,27 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.accessedParameters should contain only UndefinedKey
     res should be(Success(Some(false)))
+  }
+
+  it should "provide a processor that reads from the console" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val Result = "enteredFromUser"
+    when(consoleReader.readOption(Key, password = true)).thenReturn(Result)
+    val processor = ParameterManager.consoleReaderValue(Key)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(TestParameters)
+    res should contain only Result
+  }
+
+  it should "evaluate the password flag of the console reader processor" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val Result = "enteredFromUser"
+    when(consoleReader.readOption(Key, password = false)).thenReturn(Result)
+    val processor = ParameterManager.consoleReaderValue(Key, password = false)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(TestParameters)
+    res should contain only Result
   }
 }
