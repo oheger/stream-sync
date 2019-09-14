@@ -291,7 +291,8 @@ object ParameterManager {
     * @param fallbackProc the fallback processor
     * @return the resulting processor applying a fallback value
     */
-  def fallback(proc: CliProcessor[OptionValue], fallbackProc: CliProcessor[OptionValue]): CliProcessor[OptionValue] =
+  def withFallback(proc: CliProcessor[OptionValue], fallbackProc: CliProcessor[OptionValue]):
+  CliProcessor[OptionValue] =
     proc flatMap { result =>
       if (result.nonEmpty) constantProcessor(result)
       else fallbackProc
@@ -306,7 +307,7 @@ object ParameterManager {
     * @param proc the processor to be decorated
     * @return the processor extracting the single option value
     */
-  def singleOptionValue(key: String, proc: CliProcessor[OptionValue]): CliProcessor[SingleOptionValue[String]] =
+  def asSingleOptionValue(key: String, proc: CliProcessor[OptionValue]): CliProcessor[SingleOptionValue[String]] =
     proc map { optionValue =>
       if (optionValue.size > 1)
         Failure(paramException(key, s"should have a single value, but has multiple values - $optionValue"))
@@ -323,7 +324,7 @@ object ParameterManager {
     * @tparam A the result type
     * @return the processor returning a mandatory value
     */
-  def mandatory[A](key: String, proc: CliProcessor[SingleOptionValue[A]]): CliProcessor[Try[A]] =
+  def asMandatory[A](key: String, proc: CliProcessor[SingleOptionValue[A]]): CliProcessor[Try[A]] =
     proc.map(_.flatMap {
       case Some(v) => Success(v)
       case None => Failure(paramException(key, "mandatory option has no value"))
@@ -345,7 +346,7 @@ object ParameterManager {
     * @tparam B the mapped result type
     * @return the processor applying the mapping function
     */
-  def mapValue[A, B](key: String, proc: CliProcessor[SingleOptionValue[A]])(f: A => B):
+  def mapped[A, B](key: String, proc: CliProcessor[SingleOptionValue[A]])(f: A => B):
   CliProcessor[SingleOptionValue[B]] =
     proc.map(triedResult => triedResult.flatMap(o => paramTry(key)(o.map(f))))
 
@@ -358,8 +359,8 @@ object ParameterManager {
     * @param proc the processor providing the original option value
     * @return the processor converting the value to a number
     */
-  def intOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
-  CliProcessor[SingleOptionValue[Int]] = mapValue(key, proc)(_.toInt)
+  def asIntOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
+  CliProcessor[SingleOptionValue[Int]] = mapped(key, proc)(_.toInt)
 
   /**
     * Returns a processor that converts a command line argument to a boolean
@@ -370,14 +371,57 @@ object ParameterManager {
     * @param proc the processor providing the original option value
     * @return the processor converting the value to a boolean
     */
-  def booleanOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
-  CliProcessor[SingleOptionValue[Boolean]] = mapValue(key, proc) { s =>
+  def asBooleanOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
+  CliProcessor[SingleOptionValue[Boolean]] = mapped(key, proc) { s =>
     toLower(s) match {
       case "true" => true
       case "false" => false
       case s => throw new IllegalArgumentException(s"'$s' cannot be converted to a boolean")
     }
   }
+
+  /**
+    * Returns a processor to extract the single string value of a command line
+    * option. It is possible to specify a fallback value if this option is
+    * undefined. The processor fails if the option has multiple values.
+    *
+    * @param key           the key of the option
+    * @param fallbackValue an optional fallback value to be set
+    * @return the processor extracting the single value of an option
+    */
+  def singleOptionValue(key: String, fallbackValue: Option[String] = None):
+  CliProcessor[SingleOptionValue[String]] = {
+    val procOptValue = optionValue(key)
+    val procFallback = fallbackValue map { fallback =>
+      withFallback(procOptValue, constantOptionValue(fallback))
+    } getOrElse procOptValue
+    asSingleOptionValue(key, procFallback)
+  }
+
+  /**
+    * Returns a processor to extract the single integer value of a command line
+    * option. This works like ''singleOptionValue'', but the the result is
+    * mapped to an Int.
+    *
+    * @param key           the key of the option
+    * @param fallbackValue an optional fallback value to be set
+    * @return the processor extracting the single Int value of an option
+    */
+  def intOptionValue(key: String, fallbackValue: Option[Int] = None): CliProcessor[SingleOptionValue[Int]] =
+    asIntOptionValue(key, singleOptionValue(key, fallbackValue map (_.toString)))
+
+  /**
+    * Returns a processor to extract the single boolean value of a command line
+    * option. This works like ''singleOptionValue'', but the the result is
+    * mapped to a Boolean.
+    *
+    * @param key           the key of the option
+    * @param fallbackValue an optional fallback value to be set
+    * @return the processor extracting the single Boolean value of an option
+    */
+  def booleanOptionValue(key: String, fallbackValue: Option[Boolean] = None):
+  CliProcessor[SingleOptionValue[Boolean]] =
+    asBooleanOptionValue(key, singleOptionValue(key, fallbackValue map (_.toString)))
 
   /**
     * Returns a processor that extracts a single value of a command line
@@ -388,7 +432,7 @@ object ParameterManager {
     * @param defValue a default value
     * @return the processor to extract the single option value
     */
-  def singleOptionValue(key: String, defValue: => Option[String] = None):
+  def singleOptionValueOld(key: String, defValue: => Option[String] = None):
   CliProcessor[Try[String]] = optionValue(key) map { values =>
     Try {
       if (values.size > 1) throw new IllegalArgumentException(key + " has multiple values!")
@@ -414,7 +458,7 @@ object ParameterManager {
     */
   def singleOptionValueMapped[R](key: String, defValue: => Option[String] = None)
                                 (f: String => Try[R]): CliProcessor[Try[R]] =
-    singleOptionValue(key, defValue) map (_.flatMap(f))
+    singleOptionValueOld(key, defValue) map (_.flatMap(f))
 
   /**
     * Returns a processor that extracts a boolean option from the command
@@ -424,7 +468,7 @@ object ParameterManager {
     * @param key the option key
     * @return the processor to extract the boolean option
     */
-  def booleanOptionValue(key: String): CliProcessor[Try[Boolean]] =
+  def booleanOptionValueOld(key: String): CliProcessor[Try[Boolean]] =
     singleOptionValueMapped(key, Some(java.lang.Boolean.FALSE.toString))(s => toBoolean(s, key))
 
   /**

@@ -328,11 +328,11 @@ object SyncComponentsFactory {
     */
   private def davConfigProcessor(uri: String, timeout: Timeout, structureType: StructureType):
   CliProcessor[Try[DavConfig]] = for {
-    triedUser <- ParameterManager.singleOptionValue(structureType.configPropertyName(PropDavUser))
+    triedUser <- ParameterManager.singleOptionValueOld(structureType.configPropertyName(PropDavUser))
     triedPassword <- ParameterManager.consoleInputOption(structureType.configPropertyName(PropDavPassword))
     triedModProp <- ParameterManager.optionalOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
     triedModNs <- ParameterManager.optionalOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
-    triedDel <- ParameterManager.booleanOptionValue(structureType.configPropertyName(PropDavDeleteBeforeOverride))
+    triedDel <- ParameterManager.booleanOptionValueOld(structureType.configPropertyName(PropDavDeleteBeforeOverride))
   } yield createDavConfig(uri, timeout, structureType, triedUser, triedPassword, triedModProp,
     triedModNs, triedDel)
 

@@ -23,11 +23,8 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.util.{Failure, Success, Try}
 
 object ParameterManagerSpec {
-  /** A test Parameters object for testing CLI processors. */
-  private val TestParameters: Parameters = Map("foo" -> List("v1"))
-
-  /** Another test Parameters object representing updated parameters. */
-  private val NextParameters = Parameters(Map("bar" -> List("v2", "v3")), Set("x", "y"))
+  /** A test option key. */
+  private val Key = "--my-test-option"
 
   /** A result of a test CLI processor. */
   private val ProcessorResult = 42
@@ -35,8 +32,11 @@ object ParameterManagerSpec {
   /** A test option value containing the test result. */
   private val ResultOptionValue: OptionValue = List(ProcessorResult.toString)
 
-  /** A test option key. */
-  private val Key = "--my-test-option"
+  /** A test Parameters object for testing CLI processors. */
+  private val TestParameters: Parameters = Map(Key -> ResultOptionValue)
+
+  /** Another test Parameters object representing updated parameters. */
+  private val NextParameters = Parameters(Map("bar" -> List("v2", "v3")), Set("x", "y"))
 }
 
 /**
@@ -178,7 +178,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val proc1 = testProcessor(ResultOptionValue)
     val proc2 = CliProcessor[OptionValue](_ => throw new IllegalArgumentException("Unexpected call!"))
-    val processor = ParameterManager.fallback(proc1, proc2)
+    val processor = ParameterManager.withFallback(proc1, proc2)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -190,7 +190,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
     val proc1 = testProcessor[OptionValue](List.empty)
     val proc2 = testProcessor(ResultOptionValue, expParameters = NextParameters, nextParameters = nextNextParameters)
-    val processor = ParameterManager.fallback(proc1, proc2)
+    val processor = ParameterManager.withFallback(proc1, proc2)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(nextNextParameters)
@@ -200,7 +200,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
   it should "provide a processor to extract a single option value if there is exactly one value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val proc = testProcessor(ResultOptionValue)
-    val processor = ParameterManager.singleOptionValue(Key, proc)
+    val processor = ParameterManager.asSingleOptionValue(Key, proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -211,7 +211,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val EmptyValue: OptionValue = Nil
     val proc = testProcessor(EmptyValue)
-    val processor = ParameterManager.singleOptionValue(Key, proc)
+    val processor = ParameterManager.asSingleOptionValue(Key, proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -222,7 +222,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val MultiValue: OptionValue = List("v1", "v2")
     val proc = testProcessor(MultiValue)
-    val processor = ParameterManager.singleOptionValue(Key, proc)
+    val processor = ParameterManager.asSingleOptionValue(Key, proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -240,7 +240,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val FailedValue: SingleOptionValue[String] = Failure(new Exception("Failed"))
     val proc = testProcessor(FailedValue)
-    val processor = ParameterManager.mapValue(Key, proc)(_.toInt)
+    val processor = ParameterManager.mapped(Key, proc)(_.toInt)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -251,7 +251,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val EmptyResult: SingleOptionValue[String] = Success(None)
     val proc = testProcessor(EmptyResult)
-    val processor = ParameterManager.mapValue(Key, proc)(_ => throw new IllegalArgumentException("Nope"))
+    val processor = ParameterManager.mapped(Key, proc)(_ => throw new IllegalArgumentException("Nope"))
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -262,7 +262,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val Result: SingleOptionValue[String] = Success(Some(ProcessorResult.toString))
     val proc = testProcessor(Result)
-    val processor = ParameterManager.mapValue(Key, proc)(_.toInt)
+    val processor = ParameterManager.mapped(Key, proc)(_.toInt)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -273,7 +273,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val Result: SingleOptionValue[String] = Success(Some("Not a number!"))
     val proc = testProcessor(Result)
-    val processor = ParameterManager.mapValue(Key, proc)(_.toInt)
+    val processor = ParameterManager.mapped(Key, proc)(_.toInt)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -290,7 +290,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val StrValue: SingleOptionValue[String] = Try(Some(ProcessorResult.toString))
     val proc = testProcessor(StrValue)
-    val processor = ParameterManager.intOptionValue(Key, proc)
+    val processor = ParameterManager.asIntOptionValue(Key, proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -301,7 +301,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val StrValue: SingleOptionValue[String] = Try(Some("not a valid number"))
     val proc = testProcessor(StrValue)
-    val processor = ParameterManager.intOptionValue(Key, proc)
+    val processor = ParameterManager.asIntOptionValue(Key, proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -324,7 +324,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val StrValue: SingleOptionValue[String] = Try(Some(value))
     val proc = testProcessor(StrValue)
-    val processor = ParameterManager.booleanOptionValue(Key, proc)
+    val processor = ParameterManager.asBooleanOptionValue(Key, proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -348,7 +348,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     val StrValue = "not a valid boolean"
     val ValueOption: SingleOptionValue[String] = Try(Some(StrValue))
     val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.booleanOptionValue(Key, proc)
+    val processor = ParameterManager.asBooleanOptionValue(Key, proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -365,7 +365,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val ValueOption: SingleOptionValue[Int] = Success(Some(ProcessorResult))
     val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.mandatory(Key, proc)
+    val processor = ParameterManager.asMandatory(Key, proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -376,7 +376,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val ValueOption: SingleOptionValue[Int] = Success(None)
     val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.mandatory(Key, proc)
+    val processor = ParameterManager.asMandatory(Key, proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(NextParameters)
@@ -387,5 +387,84 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
         exception.getMessage should include("no value")
       case s => fail("Unexpected result: " + s)
     }
+  }
+
+  it should "provide a processor for a single option value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.singleOptionValue(Key)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.accessedParameters should contain only Key
+    res should be(Success(Some(ProcessorResult.toString)))
+  }
+
+  it should "provide a processor for a single option value that handles an undefined value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val UndefinedKey = Key + "_undefined"
+    val processor = ParameterManager.singleOptionValue(UndefinedKey)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.accessedParameters should contain only UndefinedKey
+    res should be(Success(None))
+  }
+
+  it should "provide a processor for a single option value that supports a fallback value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val UndefinedKey = Key + "_undefined"
+    val Result = "fallback"
+    val processor = ParameterManager.singleOptionValue(UndefinedKey, Some(Result))
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.accessedParameters should contain only UndefinedKey
+    res should be(Success(Some(Result)))
+  }
+
+  it should "provide a processor for a single option value that ignores the fallback" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.singleOptionValue(Key, Some("a fallback value"))
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.accessedParameters should contain only Key
+    res should be(Success(Some(ProcessorResult.toString)))
+  }
+
+  it should "provide a processor for a single int option value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.intOptionValue(Key)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.accessedParameters should contain only Key
+    res should be(Success(Some(ProcessorResult)))
+  }
+
+  it should "provide a processor for a single int option that supports a fallback value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val UndefinedKey = Key + "_undefined"
+    val Result = ProcessorResult + 1
+    val processor = ParameterManager.intOptionValue(UndefinedKey, Some(Result))
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.accessedParameters should contain only UndefinedKey
+    res should be(Success(Some(Result)))
+  }
+
+  it should "provide a processor for a single boolean option value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val args = Map(Key -> List("True"))
+    val processor = ParameterManager.booleanOptionValue(Key)
+
+    val (res, next) = ParameterManager.runProcessor(processor, args)
+    next.accessedParameters should contain only Key
+    res should be(Success(Some(true)))
+  }
+
+  it should "provide a processor for a single boolean option that supports a fallback value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val UndefinedKey = Key + "_undefined"
+    val processor = ParameterManager.booleanOptionValue(UndefinedKey, Some(false))
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.accessedParameters should contain only UndefinedKey
+    res should be(Success(Some(false)))
   }
 }

@@ -249,7 +249,7 @@ object SyncParameterManager {
     * @return the processor to extract the apply mode
     */
   def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
-    ParameterManager.singleOptionValue(ApplyModeOption, Some("TARGET")) map (_.map {
+    ParameterManager.singleOptionValueOld(ApplyModeOption, Some("TARGET")) map (_.map {
       case RegApplyTargetUri(uri) =>
         ApplyModeTarget(uri)
       case RegApplyTargetDefault(_*) =>
@@ -269,7 +269,7 @@ object SyncParameterManager {
     * @return the processor to extract the crypt mode
     */
   def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
-    ParameterManager.singleOptionValue(key, Some(CryptMode.None.toString())) map (_.flatMap { name =>
+    ParameterManager.singleOptionValueOld(key, Some(CryptMode.None.toString())) map (_.flatMap { name =>
       val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
       mode.fold[Try[CryptMode.Value]](Failure(
         new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!")))(Success(_))
