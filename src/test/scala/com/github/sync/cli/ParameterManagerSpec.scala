@@ -511,4 +511,52 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     next should be(TestParameters)
     res should contain only Result
   }
+
+  it should "provide a processor that yields an empty option value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+
+    val (res, next) = ParameterManager.runProcessor(ParameterManager.EmptyProcessor, TestParameters)
+    next should be(TestParameters)
+    res should be(ParameterManager.EmptyOptionValue)
+    res should have size 0
+  }
+
+  it should "provide a conditional processor that executes the if case" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
+    val condProc: CliProcessor[Try[Boolean]] = testProcessor(Success(true))
+    val ifProc = testProcessor(ResultOptionValue, expParameters = NextParameters, nextParameters = nextNextParameters)
+    val processor = ParameterManager.conditionalValue(condProc, ifProc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(nextNextParameters)
+    res should be(ResultOptionValue)
+  }
+
+  it should "provide a condition processor that executes the else case" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
+    val condProc: CliProcessor[Try[Boolean]] = testProcessor(Success(false))
+    val elseProc = testProcessor(ResultOptionValue, expParameters = NextParameters,
+      nextParameters = nextNextParameters)
+    val processor = ParameterManager.conditionalValue(condProc, ParameterManager.EmptyProcessor, elseProc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(nextNextParameters)
+    res should be(ResultOptionValue)
+  }
+
+  it should "provide a condition processor that executes the failure case" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
+    val condProc: CliProcessor[Try[Boolean]] = testProcessor(Failure(new Exception("failed")))
+    val failProc = testProcessor(ResultOptionValue, expParameters = NextParameters,
+      nextParameters = nextNextParameters)
+    val processor = ParameterManager.conditionalValue(condProc, ifProc = ParameterManager.EmptyProcessor,
+      elseProc = ParameterManager.EmptyProcessor, failProc = failProc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(nextNextParameters)
+    res should be(ResultOptionValue)
+  }
 }

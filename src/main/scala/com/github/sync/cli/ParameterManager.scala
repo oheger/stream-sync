@@ -85,6 +85,12 @@ object ParameterManager {
   type ParametersMap = Map[String, OptionValue]
 
   /**
+    * Constant for an option value that does not contain any data. This is used
+    * by some processors to set default values that are not further evaluated.
+    */
+  val EmptyOptionValue: OptionValue = List.empty
+
+  /**
     * A data class storing the information required for extracting command
     * line options.
     *
@@ -195,6 +201,13 @@ object ParameterManager {
     * command line arguments.
     */
   private type InternalParamMap = Map[String, List[String]]
+
+  /**
+    * Constant for a ''CliProcessor'' that always returns an empty value. This
+    * is useful in some cases, e.g. to define a processor when one is required,
+    * but the concrete value does not matter.
+    */
+  val EmptyProcessor: CliProcessor[OptionValue] = constantProcessor(EmptyOptionValue)
 
   /**
     * Parses the command line arguments and converts them into a map keyed by
@@ -310,6 +323,35 @@ object ParameterManager {
     */
   def consoleReaderValue(key: String, password: Boolean): CliProcessor[OptionValue] =
     CliProcessor(context => (List(context.reader.readOption(key, password)), context))
+
+  /**
+    * Returns a processor that conditionally delegates to other processors.
+    * The condition is modelled as ''CliProcessor'' of type ''Try[Boolean]''.
+    * This is because a typical use case is to extract one or multiple other
+    * command line options and evaluate their values. If this processor yields
+    * '''true''', the ''ifProc'' processor is executed. If the condition
+    * processor yields '''false''', the ''elseProc'' is executed. In case of a
+    * failure, the ''failProc'' is executed.
+    *
+    * Using this function, it is possible to implement quite complex scenarios.
+    * For instance, a program can expect a ''mode'' parameter, and depending on
+    * the concrete mode, a number of other parameters become enabled or
+    * disabled.
+    *
+    * @param condProc the processor that defines the condition
+    * @param ifProc   the processor to run if the condition is fulfilled
+    * @param elseProc the processor to run if the condition is not fulfilled
+    * @param failProc the processor to run in case of a failure
+    * @return the conditional processor
+    */
+  def conditionalValue(condProc: CliProcessor[Try[Boolean]], ifProc: CliProcessor[OptionValue],
+                       elseProc: CliProcessor[OptionValue] = EmptyProcessor,
+                       failProc: CliProcessor[OptionValue] = EmptyProcessor): CliProcessor[OptionValue] =
+    condProc flatMap {
+      case Success(value) =>
+        if (value) ifProc else elseProc
+      case Failure(_) => failProc
+    }
 
   /**
     * Returns a processor that extracts a single option value from the result
