@@ -619,7 +619,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val TestFileName = "TestFileToBeEncrypted.txt"
     createTestFile(srcFolder, TestFileName)
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--dst-encrypt-password", "!encryptDest!")
+      "--dst-encrypt-password", "!encryptDest!", "--dst-crypt-mode", "files")
 
     val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(result.successfulOperations)
@@ -635,11 +635,11 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val Password = "privacy"
     createTestFile(srcFolder, TestFileName)
     val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
-      "--dst-encrypt-password", Password)
+      "--dst-encrypt-password", Password, "--dst-crypt-mode", "files")
     futureResult(Sync.syncProcess(factory, options1))
 
     val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
-      "--src-encrypt-password", Password)
+      "--src-encrypt-password", Password, "--src-crypt-mode", "files")
     val result = futureResult(Sync.syncProcess(factory, options2))
     result.totalOperations should be(result.successfulOperations)
     readFileInPath(srcFolder, TestFileName) should be(readFileInPath(dstFolder2, TestFileName))
@@ -653,9 +653,9 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     createTestFile(srcFolder, TestFileName)
     val Password = "let's_crypt"
     val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--dst-encrypt-password", Password)
+      "--dst-encrypt-password", Password, "--dst-crypt-mode", "files")
     val options2 = Array(dstFolder.toAbsolutePath.toString, srcFolder.toAbsolutePath.toString,
-      "--src-encrypt-password", Password)
+      "--src-encrypt-password", Password, "--src-crypt-mode", "files")
     futureResult(Sync.syncProcess(factory, options1))
 
     val result1 = futureResult(Sync.syncProcess(factory, options1))

@@ -25,6 +25,7 @@ import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptMode}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
+import org.mockito.Mockito._
 import org.scalatest._
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -461,9 +462,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.SourceCryptModeOption -> List("of course")) +
       (SyncParameterManager.DestCryptModeOption -> List("full encryption"))
 
-    val msg = expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      SyncParameterManager.SourceCryptModeOption)
-    msg should include(SyncParameterManager.DestCryptModeOption)
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
+      SyncParameterManager.SourceCryptModeOption, SyncParameterManager.DestCryptModeOption)
   }
 
   it should "handle invalid integer values for the crypt cache size option" in {
@@ -471,6 +471,32 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "big", SyncParameterManager.CryptCacheSizeOption)
+  }
+
+  it should "reject a crypt password if encryption is disabled" in {
+    val argsMap = ArgsMap + (SyncParameterManager.SourcePasswordOption -> List("srcSecret")) +
+      (SyncParameterManager.DestPasswordOption -> List("dstSecret"))
+
+    val (next, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    expectFailedFuture(ParameterManager.checkParametersConsumed(next),
+      SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption)
+  }
+
+  it should "read the crypt passwords from the console if necessary" in {
+    val SrcPwd = "secretSource!"
+    val DstPwd = "!secretDest"
+    val argsMap = ArgsMap + (SyncParameterManager.SourceCryptModeOption -> List("files")) +
+      (SyncParameterManager.DestCryptModeOption -> List("FilesAndNAMEs"))
+    val reader = mock[ConsoleReader]
+    when(reader.readOption(SyncParameterManager.SourcePasswordOption, password = true))
+      .thenReturn(SrcPwd)
+    when(reader.readOption(SyncParameterManager.DestPasswordOption, password = true))
+      .thenReturn(DstPwd)
+
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap)(consoleReader = reader,
+      ec = system.dispatcher))
+    config.srcPassword should be(Some(SrcPwd))
+    config.dstPassword should be(Some(DstPwd))
   }
 
   it should "handle a crypt cache size below the allowed minimum" in {
@@ -482,7 +508,9 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "mark all options contained in the sync config as accessed" in {
-    val otherOptions = Map("foo" -> List("v1"), "bar" -> List("v2", "v3"))
+    val otherOptions = Map("foo" -> List("v1"), "bar" -> List("v2", "v3"),
+      SyncParameterManager.SourceCryptModeOption -> List("files"),
+      SyncParameterManager.DestCryptModeOption -> List("files"))
     val argsMap = ArgsMap ++ otherOptions +
       (SyncParameterManager.IgnoreTimeDeltaOption -> List("1"))
 

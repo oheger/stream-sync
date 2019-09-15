@@ -19,7 +19,7 @@ package com.github.sync.cli
 import java.nio.file.{Path, Paths}
 
 import akka.util.Timeout
-import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
+import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters, SingleOptionValue}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -233,8 +233,8 @@ object SyncParameterManager {
     syncLog <- ParameterManager.singleOptionValue(SyncLogOption)
     timeDelta <- ignoreTimeDeltaProcessor()
     opsPerSec <- opsPerSecondProcessor()
-    srcPwd <- ParameterManager.singleOptionValue(SourcePasswordOption)
-    dstPwd <- ParameterManager.singleOptionValue(DestPasswordOption)
+    srcPwd <- cryptPasswordProcessor(SourceCryptModeOption, SourcePasswordOption)
+    dstPwd <- cryptPasswordProcessor(DestCryptModeOption, DestPasswordOption)
     srcCrypt <- cryptModeProcessor(SourceCryptModeOption)
     dstCrypt <- cryptModeProcessor(DestCryptModeOption)
     cacheSize <- cryptCacheSizeProcessor()
@@ -391,6 +391,24 @@ object SyncParameterManager {
           throw new IllegalArgumentException(s"Crypt cache size must be greater or equal $MinCryptCacheSize.")
         else size
       })
+
+  /**
+    * Returns a processor that obtains the encryption password for one of the
+    * sync structures. The password is only obtained if required by the crypt
+    * mode configured. If it is not specified in the command line options, it
+    * is read from the console.
+    *
+    * @param keyCryptMode the option key for the crypt mode
+    * @param keyPwd       the option key for the password
+    * @return the processor to extract the encryption password
+    */
+  private def cryptPasswordProcessor(keyCryptMode: String, keyPwd: String):
+  CliProcessor[SingleOptionValue[String]] = {
+    val condProc = cryptModeProcessor(keyCryptMode).map(_.map(mode => mode.requiresPassword))
+    val pwdProc = ParameterManager.withFallback(ParameterManager.optionValue(keyPwd),
+      ParameterManager.consoleReaderValue(keyPwd, password = true))
+    ParameterManager.asSingleOptionValue(keyPwd, ParameterManager.conditionalValue(condProc, pwdProc))
+  }
 
   /**
     * Returns a processor that extracts the timeout from the command line.
