@@ -25,7 +25,6 @@ import akka.util.ByteString
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
-import scala.io.StdIn
 import scala.language.implicitConversions
 import scala.util.{Failure, Success, Try}
 
@@ -309,7 +308,7 @@ object ParameterManager {
     * @param password a flag whether a password is to be entered
     * @return the processor that reads from the console
     */
-  def consoleReaderValue(key: String, password: Boolean = true): CliProcessor[OptionValue] =
+  def consoleReaderValue(key: String, password: Boolean): CliProcessor[OptionValue] =
     CliProcessor(context => (List(context.reader.readOption(key, password)), context))
 
   /**
@@ -438,110 +437,6 @@ object ParameterManager {
     asBooleanOptionValue(key, singleOptionValue(key, fallbackValue map (_.toString)))
 
   /**
-    * Returns a processor that extracts a single value of a command line
-    * option. If the option has multiple values, a failure is generated. An
-    * option with a default value can be specified.
-    *
-    * @param key      the option key
-    * @param defValue a default value
-    * @return the processor to extract the single option value
-    */
-  def singleOptionValueOld(key: String, defValue: => Option[String] = None):
-  CliProcessor[Try[String]] = optionValue(key) map { values =>
-    Try {
-      if (values.size > 1) throw new IllegalArgumentException(key + " has multiple values!")
-      values.headOption orElse defValue match {
-        case Some(value) =>
-          value
-        case None =>
-          throw new IllegalArgumentException("No value specified for " + key + "!")
-      }
-    }
-  }
-
-  /**
-    * Returns a processor that extracts the single value of a command line
-    * option and applies a mapping function on it. Calls
-    * ''singleOptionValue()'' and then invokes the mapping function.
-    *
-    * @param key      the option key
-    * @param defValue a default value
-    * @param f        the mapping function
-    * @tparam R the result type of the mapping function
-    * @return the processor to extract the single option value
-    */
-  def singleOptionValueMapped[R](key: String, defValue: => Option[String] = None)
-                                (f: String => Try[R]): CliProcessor[Try[R]] =
-    singleOptionValueOld(key, defValue) map (_.flatMap(f))
-
-  /**
-    * Returns a processor that extracts a boolean option from the command
-    * line. The given key must have a single value that is either "true" or
-    * "false" (case does not matter).
-    *
-    * @param key the option key
-    * @return the processor to extract the boolean option
-    */
-  def booleanOptionValueOld(key: String): CliProcessor[Try[Boolean]] =
-    singleOptionValueMapped(key, Some(java.lang.Boolean.FALSE.toString))(s => toBoolean(s, key))
-
-  /**
-    * Returns a processor that extracts a single optional value of a command
-    * line option. If the option has multiple values, an error is produced. If
-    * it has a single value only, this value is returned as an option.
-    * Otherwise, result is an undefined ''Option''.
-    *
-    * @param key the option key
-    * @return the processor to extract the optional value
-    */
-  def optionalOptionValue(key: String): CliProcessor[Try[Option[String]]] =
-    optionValue(key) map { values =>
-      Try {
-        if (values.isEmpty) None
-        else if (values.size > 1)
-          throw new IllegalArgumentException(s"$key: only a single value is supported!")
-        else Some(values.head)
-      }
-    }
-
-  /**
-    * Returns a processor that extracts a single optional value of a command
-    * line option of type ''Int''. This is analogous to
-    * ''optionalOptionValue()'', but the resulting option is mapped to an
-    * ''Int'' (with error handling).
-    *
-    * @param key    the option key
-    * @param errMsg an error message in case the conversion fails
-    * @return the processor to extract the optional ''Int'' value
-    */
-  def optionalIntOptionValue(key: String, errMsg: => String): CliProcessor[Try[Option[Int]]] =
-    optionalOptionValue(key) map { strRes =>
-      strRes.map(_.map(toInt(errMsg)))
-    }
-
-  /**
-    * Returns a processor that prompts the user to enter a value for an option
-    * if it is not already defined in the command line arguments. This is
-    * useful for instance to enter passwords. The processor first checks
-    * whether the corresponding command line option has been set. If so, the
-    * value is returned. Otherwise, the option key is written to stdout as a
-    * prompt, and a string is read from the console. This becomes the value of
-    * the option.
-    *
-    * @param key the option key
-    * @return the processor that reads the option from the command line
-    */
-  def consoleInputOption(key: String): CliProcessor[Try[String]] =
-    ParameterManager.optionalOptionValue(key) map { triedOption =>
-      triedOption.map {
-        case Some(data) => data
-        case None =>
-          print(s"$key: ")
-          StdIn.readLine()
-      }
-    }
-
-  /**
     * Checks whether all parameters in the given parameters map have been
     * consumed. This is a test to find out whether invalid parameters have been
     * specified. During parameter processing, parameters that are recognized and
@@ -645,23 +540,6 @@ object ParameterManager {
     }
 
   /**
-    * A mapping function to convert a string to an integer. If this fails due
-    * to a ''NumberFormatException'', an ''IllegalArgumentException'' is thrown
-    * with a message generated from the passed tag and the original string
-    * value.
-    *
-    * @param tag a tag for generating an error message
-    * @param str the string to be converted
-    * @return the resulting integer value
-    */
-  def toInt(tag: String)(str: String): Int =
-    try str.toInt
-    catch {
-      case e: NumberFormatException =>
-        throw new IllegalArgumentException(s"Invalid $tag: '$str'!", e)
-    }
-
-  /**
     * Checks whether the given argument string is an option. This is the case
     * if it starts with the option prefix.
     *
@@ -721,20 +599,6 @@ object ParameterManager {
     Future.sequence(files.map(readParameterFile)).map(_.flatten)
 
   /**
-    * Conversion function to convert a string to a boolean. The case does not
-    * matter, but the string must either be "true" or "false".
-    *
-    * @param s   the string to be converted
-    * @param key the option key (to generate the error message)
-    * @return a ''Try'' with the conversion result
-    */
-  private def toBoolean(s: String, key: String): Try[Boolean] = toLower(s) match {
-    case "true" => Success(true)
-    case "false" => Success(false)
-    case _ => Failure(new IllegalArgumentException(s"$key: Not a valid boolean value '$s'."))
-  }
-
-  /**
     * Converts a string to lower case.
     *
     * @param s the string
@@ -752,5 +616,20 @@ object ParameterManager {
     * @return the resulting exception
     */
   private def paramException(key: String, message: String, cause: Throwable = null): Throwable =
-    new IllegalArgumentException(s"$key: $message", cause)
+    new IllegalArgumentException(s"$key: ${generateErrorMessage(message, cause)}", cause)
+
+  /**
+    * Generates the error message for an exception encountered during parameter
+    * processing. If there is a cause available, the exception class name is
+    * added to the message.
+    *
+    * @param message the original error message
+    * @param cause   the causing exception
+    * @return the enhanced error message
+    */
+  private def generateErrorMessage(message: String, cause: Throwable): String = {
+    val exceptionName = if (cause == null) ""
+    else cause.getClass.getName + " - "
+    s"$exceptionName$message"
+  }
 }

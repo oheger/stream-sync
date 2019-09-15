@@ -16,6 +16,8 @@
 
 package com.github.sync.cli
 
+import java.io.IOException
+
 import com.github.sync.cli.ParameterManager.{OptionValue, Parameters}
 import org.mockito.Mockito._
 import org.scalatest.{FlatSpec, Matchers}
@@ -143,6 +145,25 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     ParameterManager.tryProcessor(proc, TestParameters) match {
       case Failure(ex) =>
         ex should be(exception)
+      case s => fail("Unexpected result: " + s)
+    }
+  }
+
+  it should "wrap a function in a Try" in {
+    val triedResult = ParameterManager.paramTry(Key)(ProcessorResult)
+
+    triedResult should be(Success(ProcessorResult))
+  }
+
+  it should "catch the exception thrown by a function and wrap it" in {
+    val exception = new IOException("Fatal error")
+
+    val triedResult = ParameterManager.paramTry[String](Key)(throw exception)
+    triedResult match {
+      case Failure(ex) =>
+        ex shouldBe a[IllegalArgumentException]
+        ex.getCause should be(exception)
+        ex.getMessage should be(Key + ": java.io.IOException - " + exception.getLocalizedMessage)
       case s => fail("Unexpected result: " + s)
     }
   }
@@ -473,7 +494,7 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val Result = "enteredFromUser"
     when(consoleReader.readOption(Key, password = true)).thenReturn(Result)
-    val processor = ParameterManager.consoleReaderValue(Key)
+    val processor = ParameterManager.consoleReaderValue(Key, password = true)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next should be(TestParameters)

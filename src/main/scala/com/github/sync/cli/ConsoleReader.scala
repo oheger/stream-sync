@@ -38,5 +38,5 @@ trait ConsoleReader {
     * @param password flag whether this is a password option
     * @return the input read from the user
     */
-  def readOption(key: String, password: Boolean = true): String
+  def readOption(key: String, password: Boolean): String
 }

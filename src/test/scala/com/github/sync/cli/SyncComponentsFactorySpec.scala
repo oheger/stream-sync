@@ -16,7 +16,6 @@
 
 package com.github.sync.cli
 
-import java.io.{ByteArrayOutputStream, StringReader}
 import java.nio.file.Paths
 import java.time.ZoneId
 
@@ -30,6 +29,7 @@ import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, SourceComponentsFactory, SourceStructureType}
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.webdav.DavConfig
+import org.mockito.Mockito._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -253,23 +253,18 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "read the Dav password from the console if it is not specified" in {
     val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User)
-    val userInput = new StringReader(s"$Password\n")
-    val capturePrompt = new ByteArrayOutputStream
+    val Password = "$ecretPwd"
+    val reader = mock[ConsoleReader]
+    val propPwd = SyncComponentsFactory.SourceStructureType.configPropertyName(
+      SyncComponentsFactory.PropDavPassword)
+    when(reader.readOption(propPwd, password = true)).thenReturn(Password)
     val syncFactory = new SyncComponentsFactory
 
-    Console.withIn(userInput) {
-      Console.withOut(capturePrompt) {
-        val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
-          TestTimeout, args))
-        processedArgs.accessedParameters should contain(SourceStructureType.configPropertyName(
-          SyncComponentsFactory.PropDavPassword))
-        val config = extractDavSourceConfig(srcFactory)
-        config.user should be(User)
-        config.password should be(Password)
-      }
-    }
-    val prompt = new String(capturePrompt.toByteArray)
-    prompt should startWith(SyncComponentsFactory.SourceStructureType.configPropertyName(
-      SyncComponentsFactory.PropDavPassword))
+    val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
+      TestTimeout, args)(system, mat, system.dispatcher, reader))
+    processedArgs.accessedParameters should contain(propPwd)
+    val config = extractDavSourceConfig(srcFactory)
+    config.user should be(User)
+    config.password should be(Password)
   }
 }

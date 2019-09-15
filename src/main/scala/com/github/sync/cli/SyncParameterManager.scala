@@ -24,7 +24,7 @@ import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 /**
   * A service responsible for parsing command line arguments.
@@ -220,62 +220,6 @@ object SyncParameterManager {
     """(?i)NONE""".r
 
   /**
-    * Returns a processor that extracts the value of the option with the URIs
-    * of the structures to be synced.
-    *
-    * @return the processor to extract the sync URIs
-    */
-  def syncUrisProcessor(): CliProcessor[Try[(String, String)]] =
-    ParameterManager.optionValue(ParameterManager.InputOption) map { values =>
-      Try {
-        values match {
-          case uriDst :: uriSrc :: Nil =>
-            (uriSrc, uriDst)
-          case _ :: _ :: _ =>
-            throw new IllegalArgumentException("Too many sync URIs specified!")
-          case _ :: _ =>
-            throw new IllegalArgumentException("Missing destination URI!")
-          case _ =>
-            throw new IllegalArgumentException("Missing URIs for source and destination!")
-        }
-      }
-    }
-
-  /**
-    * Returns a processor that extracts the value of the option for the
-    * apply mode.
-    *
-    * @param destUri the destination URI
-    * @return the processor to extract the apply mode
-    */
-  def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
-    ParameterManager.singleOptionValueOld(ApplyModeOption, Some("TARGET")) map (_.map {
-      case RegApplyTargetUri(uri) =>
-        ApplyModeTarget(uri)
-      case RegApplyTargetDefault(_*) =>
-        ApplyModeTarget(destUri)
-      case RegApplyLog(_*) =>
-        ApplyModeNone
-      case s =>
-        throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
-    }
-      )
-
-  /**
-    * Returns a processor that extracts a crypt mode value from a command line
-    * option.
-    *
-    * @param key the key of the option
-    * @return the processor to extract the crypt mode
-    */
-  def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
-    ParameterManager.singleOptionValueOld(key, Some(CryptMode.None.toString())) map (_.flatMap { name =>
-      val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
-      mode.fold[Try[CryptMode.Value]](Failure(
-        new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!")))(Success(_))
-    })
-
-  /**
     * Returns a processor that extracts the ''SyncConfig'' from the command
     * line options.
     *
@@ -284,17 +228,16 @@ object SyncParameterManager {
   def syncConfigProcessor(): CliProcessor[Try[SyncConfig]] = for {
     uris <- syncUrisProcessor()
     mode <- applyModeProcessor(uris.getOrElse(("", ""))._2)
-    timeout <- ParameterManager.singleOptionValueMapped(TimeoutOption,
-      Some(DefaultTimeout.duration.toSeconds.toString))(mapTimeout)
-    logFile <- ParameterManager.optionalOptionValue(LogFileOption)
-    syncLog <- ParameterManager.optionalOptionValue(SyncLogOption)
-    timeDelta <- ignoreTimeDeltaOption()
-    opsPerSec <- opsPerSecondOption()
-    srcPwd <- ParameterManager.optionalOptionValue(SourcePasswordOption)
-    dstPwd <- ParameterManager.optionalOptionValue(DestPasswordOption)
+    timeout <- timeoutProcessor()
+    logFile <- ParameterManager.singleOptionValue(LogFileOption)
+    syncLog <- ParameterManager.singleOptionValue(SyncLogOption)
+    timeDelta <- ignoreTimeDeltaProcessor()
+    opsPerSec <- opsPerSecondProcessor()
+    srcPwd <- ParameterManager.singleOptionValue(SourcePasswordOption)
+    dstPwd <- ParameterManager.singleOptionValue(DestPasswordOption)
     srcCrypt <- cryptModeProcessor(SourceCryptModeOption)
     dstCrypt <- cryptModeProcessor(DestCryptModeOption)
-    cacheSize <- cryptCacheSizeOption()
+    cacheSize <- cryptCacheSizeProcessor()
   } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta, opsPerSec,
     srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
 
@@ -357,15 +300,62 @@ object SyncParameterManager {
     }
 
   /**
-    * Converts a timeout string to the corresponding ''Timeout'' value in
-    * seconds. In case of an error, a meaningful message is constructed.
+    * Returns a processor that extracts the value of the option with the URIs
+    * of the structures to be synced.
     *
-    * @param timeoutStr the string value for the timeout
-    * @return a ''Try'' with the converted value
+    * @return the processor to extract the sync URIs
     */
-  private def mapTimeout(timeoutStr: String): Try[Timeout] = Try {
-    Timeout(ParameterManager.toInt("timeout value")(timeoutStr).seconds)
-  }
+  private def syncUrisProcessor(): CliProcessor[Try[(String, String)]] =
+    ParameterManager.optionValue(ParameterManager.InputOption) map { values =>
+      Try {
+        values match {
+          case uriDst :: uriSrc :: Nil =>
+            (uriSrc, uriDst)
+          case _ :: _ :: _ =>
+            throw new IllegalArgumentException("Too many sync URIs specified!")
+          case _ :: _ =>
+            throw new IllegalArgumentException("Missing destination URI!")
+          case _ =>
+            throw new IllegalArgumentException("Missing URIs for source and destination!")
+        }
+      }
+    }
+
+  /**
+    * Returns a processor that extracts the value of the option for the
+    * apply mode.
+    *
+    * @param destUri the destination URI
+    * @return the processor to extract the apply mode
+    */
+  private def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
+    ParameterManager.asMandatory(ApplyModeOption,
+      ParameterManager.mapped(ApplyModeOption,
+        ParameterManager.singleOptionValue(ApplyModeOption, Some("TARGET"))) {
+        case RegApplyTargetUri(uri) =>
+          ApplyModeTarget(uri)
+        case RegApplyTargetDefault(_*) =>
+          ApplyModeTarget(destUri)
+        case RegApplyLog(_*) =>
+          ApplyModeNone
+        case s =>
+          throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
+      })
+
+  /**
+    * Returns a processor that extracts a crypt mode value from a command line
+    * option.
+    *
+    * @param key the key of the option
+    * @return the processor to extract the crypt mode
+    */
+  private def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
+    ParameterManager.asMandatory(key,
+      ParameterManager.mapped(key,
+        ParameterManager.singleOptionValue(key, Some(CryptMode.None.toString()))) { name =>
+        val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
+        mode.fold[CryptMode.Value](throw new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!"))(m => m)
+      })
 
   /**
     * Returns a processor that extracts the value of the option for ignoring
@@ -374,8 +364,8 @@ object SyncParameterManager {
     *
     * @return the processor for the ignore time delta option
     */
-  private def ignoreTimeDeltaOption(): CliProcessor[Try[Option[Int]]] =
-    ParameterManager.optionalIntOptionValue(IgnoreTimeDeltaOption, "threshold for file time deltas")
+  private def ignoreTimeDeltaProcessor(): CliProcessor[Try[Option[Int]]] =
+    ParameterManager.intOptionValue(IgnoreTimeDeltaOption)
 
   /**
     * Returns a processor that extracts he value of the option for the number
@@ -383,8 +373,8 @@ object SyncParameterManager {
     *
     * @return the processor for the ops per second option
     */
-  private def opsPerSecondOption(): CliProcessor[Try[Option[Int]]] =
-    ParameterManager.optionalIntOptionValue(OpsPerSecondOption, "number of operations per second")
+  private def opsPerSecondProcessor(): CliProcessor[Try[Option[Int]]] =
+    ParameterManager.intOptionValue(OpsPerSecondOption)
 
   /**
     * Returns a processor that extracts the value of the option for the crypt
@@ -393,14 +383,27 @@ object SyncParameterManager {
     *
     * @return the processor for the crypt cache size
     */
-  private def cryptCacheSizeOption(): CliProcessor[Try[Int]] =
-    ParameterManager.singleOptionValueMapped(CryptCacheSizeOption, Some(DefaultCryptCacheSize.toString)) { s =>
-      Try(ParameterManager.toInt("crypt cache size")(s)) map { size =>
+  private def cryptCacheSizeProcessor(): CliProcessor[Try[Int]] =
+    ParameterManager.asMandatory(CryptCacheSizeOption,
+      ParameterManager.mapped(CryptCacheSizeOption,
+        ParameterManager.intOptionValue(CryptCacheSizeOption, Some(DefaultCryptCacheSize))) { size =>
         if (size < MinCryptCacheSize)
           throw new IllegalArgumentException(s"Crypt cache size must be greater or equal $MinCryptCacheSize.")
         else size
-      }
-    }
+      })
+
+  /**
+    * Returns a processor that extracts the timeout from the command line.
+    * This processor extracts an int value, which is interpreted as timeout in
+    * seconds. A default timeout is set if the option is undefined.
+    *
+    * @return
+    */
+  private def timeoutProcessor(): CliProcessor[Try[Timeout]] =
+    ParameterManager.asMandatory(TimeoutOption,
+      ParameterManager.mapped(TimeoutOption,
+        ParameterManager.intOptionValue(TimeoutOption,
+          Some(DefaultTimeout.duration.toSeconds.toInt)))(_.seconds))
 
   /**
     * Transforms an option of a string to an option of a path. The path is

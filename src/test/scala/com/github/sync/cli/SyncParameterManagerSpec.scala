@@ -73,13 +73,13 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * the future is actually failed with an ''IllegalArgumentException'' that
     * has a specific error message.
     *
-    * @param future the future to be checked
-    * @param msg    text to be expected in the exception message
+    * @param future   the future to be checked
+    * @param msgParts text parts to be expected in the exception message
     * @return the error message from the exception
     */
-  private def expectFailedFuture(future: Future[_], msg: String): String = {
+  private def expectFailedFuture(future: Future[_], msgParts: String*): String = {
     val exception = expectFailedFuture[IllegalArgumentException](future)
-    exception.getMessage should include(msg)
+    msgParts foreach (part => exception.getMessage should include(part))
     exception.getMessage
   }
 
@@ -294,7 +294,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.TimeoutOption -> List("bar", "baz"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      SyncParameterManager.TimeoutOption + " has multiple values")
+      SyncParameterManager.TimeoutOption, "has multiple values")
   }
 
   it should "return a default apply mode" in {
@@ -342,7 +342,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.TimeoutOption -> List(timeoutStr))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      "Invalid timeout value: '" + timeoutStr)
+      SyncParameterManager.TimeoutOption, timeoutStr)
   }
 
   it should "have an undefined log file option if none is specified" in {
@@ -362,7 +362,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.LogFileOption -> List("log1", "log2"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      SyncParameterManager.LogFileOption + ": only a single value")
+      SyncParameterManager.LogFileOption, "have a single value")
   }
 
   it should "have an undefined sync log option if none is specified" in {
@@ -382,7 +382,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.SyncLogOption -> List("log1", "log2"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      SyncParameterManager.SyncLogOption + ": only a single value")
+      SyncParameterManager.SyncLogOption, "should have a single value")
   }
 
   it should "handle an undefined option for the file times threshold" in {
@@ -404,7 +404,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.IgnoreTimeDeltaOption -> List(InvalidValue))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      "Invalid threshold for file time deltas: '" + InvalidValue)
+      InvalidValue, SyncParameterManager.IgnoreTimeDeltaOption)
   }
 
   it should "handle an undefined option for the operations per second" in {
@@ -426,7 +426,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.OpsPerSecondOption -> List(InvalidValue))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      "Invalid number of operations per second: '" + InvalidValue)
+      InvalidValue, SyncParameterManager.OpsPerSecondOption)
   }
 
   it should "return correct default options related to encryption" in {
@@ -470,7 +470,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.CryptCacheSizeOption -> List("big"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      "Invalid crypt cache size")
+      "big", SyncParameterManager.CryptCacheSizeOption)
   }
 
   it should "handle a crypt cache size below the allowed minimum" in {
@@ -500,10 +500,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       SyncParameterManager.TimeoutOption -> List("invalidTimeout"),
       SyncParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))
 
-    val msg = expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      "destination URI")
-    msg should include("apply mode")
-    msg should include("timeout value")
-    msg should include("crypt cache size")
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
+      "destination URI", "apply mode", SyncParameterManager.TimeoutOption,
+      SyncParameterManager.CryptCacheSizeOption)
   }
 }

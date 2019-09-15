@@ -27,7 +27,7 @@ import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
-import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
+import com.github.sync.cli.ParameterManager._
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.webdav.DavConfig
 
@@ -277,8 +277,7 @@ object SyncComponentsFactory {
     */
   private def localFsConfigProcessor(uri: String, structureType: StructureType): CliProcessor[Try[LocalFsConfig]] = {
     val propZoneId = structureType.configPropertyName(PropLocalFsTimeZone)
-    ParameterManager.optionalOptionValue(propZoneId)
-      .map(triedZoneId => triedZoneId.flatMap(zoneId => ParameterManager.paramTry(propZoneId)(zoneId map ZoneId.of)))
+    mapped(propZoneId, singleOptionValue(propZoneId))(ZoneId.of)
       .map(triedZone => createLocalFsConfig(uri, structureType, triedZone))
   }
 
@@ -327,14 +326,32 @@ object SyncComponentsFactory {
     * @return the ''CliProcessor'' for the WebDav configuration
     */
   private def davConfigProcessor(uri: String, timeout: Timeout, structureType: StructureType):
-  CliProcessor[Try[DavConfig]] = for {
-    triedUser <- ParameterManager.singleOptionValueOld(structureType.configPropertyName(PropDavUser))
-    triedPassword <- ParameterManager.consoleInputOption(structureType.configPropertyName(PropDavPassword))
-    triedModProp <- ParameterManager.optionalOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
-    triedModNs <- ParameterManager.optionalOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
-    triedDel <- ParameterManager.booleanOptionValueOld(structureType.configPropertyName(PropDavDeleteBeforeOverride))
-  } yield createDavConfig(uri, timeout, structureType, triedUser, triedPassword, triedModProp,
-    triedModNs, triedDel)
+  CliProcessor[Try[DavConfig]] = {
+    val keyDelBeforeOverride = structureType.configPropertyName(PropDavDeleteBeforeOverride)
+    val keyUser = structureType.configPropertyName(PropDavUser)
+    for {
+      triedUser <- asMandatory(keyUser, singleOptionValue(keyUser))
+      triedPassword <- davPasswordOption(structureType)
+      triedModProp <- singleOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
+      triedModNs <- singleOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
+      triedDel <- asMandatory(keyDelBeforeOverride, booleanOptionValue(keyDelBeforeOverride, Some(false)))
+    } yield createDavConfig(uri, timeout, structureType, triedUser, triedPassword, triedModProp,
+      triedModNs, triedDel)
+  }
+
+  /**
+    * Returns a ''CliProcessor'' for obtaining the password of the Dav server.
+    * The password is mandatory; if it is not specified in the arguments, it is
+    * read from the console.
+    *
+    * @param structureType the structure type
+    * @return the ''CliProcessor'' for the Dav password
+    */
+  private def davPasswordOption(structureType: StructureType): CliProcessor[Try[String]] = {
+    val prop = structureType.configPropertyName(PropDavPassword)
+    asMandatory(prop, asSingleOptionValue(prop, withFallback(optionValue(prop),
+      consoleReaderValue(prop, password = true))))
+  }
 
   /**
     * Creates a ''DavConfig'' object from the given components. Errors are
