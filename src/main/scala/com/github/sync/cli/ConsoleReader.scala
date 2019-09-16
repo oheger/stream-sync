@@ -40,3 +40,20 @@ trait ConsoleReader {
     */
   def readOption(key: String, password: Boolean): String
 }
+
+/**
+  * A default implementation of the ''ConsoleReader'' trait that reads user
+  * input via Java's ''Console'' class.
+  *
+  * ''java.io.Console'' offers methods for prompting the user and gathering
+  * user input, with and without echo (as needed for passwords). Unfortunately,
+  * the class is final which makes testing rather difficult.
+  */
+object DefaultConsoleReader extends ConsoleReader {
+  override def readOption(key: String, password: Boolean): String = {
+    val prompt = s"$key: "
+    val console = System.console()
+    if (password) String.valueOf(console.readPassword(prompt))
+    else console.readLine(prompt)
+  }
+}

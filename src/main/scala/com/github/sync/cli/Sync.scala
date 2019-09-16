@@ -87,10 +87,7 @@ object Sync {
     implicit val materializer: ActorMaterializer =
       ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
     implicit val ec: ExecutionContext = system.dispatcher
-    //TODO set valid console reader
-    implicit val consoleReader: ConsoleReader = new ConsoleReader {
-      override def readOption(key: String, password: Boolean): String = ""
-    }
+    implicit val consoleReader: ConsoleReader = DefaultConsoleReader
 
     for {argsMap <- ParameterManager.parseParameters(args)
          (argsMap1, config) <- SyncParameterManager.extractSyncConfig(argsMap)
