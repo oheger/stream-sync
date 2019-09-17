@@ -215,6 +215,10 @@ option can have one of the following values (case does not matter):
 | TARGET:URI | Works like the default _TARGET_ mode, but the sync operations are applied to the structure defined by the URI. This can be a different URI than the URI of the destination structure. This is useful for instance if a structure should be mirrored to multiple backup locations. Then the delta between the source and destination structure can be applied to alternative target structures as well. |
 | NONE | In this mode no sync operations are executed at all. This mainly makes sense when a log file is written (see below); then a sync process can be executed in a _dry-run_ mode in which no actions are performed, but the operations that would be executed can be seen in the log file. |
 
+*Attention*: The implementation of the apply mode `TARGET:URI` is currently
+limited. It can only be used when syncing file systems and file names are not
+encrypted. 
+
 ### Sync log files
 The sync operations executed during a sync process can also be written in a 
 textual representation to a log file. This is achieved by adding the `--log`
@@ -284,6 +288,13 @@ the data that is synced:
 * The content of files can be encrypted.
 * The names of files and folders can be encrypted.
 
+If encryption is used and what is encrypted is controlled by the so-called
+_encryption mode_. This is an enumeration that can have the following values:
+* _none_: No encryption is used.
+* _files_: The content of files is encrypted.
+* _filesAndNames_: Both the content of files and their names are encrypted.
+  (This includes directories as well.)
+
 In all cases, encryption is based on 
 [AES](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) using key
 sizes of 128 bits. The keys are derived from password strings that are
@@ -293,10 +304,10 @@ so an encrypted text will always be different, even if the same input is
 passed.
 
 The source and the destination of a sync process can be encrypted 
-independently. If an encryption password for the destination is provided, but
-not for the source, files transferred to the destination are encrypted. If an
-encryption password is provided for the source, but not for the destination,
-files are decrypted. If encryption passwords are specified for both sides,
+independently. If an encryption mode other than _none_ is set for the destination, 
+but not for the source, files transferred to the destination are encrypted. If
+such an encryption mode is set for the source, but not for the destination,
+files are decrypted. If active encryption modes are specified for both sides,
 files are decrypted first and then encrypted again with the destination 
 password.
 
@@ -305,10 +316,10 @@ of them are optional):
 
 | Option | Description | Default |
 | ------ | ----------- | ------- |
-| src-encrypt-password | Defines a password for the encryption of files in the source structure. If provided, files from the source structure are decrypted using this password when they need to be copied. | Undefined |
-| dst-encrypt-password | Analogous to ``src-encrypt-password``, but a password for the destination structure is defined. If set, files are encrypted using this password when they are copied to the destination. | Undefined |
-| src-encrypt-names | A boolean flag that determines whether file and folder names in the source structure are encrypted. This option is evaluated only if an encryption password for the source is specified. It can have the values **true** or **false**. If set to **true**, the file names from the source structure are decrypted using the password for the source. | **false** |
-| dst-encrypt-names | Analogous to ``src-encrypt-names``, but determines whether file names in the destination structure should be encrypted. | **false** |
+| src-crypt-mode | The encryption mode for the source structure (see above). This flag controls whether encryption is applied to files on the source structure. | _none_ |
+| dst-crypt-mode | The encryption mode for the destination structure; controls how encryption is applied to the destination structure. | _none_ |
+| src-encrypt-password | Defines a password for the encryption of files in the source structure. This password is needed when the source crypt mode indicates that encryption should be used. | Undefined |
+| dst-encrypt-password | Analogous to ``src-encrypt-password``, but a password for the destination structure is defined. It is evaluated for a corresponding encryption mode. | Undefined |
 | crypt-cache-size | During a sync operation with encrypted file names, it may be necessary to encrypt or decrypt file names multiple times; for instance if parent folders are accessed multiple times to process their sub folders. As an optimization, a cache is maintained storing the names that have already been encrypted or decrypted; that way the number of crypt operations can be reduced. For sync operations of very complex structures (with deeply nested folder structures), it can make sense to set a higher cache size. Note that the minimum allowed size is 32. | 128 |
 
 Note that folder structures that are only partly encrypted are not supported;
@@ -411,6 +422,28 @@ As you can see in this example, the name of the system properties is derived
 from the hierarchical structure of the configuration options for Akka HTTP as
 described in the referenced documentation.
 
+### Reading passwords from the console
+For some use cases, e.g. connecting to a WebDav server or encrypting files,
+StreamSync needs passwords. Per default, such passwords can be specified as
+command line arguments, like any other arguments processed by the program.
+This can, however, be problematic when it comes to secret data: If the program
+is invoked from a command shell, the passwords are directly visible. They are
+typically stored in the command line history as well. So they can be easily
+compromised.
+
+To reduce this risk, passwords can also be read from the console. This happens
+automatically without any additional action required by the caller. If a
+password is required for a concrete sync scenario, but the corresponding 
+command line argument is missing, the user is prompted to enter it. As prompt
+the name of the command line argument representing the password is used. When 
+the password is typed in no echo is displayed.
+
+It is well possible that multiple passwords are needed for a single sync
+process. An example could be a process that syncs from the local file system to
+an encrypted WebDav server. Then a password is needed to connect to the server,
+and another one for the encryption. Either of them can be omitted from the
+command line; the user is prompted for all missing passwords.
+
 ### Examples and use cases
 **Sync a local directory to an external USB hard disk**
 
@@ -484,7 +517,7 @@ online storage:
 ```
 Sync C:\data\work dav:https://sd2dav.1und1.de/backup/work \
 --log C:\Temp\sync.log \
---dst-user my.account --dst-password s3c3t_PASsword \
+--dst-user my.account --dst-password s3cr3t_PASsword \
 --dst-modified-property Win32LastModifiedTime \
 --dst-modified-namespace urn:schemas-microsoft-com: \
 --filter exclude:*.bak
@@ -496,6 +529,9 @@ WebDav _getlastmodified_ property, but uses a custom property named
 _Win32LastModifiedTime_ with the namespace _urn:schemas-microsoft-com:_ to
 hold a modified time different from the upload time. This property will be set
 correctly for each file that is uploaded during a sync process.
+
+Note that the _--dst-password_ parameter could have been omitted. Then the user
+would have been prompted for the password.
 
 **Sync from a local directory to a WebDav server with encryption**
 Building upon the previous example, with some additional options it is possible
@@ -509,17 +545,18 @@ Sync C:\data\work dav:https://sd2dav.1und1.de/backup/work \
 --dst-modified-namespace urn:schemas-microsoft-com: \
 --filter exclude:*.bak \
 --dst-encrypt-password s3cr3t
---dst-encrypt-names true
+--dst-crypt-mode filesAndNames
 --crypt-cache-size 1024
 --ops-per-second 2
 ```
 
 This command specifies that both the content and the names of files are
-encrypted using the password "s3cr3t" when copied onto the WebDav server. The
-size of the cache for encrypted names is increased to avoid unnecessary crypt
-operations. In the example the number of sync operations per second is
-limited to 2 to avoid that the server rejects requests because its load is too
-high.
+encrypted using the password "s3cr3t" when copied onto the WebDav server. With
+an encryption mode of _files_ only the files' content would be encrypted, but
+the file names would remain in plain text. The size of the cache for encrypted
+names is increased to avoid unnecessary crypt operations. In the example the
+number of sync operations per second is limited to 2 to avoid that the server
+rejects requests because its load is too high.
 
 ## Architecture
 The Stream Sync tool makes use of [Reactive streams](http://www.reactive-streams.org/)
