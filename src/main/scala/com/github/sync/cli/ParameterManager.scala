@@ -16,7 +16,7 @@
 
 package com.github.sync.cli
 
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 import java.util.Locale
 
 import akka.stream.ActorMaterializer
@@ -436,6 +436,18 @@ object ParameterManager {
   }
 
   /**
+    * Returns a processor that converts a command line argument to a file path.
+    * The conversion may fail if the option value is not a valid path.
+    * Undefined values are ignored.
+    *
+    * @param key  the key of the option (to generate an error message)
+    * @param proc the processor providing the original option value
+    * @return the processor converting the value to a ''Path''
+    */
+  def asPathOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
+  CliProcessor[SingleOptionValue[Path]] = mapped(key, proc) { s => Paths.get(s) }
+
+  /**
     * Returns a processor to extract the single string value of a command line
     * option. It is possible to specify a fallback value if this option is
     * undefined. The processor fails if the option has multiple values.
@@ -582,6 +594,18 @@ object ParameterManager {
     }
 
   /**
+    * Generates an exception that reports a problem with a specific command
+    * line option. Makes sure that such exceptions have a uniform format.
+    *
+    * @param key     the option key
+    * @param message the error message
+    * @param cause   an option cause of the error
+    * @return the resulting exception
+    */
+  def paramException(key: String, message: String, cause: Throwable = null): Throwable =
+    new IllegalArgumentException(s"$key: ${generateErrorMessage(message, cause)}", cause)
+
+  /**
     * Checks whether the given argument string is an option. This is the case
     * if it starts with the option prefix.
     *
@@ -647,18 +671,6 @@ object ParameterManager {
     * @return the string in lower case
     */
   private def toLower(s: String): String = s.toLowerCase(Locale.ROOT)
-
-  /**
-    * Generates an exception that reports a problem with a specific command
-    * line option. Makes sure that such exceptions have a uniform format.
-    *
-    * @param key     the option key
-    * @param message the error message
-    * @param cause   an option cause of the error
-    * @return the resulting exception
-    */
-  private def paramException(key: String, message: String, cause: Throwable = null): Throwable =
-    new IllegalArgumentException(s"$key: ${generateErrorMessage(message, cause)}", cause)
 
   /**
     * Generates the error message for an exception encountered during parameter

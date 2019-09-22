@@ -490,6 +490,18 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     res should be(Success(Some(false)))
   }
 
+  it should "provide a processor for a single Path value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val StrPath = "myPath"
+    val OptValue: SingleOptionValue[String] = Success(Some(StrPath))
+    val proc = testProcessor(OptValue)
+    val processor = ParameterManager.asPathOptionValue(Key, proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res.get.get.toString should be(StrPath)
+  }
+
   it should "provide a processor that reads from the console" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val Result = "enteredFromUser"
