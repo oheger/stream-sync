@@ -16,7 +16,7 @@
 
 package com.github.sync.cli
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 
 import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters, SingleOptionValue}
@@ -229,8 +229,8 @@ object SyncParameterManager {
     uris <- syncUrisProcessor()
     mode <- applyModeProcessor(uris.getOrElse(("", ""))._2)
     timeout <- timeoutProcessor()
-    logFile <- ParameterManager.singleOptionValue(LogFileOption)
-    syncLog <- ParameterManager.singleOptionValue(SyncLogOption)
+    logFile <- ParameterManager.asPathOptionValue(LogFileOption, ParameterManager.singleOptionValue(LogFileOption))
+    syncLog <- ParameterManager.asPathOptionValue(SyncLogOption, ParameterManager.singleOptionValue(SyncLogOption))
     timeDelta <- ignoreTimeDeltaProcessor()
     opsPerSec <- opsPerSecondProcessor()
     srcPwd <- cryptPasswordProcessor(SourceCryptModeOption, SourcePasswordOption)
@@ -281,8 +281,8 @@ object SyncParameterManager {
   private def createSyncConfig(triedUris: Try[(String, String)],
                                triedApplyMode: Try[ApplyMode],
                                triedTimeout: Try[Timeout],
-                               triedLogFile: Try[Option[String]],
-                               triedSyncLog: Try[Option[String]],
+                               triedLogFile: Try[Option[Path]],
+                               triedSyncLog: Try[Option[Path]],
                                triedTimeDelta: Try[Option[Int]],
                                triedOpsPerSec: Try[Option[Int]],
                                triedSrcPassword: Try[Option[String]],
@@ -294,9 +294,8 @@ object SyncParameterManager {
       triedSyncLog, triedTimeDelta, triedOpsPerSec, triedSrcPassword, triedSrcCryptMode, triedDstPassword,
       triedDstCryptMode, triedCryptCacheSize) {
       SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
-        mapPath(triedLogFile.get), mapPath(triedSyncLog.get), triedTimeDelta.get,
-        triedSrcPassword.get, triedSrcCryptMode.get, triedDstPassword.get, triedDstCryptMode.get,
-        triedCryptCacheSize.get, triedOpsPerSec.get)
+        triedLogFile.get, triedSyncLog.get, triedTimeDelta.get, triedSrcPassword.get, triedSrcCryptMode.get,
+        triedDstPassword.get, triedDstCryptMode.get, triedCryptCacheSize.get, triedOpsPerSec.get)
     }
 
   /**
@@ -423,13 +422,4 @@ object SyncParameterManager {
         ParameterManager.intOptionValue(TimeoutOption,
           Some(DefaultTimeout.duration.toSeconds.toInt)))(_.seconds))
 
-  /**
-    * Transforms an option of a string to an option of a path. The path is
-    * resolved.
-    *
-    * @param optPathStr the option with the path string
-    * @return the transformed option for a path
-    */
-  private def mapPath(optPathStr: Option[String]): Option[Path] =
-    optPathStr map (s => Paths get s)
 }
