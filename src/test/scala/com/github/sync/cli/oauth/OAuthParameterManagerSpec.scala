@@ -20,7 +20,10 @@ import java.nio.file.Paths
 
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ParameterManager.{InputOption, Parameters}
+import com.github.sync.cli.oauth.OAuthParameterManager.IdpConfig
 import com.github.sync.cli.{ConsoleReader, ParameterManager}
+import com.github.sync.crypt.Secret
+import com.github.sync.webdav.oauth.OAuthConfig
 import org.mockito.Mockito._
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
@@ -28,6 +31,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
+import scala.util.Success
 
 object OAuthParameterManagerSpec {
   /** Test base name of an OAuth provider. */
@@ -42,8 +46,29 @@ object OAuthParameterManagerSpec {
   /** A test command name. */
   private val CommandName = "check"
 
+  /** A test authorization URL. */
+  private val AuthEndpointUrl = "https://my-test-provider.org/auth"
+
+  /** A test token endpoint URL. */
+  private val TokenEndpointUrl = "https://my-test-provider.org/tokens"
+
+  /** A test redirect URI. */
+  private val Redirect = "https://my-domain.org/redirect"
+
+  /** A test client ID. */
+  private val ClientID = "testOAuthClient"
+
+  /** A test client secret. */
+  private val ClientSecret = "testClientSecret!?"
+
+  /** A set with test scope values. */
+  private val Scopes = Set("read", "write", "draw", "pull", "exec")
+
   /** A map with default parameter options. */
   private val DefaultOptions = createBasicParametersMap()
+
+  /** The configuration for the test IDP. */
+  private val TestIdpConfig = createTestIdpConfig()
 
   /**
     * Implicit conversion from a simple map to a ''Parameters'' object. As we
@@ -65,6 +90,37 @@ object OAuthParameterManagerSpec {
       OAuthParameterManager.NameOption -> ProviderName,
       OAuthParameterManager.PasswordOption -> Password,
       InputOption -> CommandName)
+
+  /**
+    * Returns a string with the test scope values separated by the given
+    * separator.
+    *
+    * @param separator the separator
+    * @return the string with scope values
+    */
+  private def scopeString(separator: String): String = Scopes.mkString(separator)
+
+  /**
+    * Creates the configuration for the test IDP with the expected values.
+    *
+    * @return the test IDP configuration
+    */
+  private def createTestIdpConfig(): IdpConfig =
+    IdpConfig(OAuthConfig(authorizationEndpoint = AuthEndpointUrl, tokenEndpoint = TokenEndpointUrl,
+      scope = scopeString(" "), redirectUri = Redirect, clientID = ClientID),
+      Secret(ClientSecret))
+
+  /**
+    * Compares the given configuration against the test IDP configuration.
+    * This
+    *
+    * @param config the configuration to be compared
+    * @return a flag whether this is equal to the test config
+    */
+  private def equalsTestConfig(config: IdpConfig): Boolean = {
+    val confWithSecret = config.copy(clientSecret = TestIdpConfig.clientSecret)
+    confWithSecret == TestIdpConfig && config.clientSecret.secret == TestIdpConfig.clientSecret.secret
+  }
 }
 
 /**
@@ -166,5 +222,59 @@ class OAuthParameterManagerSpec extends FlatSpec with Matchers with AsyncTestHel
     expectFailedFuture(OAuthParameterManager.extractCommandConfig(args),
       OAuthParameterManager.EncryptOption)
     verifyZeroInteractions(consoleReader)
+  }
+
+  /**
+    * Helper function to check whether an IDP configuration can be extracted.
+    *
+    * @param scopeSeparator the separator for scope values
+    */
+  private def checkExtractValidIdpConfiguration(scopeSeparator: String): Unit = {
+    val args = Map(OAuthParameterManager.AuthEndpointOption -> AuthEndpointUrl,
+      OAuthParameterManager.TokenEndpointOption -> TokenEndpointUrl,
+      OAuthParameterManager.RedirectUrlOption -> Redirect,
+      OAuthParameterManager.ScopeOption -> scopeString(scopeSeparator),
+      OAuthParameterManager.ClientIDOption -> ClientID,
+      OAuthParameterManager.ClientSecretOption -> ClientSecret)
+
+    val (config, next) = ParameterManager.runProcessor(OAuthParameterManager.idpConfigProcessor, args)
+    next.accessedParameters should contain only(OAuthParameterManager.AuthEndpointOption,
+      OAuthParameterManager.TokenEndpointOption, OAuthParameterManager.RedirectUrlOption,
+      OAuthParameterManager.ScopeOption, OAuthParameterManager.ClientIDOption,
+      OAuthParameterManager.ClientSecretOption)
+    equalsTestConfig(config.get) shouldBe true
+  }
+
+  it should "extract a valid IDP configuration" in {
+    checkExtractValidIdpConfiguration(" ")
+  }
+
+  it should "support comma as separator for scope values" in {
+    checkExtractValidIdpConfiguration(",")
+  }
+
+  it should "read the client secret from the console if necessary" in {
+    val reader = mock[ConsoleReader]
+    when(reader.readOption(OAuthParameterManager.ClientSecretOption, password = true))
+      .thenReturn(ClientSecret)
+    val args = Map(OAuthParameterManager.AuthEndpointOption -> AuthEndpointUrl,
+      OAuthParameterManager.TokenEndpointOption -> TokenEndpointUrl,
+      OAuthParameterManager.RedirectUrlOption -> Redirect,
+      OAuthParameterManager.ScopeOption -> scopeString(" "),
+      OAuthParameterManager.ClientIDOption -> ClientID)
+
+    val (config, next) = ParameterManager.runProcessor(OAuthParameterManager.idpConfigProcessor, args)(reader)
+    next.accessedParameters should contain(OAuthParameterManager.ClientSecretOption)
+    equalsTestConfig(config.get) shouldBe true
+  }
+
+  it should "report errors for missing mandatory properties of the IDP config" in {
+    val args = Map(OAuthParameterManager.ClientSecretOption -> ClientSecret)
+
+    expectFailedFuture(Future.fromTry(
+      ParameterManager.tryProcessor(OAuthParameterManager.idpConfigProcessor, args)),
+      OAuthParameterManager.AuthEndpointOption, OAuthParameterManager.TokenEndpointOption,
+      OAuthParameterManager.RedirectUrlOption, OAuthParameterManager.ScopeOption,
+      OAuthParameterManager.ClientIDOption)
   }
 }

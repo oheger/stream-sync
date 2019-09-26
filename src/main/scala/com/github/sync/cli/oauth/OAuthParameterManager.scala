@@ -21,7 +21,7 @@ import java.nio.file.Path
 import com.github.sync.cli.ParameterManager._
 import com.github.sync.cli.{ConsoleReader, ParameterManager}
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.oauth.OAuthStorageConfig
+import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageConfig}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -53,6 +53,30 @@ object OAuthParameterManager {
   val EncryptOption: String = ParameterManager.OptionPrefix + "encrypt-data"
 
   /**
+    * Name of the option that defines the authorization endpoint for an IDP.
+    */
+  val AuthEndpointOption: String = ParameterManager.OptionPrefix + "auth-url"
+
+  /** Name of the option that defines the token endpoint for an IDP. */
+  val TokenEndpointOption: String = ParameterManager.OptionPrefix + "token-url"
+
+  /** Name of the option that defines the redirect URL for an IDP. */
+  val RedirectUrlOption: String = ParameterManager.OptionPrefix + "redirect-url"
+
+  /**
+    * Name of the option that defines the scope values to be requested when
+    * asking for a token. The value can contain multiple scope values separated
+    * by either comma or whitespace.
+    */
+  val ScopeOption: String = ParameterManager.OptionPrefix + "scope"
+
+  /** Name of the option that defines the client ID for an IDP. */
+  val ClientIDOption: String = ParameterManager.OptionPrefix + "client-id"
+
+  /** Name of the option that defines the client secret for an IDP. */
+  val ClientSecretOption: String = ParameterManager.OptionPrefix + "client-secret"
+
+  /**
     * A name to be displayed if there is something wrong with the command.
     * Here a different name is used than for the underlying input option of
     * ''ParameterManager''.
@@ -70,6 +94,18 @@ object OAuthParameterManager {
     * @param storageConfig the storage configuration
     */
   case class CommandConfig(command: String, storageConfig: OAuthStorageConfig)
+
+  /**
+    * A data class collecting all the data required to describe an OAuth
+    * identity provider.
+    *
+    * This is basically a combination of the (public) OAuth configuration plus
+    * the client secret.
+    *
+    * @param oauthConfig  the OAuth configuration
+    * @param clientSecret the client secret
+    */
+  case class IdpConfig(oauthConfig: OAuthConfig, clientSecret: Secret)
 
   /**
     * A ''CliProcessor'' for extracting the command passed in the
@@ -108,6 +144,21 @@ object OAuthParameterManager {
     Future.fromTry(tryProcessor(commandConfigProcessor(needPassword), parameters))
 
   /**
+    * Returns a ''CliProcessor'' to extract the data for an IDP from the
+    * command line.
+    *
+    * @return the ''CliProcessor'' to extract IDP-related data
+    */
+  def idpConfigProcessor: CliProcessor[Try[IdpConfig]] =
+    for {triedAuthUrl <- mandatoryStringOption(AuthEndpointOption)
+         triedTokenUrl <- mandatoryStringOption(TokenEndpointOption)
+         triedScope <- scopeProcessor
+         triedRedirect <- mandatoryStringOption(RedirectUrlOption)
+         triedID <- mandatoryStringOption(ClientIDOption)
+         triedSecret <- clientSecretProcessor
+         } yield createIdpConfig(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect, triedID, triedSecret)
+
+  /**
     * Returns a ''CliProcessor'' for extracting a ''CommandConfig'' object.
     *
     * @param needPassword flag whether a password is needed by the storage
@@ -142,7 +193,7 @@ object OAuthParameterManager {
     * @return the ''CliProcessor'' for the ''OAuthStorageConfig''
     */
   private def storageConfigProcessor(needPassword: Boolean): CliProcessor[Try[OAuthStorageConfig]] =
-    for {name <- asMandatory(NameOption, singleOptionValue(NameOption))
+    for {name <- mandatoryStringOption(NameOption)
          path <- asMandatory(StoragePathOption, asPathOptionValue(StoragePathOption, singleOptionValue(StoragePathOption)))
          pwd <- storagePasswordProcessor(needPassword)
          crypt <- booleanOptionValue(EncryptOption)
@@ -165,6 +216,30 @@ object OAuthParameterManager {
   }
 
   /**
+    * Returns a ''CliProcessor'' for extracting the scope. For scope different
+    * separators are allowed. This is handled here.
+    *
+    * @return the ''CliProcessor'' for scope
+    */
+  private def scopeProcessor: CliProcessor[Try[String]] =
+    asMandatory(ScopeOption, mapped(ScopeOption, singleOptionValue(ScopeOption))(_.replace(',', ' ')))
+
+  /**
+    * Returns a ''CliProcessor'' for extracting the client secret of an IDP.
+    * If the secret has not been provided as command line argument, it has to
+    * be read from the console.
+    *
+    * @return the ''CliProcessor'' for the client secret
+    */
+  private def clientSecretProcessor: CliProcessor[Try[Secret]] = {
+    asMandatory(ClientSecretOption,
+      mapped(ClientSecretOption,
+        asSingleOptionValue(ClientSecretOption,
+          withFallback(optionValue(ClientSecretOption),
+            consoleReaderValue(ClientSecretOption, password = true))))(pwd => Secret(pwd)))
+  }
+
+  /**
     * Creates an ''OAuthStorageConfig'' from the given components. Failures are
     * accumulated.
     *
@@ -180,4 +255,34 @@ object OAuthParameterManager {
       OAuthStorageConfig(baseName = triedName.get, rootDir = triedPath.get,
         optPassword = triedPwd.get.map(Secret(_)))
     }
+
+  /**
+    * Tries to create an ''IdpConfig'' from the given components.
+    *
+    * @param triedAuthUrl  the authorization URL component
+    * @param triedTokenUrl the token URL component
+    * @param triedScope    the scope component
+    * @param triedRedirect the redirect URL component
+    * @param triedID       the client ID component
+    * @param triedSecret   the client secret component
+    * @return a ''Try'' with the generated IDP configuration
+    */
+  private def createIdpConfig(triedAuthUrl: Try[String], triedTokenUrl: Try[String], triedScope: Try[String],
+                              triedRedirect: Try[String], triedID: Try[String], triedSecret: Try[Secret]):
+  Try[IdpConfig] = createRepresentation(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect,
+    triedID, triedSecret) {
+    val oauthConfig = OAuthConfig(authorizationEndpoint = triedAuthUrl.get, tokenEndpoint = triedTokenUrl.get,
+      scope = triedScope.get, redirectUri = triedRedirect.get, clientID = triedID.get)
+    IdpConfig(oauthConfig, triedSecret.get)
+  }
+
+  /**
+    * Convenience function for the frequent use case to create a
+    * ''CliProcessor'' for a mandatory string value.
+    *
+    * @param key the key of the option
+    * @return the processor to extract this option
+    */
+  private def mandatoryStringOption(key: String): CliProcessor[Try[String]] =
+    asMandatory(key, singleOptionValue(key))
 }
