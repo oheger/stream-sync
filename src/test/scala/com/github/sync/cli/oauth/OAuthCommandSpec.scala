@@ -16,11 +16,12 @@
 
 package com.github.sync.cli.oauth
 
+import akka.stream.ActorMaterializer
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ConsoleReader
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.oauth.{OAuthStorageConfig, OAuthStorageService, OAuthTokenData}
+import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageConfig, OAuthStorageService, OAuthTokenData}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -58,6 +59,9 @@ class OAuthCommandSpec extends FlatSpec with Matchers with AsyncTestHelper with 
 
   /** Mock for the implicit console reader. */
   private implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+
+  /** Mock for an object to materialize streams. */
+  private implicit val streamMat: ActorMaterializer = mock[ActorMaterializer]
 
   /**
     * Creates a generic test Cli processor that checks the context passed to it
@@ -119,7 +123,7 @@ class OAuthCommandSpec extends FlatSpec with Matchers with AsyncTestHelper with 
     private val mockStorageConfig = mock[OAuthStorageConfig]
 
     /** Mock storage service. */
-    private val mockStorageService = mock[OAuthStorageService[OAuthStorageConfig, OAuthStorageConfig,
+    private val mockStorageService = mock[OAuthStorageService[OAuthStorageConfig, OAuthConfig,
       Secret, OAuthTokenData]]
 
     /**
@@ -149,12 +153,13 @@ class OAuthCommandSpec extends FlatSpec with Matchers with AsyncTestHelper with 
         * @inheritdoc This implementation
         */
       override protected def runCommand(storageConfig: OAuthStorageConfig,
-                                        storageService: OAuthStorageService[OAuthStorageConfig, OAuthStorageConfig,
+                                        storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                           Secret, OAuthTokenData], config: Int)
-                                       (implicit ec: ExecutionContext): Future[String] = {
+                                       (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] = {
         storageConfig should be(mockStorageConfig)
         storageService should be(mockStorageService)
         config should be(Config)
+        mat should be(streamMat)
         result
       }
     }

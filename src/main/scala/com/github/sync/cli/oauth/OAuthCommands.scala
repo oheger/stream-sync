@@ -16,10 +16,12 @@
 
 package com.github.sync.cli.oauth
 
+import akka.stream.ActorMaterializer
 import com.github.sync.cli.{ConsoleReader, ParameterManager}
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
+import com.github.sync.cli.oauth.OAuthParameterManager.IdpConfig
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.oauth.{OAuthStorageConfig, OAuthStorageService, OAuthTokenData}
+import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageConfig, OAuthStorageService, OAuthTokenData}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
@@ -65,13 +67,14 @@ trait OAuthCommand[C] {
     * @param storageService the storage service
     * @param parameters     the current command line arguments
     * @param ec             the execution context
+    * @param mat            the object to materialize streams
     * @param consoleReader  the console reader
     * @return a ''Future'' with the result of this command
     */
   def run(storageConfig: OAuthStorageConfig,
-          storageService: OAuthStorageService[OAuthStorageConfig, OAuthStorageConfig, Secret, OAuthTokenData],
+          storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData],
           parameters: Parameters)
-         (implicit ec: ExecutionContext, consoleReader: ConsoleReader): Future[String] = {
+         (implicit ec: ExecutionContext, mat: ActorMaterializer, consoleReader: ConsoleReader): Future[String] = {
     val cliResult = ParameterManager.tryProcessor(cliProcessor, parameters)
     for {(config, updParams) <- Future.fromTry(cliResult)
          _ <- ParameterManager.checkParametersConsumed(updParams)
@@ -88,10 +91,39 @@ trait OAuthCommand[C] {
     * @param storageService the storage service
     * @param config         the configuration for this command
     * @param ec             the execution context
+    * @param mat            the object to materialize streams
     * @return a ''Future'' with the result of this command
     */
   protected def runCommand(storageConfig: OAuthStorageConfig,
-                           storageService: OAuthStorageService[OAuthStorageConfig, OAuthStorageConfig, Secret,
+                           storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret,
                              OAuthTokenData], config: C)
-                          (implicit ec: ExecutionContext): Future[String]
+                          (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String]
+}
+
+/**
+  * A command implementation that allows initializing a new IDP.
+  *
+  * The command expects parameters that define the properties of the new
+  * identity provider. With this information, the [[OAuthStorageService]] is
+  * called to persist it, so that it can be later referenced when interacting
+  * with the IDP.
+  */
+class OAuthInitCommand extends OAuthCommand[IdpConfig] {
+  /**
+    * @inheritdoc This implementation returns the processor to extract an
+    *             ''IdpConfig'' from the OAuth parameter manager.
+    */
+  override def cliProcessor: CliProcessor[Try[IdpConfig]] =
+    OAuthParameterManager.idpConfigProcessor
+
+  /**
+    * @inheritdoc This implementation invokes the storage service.
+    */
+  override protected def runCommand(storageConfig: OAuthStorageConfig,
+                                    storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+                                      Secret, OAuthTokenData], config: IdpConfig)
+                                   (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] =
+    for {_ <- storageService.saveConfig(storageConfig, config.oauthConfig)
+         _ <- storageService.saveClientSecret(storageConfig, config.clientSecret)
+         } yield s"IDP ${storageConfig.baseName} has been successfully initialized."
 }
