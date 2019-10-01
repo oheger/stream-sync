@@ -194,6 +194,17 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   private def decryptName(key: String, name: String): String =
     futureResult(CryptService.decryptName(CryptStage.keyFromString(key), name))
 
+  /**
+    * Creates a new ''Sync'' instance that is configured to use the actor
+    * system of this test class.
+    *
+    * @return the special ''Sync'' instance
+    */
+  private def createSync(): Sync =
+    new Sync {
+      override implicit def actorSystem: ActorSystem = system
+    }
+
   "Sync" should "synchronize two directory structures" in {
     val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
@@ -207,6 +218,23 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
 
     val result = futureResult(Sync.syncProcess(factory, options))
     result.totalOperations should be(result.successfulOperations)
+    checkFile(dstFolder, "test1.txt")
+    checkFileNotPresent(dstFolder, "toBeRemoved.txt")
+    checkFileNotPresent(dstFolder, "ignored.tmp")
+  }
+
+  it should "start a sync process via its run() function" in {
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    createTestFile(srcFolder, "test1.txt")
+    createTestFile(srcFolder, "test2.txt")
+    createTestFile(srcFolder, "ignored.tmp")
+    createTestFile(dstFolder, "toBeRemoved.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--filter", "exclude:*.tmp")
+    val sync = createSync()
+
+    sync.run(options)
     checkFile(dstFolder, "test1.txt")
     checkFileNotPresent(dstFolder, "toBeRemoved.txt")
     checkFileNotPresent(dstFolder, "ignored.tmp")
@@ -310,7 +338,6 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
   }
 
   it should "ignore invalid sync operations in the sync log file" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val SuccessFile = "successSync.txt"
@@ -322,12 +349,11 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(factory, options))
+    createSync().run(options)
     checkFile(dstFolder, SuccessFile)
   }
 
   it should "skip an operation that cannot be processed" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val SuccessFile = "successSync.txt"
@@ -339,12 +365,11 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--timeout", "2")
 
-    futureResult(Sync.syncProcess(factory, options))
+    createSync().run(options)
     checkFile(dstFolder, SuccessFile)
   }
 
   it should "log only successfully executed sync operations" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val SuccessFile = "successSync.txt"
@@ -359,7 +384,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString,
       "--timeout", "2")
 
-    futureResult(Sync.syncProcess(factory, options))
+    createSync().run(options)
     val lines = Files.readAllLines(logFile)
     lines should have size 1
     lines.get(0) should include(SuccessFile)
@@ -593,7 +618,8 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--src-user", UserId, "--src-password", Password, "--timeout", timeout.toSeconds.toString)
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val sync = createSync()
+    val result = futureResult(Sync.syncProcess(factory, options)(system, sync.createStreamMat(), system.dispatcher))
     result.successfulOperations should be(0)
   }
 

@@ -20,27 +20,24 @@ import java.nio.file.{Path, StandardOpenOption}
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.http.scaladsl.Http
 import akka.stream._
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import com.github.sync.SourceFileProvider
-import com.github.sync.SyncTypes.{CompletionFunc, ElementSourceFactory, FsElement, IterateFunc, ResultTransformer, SyncFolderData, SyncOperation}
+import com.github.sync.SyncTypes._
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
 import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.crypt.{CryptService, CryptStage}
-import com.github.sync.impl.{CleanupStage, CryptAwareSourceFileProvider, ElementSource, StatefulStage, SyncStage}
+import com.github.sync.impl._
 import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
 import com.github.sync.util.LRUCache
 
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Main object to start the sync process.
-  *
-  * This is currently a minimum implementation to be extended stepwise.
   */
 object Sync {
 
@@ -57,17 +54,8 @@ object Sync {
   case class SyncResult(totalOperations: Int, successfulOperations: Int)
 
   def main(args: Array[String]): Unit = {
-    implicit val system: ActorSystem = ActorSystem("stream-sync")
-    implicit val ec: ExecutionContext = system.dispatcher
-    val factory = new SyncComponentsFactory
-    val futResult = for {
-      msg <- syncWithResultMessage(factory, args)
-      _ <- Http().shutdownAllConnectionPools()
-      _ <- system.terminate()
-    } yield msg
-
-    val resultMsg = Await.result(futResult, 365.days)
-    println(resultMsg)
+    val sync = new Sync
+    sync.run(args)
   }
 
   /**
@@ -79,14 +67,13 @@ object Sync {
     * @param factory the factory for the sync stream
     * @param args    the array with command line arguments
     * @param system  the actor system
+    * @param mat     the object to materialize streams
+    * @param ec      the execution context
     * @return a future with information about the result of the process
     */
-  def syncProcess(factory: SyncComponentsFactory, args: Array[String])(implicit system: ActorSystem):
+  def syncProcess(factory: SyncComponentsFactory, args: Array[String])
+                 (implicit system: ActorSystem, mat: ActorMaterializer, ec: ExecutionContext):
   Future[SyncResult] = {
-    val decider: Supervision.Decider = _ => Supervision.Resume
-    implicit val materializer: ActorMaterializer =
-      ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
-    implicit val ec: ExecutionContext = system.dispatcher
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
 
     for {argsMap <- ParameterManager.parseParameters(args)
@@ -446,15 +433,6 @@ object Sync {
       s"$successCount operations from $totalCount were successful."
 
   /**
-    * Returns an error message from the given exception.
-    *
-    * @param ex the exception
-    * @return the error message derived from this exception
-    */
-  private def errorMessage(ex: Throwable): String =
-    s"[${ex.getClass.getSimpleName}]: ${ex.getMessage}"
-
-  /**
     * Starts a sync process with the given parameters and returns a message
     * about the result in a ''Future''. Note that the ''Future'' returned by
     * this function never fails; if the sync process fails, it is completed
@@ -463,14 +441,42 @@ object Sync {
     * @param factory the factory for creating stream components
     * @param args    the array with command line arguments
     * @param system  the actor system
+    * @param mat     the object to materialize streams
     * @param ec      the execution context
     * @return a ''Future'' with a result message
     */
   private def syncWithResultMessage(factory: SyncComponentsFactory, args: Array[String])
-                                   (implicit system: ActorSystem, ec: ExecutionContext): Future[String] =
+                                   (implicit system: ActorSystem, mat: ActorMaterializer, ec: ExecutionContext):
+  Future[String] =
     syncProcess(factory, args)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
-      .recover {
-        case ex => errorMessage(ex)
-      }
+}
+
+/**
+  * The main class to execute sync processes.
+  *
+  * An instance of this class is created and invoked by the ''main()'' function
+  * in the companion object. By extending [[ActorSystemLifeCycle]], this class
+  * has access to an actor system and can therefore initiate the sync process.
+  */
+class Sync extends ActorSystemLifeCycle {
+  override val name: String = "Sync"
+
+  /**
+    * @inheritdoc This implementation starts the sync process using the actor
+    *             system in implicit scope.
+    */
+  override protected def runApp(args: Array[String]): Future[String] = {
+    val factory = new SyncComponentsFactory
+    Sync.syncWithResultMessage(factory, args)
+  }
+
+  /**
+    * @inheritdoc This implementation creates a special materializer that can
+    *             resume the stream on errors.
+    */
+  override def createStreamMat(): ActorMaterializer = {
+    val decider: Supervision.Decider = _ => Supervision.Resume
+    ActorMaterializer(ActorMaterializerSettings(actorSystem).withSupervisionStrategy(decider))
+  }
 }
