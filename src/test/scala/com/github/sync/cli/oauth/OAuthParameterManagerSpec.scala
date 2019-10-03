@@ -20,7 +20,7 @@ import java.nio.file.Paths
 
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ParameterManager.{InputOption, Parameters}
-import com.github.sync.cli.oauth.OAuthParameterManager.IdpConfig
+import com.github.sync.cli.oauth.OAuthParameterManager.{CommandPasswordFunc, IdpConfig}
 import com.github.sync.cli.{ConsoleReader, ParameterManager}
 import com.github.sync.crypt.Secret
 import com.github.sync.webdav.oauth.OAuthConfig
@@ -31,7 +31,6 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
-import scala.util.Success
 
 object OAuthParameterManagerSpec {
   /** Test base name of an OAuth provider. */
@@ -69,6 +68,12 @@ object OAuthParameterManagerSpec {
 
   /** The configuration for the test IDP. */
   private val TestIdpConfig = createTestIdpConfig()
+
+  /**
+    * A default function to determine whether a password is needed. This
+    * function returns always '''true''' for the test command.
+    */
+  private val DefaultPwdFunc: CommandPasswordFunc = _ == CommandName
 
   /**
     * Implicit conversion from a simple map to a ''Parameters'' object. As we
@@ -150,7 +155,7 @@ class OAuthParameterManagerSpec extends FlatSpec with Matchers with AsyncTestHel
   }
 
   "OAuthParameterManager" should "extract a valid command config" in {
-    val (config, nextParams) = futureResult(OAuthParameterManager.extractCommandConfig(DefaultOptions))
+    val (config, nextParams) = futureResult(OAuthParameterManager.extractCommandConfig(DefaultOptions)(DefaultPwdFunc))
 
     config.command should be(CommandName)
     config.storageConfig.rootDir should be(Paths.get(StoragePath))
@@ -164,7 +169,7 @@ class OAuthParameterManagerSpec extends FlatSpec with Matchers with AsyncTestHel
   it should "report missing mandatory parameters when creating a command config" in {
     val args = Map(OAuthParameterManager.PasswordOption -> Password)
 
-    expectFailedFuture(OAuthParameterManager.extractCommandConfig(args),
+    expectFailedFuture(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc),
       OAuthParameterManager.NameOption, OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.CommandOption, "no command")
   }
@@ -174,7 +179,7 @@ class OAuthParameterManagerSpec extends FlatSpec with Matchers with AsyncTestHel
     val wrongParameters = parameters.copy(parametersMap =
       parameters.parametersMap + (ParameterManager.InputOption -> List("cmd1", "cmd2")))
 
-    expectFailedFuture(OAuthParameterManager.extractCommandConfig(wrongParameters),
+    expectFailedFuture(OAuthParameterManager.extractCommandConfig(wrongParameters)(DefaultPwdFunc),
       OAuthParameterManager.CommandOption, "too many")
   }
 
@@ -185,7 +190,8 @@ class OAuthParameterManagerSpec extends FlatSpec with Matchers with AsyncTestHel
       .thenReturn(Password)
     val args = DefaultOptions - OAuthParameterManager.PasswordOption
 
-    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args)(ec = ec, consoleReader = reader))
+    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc)(ec = ec,
+      consoleReader = reader))
     config.storageConfig.optPassword.get.secret should be(Password)
   }
 
@@ -196,14 +202,17 @@ class OAuthParameterManagerSpec extends FlatSpec with Matchers with AsyncTestHel
       .thenReturn(Password)
     val args = DefaultOptions - OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "true")
 
-    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args)(ec = ec, consoleReader = reader))
+    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc)(ec = ec,
+      consoleReader = reader))
     config.storageConfig.optPassword.get.secret should be(Password)
   }
 
   it should "support an undefined password for the storage configuration" in {
     val args = DefaultOptions - OAuthParameterManager.PasswordOption
 
-    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args, needPassword = false))
+    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args) { name =>
+      name != CommandName
+    })
     config.storageConfig.optPassword should be(None)
     verifyZeroInteractions(consoleReader)
   }
@@ -211,7 +220,7 @@ class OAuthParameterManagerSpec extends FlatSpec with Matchers with AsyncTestHel
   it should "evaluate a negative encrypt option when creating a storage configuration" in {
     val args = DefaultOptions - OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "false")
 
-    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args))
+    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc))
     config.storageConfig.optPassword should be(None)
     verifyZeroInteractions(consoleReader)
   }
@@ -219,7 +228,7 @@ class OAuthParameterManagerSpec extends FlatSpec with Matchers with AsyncTestHel
   it should "detect an invalid encryption option" in {
     val args = DefaultOptions - OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "?")
 
-    expectFailedFuture(OAuthParameterManager.extractCommandConfig(args),
+    expectFailedFuture(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc),
       OAuthParameterManager.EncryptOption)
     verifyZeroInteractions(consoleReader)
   }

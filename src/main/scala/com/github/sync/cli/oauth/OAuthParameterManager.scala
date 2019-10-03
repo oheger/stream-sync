@@ -84,6 +84,16 @@ object OAuthParameterManager {
   val CommandOption = "command"
 
   /**
+    * Definition of a function type that is used to determine whether for a
+    * specific command a storage password is needed. The function is passed
+    * the command name and returns a boolean flag indicating whether the
+    * password is needed. If the function yields '''true''' and no password has
+    * been provided on the command line, it is read from the console. Note that
+    * an implementation must be able to handle unknown commands.
+    */
+  type CommandPasswordFunc = String => Boolean
+
+  /**
     * A data class collecting data that is needed for the execution of an OAuth
     * command.
     *
@@ -134,14 +144,15 @@ object OAuthParameterManager {
     * place, and missing mandatory arguments are reported.
     *
     * @param parameters    the object with parsed parameters
+    * @param needPwdFunc function to check whether a password is needed
     * @param ec            the execution context
     * @param consoleReader the console reader
     * @return a ''Future'' with the config and updated parameters
     */
-  def extractCommandConfig(parameters: Parameters, needPassword: Boolean = true)
+  def extractCommandConfig(parameters: Parameters)(needPwdFunc: CommandPasswordFunc)
                           (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(CommandConfig, Parameters)] =
-    Future.fromTry(tryProcessor(commandConfigProcessor(needPassword), parameters))
+    Future.fromTry(tryProcessor(commandConfigProcessor(needPwdFunc), parameters))
 
   /**
     * Returns a ''CliProcessor'' to extract the data for an IDP from the
@@ -161,13 +172,12 @@ object OAuthParameterManager {
   /**
     * Returns a ''CliProcessor'' for extracting a ''CommandConfig'' object.
     *
-    * @param needPassword flag whether a password is needed by the storage
-    *                     configuration
+    * @param needPwdFunc function to check whether a password is needed
     * @return the ''CliProcessor'' for a ''CommandConfig''
     */
-  private def commandConfigProcessor(needPassword: Boolean): CliProcessor[Try[CommandConfig]] =
+  private def commandConfigProcessor(needPwdFunc: CommandPasswordFunc): CliProcessor[Try[CommandConfig]] =
     for {triedCmd <- commandProcessor
-         triedConfig <- storageConfigProcessor(needPassword)
+         triedConfig <- storageConfigProcessor(needPwdFunc(triedCmd.getOrElse("")))
          } yield createCommandConfig(triedCmd, triedConfig)
 
   /**
