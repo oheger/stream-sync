@@ -16,6 +16,8 @@
 
 package com.github.sync.webdav.oauth
 
+import java.nio.file.Path
+
 import akka.Done
 import akka.stream.ActorMaterializer
 
@@ -108,4 +110,16 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS] {
     */
   def loadTokens(storageConfig: STORAGE_CONFIG)
                 (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[TOKENS]
+
+  /**
+    * Removes all files related to a specific identity provider defined by the
+    * given storage configuration. An implementation should remove all possible
+    * files, e.g. for tokens, secrets, etc. The resulting future contains a
+    * list with the paths that have been removed.
+    *
+    * @param storageConfig the storage configuration
+    * @param ec            the eecution context
+    * @return a ''Future'' with the paths that have been removed
+    */
+  def removeStorage(storageConfig: STORAGE_CONFIG)(implicit ec: ExecutionContext): Future[List[Path]]
 }

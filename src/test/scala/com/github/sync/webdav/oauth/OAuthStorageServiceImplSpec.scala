@@ -203,4 +203,36 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     encContent should not include TestTokens.accessToken
     encContent should not include TestTokens.refreshToken
   }
+
+  it should "remove all files related to a storage configuration" in {
+    val storageConfig = createStorageConfig()
+    val FilePaths = List(OAuthStorageServiceImpl.SuffixConfigFile, OAuthStorageServiceImpl.SuffixSecretFile,
+      OAuthStorageServiceImpl.SuffixTokenFile) map storageConfig.resolveFileName
+    FilePaths foreach { path =>
+      writeFileContent(path, FileTestHelper.TestData)
+    }
+    val otherFile = createDataFile()
+
+    val removeResult = futureResult(OAuthStorageServiceImpl.removeStorage(storageConfig))
+    removeResult should contain theSameElementsAs FilePaths
+    FilePaths forall (!Files.exists(_)) shouldBe true
+    Files.exists(otherFile) shouldBe true
+  }
+
+  it should "ignore non existing files when removing a storage configuration" in {
+    val storageConfig = createStorageConfig()
+
+    val removeResult = futureResult(OAuthStorageServiceImpl.removeStorage(storageConfig))
+    removeResult should have size 0
+  }
+
+  it should "ignore directories when removing a storage configuration" in {
+    val storageConfig = createStorageConfig()
+    val tokenPath = storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixTokenFile)
+    Files.createDirectory(tokenPath)
+
+    val removeResult = futureResult(OAuthStorageServiceImpl.removeStorage(storageConfig))
+    removeResult should have size 0
+    Files.exists(tokenPath) shouldBe true
+  }
 }

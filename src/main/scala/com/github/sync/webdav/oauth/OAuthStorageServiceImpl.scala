@@ -16,6 +16,8 @@
 
 package com.github.sync.webdav.oauth
 
+import java.nio.file.{Files, Path}
+
 import akka.Done
 import akka.stream.{ActorMaterializer, IOResult}
 import akka.stream.scaladsl.{FileIO, Sink, Source}
@@ -128,6 +130,17 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, O
       else if (parts.length > 2)
         throw new IllegalArgumentException(s"Token file for ${storageConfig.baseName} has unexpected content.")
       OAuthTokenData(accessToken = parts(0), refreshToken = parts(1))
+    }
+
+  override def removeStorage(storageConfig: OAuthStorageConfig)(implicit ec: ExecutionContext): Future[List[Path]] =
+    Future {
+      List(SuffixConfigFile, SuffixSecretFile, SuffixTokenFile)
+        .map(storageConfig.resolveFileName)
+        .filter(Files.isRegularFile(_))
+        .map { path =>
+          Files.delete(path)
+          path
+        }
     }
 
   /**
