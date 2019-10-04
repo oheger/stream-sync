@@ -22,6 +22,7 @@ import java.util.Locale
 
 import com.github.sync.FileTestHelper
 import com.github.sync.cli.oauth.{OAuth, OAuthParameterManager}
+import com.github.sync.webdav.oauth.{OAuthStorageConfig, OAuthStorageServiceImpl}
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 /**
@@ -96,5 +97,28 @@ class OAuthSpec extends FlatSpec with BeforeAndAfterEach with Matchers with File
     OAuth.SupportedCommands.keys foreach { cmd =>
       output should include(cmd)
     }
+  }
+
+  it should "execute a command to remove an IDP" in {
+    val storageConfig = OAuthStorageConfig(testDirectory, "testIdp", None)
+    val configFile = storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile)
+    writeFileContent(configFile, FileTestHelper.TestData)
+    val args = Array(OAuth.CommandRemoveIdp, OAuthParameterManager.StoragePathOption,
+      storageConfig.rootDir.toString, OAuthParameterManager.NameOption, storageConfig.baseName)
+
+    val output = runAndCaptureOut(args)
+    output should include(configFile.toString)
+    output should include(storageConfig.baseName)
+    Files.exists(configFile) shouldBe false
+  }
+
+  it should "handle a remove command that does not remove any files" in {
+    val storageConfig = OAuthStorageConfig(testDirectory, "unknownIdp", None)
+    val args = Array(OAuth.CommandRemoveIdp, OAuthParameterManager.StoragePathOption,
+      storageConfig.rootDir.toString, OAuthParameterManager.NameOption, storageConfig.baseName)
+
+    val output = runAndCaptureOut(args)
+    output should include(storageConfig.baseName)
+    output should include("no files")
   }
 }

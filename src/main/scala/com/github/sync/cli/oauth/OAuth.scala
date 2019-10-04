@@ -40,6 +40,9 @@ object OAuth {
   /** The command to initialize an IDP. */
   val CommandInitIDP = "init"
 
+  /** The command to remove all the data of an IDP. */
+  val CommandRemoveIdp = "remove"
+
   /**
     * A function type definition for creating [[OAuthCommand]] instances.
     *
@@ -66,7 +69,8 @@ object OAuth {
     * commands supported is stored.
     */
   val SupportedCommands: Map[String, CommandData] =
-    Map(CommandInitIDP -> CommandData(() => new OAuthInitCommand, needStoragePwd = true))
+    Map(CommandInitIDP -> CommandData(() => new OAuthInitCommand, needStoragePwd = true),
+      CommandRemoveIdp -> CommandData(() => new OAuthRemoveCommand, needStoragePwd = false))
 
   /**
     * Implementation of the function that checks whether for a command a
@@ -77,9 +81,8 @@ object OAuth {
     * @param command the name of the command
     * @return a flag whether this command requires a storage password
     */
-  //TODO implementation
   private def needsPwdFunc(command: String): Boolean =
-    SupportedCommands.contains(canonicalCommand(command))
+    SupportedCommands get canonicalCommand(command) exists (_.needStoragePwd)
 
   /**
     * Obtains the command to be executed from the map of supported commands and

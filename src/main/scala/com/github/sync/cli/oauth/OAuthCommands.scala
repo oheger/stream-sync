@@ -24,7 +24,7 @@ import com.github.sync.crypt.Secret
 import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageConfig, OAuthStorageService, OAuthTokenData}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
+import scala.util.{Success, Try}
 
 /**
   * A trait defining a command related to an OAuth operation.
@@ -126,4 +126,32 @@ class OAuthInitCommand extends OAuthCommand[IdpConfig] {
     for {_ <- storageService.saveConfig(storageConfig, config.oauthConfig)
          _ <- storageService.saveClientSecret(storageConfig, config.clientSecret)
          } yield s"IDP ${storageConfig.baseName} has been successfully initialized."
+}
+
+/**
+  * A command implementation that removes all persistent data about an IDP.
+  *
+  * This command mainly delegates to [[OAuthStorageService]] to handle the
+  * removal. It does not require a specific configuration beyond the storage
+  * configuration.
+  */
+class OAuthRemoveCommand extends OAuthCommand[Unit] {
+  override val cliProcessor: CliProcessor[Try[Unit]] =
+    ParameterManager.constantProcessor(Success(()))
+
+  /**
+    * @inheritdoc This implementation invokes the storage service and generates
+    *             a result message.
+    */
+  override protected def runCommand(storageConfig: OAuthStorageConfig,
+                                    storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+                                      Secret, OAuthTokenData], config: Unit)
+                                   (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] =
+    storageService.removeStorage(storageConfig) map {
+      case paths@_ :: _ =>
+        val removeMsg = paths.mkString(", ")
+        s"Removed data for IDP ${storageConfig.baseName}: $removeMsg"
+      case _ =>
+        s"Unknown identity provider '${storageConfig.baseName}'; no files have been removed."
+    }
 }
