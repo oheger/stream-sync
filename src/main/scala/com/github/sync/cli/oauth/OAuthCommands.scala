@@ -16,12 +16,15 @@
 
 package com.github.sync.cli.oauth
 
+import akka.actor.ActorSystem
+import akka.http.scaladsl.model.Uri
 import akka.stream.ActorMaterializer
-import com.github.sync.cli.{ConsoleReader, ParameterManager}
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import com.github.sync.cli.oauth.OAuthParameterManager.IdpConfig
+import com.github.sync.cli.{ConsoleReader, ParameterManager}
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageConfig, OAuthStorageService, OAuthTokenData}
+import com.github.sync.webdav.HttpRequestActor
+import com.github.sync.webdav.oauth._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Success, Try}
@@ -67,6 +70,7 @@ trait OAuthCommand[C] {
     * @param storageService the storage service
     * @param parameters     the current command line arguments
     * @param ec             the execution context
+    * @param system         the actor system
     * @param mat            the object to materialize streams
     * @param consoleReader  the console reader
     * @return a ''Future'' with the result of this command
@@ -74,7 +78,8 @@ trait OAuthCommand[C] {
   def run(storageConfig: OAuthStorageConfig,
           storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData],
           parameters: Parameters)
-         (implicit ec: ExecutionContext, mat: ActorMaterializer, consoleReader: ConsoleReader): Future[String] = {
+         (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
+          consoleReader: ConsoleReader): Future[String] = {
     val cliResult = ParameterManager.tryProcessor(cliProcessor, parameters)
     for {(config, updParams) <- Future.fromTry(cliResult)
          _ <- ParameterManager.checkParametersConsumed(updParams)
@@ -91,13 +96,14 @@ trait OAuthCommand[C] {
     * @param storageService the storage service
     * @param config         the configuration for this command
     * @param ec             the execution context
+    * @param system         the actor system
     * @param mat            the object to materialize streams
     * @return a ''Future'' with the result of this command
     */
   protected def runCommand(storageConfig: OAuthStorageConfig,
                            storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret,
                              OAuthTokenData], config: C)
-                          (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String]
+                          (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer): Future[String]
 }
 
 /**
@@ -122,7 +128,8 @@ class OAuthInitCommand extends OAuthCommand[IdpConfig] {
   override protected def runCommand(storageConfig: OAuthStorageConfig,
                                     storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                       Secret, OAuthTokenData], config: IdpConfig)
-                                   (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] =
+                                   (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
+  Future[String] =
     for {_ <- storageService.saveConfig(storageConfig, config.oauthConfig)
          _ <- storageService.saveClientSecret(storageConfig, config.clientSecret)
          } yield s"IDP ${storageConfig.baseName} has been successfully initialized."
@@ -146,7 +153,8 @@ class OAuthRemoveCommand extends OAuthCommand[Unit] {
   override protected def runCommand(storageConfig: OAuthStorageConfig,
                                     storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                       Secret, OAuthTokenData], config: Unit)
-                                   (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] =
+                                   (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
+  Future[String] =
     storageService.removeStorage(storageConfig) map {
       case paths@_ :: _ =>
         val removeMsg = paths.mkString(", ")
@@ -154,4 +162,98 @@ class OAuthRemoveCommand extends OAuthCommand[Unit] {
       case _ =>
         s"Unknown identity provider '${storageConfig.baseName}'; no files have been removed."
     }
+}
+
+/**
+  * A command implementation that allows users to login against a specific IDP
+  * using the authorization code flow.
+  *
+  * The command generates the URL for the authorization request and tries to
+  * open the Web Browser at this address. The user then has to login. The
+  * resulting authorization code is then entered in the console. With this
+  * information a token pair is retrieved from the IDP.
+  *
+  * @param tokenService   the service for retrieving tokens
+  * @param browserHandler the object to control the browser
+  */
+class OAuthLoginCommand(val tokenService: OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData],
+                        val browserHandler: BrowserHandler) extends OAuthCommand[ConsoleReader] {
+  /**
+    * Creates a new instance with default dependencies.
+    */
+  def this() = this(OAuthTokenRetrieverServiceImpl, BrowserHandler())
+
+  /**
+    * @inheritdoc This command does not need any configuration.
+    */
+  override def cliProcessor: CliProcessor[Try[ConsoleReader]] =
+    new CliProcessor[Try[ConsoleReader]](ctx => (Success(ctx.reader), ctx))
+
+  /**
+    * @inheritdoc This implementation performs the authorization code flow
+    *             against the IDP specified.
+    */
+  override protected def runCommand(storageConfig: OAuthStorageConfig,
+                                    storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+                                      Secret, OAuthTokenData], reader: ConsoleReader)
+                                   (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
+  Future[String] = for {config <- storageService.loadConfig(storageConfig)
+                        authUri <- tokenService.authorizeUrl(config)
+                        code <- obtainCode(authUri, reader)
+                        secret <- storageService.loadClientSecret(storageConfig)
+                        tokens <- fetchTokens(config, secret, code)
+                        _ <- storageService.saveTokens(storageConfig, tokens)
+                        } yield "Login into identity provider was successful. Token data has been stored."
+
+  /**
+    * Generates output on the console. Note: This is mainly to have the output
+    * code in a central place that can also be overridden by tests.
+    *
+    * @param s the string to be written to console
+    */
+  protected def output(s: String): Unit = {
+    println(s)
+  }
+
+  /**
+    * Handles the authorization step of the code flow and tries to obtain the
+    * code. This is done by opening the browser at the authorization URI and
+    * prompting the user to enter the resulting code.
+    *
+    * @param authUri the authorization URI
+    * @param reader  the console reader to prompt the user
+    * @param ec      the execution context
+    * @return a ''Future'' with the code
+    */
+  private def obtainCode(authUri: Uri, reader: ConsoleReader)
+                        (implicit ec: ExecutionContext): Future[String] = Future {
+    output("Opening Web browser to login into identity provider...")
+    if (!browserHandler.openBrowser(authUri.toString())) {
+      output("Could not open Web browser!")
+      output("Please open the browser manually and navigate to this URL:")
+      output(s"\t${authUri.toString()}")
+    }
+    reader.readOption("Enter authorization code: ", password = true)
+  }
+
+  /**
+    * Invokes the token service to obtain a token pair for the given
+    * authorization code.
+    *
+    * @param config the OAuth configuration
+    * @param secret the client secret
+    * @param code   the authorization code
+    * @param ec     the execution context
+    * @param system the actor system
+    * @param mat    the object to materialize streams
+    * @return a ''Future'' with the token pair
+    */
+  private def fetchTokens(config: OAuthConfig, secret: Secret, code: String)
+                         (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
+  Future[OAuthTokenData] = {
+    val httpActor = system.actorOf(HttpRequestActor(config.tokenEndpoint), "httpRequestActor")
+    tokenService.fetchTokens(httpActor, config, secret, code) andThen {
+      case _ => system stop httpActor
+    }
+  }
 }

@@ -20,6 +20,7 @@ import java.io.IOException
 import java.nio.file.Paths
 
 import akka.Done
+import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ConsoleReader
@@ -107,6 +108,9 @@ class OAuthInitCommandSpec extends FlatSpec with Matchers with MockitoSugar with
   private class CommandTestHelper {
     /** Implicit console reader required for command execution. */
     private implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+
+    /** Implicit actor system required for command execution. */
+    private implicit val actorSystem: ActorSystem = mock[ActorSystem]
 
     /** Implicit object to materialize streams required by commands. */
     private implicit val streamMat: ActorMaterializer = mock[ActorMaterializer]
