@@ -64,7 +64,7 @@ object OAuthTokenRetrieverServiceImplSpec {
     */
   private val FetchTokenParams = Map("client_id" -> TestConfig.clientID,
     "redirect_uri" -> TestConfig.redirectUri, "client_secret" -> ClientSecret,
-    "code" -> AuthCode)
+    "grant_type" -> "authorization_code", "code" -> AuthCode)
 
   /**
     * A map with the expected parameters for a request to refresh the access
@@ -72,7 +72,7 @@ object OAuthTokenRetrieverServiceImplSpec {
     */
   private val RefreshTokenParams = Map("client_id" -> TestConfig.clientID,
     "redirect_uri" -> TestConfig.redirectUri, "client_secret" -> ClientSecret,
-    "refresh_token" -> TestTokens.refreshToken)
+    "refresh_token" -> TestTokens.refreshToken, "grant_type" -> "refresh_token")
 
   /** A valid response of the IDP for a token request. */
   private val TokenResponse =

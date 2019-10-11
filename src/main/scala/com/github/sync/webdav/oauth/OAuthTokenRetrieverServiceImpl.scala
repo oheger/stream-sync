@@ -49,6 +49,9 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[OAuthCo
   /** Parameter for the client secret. */
   private val ParamClientSecret = "client_secret"
 
+  /** Parameter for the grant type. */
+  private val ParamGrantType = "grant_type"
+
   /** Parameter for the authorization code. */
   private val ParamCode = "code"
 
@@ -57,6 +60,12 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[OAuthCo
 
   /** Constant for the response type code. */
   private val ResponseTypeCode = "code"
+
+  /** Constant for the authorization code grant type. */
+  private val GrantTypeAuthorizationCode = "authorization_code"
+
+  /** Constant for the refresh token grant type. */
+  private val GrantTypeRefreshToken = "refresh_token"
 
   /** RegEx to extract the access token. */
   private val regAccessToken = jsonPropRegEx("access_token")
@@ -76,14 +85,14 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[OAuthCo
   override def fetchTokens(httpActor: ActorRef, config: OAuthConfig, secret: Secret, code: String)
                           (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[OAuthTokenData] = {
     val params = Map(ParamClientId -> config.clientID, ParamRedirectUri -> config.redirectUri,
-      ParamClientSecret -> secret.secret, ParamCode -> code)
+      ParamClientSecret -> secret.secret, ParamCode -> code, ParamGrantType -> GrantTypeAuthorizationCode)
     sendTokenRequest(httpActor, config, params)
   }
 
   override def refreshToken(httpActor: ActorRef, config: OAuthConfig, secret: Secret, refreshToken: String)
                            (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[OAuthTokenData] = {
     val params = Map(ParamClientId -> config.clientID, ParamRedirectUri -> config.redirectUri,
-      ParamClientSecret -> secret.secret, ParamRefreshToken -> refreshToken)
+      ParamClientSecret -> secret.secret, ParamRefreshToken -> refreshToken, ParamGrantType -> GrantTypeRefreshToken)
     sendTokenRequest(httpActor, config, params)
   }
 
