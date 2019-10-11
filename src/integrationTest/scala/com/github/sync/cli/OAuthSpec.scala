@@ -103,7 +103,7 @@ class OAuthSpec extends FlatSpec with BeforeAndAfterEach with Matchers with File
     val storageConfig = OAuthStorageConfig(testDirectory, "testIdp", None)
     val configFile = storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile)
     writeFileContent(configFile, FileTestHelper.TestData)
-    val args = Array(OAuth.CommandRemoveIdp, OAuthParameterManager.StoragePathOption,
+    val args = Array(OAuth.CommandRemoveIDP, OAuthParameterManager.StoragePathOption,
       storageConfig.rootDir.toString, OAuthParameterManager.NameOption, storageConfig.baseName)
 
     val output = runAndCaptureOut(args)
@@ -114,11 +114,17 @@ class OAuthSpec extends FlatSpec with BeforeAndAfterEach with Matchers with File
 
   it should "handle a remove command that does not remove any files" in {
     val storageConfig = OAuthStorageConfig(testDirectory, "unknownIdp", None)
-    val args = Array(OAuth.CommandRemoveIdp, OAuthParameterManager.StoragePathOption,
+    val args = Array(OAuth.CommandRemoveIDP, OAuthParameterManager.StoragePathOption,
       storageConfig.rootDir.toString, OAuthParameterManager.NameOption, storageConfig.baseName)
 
     val output = runAndCaptureOut(args)
     output should include(storageConfig.baseName)
     output should include("no files")
+  }
+
+  it should "support the login command with correct settings" in {
+    val data = OAuth.SupportedCommands(OAuth.CommandLoginIDP)
+
+    data.needStoragePwd shouldBe true
   }
 }

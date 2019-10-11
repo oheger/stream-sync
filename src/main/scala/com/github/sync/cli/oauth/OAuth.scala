@@ -41,7 +41,10 @@ object OAuth {
   val CommandInitIDP = "init"
 
   /** The command to remove all the data of an IDP. */
-  val CommandRemoveIdp = "remove"
+  val CommandRemoveIDP = "remove"
+
+  /** The command to perform a login into an IDP. */
+  val CommandLoginIDP = "login"
 
   /**
     * A function type definition for creating [[OAuthCommand]] instances.
@@ -70,7 +73,8 @@ object OAuth {
     */
   val SupportedCommands: Map[String, CommandData] =
     Map(CommandInitIDP -> CommandData(() => new OAuthInitCommand, needStoragePwd = true),
-      CommandRemoveIdp -> CommandData(() => new OAuthRemoveCommand, needStoragePwd = false))
+      CommandRemoveIDP -> CommandData(() => new OAuthRemoveCommand, needStoragePwd = false),
+      CommandLoginIDP -> CommandData(() => new OAuthLoginCommand, needStoragePwd = true))
 
   /**
     * Implementation of the function that checks whether for a command a
