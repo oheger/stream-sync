@@ -99,6 +99,17 @@ trait HttpExtensionActor {
   }
 
   /**
+    * Switches to another state represented by the given receive function. This
+    * function makes sure that the default message handling implemented by this
+    * trait is still active.
+    *
+    * @param receive the new ''Receive'' function
+    */
+  protected def become(receive: Receive): Unit = {
+    context.become(receive orElse commonReceive)
+  }
+
+  /**
     * A receive function to be implemented by derived classes to handle
     * specific messages. Derived actors must place their message handling code
     * here. In the normal ''receive'' function the default message handling of
