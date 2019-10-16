@@ -16,11 +16,13 @@
 
 package com.github.sync.webdav.oauth
 
+import java.io.IOException
 import java.nio.file.Paths
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props, Status}
 import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
 import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse, StatusCodes}
+import akka.stream.KillSwitch
 import akka.testkit.{ImplicitSender, TestKit}
 import com.github.sync.crypt.Secret
 import com.github.sync.webdav.{DepthHeader, HttpRequestActor}
@@ -90,7 +92,6 @@ object OAuthTokenActorSpec {
     * @return a flag whether the request is as expected
     */
   private def checkRequest(req: HttpRequest): Boolean = {
-    println("checkRequest: " + req)
     val optAuth = req.header[Authorization]
     if (optAuth.isDefined) {
       val noAuthHeaders = req.headers filterNot (_ == optAuth.get)
@@ -137,7 +138,6 @@ object OAuthTokenActorSpec {
         responses = stubResponses
 
       case req: HttpRequestActor.SendRequest if checkRequest(req.request) =>
-        println("Sending response: " + responses.head)
         val result = responses.head.triedResponse match {
           case Success(response) =>
             HttpRequestActor.Result(req, response)
@@ -306,6 +306,28 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     helper.verifyTokenRefreshed()
   }
 
+  it should "trigger the kill switch in case of a failed refresh operation" in {
+    val failedResp = failedResponse(HttpResponse(status = StatusCodes.Unauthorized))
+    val refreshEx = HttpRequestActor.RequestException("Failed", new IOException("OAuthError"), null)
+    val helper = new TokenActorTestHelper
+
+    helper.initResponses(List(StubResponse(failedResp), StubResponse(failedResp)))
+      .expectTokenRequest(Future.failed(refreshEx))
+      .sendTestRequest()
+      .sendTestRequest()
+    (1 to 2) foreach { _ =>
+      val response = expectMsgType[Status.Failure]
+      response.cause match {
+        case HttpRequestActor.RequestException(_, HttpRequestActor.FailedResponseException(r), sendReq) =>
+          r.status should be(StatusCodes.Unauthorized)
+          sendReq.request should be(TestRequest)
+        case c =>
+          fail("Unexpected exception", c)
+      }
+    }
+    helper.verifyKillSwitchTriggered(refreshEx)
+  }
+
   /**
     * A test helper class that manages a test instance and all its
     * dependencies.
@@ -316,6 +338,9 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
 
     /** Mock for the token service. */
     private val tokenService = mock[OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData]]
+
+    /** Mock for the kill switch to handle token refresh failures. */
+    private val killSwitch = mock[KillSwitch]
 
     /** The target HTTP actor. */
     private val targetHttpActor = system.actorOf(Props[HttpStubActor])
@@ -376,13 +401,25 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     }
 
     /**
+      * Verifies that the kill switch has been invoked with the given
+      * exception.
+      *
+      * @param expException the expected exception
+      * @return this test helper
+      */
+    def verifyKillSwitchTriggered(expException: Throwable): TokenActorTestHelper = {
+      verify(killSwitch).abort(expException)
+      this
+    }
+
+    /**
       * Creates the token actor to be tested.
       *
       * @return the test actor instance
       */
     private def createTokenActor(): ActorRef =
       system.actorOf(OAuthTokenActor(targetHttpActor, 1, idpHttpActor, TestStorageConfig, TestConfig,
-        ClientSecret, TestTokens, storageService, tokenService))
+        ClientSecret, TestTokens, storageService, tokenService, killSwitch))
   }
 
 }

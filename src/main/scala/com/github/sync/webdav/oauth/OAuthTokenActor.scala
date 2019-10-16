@@ -17,15 +17,15 @@
 package com.github.sync.webdav.oauth
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Status}
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
 import akka.pattern.ask
-import akka.stream.ActorMaterializer
+import akka.stream.{ActorMaterializer, KillSwitch}
 import akka.util.Timeout
 import com.github.sync.crypt.Secret
 import com.github.sync.webdav.HttpExtensionActor
 import com.github.sync.webdav.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
-import com.github.sync.webdav.oauth.OAuthTokenActor.{DoRefresh, PendingRequestData, TokensRefreshed}
+import com.github.sync.webdav.oauth.OAuthTokenActor.{DoRefresh, PendingRequestData, RefreshFailure, TokensRefreshed}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -60,6 +60,14 @@ object OAuthTokenActor {
   private case class TokensRefreshed(tokenData: OAuthTokenData)
 
   /**
+    * An internal message class used to report a failure during a token refresh
+    * operation. This is fatal and causes the sync process to be stopped.
+    *
+    * @param exception the exception
+    */
+  private case class RefreshFailure(exception: Throwable)
+
+  /**
     * Creates a ''Props'' object for creating a new actor instance based on the
     * parameters specified.
     *
@@ -72,14 +80,17 @@ object OAuthTokenActor {
     * @param initTokenData  the initial token pair
     * @param storageService the storage service for OAuth data
     * @param tokenService   the token retriever service
+    * @param killSwitch     an object to terminate the stream in case of a
+    *                       fatal error
     * @return the ''Props'' for creating a new actor instance
     */
   def apply(httpActor: ActorRef, clientCount: Int, idpHttpActor: ActorRef, storageConfig: OAuthStorageConfig,
             oauthConfig: OAuthConfig, clientSecret: Secret, initTokenData: OAuthTokenData,
             storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData],
-            tokenService: OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData]): Props =
+            tokenService: OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData],
+            killSwitch: KillSwitch): Props =
     Props(classOf[OAuthTokenActor], httpActor, clientCount, idpHttpActor, storageConfig, oauthConfig,
-      clientSecret, initTokenData, storageService, tokenService)
+      clientSecret, initTokenData, storageService, tokenService, killSwitch)
 }
 
 /**
@@ -93,6 +104,10 @@ object OAuthTokenActor {
   * token is no longer valid), a request to refresh the token is sent to the
   * IDP. The access token is then updated (and also stored for later reuse).
   *
+  * If the refresh of the access token fails, it can be expected that all
+  * further requests will fail, too. Therefore, the current sync process should
+  * be canceled. This is done via a ''KillSwitch'' passed to the constructor.
+  *
   * @param httpActor      the actor to forward HTTP requests to
   * @param clientCount    the initial number of clients
   * @param idpHttpActor   the actor for HTTP requests to the IDP
@@ -102,6 +117,8 @@ object OAuthTokenActor {
   * @param initTokenData  the initial token pair
   * @param storageService the storage service for OAuth data
   * @param tokenService   the token retriever service
+  * @param killSwitch     an object to terminate the stream in case of a
+  *                       fatal error
   */
 class OAuthTokenActor(override val httpActor: ActorRef,
                       override val clientCount: Int,
@@ -112,7 +129,8 @@ class OAuthTokenActor(override val httpActor: ActorRef,
                       initTokenData: OAuthTokenData,
                       storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                         Secret, OAuthTokenData],
-                      tokenService: OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData])
+                      tokenService: OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData],
+                      killSwitch: KillSwitch)
   extends Actor with ActorLogging with HttpExtensionActor {
   /** Execution context in implicit scope. */
   private implicit val ec: ExecutionContext = context.dispatcher
@@ -177,6 +195,15 @@ class OAuthTokenActor(override val httpActor: ActorRef,
       }
       pendingRequests = Nil
 
+    case RefreshFailure(exception) =>
+      val respUnauthorized = HttpResponse(status = StatusCodes.Unauthorized)
+      pendingRequests foreach { pr =>
+        val respEx = RequestException("Could not refresh access token",
+          FailedResponseException(respUnauthorized), pr.request)
+        pr.caller ! Status.Failure(respEx)
+      }
+      killSwitch abort exception
+
     case DoRefresh(pendingRequest, _) =>
       // a refresh is already in progress
       pendingRequests = pendingRequest :: pendingRequests
@@ -203,10 +230,13 @@ class OAuthTokenActor(override val httpActor: ActorRef,
   private def refreshTokens(): Unit = {
     become(refreshing)
     log.info("Obtaining a new access token.")
-    //TODO handle failed refresh operation
     tokenService.refreshToken(idpHttpActor, oauthConfig, clientSecret, currentTokenData.refreshToken)
-      .foreach { tokenData =>
-        self ! TokensRefreshed(tokenData)
+      .onComplete {
+        case Success(tokenData) =>
+          self ! TokensRefreshed(tokenData)
+        case Failure(refreshEx) =>
+          log.error(refreshEx, "Token refresh failed! Aborting sync process.")
+          self ! RefreshFailure(refreshEx)
       }
   }
 
