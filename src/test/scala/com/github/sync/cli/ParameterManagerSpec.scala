@@ -324,6 +324,27 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     }
   }
 
+  it should "provide a mapping processor with fallbacks if the value is defined" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val Result: OptionValue[String] = Success(Some(ProcessorResult.toString))
+    val proc = testProcessor(Result)
+    val processor = ParameterManager.mappedWithFallback(Key, proc, 1, 2, 3)(_.toInt)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(NextParameters)
+    res should be(Success(List(ProcessorResult)))
+  }
+
+  it should "provide a mapping processor with fallbacks if the value is undefined" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.mappedWithFallback(Key, ParameterManager.emptyProcessor[String],
+      1, 2, 3)(_.toInt)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next should be(TestParameters)
+    res should be(Success(List(1, 2, 3)))
+  }
+
   it should "provide a processor that converts an option value to int" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val StrValue: OptionValue[String] = Try(Some(ProcessorResult.toString))

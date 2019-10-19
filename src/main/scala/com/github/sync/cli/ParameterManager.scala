@@ -418,6 +418,26 @@ object ParameterManager {
     proc.map(triedResult => triedResult.flatMap(o => paramTry(key)(o.map(f))))
 
   /**
+    * Returns a processor that combines a map operation with applying constant
+    * fallback values. If the passed in processor returns a non-empty value,
+    * the mapping function is applied to all values. Otherwise, a constant
+    * processor is returned that yields the specified fallback values.
+    *
+    * @param key                the key of the option (to generate an error message)
+    * @param proc               the processor to be mapped
+    * @param firstFallback      the first fallback value
+    * @param moreFallbackValues further fallback values
+    * @param f                  the mapping function to be applied
+    * @tparam A the original result type
+    * @tparam B the mapped result type
+    * @return the processor applying the mapping function with fallbacks
+    */
+  def mappedWithFallback[A, B](key: String, proc: CliProcessor[OptionValue[A]],
+                               firstFallback: B, moreFallbackValues: B*)(f: A => B):
+  CliProcessor[OptionValue[B]] =
+    withFallback(mapped(key, proc)(f), constantOptionValue(firstFallback, moreFallbackValues: _*))
+
+  /**
     * Returns a processor that converts a command line argument to int
     * numbers. All the string values of the option are converted to
     * numbers including error handling. Undefined values are ignored.

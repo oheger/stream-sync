@@ -19,7 +19,7 @@ package com.github.sync.cli
 import java.nio.file.Path
 
 import akka.util.Timeout
-import com.github.sync.cli.ParameterManager.{CliProcessor, OptionValue, Parameters, SingleOptionValue}
+import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters, SingleOptionValue}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -332,9 +332,8 @@ object SyncParameterManager {
   private def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
     ParameterManager.asMandatory(ApplyModeOption,
       ParameterManager.asSingleOptionValue(ApplyModeOption,
-        ParameterManager.mapped(ApplyModeOption,
-          ParameterManager.withFallback(ParameterManager.optionValue(ApplyModeOption),
-            ParameterManager.constantOptionValue("TARGET"))) {
+        ParameterManager.mappedWithFallback[String, ApplyMode](ApplyModeOption,
+          ParameterManager.optionValue(ApplyModeOption), ApplyModeTarget(destUri)) {
           case RegApplyTargetUri(uri) =>
             ApplyModeTarget(uri)
           case RegApplyTargetDefault(_*) =>
@@ -352,17 +351,14 @@ object SyncParameterManager {
     * @param key the key of the option
     * @return the processor to extract the crypt mode
     */
-  private def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] = {
-    def asCryptModeOption(key: String, proc: CliProcessor[OptionValue[String]]):
-    CliProcessor[OptionValue[CryptMode.Value]] =
-      ParameterManager.mapped(key, proc) { name =>
-        val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
-        mode.fold[CryptMode.Value](throw new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!"))(m => m)
-      }
-
+  private def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
     ParameterManager.asMandatory(key,
-      ParameterManager.singleOptionValue(key, Some(CryptMode.None.asInstanceOf[CryptMode.Value]))(asCryptModeOption))
-  }
+      ParameterManager.asSingleOptionValue(key,
+        ParameterManager.mappedWithFallback(key,
+          ParameterManager.optionValue(key), CryptMode.None.asInstanceOf[CryptMode.Value]) { name =>
+          val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
+          mode.fold[CryptMode.Value](throw new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!"))(m => m)
+        }))
 
   /**
     * Returns a processor that extracts the value of the option for ignoring
@@ -426,14 +422,12 @@ object SyncParameterManager {
     * This processor extracts an int value, which is interpreted as timeout in
     * seconds. A default timeout is set if the option is undefined.
     *
-    * @return
+    * @return the processor to extract the timeout value
     */
   private def timeoutProcessor(): CliProcessor[Try[Timeout]] =
     ParameterManager.asMandatory(TimeoutOption,
       ParameterManager.asSingleOptionValue(TimeoutOption,
-        ParameterManager.withFallback(
-          ParameterManager.mapped(TimeoutOption,
-            ParameterManager.asIntOptionValue(TimeoutOption,
-              ParameterManager.optionValue(TimeoutOption)))(time => Timeout(time.seconds)),
-          ParameterManager.constantOptionValue(DefaultTimeout))))
+        ParameterManager.mappedWithFallback(TimeoutOption,
+          ParameterManager.asIntOptionValue(TimeoutOption,
+            ParameterManager.optionValue(TimeoutOption)), DefaultTimeout)(time => Timeout(time.seconds))))
 }
