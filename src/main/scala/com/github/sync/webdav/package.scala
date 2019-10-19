@@ -17,7 +17,6 @@
 package com.github.sync
 
 import akka.actor.ActorRef
-import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.http.scaladsl.{Http, HttpExt}
 import akka.pattern.ask
@@ -52,15 +51,6 @@ package object webdav {
     if (port != 0) port
     else extractPortFromScheme(uri)
   }
-
-  /**
-    * Generates an ''Authorization'' header based on the given configuration.
-    *
-    * @param config the configuration of the WebDav server
-    * @return a header to authenticate against this WebDav server
-    */
-  def authHeader(config: DavConfig): Authorization =
-    Authorization(BasicHttpCredentials(config.user, config.password))
 
   /**
     * Creates a flow to execute HTTP requests to the host identified by the

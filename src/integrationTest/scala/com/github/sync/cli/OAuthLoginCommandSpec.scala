@@ -26,6 +26,7 @@ import akka.testkit.TestKit
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.oauth.{BrowserHandler, OAuthLoginCommand}
 import com.github.sync.crypt.Secret
+import com.github.sync.webdav.OAuthStorageConfig
 import com.github.sync.webdav.oauth._
 import com.github.sync.{AsyncTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._

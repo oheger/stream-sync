@@ -23,7 +23,7 @@ import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import com.github.sync.cli.oauth.OAuthParameterManager.IdpConfig
 import com.github.sync.cli.{ConsoleReader, ParameterManager}
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.HttpRequestActor
+import com.github.sync.webdav.{HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.webdav.oauth._
 
 import scala.concurrent.{ExecutionContext, Future}

@@ -22,6 +22,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import com.github.sync.crypt.Secret
+import com.github.sync.webdav.OAuthStorageConfig
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 

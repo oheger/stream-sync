@@ -22,7 +22,8 @@ import java.util.Locale
 
 import com.github.sync.FileTestHelper
 import com.github.sync.cli.oauth.{OAuth, OAuthParameterManager}
-import com.github.sync.webdav.oauth.{OAuthStorageConfig, OAuthStorageServiceImpl}
+import com.github.sync.webdav.OAuthStorageConfig
+import com.github.sync.webdav.oauth.OAuthStorageServiceImpl
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 /**

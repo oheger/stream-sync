@@ -61,8 +61,9 @@ trait DavComponentsFactory {
     */
   protected def createHttpRequestActor(conf: DavConfig, system: ActorSystem, clientCount: Int, name: String)
   : ActorRef = {
+    //TODO evaluate authentication mechanism
     val httpActor = system.actorOf(HttpRequestActor(conf.rootUri), name)
-    system.actorOf(HttpBasicAuthActor(httpActor, conf, clientCount), name + "_auth")
+    system.actorOf(HttpBasicAuthActor(httpActor, conf.optBasicAuthConfig.get, clientCount), name + "_auth")
   }
 }
 

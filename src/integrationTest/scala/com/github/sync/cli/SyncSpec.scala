@@ -34,10 +34,10 @@ import com.github.sync.WireMockSupport.{Password, _}
 import com.github.sync._
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncParameterManager.CryptMode
-import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptOpHandler}
+import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage, DecryptOpHandler, Secret}
 import com.github.sync.local.LocalUriResolver
 import com.github.sync.util.UriEncodingHelper
-import com.github.sync.webdav.{DavConfig, DavSourceFileProvider}
+import com.github.sync.webdav.{BasicAuthConfig, DavConfig, DavSourceFileProvider}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
 import org.scalatest._
@@ -585,9 +585,9 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
 
   it should "make sure that an element source for WebDav operations is shutdown" in {
     val WebDavPath = "/destination"
-    val davConfig = DavConfig(serverUri(WebDavPath), UserId, Password,
-      DavConfig.DefaultModifiedProperty, None, deleteBeforeOverride = false,
-      modifiedProperties = List(DavConfig.DefaultModifiedProperty), Timeout(10.seconds))
+    val davConfig = DavConfig(serverUri(WebDavPath),
+      Some(DavConfig.DefaultModifiedProperty), None, deleteBeforeOverride = false,
+      Timeout(10.seconds), optBasicAuthConfig = Some(BasicAuthConfig(UserId, Secret(Password))))
     val shutdownCount = new AtomicInteger
     val provider = new DavSourceFileProvider(davConfig, TestProbe().ref) {
       override def shutdown(): Unit = {

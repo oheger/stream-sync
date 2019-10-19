@@ -26,7 +26,8 @@ import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ConsoleReader
 import com.github.sync.cli.ParameterManager.ParametersMap
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageConfig, OAuthStorageService, OAuthTokenData}
+import com.github.sync.webdav.OAuthStorageConfig
+import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito._
 import org.mockito.Matchers.{any, eq => eqArg}

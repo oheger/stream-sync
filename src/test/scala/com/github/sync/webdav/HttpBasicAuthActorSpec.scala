@@ -20,11 +20,9 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props, Terminated}
 import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
-import akka.util.Timeout
+import com.github.sync.crypt.Secret
 import com.github.sync.webdav.HttpExtensionActor.{RegisterClient, Release}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
-
-import scala.concurrent.duration._
 
 object HttpBasicAuthActorSpec {
   /** A test user name. */
@@ -33,18 +31,8 @@ object HttpBasicAuthActorSpec {
   /** A test password. */
   val Password = "testPassword"
 
-  /** A test DAV configuration. */
-  private val TestDavConfig = createConfig()
-
-  /**
-    * Creates a DAV configuration with test settings.
-    *
-    * @return the test DAV configuration
-    */
-  private def createConfig(): DavConfig =
-    DavConfig(rootUri = "http://www.test.org", lastModifiedProperty = "test", lastModifiedNamespace = None,
-      deleteBeforeOverride = false, modifiedProperties = List.empty, timeout = Timeout(1.minute),
-      user = User, password = Password)
+  /** A test configuration for basic auth. */
+  private val TestAuthConfig = BasicAuthConfig(User, Secret(Password))
 }
 
 /**
@@ -77,7 +65,7 @@ class HttpBasicAuthActorSpec(testSystem: ActorSystem) extends TestKit(testSystem
     val TestPath = Uri("/test")
     val request = HttpRequestActor.SendRequest(HttpRequest(uri = TestPath), "someData")
     val httpActor = system.actorOf(Props(classOf[StubHttpRequestActor], TestPath))
-    val authActor = system.actorOf(HttpBasicAuthActor(httpActor, TestDavConfig))
+    val authActor = system.actorOf(HttpBasicAuthActor(httpActor, TestAuthConfig))
 
     authActor ! request
     val result = expectMsgType[HttpRequestActor.Result]
@@ -88,7 +76,7 @@ class HttpBasicAuthActorSpec(testSystem: ActorSystem) extends TestKit(testSystem
 
   it should "stop itself and the underlying HTTP actor when receiving the last Release message" in {
     val probeHttp = TestProbe()
-    val authActor = system.actorOf(HttpBasicAuthActor(probeHttp.ref, TestDavConfig))
+    val authActor = system.actorOf(HttpBasicAuthActor(probeHttp.ref, TestAuthConfig))
 
     authActor ! HttpExtensionActor.Release
     checkStopped(probeHttp.ref)
@@ -97,7 +85,7 @@ class HttpBasicAuthActorSpec(testSystem: ActorSystem) extends TestKit(testSystem
 
   it should "not stop itself before the last client sends a Release message" in {
     val probeHttp = TestProbe()
-    val authActor = system.actorOf(HttpBasicAuthActor(probeHttp.ref, TestDavConfig, 3))
+    val authActor = system.actorOf(HttpBasicAuthActor(probeHttp.ref, TestAuthConfig, 3))
     authActor ! Release
     authActor ! Release
 
@@ -109,7 +97,7 @@ class HttpBasicAuthActorSpec(testSystem: ActorSystem) extends TestKit(testSystem
 
   it should "support registering clients dynamically" in {
     val probeHttp = TestProbe()
-    val authActor = system.actorOf(HttpBasicAuthActor(probeHttp.ref, TestDavConfig))
+    val authActor = system.actorOf(HttpBasicAuthActor(probeHttp.ref, TestAuthConfig))
 
     authActor ! RegisterClient
     authActor ! Release

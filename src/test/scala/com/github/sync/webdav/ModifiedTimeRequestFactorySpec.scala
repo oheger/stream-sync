@@ -42,10 +42,9 @@ object ModifiedTimeRequestFactorySpec {
     */
   private def createConfig(property: String = DavConfig.DefaultModifiedProperty,
                            namespace: Option[String] = None): DavConfig =
-    DavConfig(rootUri = "https://test.dav.org", user = "testUser", password = "S3cr3T",
-      lastModifiedProperty = property, lastModifiedNamespace = namespace,
+    DavConfig(rootUri = "https://test.dav.org",
+      optModifiedProperty = Some(property), optModifiedNamespace = namespace,
       deleteBeforeOverride = false,
-      modifiedProperties = List(property, DavConfig.DefaultModifiedProperty),
       Timeout(16.seconds))
 
   /**

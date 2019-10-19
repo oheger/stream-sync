@@ -29,6 +29,7 @@ import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.SyncTypes._
 import com.github.sync._
+import com.github.sync.crypt.Secret
 import com.github.sync.impl.ElementSource
 import com.github.sync.util.UriEncodingHelper
 import com.github.tomakehurst.wiremock.client.WireMock._
@@ -257,7 +258,7 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     */
   private def createRequestActor(config: DavConfig): ActorRef = {
     val httpActor = system.actorOf(HttpRequestActor(serverUri(""), 2))
-    system.actorOf(HttpBasicAuthActor(httpActor, config))
+    system.actorOf(HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get))
   }
 
   /**
@@ -267,10 +268,11 @@ class DavFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem
     * @return the config
     */
   private def createDavConfig(modifiedProperty: String): DavConfig =
-    DavConfig(serverUri(RootPath), UserId, Password, modifiedProperty, None,
+    DavConfig(serverUri(RootPath), modifiedProperty, None,
       deleteBeforeOverride = false,
       modifiedProperties = List(modifiedProperty, DavConfig.DefaultModifiedProperty),
-      Timeout(10.seconds))
+      Timeout(10.seconds), optBasicAuthConfig = Some(BasicAuthConfig(UserId, Secret(Password))),
+      optOAuthConfig = None)
 
   "A DavFsElementSource" should "iterate over a WebDav structure" in {
     stubTestFolders("")

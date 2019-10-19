@@ -174,7 +174,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     }
   }
 
-  it should "create a correct DavConfig for the source structure if all properties are defined" in {
+  it should "create a correct DavConfig for the source structure if all basic auth properties are defined" in {
     val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
       SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
       SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
@@ -187,8 +187,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     processedArgs.accessedParameters should be(args.keySet)
     val config = extractDavSourceConfig(srcFactory)
     config.rootUri should be(Uri(DavRootUri))
-    config.user should be(User)
-    config.password should be(Password)
+    config.optBasicAuthConfig.get.user should be(User)
+    config.optBasicAuthConfig.get.password.secret should be(Password)
     config.lastModifiedProperty should be(LastModifiedProperty)
     config.lastModifiedNamespace should be(Some(LastModifiedNamespace))
     config.deleteBeforeOverride shouldBe true
@@ -241,8 +241,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     srcFactory match {
       case davFactory: DavComponentsDestinationFactory =>
         davFactory.config.rootUri should be(Uri(DavRootUri))
-        davFactory.config.user should be(User)
-        davFactory.config.password should be(Password)
+        davFactory.config.optBasicAuthConfig.get.user should be(User)
+        davFactory.config.optBasicAuthConfig.get.password.secret should be(Password)
         davFactory.config.lastModifiedProperty should be(LastModifiedProperty)
         davFactory.config.lastModifiedNamespace should be(Some(LastModifiedNamespace))
         davFactory.config.deleteBeforeOverride shouldBe true
@@ -264,7 +264,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       TestTimeout, args)(system, mat, system.dispatcher, reader))
     processedArgs.accessedParameters should contain(propPwd)
     val config = extractDavSourceConfig(srcFactory)
-    config.user should be(User)
-    config.password should be(Password)
+    config.optBasicAuthConfig.get.user should be(User)
+    config.optBasicAuthConfig.get.password.secret should be(Password)
   }
 }

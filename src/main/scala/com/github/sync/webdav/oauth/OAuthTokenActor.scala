@@ -17,13 +17,13 @@
 package com.github.sync.webdav.oauth
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Status}
-import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
+import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.pattern.ask
 import akka.stream.{ActorMaterializer, KillSwitch}
 import akka.util.Timeout
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.HttpExtensionActor
+import com.github.sync.webdav.{HttpExtensionActor, OAuthStorageConfig}
 import com.github.sync.webdav.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
 import com.github.sync.webdav.oauth.OAuthTokenActor.{DoRefresh, PendingRequestData, RefreshFailure, TokensRefreshed}
 

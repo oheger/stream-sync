@@ -25,11 +25,11 @@ object HttpBasicAuthActor {
     * Returns a ''Props'' object for creating new actor instances.
     *
     * @param httpActor   the underlying ''HttpRequestActor''
-    * @param config      the DAV configuration
+    * @param config      the basic auth configuration
     * @param clientCount the number of clients
     * @return the ''Props'' for creating a new actor instance
     */
-  def apply(httpActor: ActorRef, config: DavConfig, clientCount: Int = 1): Props =
+  def apply(httpActor: ActorRef, config: BasicAuthConfig, clientCount: Int = 1): Props =
     Props(classOf[HttpBasicAuthActor], httpActor, config, clientCount)
 }
 
@@ -40,11 +40,11 @@ object HttpBasicAuthActor {
   * added to HTTP requests sent to this actor.
   *
   * @param httpActor   the underlying ''HttpRequestActor''
-  * @param config      the DAV configuration
+  * @param config      the basic auth configuration
   * @param clientCount the number of clients
   */
 class HttpBasicAuthActor(override val httpActor: ActorRef,
-                         config: DavConfig,
+                         config: BasicAuthConfig,
                          override val clientCount: Int) extends Actor with HttpExtensionActor {
   /** The authorization header to be added to requests. */
   private val authHeader = createAuthHeader(config)
@@ -59,9 +59,9 @@ class HttpBasicAuthActor(override val httpActor: ActorRef,
   /**
     * Generates an ''Authorization'' header based on the given configuration.
     *
-    * @param config the configuration of the WebDav server
+    * @param config the configuration for basic auth
     * @return a header to authenticate against this WebDav server
     */
-  private def createAuthHeader(config: DavConfig): Authorization =
-    Authorization(BasicHttpCredentials(config.user, config.password))
+  private def createAuthHeader(config: BasicAuthConfig): Authorization =
+    Authorization(BasicHttpCredentials(config.user, config.password.secret))
 }

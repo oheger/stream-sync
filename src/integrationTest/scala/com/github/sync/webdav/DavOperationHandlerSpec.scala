@@ -29,6 +29,7 @@ import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes._
 import com.github.sync.WireMockSupport.{Password, PriorityDefault, PrioritySpecific, UserId}
 import com.github.sync._
+import com.github.sync.crypt.Secret
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.matching.UrlPathPattern
 import org.mockito.Mockito
@@ -108,9 +109,10 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     * @return the test WebDav server configuration
     */
   private def createDavConfig(): DavConfig =
-    DavConfig(serverUri(RootPath), UserId, Password, DavConfig.DefaultModifiedProperty, None,
+    DavConfig(serverUri(RootPath), DavConfig.DefaultModifiedProperty, None,
       deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty),
-      Timeout(10.seconds))
+      Timeout(10.seconds), optBasicAuthConfig = Some(BasicAuthConfig(UserId, Secret(Password))),
+      optOAuthConfig = None)
 
   /**
     * Convenience function to define the URI of a stub or verification based on
@@ -162,7 +164,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     implicit val mat: ActorMaterializer =
       ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
     val httpActor = system.actorOf(HttpRequestActor(config.rootUri))
-    val requestActor = system.actorOf(HttpBasicAuthActor(httpActor, config))
+    val requestActor = system.actorOf(HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get))
     val source = Source(operations)
     val sink = Sink.fold[List[SyncOperation], SyncOperation](List.empty) { (lst, op) =>
       op :: lst

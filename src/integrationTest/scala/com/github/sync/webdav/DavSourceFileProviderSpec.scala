@@ -27,6 +27,7 @@ import akka.testkit.{TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes.FsFile
 import com.github.sync.WireMockSupport._
+import com.github.sync.crypt.Secret
 import com.github.sync.{AsyncTestHelper, FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
@@ -63,9 +64,10 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     * @return the ''DavConfig''
     */
   private def createConfig(): DavConfig =
-    DavConfig(serverUri(RootPath), UserId, Password, DavConfig.DefaultModifiedProperty, None,
+    DavConfig(serverUri(RootPath), DavConfig.DefaultModifiedProperty, None,
       deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty),
-      Timeout(10.seconds))
+      Timeout(10.seconds), optBasicAuthConfig = Some(BasicAuthConfig(UserId, Secret(Password))),
+      optOAuthConfig = None)
 
   /**
     * Creates an actor for sending HTTP requests.
@@ -75,7 +77,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     */
   private def createRequestActor(config: DavConfig): ActorRef = {
     val httpActor = system.actorOf(HttpRequestActor(serverUri(""), 2))
-    system.actorOf(HttpBasicAuthActor(httpActor, config))
+    system.actorOf(HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get))
   }
 
   "A DavSourceFileProvider" should "provide a source for a requested existing file" in {

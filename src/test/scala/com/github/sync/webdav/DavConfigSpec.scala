@@ -29,12 +29,6 @@ object DavConfigSpec {
   /** Test URI of a Dav server. */
   private val DavUri = "https://test.webdav.tst/"
 
-  /** Test user name. */
-  private val User = "scott"
-
-  /** Test password. */
-  private val Password = "tiger"
-
   /** Test modified property name. */
   private val ModifiedProp = "myModifiedTime"
 
@@ -51,21 +45,21 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
 
   "DavConfig" should "fill the list of modified properties correctly" in {
     val expModifiedProperties = List(ModifiedProp, DavConfig.DefaultModifiedProperty)
-    val config = DavConfig(DavUri, User, Password, Some(ModifiedProp), Some(ModifiedNamespace),
+    val config = DavConfig(DavUri, Some(ModifiedProp), Some(ModifiedNamespace),
       deleteBeforeOverride = true, DavTimeout)
 
     config.modifiedProperties should contain theSameElementsInOrderAs expModifiedProperties
   }
 
   it should "eliminate duplicates in the list of modified properties" in {
-    val config = DavConfig(DavUri, User, Password, Some(DavConfig.DefaultModifiedProperty), Some(ModifiedNamespace),
+    val config = DavConfig(DavUri, Some(DavConfig.DefaultModifiedProperty), Some(ModifiedNamespace),
       deleteBeforeOverride = true, DavTimeout)
 
     config.modifiedProperties should contain only DavConfig.DefaultModifiedProperty
   }
 
   it should "set the default last modified property if undefined" in {
-    val config = DavConfig(DavUri, User, Password, None, None, deleteBeforeOverride = false, DavTimeout)
+    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout)
 
     config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
   }
