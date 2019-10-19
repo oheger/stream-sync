@@ -124,13 +124,15 @@ object OAuthParameterManager {
     */
   private val commandProcessor: CliProcessor[Try[String]] =
     ParameterManager.optionValue(ParameterManager.InputOption)
-      .map {
-        case h :: t if t.isEmpty =>
-          Success(h)
-        case _ :: _ =>
-          Failure(paramException(CommandOption, "too many commands specified; only a single one is supported"))
-        case _ =>
-          Failure(paramException(CommandOption, "no command was specified"))
+      .map { triedValue =>
+        triedValue flatMap {
+          case h :: t if t.isEmpty =>
+            Success(h)
+          case _ :: _ =>
+            Failure(paramException(CommandOption, "too many commands specified; only a single one is supported"))
+          case _ =>
+            Failure(paramException(CommandOption, "no command was specified"))
+        }
       }
 
   /**
@@ -144,7 +146,7 @@ object OAuthParameterManager {
     * place, and missing mandatory arguments are reported.
     *
     * @param parameters    the object with parsed parameters
-    * @param needPwdFunc function to check whether a password is needed
+    * @param needPwdFunc   function to check whether a password is needed
     * @param ec            the execution context
     * @param consoleReader the console reader
     * @return a ''Future'' with the config and updated parameters
@@ -204,7 +206,7 @@ object OAuthParameterManager {
     */
   private def storageConfigProcessor(needPassword: Boolean): CliProcessor[Try[OAuthStorageConfig]] =
     for {name <- mandatoryStringOption(NameOption)
-         path <- asMandatory(StoragePathOption, asPathOptionValue(StoragePathOption, singleOptionValue(StoragePathOption)))
+         path <- asMandatory(StoragePathOption, pathOptionValue(StoragePathOption))
          pwd <- storagePasswordProcessor(needPassword)
          crypt <- booleanOptionValue(EncryptOption)
          } yield createStorageConfig(name, path, pwd, crypt)
@@ -232,7 +234,8 @@ object OAuthParameterManager {
     * @return the ''CliProcessor'' for scope
     */
   private def scopeProcessor: CliProcessor[Try[String]] =
-    asMandatory(ScopeOption, mapped(ScopeOption, singleOptionValue(ScopeOption))(_.replace(',', ' ')))
+    asMandatory(ScopeOption,
+      asSingleOptionValue(ScopeOption, mapped(ScopeOption, optionValue(ScopeOption))(_.replace(',', ' '))))
 
   /**
     * Returns a ''CliProcessor'' for extracting the client secret of an IDP.
@@ -241,13 +244,13 @@ object OAuthParameterManager {
     *
     * @return the ''CliProcessor'' for the client secret
     */
-  private def clientSecretProcessor: CliProcessor[Try[Secret]] = {
+  private def clientSecretProcessor: CliProcessor[Try[Secret]] =
     asMandatory(ClientSecretOption,
-      mapped(ClientSecretOption,
-        asSingleOptionValue(ClientSecretOption,
-          withFallback(optionValue(ClientSecretOption),
-            consoleReaderValue(ClientSecretOption, password = true))))(pwd => Secret(pwd)))
-  }
+      asSingleOptionValue(ClientSecretOption,
+        mapped(ClientSecretOption,
+          withFallback(
+            optionValue(ClientSecretOption),
+            consoleReaderValue(ClientSecretOption, password = true)))(pwd => Secret(pwd))))
 
   /**
     * Creates an ''OAuthStorageConfig'' from the given components. Failures are
@@ -294,5 +297,5 @@ object OAuthParameterManager {
     * @return the processor to extract this option
     */
   private def mandatoryStringOption(key: String): CliProcessor[Try[String]] =
-    asMandatory(key, singleOptionValue(key))
+    asMandatory(key, stringOptionValue(key))
 }

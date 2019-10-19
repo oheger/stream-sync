@@ -277,7 +277,7 @@ object SyncComponentsFactory {
     */
   private def localFsConfigProcessor(uri: String, structureType: StructureType): CliProcessor[Try[LocalFsConfig]] = {
     val propZoneId = structureType.configPropertyName(PropLocalFsTimeZone)
-    mapped(propZoneId, singleOptionValue(propZoneId))(ZoneId.of)
+    asSingleOptionValue(propZoneId, mapped(propZoneId, optionValue(propZoneId))(ZoneId.of))
       .map(triedZone => createLocalFsConfig(uri, structureType, triedZone))
   }
 
@@ -330,10 +330,10 @@ object SyncComponentsFactory {
     val keyDelBeforeOverride = structureType.configPropertyName(PropDavDeleteBeforeOverride)
     val keyUser = structureType.configPropertyName(PropDavUser)
     for {
-      triedUser <- asMandatory(keyUser, singleOptionValue(keyUser))
+      triedUser <- asMandatory(keyUser, stringOptionValue(keyUser))
       triedPassword <- davPasswordOption(structureType)
-      triedModProp <- singleOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
-      triedModNs <- singleOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
+      triedModProp <- stringOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
+      triedModNs <- stringOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
       triedDel <- asMandatory(keyDelBeforeOverride, booleanOptionValue(keyDelBeforeOverride, Some(false)))
     } yield createDavConfig(uri, timeout, structureType, triedUser, triedPassword, triedModProp,
       triedModNs, triedDel)

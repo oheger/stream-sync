@@ -62,11 +62,11 @@ object ParameterManager {
   val FileOption: String = OptionPrefix + "file"
 
   /**
-    * Type definition for the base type of a command line option. Values are
-    * strings, but options can be repeated; therefore, the type is an
-    * ''Iterable'' of strings.
+    * Type definition for the base type of a command line option. The option
+    * can have an arbitrary type and multiple values. As each type conversion
+    * can fail, it is a ''Try''.
     */
-  type OptionValue = Iterable[String]
+  type OptionValue[A] = Try[Iterable[A]]
 
   /**
     * Type definition for the value of an option that accepts a single value at
@@ -82,13 +82,7 @@ object ParameterManager {
     * with command line options is transformed in such a map which allows
     * direct access to the value(s) assigned to options.
     */
-  type ParametersMap = Map[String, OptionValue]
-
-  /**
-    * Constant for an option value that does not contain any data. This is used
-    * by some processors to set default values that are not further evaluated.
-    */
-  val EmptyOptionValue: OptionValue = List.empty
+  type ParametersMap = Map[String, Iterable[String]]
 
   /**
     * A data class storing the information required for extracting command
@@ -203,13 +197,6 @@ object ParameterManager {
   private type InternalParamMap = Map[String, List[String]]
 
   /**
-    * Constant for a ''CliProcessor'' that always returns an empty value. This
-    * is useful in some cases, e.g. to define a processor when one is required,
-    * but the concrete value does not matter.
-    */
-  val EmptyProcessor: CliProcessor[OptionValue] = constantProcessor(EmptyOptionValue)
-
-  /**
     * Parses the command line arguments and converts them into a map keyed by
     * options.
     *
@@ -259,6 +246,26 @@ object ParameterManager {
   }
 
   /**
+    * Returns an option value of the given type that does not contain any data.
+    * This is used by some processors to set default values that are not
+    * further evaluated.
+    *
+    * @return the empty option value of the given type
+    * @tparam A the type of the option value
+    */
+  def emptyOptionValue[A]: OptionValue[A] = Success(List.empty[A])
+
+  /**
+    * Returns a ''CliProcessor'' that always produces an empty value. This
+    * is useful in some cases, e.g. to define a processor when one is required,
+    * but the concrete value does not matter.
+    *
+    * @return the ''CliProcessor'' producing empty values
+    * @tparam A the type of the option value
+    */
+  def emptyProcessor[A]: CliProcessor[OptionValue[A]] = constantProcessor(emptyOptionValue)
+
+  /**
     * Returns a ''CliProcessor'' that always returns the given constant value
     * as result without manipulating the parameter context. This processor is
     * mainly useful for building up complex processors, e.g. together with
@@ -272,25 +279,27 @@ object ParameterManager {
 
   /**
     * Returns a ''CliProcessor'' that returns a constant collection of option
-    * values. This is a special case of a constant processor that operates on
-    * the base type of command line arguments.
+    * values of the given type. This is a special case of a constant processor
+    * that operates on the base type of command line arguments.
     *
     * @param first the first value
     * @param items a sequence of additional values
     * @return the ''CliProcessor'' returning this constant ''OptionValue''
+    * @tparam A the type of the resulting option value
     */
-  def constantOptionValue(first: String, items: String*): CliProcessor[OptionValue] =
-    constantProcessor(first :: items.toList)
+  def constantOptionValue[A](first: A, items: A*): CliProcessor[OptionValue[A]] =
+    constantProcessor(Success(first :: items.toList))
 
   /**
-    * Returns a processor that extracts all values of the specified option key.
+    * Returns a processor that extracts all values of the specified option key
+    * in their basic string representation.
     *
     * @param key the key of the option
     * @return the processor to extract the option values
     */
-  def optionValue(key: String): CliProcessor[OptionValue] = CliProcessor(context => {
+  def optionValue(key: String): CliProcessor[OptionValue[String]] = CliProcessor(context => {
     val values = context.parameters.parametersMap.getOrElse(key, Nil)
-    (values, context.update(context.parameters keyAccessed key))
+    (Success(values), context.update(context.parameters keyAccessed key))
   })
 
   /**
@@ -302,11 +311,12 @@ object ParameterManager {
     * @param proc         the first processor to be invoked
     * @param fallbackProc the fallback processor
     * @return the resulting processor applying a fallback value
+    * @tparam A the type of the option values
     */
-  def withFallback(proc: CliProcessor[OptionValue], fallbackProc: CliProcessor[OptionValue]):
-  CliProcessor[OptionValue] =
+  def withFallback[A](proc: CliProcessor[OptionValue[A]], fallbackProc: CliProcessor[OptionValue[A]]):
+  CliProcessor[OptionValue[A]] =
     proc flatMap { result =>
-      if (result.nonEmpty) constantProcessor(result)
+      if (result.isFailure || result.get.nonEmpty) constantProcessor(result)
       else fallbackProc
     }
 
@@ -321,8 +331,8 @@ object ParameterManager {
     * @param password a flag whether a password is to be entered
     * @return the processor that reads from the console
     */
-  def consoleReaderValue(key: String, password: Boolean): CliProcessor[OptionValue] =
-    CliProcessor(context => (List(context.reader.readOption(key, password)), context))
+  def consoleReaderValue(key: String, password: Boolean): CliProcessor[OptionValue[String]] =
+    CliProcessor(context => (Try(List(context.reader.readOption(key, password))), context))
 
   /**
     * Returns a processor that conditionally delegates to other processors.
@@ -343,10 +353,11 @@ object ParameterManager {
     * @param elseProc the processor to run if the condition is not fulfilled
     * @param failProc the processor to run in case of a failure
     * @return the conditional processor
+    * @tparam A the type of the option values
     */
-  def conditionalValue(condProc: CliProcessor[Try[Boolean]], ifProc: CliProcessor[OptionValue],
-                       elseProc: CliProcessor[OptionValue] = EmptyProcessor,
-                       failProc: CliProcessor[OptionValue] = EmptyProcessor): CliProcessor[OptionValue] =
+  def conditionalValue[A](condProc: CliProcessor[Try[Boolean]], ifProc: CliProcessor[OptionValue[A]],
+                          elseProc: CliProcessor[OptionValue[A]] = emptyProcessor[A],
+                          failProc: CliProcessor[OptionValue[A]] = emptyProcessor[A]): CliProcessor[OptionValue[A]] =
     condProc flatMap {
       case Success(value) =>
         if (value) ifProc else elseProc
@@ -362,11 +373,13 @@ object ParameterManager {
     * @param proc the processor to be decorated
     * @return the processor extracting the single option value
     */
-  def asSingleOptionValue(key: String, proc: CliProcessor[OptionValue]): CliProcessor[SingleOptionValue[String]] =
+  def asSingleOptionValue[A](key: String, proc: CliProcessor[OptionValue[A]]): CliProcessor[SingleOptionValue[A]] =
     proc map { optionValue =>
-      if (optionValue.size > 1)
-        Failure(paramException(key, s"should have a single value, but has multiple values - $optionValue"))
-      else Success(optionValue.headOption)
+      optionValue flatMap { values =>
+        if (values.size > 1)
+          Failure(paramException(key, s"should have a single value, but has multiple values - $optionValue"))
+        else Success(values.headOption)
+      }
     }
 
   /**
@@ -388,11 +401,10 @@ object ParameterManager {
   /**
     * Returns a processor that modifies the result of another processor by
     * applying a mapping function. While mapping is supported by processors in
-    * general, this function simplifies this for ''SingleOptionValue'' results.
-    * The mapping function operates on the result type, and it is called only
-    * if the ''Try'' and the ''Option'' are defined. The mapping function can
-    * throw an exception; this is handled automatically by causing the result
-    * to fail.
+    * general, this function simplifies this for ''OptionValue'' objects.
+    * The mapping function operates on the values collection, and it is called
+    * only if the ''Try'' is  successful. The mapping function can throw an
+    * exception; this is handled automatically by causing the result to fail.
     *
     * @param key  the key of the option (to generate an error message)
     * @param proc the processor to be decorated
@@ -401,33 +413,33 @@ object ParameterManager {
     * @tparam B the mapped result type
     * @return the processor applying the mapping function
     */
-  def mapped[A, B](key: String, proc: CliProcessor[SingleOptionValue[A]])(f: A => B):
-  CliProcessor[SingleOptionValue[B]] =
+  def mapped[A, B](key: String, proc: CliProcessor[OptionValue[A]])(f: A => B):
+  CliProcessor[OptionValue[B]] =
     proc.map(triedResult => triedResult.flatMap(o => paramTry(key)(o.map(f))))
 
   /**
-    * Returns a processor that converts a command line argument to an int
-    * number. If the option has a defined string value, it is converted to a
-    * number including error handling. Undefined values are ignored.
+    * Returns a processor that converts a command line argument to int
+    * numbers. All the string values of the option are converted to
+    * numbers including error handling. Undefined values are ignored.
     *
     * @param key  the key of the option (to generate an error message)
     * @param proc the processor providing the original option value
-    * @return the processor converting the value to a number
+    * @return the processor converting the values to numbers
     */
-  def asIntOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
-  CliProcessor[SingleOptionValue[Int]] = mapped(key, proc)(_.toInt)
+  def asIntOptionValue(key: String, proc: CliProcessor[OptionValue[String]]):
+  CliProcessor[OptionValue[Int]] = mapped(key, proc)(_.toInt)
 
   /**
-    * Returns a processor that converts a command line argument to a boolean
-    * value. If the option has a defined string value, it is converted to a
-    * boolean including error handling. Undefined values are ignored.
+    * Returns a processor that converts a command line argument to boolean
+    * values. All the string values of the option are converted to
+    * booleans including error handling. Undefined values are ignored.
     *
     * @param key  the key of the option (to generate an error message)
     * @param proc the processor providing the original option value
-    * @return the processor converting the value to a boolean
+    * @return the processor converting the values to booleans
     */
-  def asBooleanOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
-  CliProcessor[SingleOptionValue[Boolean]] = mapped(key, proc) { s =>
+  def asBooleanOptionValue(key: String, proc: CliProcessor[OptionValue[String]]):
+  CliProcessor[OptionValue[Boolean]] = mapped(key, proc) { s =>
     toLower(s) match {
       case "true" => true
       case "false" => false
@@ -436,16 +448,41 @@ object ParameterManager {
   }
 
   /**
-    * Returns a processor that converts a command line argument to a file path.
-    * The conversion may fail if the option value is not a valid path.
+    * Returns a processor that converts a command line argument to file paths.
+    * The conversion may fail if one of the option values is not a valid path.
     * Undefined values are ignored.
     *
     * @param key  the key of the option (to generate an error message)
     * @param proc the processor providing the original option value
-    * @return the processor converting the value to a ''Path''
+    * @return the processor converting the value to ''Path'' objects
     */
-  def asPathOptionValue(key: String, proc: CliProcessor[SingleOptionValue[String]]):
-  CliProcessor[SingleOptionValue[Path]] = mapped(key, proc) { s => Paths.get(s) }
+  def asPathOptionValue(key: String, proc: CliProcessor[OptionValue[String]]):
+  CliProcessor[OptionValue[Path]] = mapped(key, proc) { s => Paths.get(s) }
+
+  /**
+    * A generic function to extract a single value from a command line option
+    * of a specific type, optionally applying a default value if the option is
+    * undefined. If the option has multiple values, a ''Failure'' is generated.
+    * This function is a convenient wrapper around the fallback processor that
+    * can be obtained via the ''withFallback()'' function. In order to handle
+    * the type conversion, a function has to be provided that maps the original
+    * string-based processor to one using the target data type.
+    *
+    * @param key           the key of the option
+    * @param fallbackValue an optional fallback value
+    * @param fProc         a function to map the type of the processor
+    * @tparam A the type of the target option value
+    * @return the processor extracting a single option value
+    */
+  def singleOptionValue[A](key: String, fallbackValue: Option[A] = None)
+                          (fProc: (String, CliProcessor[OptionValue[String]]) => CliProcessor[OptionValue[A]]):
+  CliProcessor[SingleOptionValue[A]] = {
+    val procOptValue = fProc(key, optionValue(key))
+    val procFallback = fallbackValue map { fallback =>
+      withFallback(procOptValue, constantOptionValue(fallback))
+    } getOrElse procOptValue
+    asSingleOptionValue(key, procFallback)
+  }
 
   /**
     * Returns a processor to extract the single string value of a command line
@@ -456,13 +493,9 @@ object ParameterManager {
     * @param fallbackValue an optional fallback value to be set
     * @return the processor extracting the single value of an option
     */
-  def singleOptionValue(key: String, fallbackValue: Option[String] = None):
+  def stringOptionValue(key: String, fallbackValue: Option[String] = None):
   CliProcessor[SingleOptionValue[String]] = {
-    val procOptValue = optionValue(key)
-    val procFallback = fallbackValue map { fallback =>
-      withFallback(procOptValue, constantOptionValue(fallback))
-    } getOrElse procOptValue
-    asSingleOptionValue(key, procFallback)
+    singleOptionValue(key, fallbackValue)((_, p) => p)
   }
 
   /**
@@ -475,7 +508,7 @@ object ParameterManager {
     * @return the processor extracting the single Int value of an option
     */
   def intOptionValue(key: String, fallbackValue: Option[Int] = None): CliProcessor[SingleOptionValue[Int]] =
-    asIntOptionValue(key, singleOptionValue(key, fallbackValue map (_.toString)))
+    singleOptionValue(key, fallbackValue)(asIntOptionValue)
 
   /**
     * Returns a processor to extract the single boolean value of a command line
@@ -488,7 +521,20 @@ object ParameterManager {
     */
   def booleanOptionValue(key: String, fallbackValue: Option[Boolean] = None):
   CliProcessor[SingleOptionValue[Boolean]] =
-    asBooleanOptionValue(key, singleOptionValue(key, fallbackValue map (_.toString)))
+    singleOptionValue(key, fallbackValue)(asBooleanOptionValue)
+
+  /**
+    * Returns a processor to extract the single ''Path'' value of a command
+    * line option. This works like ''singleOptionValue'', but the result is
+    * mapped to a ''Path''.
+    *
+    * @param key           the key of the option
+    * @param fallbackValue an optional fallback value to be set
+    * @return the processor extracting the single ''Path'' value of an option
+    */
+  def pathOptionValue(key: String, fallbackValue: Option[Path] = None):
+  CliProcessor[SingleOptionValue[Path]] =
+    singleOptionValue(key, fallbackValue)(asPathOptionValue)
 
   /**
     * Checks whether all parameters in the given parameters map have been

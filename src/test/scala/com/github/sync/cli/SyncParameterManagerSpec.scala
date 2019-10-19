@@ -292,7 +292,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "not return a single option value if there are multiple" in {
-    val argsMap = ArgsMap + (SyncParameterManager.TimeoutOption -> List("bar", "baz"))
+    val argsMap = ArgsMap + (SyncParameterManager.TimeoutOption -> List("100", "200"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       SyncParameterManager.TimeoutOption, "has multiple values")
