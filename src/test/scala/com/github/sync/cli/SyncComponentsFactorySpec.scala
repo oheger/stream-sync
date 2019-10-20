@@ -27,6 +27,7 @@ import akka.util.Timeout
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, SourceComponentsFactory, SourceStructureType}
+import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.webdav.DavConfig
 import org.mockito.Mockito._
@@ -57,6 +58,12 @@ object SyncComponentsFactorySpec {
 
   /** Test namespace for the last-modified property. */
   private val LastModifiedNamespace = "testNamespace"
+
+  /** Test storage path. */
+  private val StoragePath = "/data/idp-providers"
+
+  /** Test IDP name. */
+  private val IdpName = "MyTestIDP"
 
   /**
     * A conversion function for parameter maps. This makes it possible to use
@@ -180,11 +187,12 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
       SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
       SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true")
+    val expAccessedKeys = args.keySet + SourceStructureType.configPropertyName(OAuthParameterManager.NameOptionName)
     val syncFactory = new SyncComponentsFactory
 
     val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
       TestTimeout, args))
-    processedArgs.accessedParameters should be(args.keySet)
+    processedArgs.accessedParameters should be(expAccessedKeys)
     val config = extractDavSourceConfig(srcFactory)
     config.rootUri should be(Uri(DavRootUri))
     config.optBasicAuthConfig.get.user should be(User)
@@ -193,6 +201,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     config.lastModifiedNamespace should be(Some(LastModifiedNamespace))
     config.deleteBeforeOverride shouldBe true
     config.timeout should be(TestTimeout)
+    config.optOAuthConfig should be(None)
   }
 
   it should "create a correct DavConfig for the source structure with defaults" in {
@@ -215,14 +224,58 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val DavUri = SyncComponentsFactory.PrefixWebDav + "?not a Valid URI!"
     val syncFactory = new SyncComponentsFactory
 
-    val exception =
-      expectFailedFuture[IllegalArgumentException] {
-        syncFactory.createSourceComponentsFactory(DavUri, TestTimeout, args)
-      }
+    val exception = expectFailedFuture[IllegalArgumentException] {
+      syncFactory.createSourceComponentsFactory(DavUri, TestTimeout, args)
+    }
     exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUri))
     exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser))
     exception.getMessage should include(SourceStructureType.configPropertyName(
       SyncComponentsFactory.PropDavDeleteBeforeOverride))
+  }
+
+  it should "create a correct DavConfig for the source structure if OAuth properties are defined" in {
+    val args = Map(
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true",
+      SourceStructureType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
+      SourceStructureType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
+      SourceStructureType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
+    )
+    val expAccessedKeys = args.keySet +
+      SourceStructureType.configPropertyName(OAuthParameterManager.EncryptOptionName)
+    val syncFactory = new SyncComponentsFactory
+
+    val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
+      TestTimeout, args))
+    processedArgs.accessedParameters should be(expAccessedKeys)
+    val config = extractDavSourceConfig(srcFactory)
+    config.optBasicAuthConfig should be(None)
+    val oauthConfig = config.optOAuthConfig.get
+    oauthConfig.baseName should be(IdpName)
+    oauthConfig.optPassword.get.secret should be(Password)
+    oauthConfig.rootDir.toString should be(StoragePath)
+  }
+
+  it should "fail parsing parameters if properties for both basic auth and OAuth are set" in {
+    val args = Map(
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true",
+      SourceStructureType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
+      SourceStructureType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
+      SourceStructureType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User
+    )
+    val syncFactory = new SyncComponentsFactory
+
+    val exception = expectFailedFuture[IllegalArgumentException] {
+      for {
+        (params, _) <- syncFactory.createSourceComponentsFactory(PrefixDavRootUri, TestTimeout, args)
+        params2 <- ParameterManager.checkParametersConsumed(params)
+      } yield params2
+    }
+    exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser))
   }
 
   it should "create a correct DavConfig for the destination structure" in {
@@ -233,11 +286,13 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) ->
         LastModifiedNamespace,
       DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true")
+    val expAccessedKeys = args.keySet +
+      DestinationStructureType.configPropertyName(OAuthParameterManager.NameOptionName)
     val syncFactory = new SyncComponentsFactory
 
     val (processedArgs, srcFactory) = futureResult(syncFactory.createDestinationComponentsFactory(PrefixDavRootUri,
       TestTimeout, args))
-    processedArgs.accessedParameters should be(args.keySet)
+    processedArgs.accessedParameters should be(expAccessedKeys)
     srcFactory match {
       case davFactory: DavComponentsDestinationFactory =>
         davFactory.config.rootUri should be(Uri(DavRootUri))

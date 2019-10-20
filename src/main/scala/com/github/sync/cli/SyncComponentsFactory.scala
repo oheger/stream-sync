@@ -28,9 +28,10 @@ import akka.util.Timeout
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
 import com.github.sync.cli.ParameterManager._
+import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
 import com.github.sync.local.LocalFsConfig
-import com.github.sync.webdav.{BasicAuthConfig, DavConfig}
+import com.github.sync.webdav.{BasicAuthConfig, DavConfig, OAuthStorageConfig}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
@@ -131,7 +132,7 @@ object SyncComponentsFactory {
       * @param property the property name
       * @return the full property name for this source type
       */
-    def configPropertyName(property: String): String = s"--$name$property"
+    def configPropertyName(property: String): String = s"${ParameterManager.OptionPrefix}$name$property"
   }
 
   /**
@@ -329,15 +330,14 @@ object SyncComponentsFactory {
   private def davConfigProcessor(uri: String, timeout: Timeout, structureType: StructureType):
   CliProcessor[Try[DavConfig]] = {
     val keyDelBeforeOverride = structureType.configPropertyName(PropDavDeleteBeforeOverride)
-    val keyUser = structureType.configPropertyName(PropDavUser)
     for {
-      triedUser <- asMandatory(keyUser, stringOptionValue(keyUser))
-      triedPassword <- davPasswordOption(structureType)
       triedModProp <- stringOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
       triedModNs <- stringOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
       triedDel <- asMandatory(keyDelBeforeOverride, booleanOptionValue(keyDelBeforeOverride, Some(false)))
-    } yield createDavConfig(uri, timeout, structureType, triedUser, triedPassword, triedModProp,
-      triedModNs, triedDel)
+      triedBasicAuth <- basicAuthProcessor(structureType)
+      triedOAuth <- oauthConfigProcessor(structureType)
+    } yield createDavConfig(uri, timeout, structureType, triedModProp, triedModNs, triedDel,
+      triedBasicAuth, triedOAuth)
   }
 
   /**
@@ -355,32 +355,89 @@ object SyncComponentsFactory {
   }
 
   /**
+    * Returns a ''CliProcessor'' for obtaining the basic auth configuration.
+    * The processor checks whether the name of an IDP has been specified. If
+    * this is the case, an undefined option is returned; otherwise, the config
+    * is parsed and returned.
+    *
+    * @param structureType the structure type
+    * @return the ''CliProcessor'' for the basic auth config
+    */
+  private def basicAuthProcessor(structureType: StructureType): CliProcessor[Try[Option[BasicAuthConfig]]] = {
+    val keyUser = structureType.configPropertyName(PropDavUser)
+    val proc = for {
+      triedUser <- asMandatory(keyUser, stringOptionValue(keyUser))
+      triedPassword <- davPasswordOption(structureType)
+    } yield createBasicAuthConfig(triedUser, triedPassword)
+    asSingleOptionValue("",
+      conditionalValue[BasicAuthConfig](isDefinedProcessor(structureType.configPropertyName(
+        OAuthParameterManager.NameOptionName)), ifProc = emptyProcessor, elseProc = proc))
+  }
+
+  /**
+    * Returns a ''CliProcessor'' for obtaining the OAuth configuration. This
+    * processor checks whether the name of an IDP has been specified. If so,
+    * the configuration is extracted; otherwise, an undefined option is
+    * returned. This processor and the processor for the basic auth config are
+    * mutually exclusive.
+    *
+    * @param structureType the structure type
+    * @return the ''CliProcessor'' for the OAuth configuration
+    */
+  private def oauthConfigProcessor(structureType: StructureType): CliProcessor[Try[Option[OAuthStorageConfig]]] = {
+    val proc = OAuthParameterManager.storageConfigProcessor(needPassword = true,
+      prefix = OptionPrefix + structureType.name)
+      .map { triedConfig =>
+        triedConfig map (config => Iterable(config))
+      }
+    asSingleOptionValue("",
+      conditionalValue[OAuthStorageConfig](isDefinedProcessor(structureType.configPropertyName(
+        OAuthParameterManager.NameOptionName)), ifProc = proc))
+  }
+
+  /**
     * Creates a ''DavConfig'' object from the given components. Errors are
     * aggregated in the resulting ''Try''.
     *
     * @param uri                       the URI of the Dav server
     * @param timeout                   the timeout for requests
     * @param structureType             the structure type
-    * @param triedUser                 the user name component
-    * @param triedPassword             the password component
     * @param triedOptModifiedProp      the component for the modified property
     * @param triedOptModifiedNamespace the component for the modified namespace
     * @param triedDelBeforeOverride    the component for the delete before
     *                                  override flag
+    * @param triedBasicAuthConfig      the component for the basic auth config
+    * @param triedOAuthConfig          the component for the OAuth config
     * @return a ''Try'' with the configuration for a Dav server
     */
-  private def createDavConfig(uri: String, timeout: Timeout, structureType: StructureType, triedUser: Try[String],
-                              triedPassword: Try[String], triedOptModifiedProp: Try[Option[String]],
+  private def createDavConfig(uri: String, timeout: Timeout, structureType: StructureType,
+                              triedOptModifiedProp: Try[Option[String]],
                               triedOptModifiedNamespace: Try[Option[String]],
-                              triedDelBeforeOverride: Try[Boolean]): Try[DavConfig] = {
+                              triedDelBeforeOverride: Try[Boolean],
+                              triedBasicAuthConfig: Try[Option[BasicAuthConfig]],
+                              triedOAuthConfig: Try[Option[OAuthStorageConfig]]): Try[DavConfig] = {
     val triedUri = ParameterManager.paramTry(structureType.configPropertyName(PropDavUri))(Uri(uri))
-    ParameterManager.createRepresentation(triedUser, triedPassword, triedOptModifiedProp, triedOptModifiedNamespace,
-      triedDelBeforeOverride, triedUri) {
+    ParameterManager.createRepresentation(triedOptModifiedProp, triedOptModifiedNamespace,
+      triedDelBeforeOverride, triedUri, triedBasicAuthConfig, triedOAuthConfig) {
       DavConfig(triedUri.get, triedOptModifiedProp.get,
         triedOptModifiedNamespace.get, triedDelBeforeOverride.get, timeout,
-        optBasicAuthConfig = Some(BasicAuthConfig(triedUser.get, Secret(triedPassword.get))))
+        triedBasicAuthConfig.get, triedOAuthConfig.get)
     }
   }
+
+  /**
+    * Creates an ''OptionValue'' with a ''BasicAuthConfig'' based on the given
+    * components.
+    *
+    * @param triedUser     the user component
+    * @param triedPassword the password component
+    * @return the option value for the ''BasicAuthConfig''
+    */
+  private def createBasicAuthConfig(triedUser: Try[String], triedPassword: Try[String]):
+  OptionValue[BasicAuthConfig] =
+    ParameterManager.createRepresentation(triedUser, triedPassword) {
+      List(BasicAuthConfig(triedUser.get, Secret(triedPassword.get)))
+    }
 
 }
 

@@ -35,23 +35,35 @@ import scala.util.{Failure, Success, Try}
   */
 object OAuthParameterManager {
   /** Name of the option that defines the storage path for OAuth data. */
-  val StoragePathOption: String = ParameterManager.OptionPrefix + "storage-path"
+  val StoragePathOptionName = "storage-path"
+
+  /** The option that defines the storage path for OAuth data. */
+  val StoragePathOption: String = OptionPrefix + StoragePathOptionName
 
   /** Name of the option that defines the (base) name of an IDP. */
-  val NameOption: String = ParameterManager.OptionPrefix + "idp-name"
+  val NameOptionName = "idp-name"
+
+  /** The option that defines the (base) name of an IDP. */
+  val NameOption: String = OptionPrefix + NameOptionName
+
+  /** Name of the option that defines a password for the data of an IDP. */
+  val PasswordOptionName = "idp-password"
 
   /**
-    * Name of the option that defines a password for the data of an IDP. If a
+    * The option that defines a password for the data of an IDP. If a
     * password is provided, sensitive information is encrypted with it.
     */
-  val PasswordOption: String = ParameterManager.OptionPrefix + "idp-password"
+  val PasswordOption: String = OptionPrefix + PasswordOptionName
+
+  /** Name of the option that defines whether encryption is used. */
+  val EncryptOptionName = "encrypt-idp-data"
 
   /**
-    * Name of the boolean option that defines whether sensitive data of an IDP
-    * needs to be encrypted. If this is '''true''' (which is also the default),
-    * a password must be present (and is read from the console if necessary).
+    * The boolean option that defines whether sensitive data of an IDP needs
+    * to be encrypted. If this is '''true''' (which is also the default), a
+    * password must be present (and is read from the console if necessary).
     */
-  val EncryptOption: String = ParameterManager.OptionPrefix + "encrypt-idp-data"
+  val EncryptOption: String = OptionPrefix + EncryptOptionName
 
   /**
     * Name of the option that defines the authorization endpoint for an IDP.
@@ -161,16 +173,19 @@ object OAuthParameterManager {
     * Returns a ''CliProcessor'' for extracting an ''OAuthStorageConfig''
     * object. Whether a password is required or not is determined by the given
     * boolean parameter. If it is required, but not provided, it is read from
-    * the console.
+    * the console. As the storage configuration can be used in multiple
+    * contexts, a prefix for option names can be specified.
     *
     * @param needPassword flag whether a password is required
+    * @param prefix       a prefix that is added to all option names
     * @return the ''CliProcessor'' for the ''OAuthStorageConfig''
     */
-  def storageConfigProcessor(needPassword: Boolean): CliProcessor[Try[OAuthStorageConfig]] =
-    for {name <- mandatoryStringOption(NameOption)
-         path <- asMandatory(StoragePathOption, pathOptionValue(StoragePathOption))
-         pwd <- storagePasswordProcessor(needPassword)
-         crypt <- booleanOptionValue(EncryptOption)
+  def storageConfigProcessor(needPassword: Boolean, prefix: String = OptionPrefix):
+  CliProcessor[Try[OAuthStorageConfig]] =
+    for {name <- mandatoryStringOption(prefix + NameOptionName)
+         path <- asMandatory(prefix + StoragePathOptionName, pathOptionValue(prefix + StoragePathOptionName))
+         pwd <- storagePasswordProcessor(needPassword, prefix + EncryptOptionName, prefix + PasswordOptionName)
+         crypt <- booleanOptionValue(prefix + EncryptOptionName)
          } yield createStorageConfig(name, path, pwd, crypt)
 
   /**
@@ -219,13 +234,16 @@ object OAuthParameterManager {
     * the command line.
     *
     * @param needPassword flag whether a password is required
+    * @param encOption    the key to be used for the encrypt option
+    * @param pwdOption    the key to be used for the password option
     * @return the ''CliProcessor'' for the storage password
     */
-  private def storagePasswordProcessor(needPassword: Boolean): CliProcessor[SingleOptionValue[String]] = {
-    val condProc = asMandatory(EncryptOption, booleanOptionValue(EncryptOption, Some(needPassword)))
-    asSingleOptionValue(PasswordOption,
-      withFallback(optionValue(PasswordOption),
-        conditionalValue(condProc, consoleReaderValue(PasswordOption, password = true))))
+  private def storagePasswordProcessor(needPassword: Boolean, encOption: String, pwdOption: String):
+  CliProcessor[SingleOptionValue[String]] = {
+    val condProc = asMandatory(encOption, booleanOptionValue(encOption, Some(needPassword)))
+    asSingleOptionValue(pwdOption,
+      withFallback(optionValue(pwdOption),
+        conditionalValue(condProc, consoleReaderValue(pwdOption, password = true))))
   }
 
   /**
