@@ -607,4 +607,23 @@ class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
     next should be(nextNextParameters)
     res should be(ResultOptionValue)
   }
+
+  it should "provide a processor that checks whether an option is defined if the option has a value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.isDefinedProcessor(Key)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.accessedParameters should contain only Key
+    res should be(Success(true))
+  }
+
+  it should "provide a processor that checks whether an option is defined if the option has no value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val OtherKey = "undefinedOption"
+    val processor = ParameterManager.isDefinedProcessor(OtherKey)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.accessedParameters should contain only OtherKey
+    res should be(Success(false))
+  }
 }

@@ -365,6 +365,19 @@ object ParameterManager {
     }
 
   /**
+    * Returns a processor that yields a flag whether the command line option
+    * with the given key is defined. This is useful for instance to define
+    * a condition for the ''conditionalValue'' processor.
+    *
+    * @param key the key of the option in question
+    * @return a processor checking whether this option is defined
+    */
+  def isDefinedProcessor(key: String): CliProcessor[Try[Boolean]] =
+    optionValue(key) map { optionValue =>
+      optionValue map (_.nonEmpty)
+    }
+
+  /**
     * Returns a processor that extracts a single option value from the result
     * of the given processor. It is an error if the result contains multiple
     * values; however, an undefined value is accepted.
