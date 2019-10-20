@@ -35,23 +35,23 @@ import scala.util.{Failure, Success, Try}
   */
 object OAuthParameterManager {
   /** Name of the option that defines the storage path for OAuth data. */
-  val StoragePathOption: String = ParameterManager.OptionPrefix + "path"
+  val StoragePathOption: String = ParameterManager.OptionPrefix + "storage-path"
 
   /** Name of the option that defines the (base) name of an IDP. */
-  val NameOption: String = ParameterManager.OptionPrefix + "name"
+  val NameOption: String = ParameterManager.OptionPrefix + "idp-name"
 
   /**
     * Name of the option that defines a password for the data of an IDP. If a
     * password is provided, sensitive information is encrypted with it.
     */
-  val PasswordOption: String = ParameterManager.OptionPrefix + "password"
+  val PasswordOption: String = ParameterManager.OptionPrefix + "idp-password"
 
   /**
     * Name of the boolean option that defines whether sensitive data of an IDP
     * needs to be encrypted. If this is '''true''' (which is also the default),
     * a password must be present (and is read from the console if necessary).
     */
-  val EncryptOption: String = ParameterManager.OptionPrefix + "encrypt-data"
+  val EncryptOption: String = ParameterManager.OptionPrefix + "encrypt-idp-data"
 
   /**
     * Name of the option that defines the authorization endpoint for an IDP.
@@ -158,6 +158,22 @@ object OAuthParameterManager {
     Future.fromTry(tryProcessor(commandConfigProcessor(needPwdFunc), parameters))
 
   /**
+    * Returns a ''CliProcessor'' for extracting an ''OAuthStorageConfig''
+    * object. Whether a password is required or not is determined by the given
+    * boolean parameter. If it is required, but not provided, it is read from
+    * the console.
+    *
+    * @param needPassword flag whether a password is required
+    * @return the ''CliProcessor'' for the ''OAuthStorageConfig''
+    */
+  def storageConfigProcessor(needPassword: Boolean): CliProcessor[Try[OAuthStorageConfig]] =
+    for {name <- mandatoryStringOption(NameOption)
+         path <- asMandatory(StoragePathOption, pathOptionValue(StoragePathOption))
+         pwd <- storagePasswordProcessor(needPassword)
+         crypt <- booleanOptionValue(EncryptOption)
+         } yield createStorageConfig(name, path, pwd, crypt)
+
+  /**
     * Returns a ''CliProcessor'' to extract the data for an IDP from the
     * command line.
     *
@@ -195,22 +211,6 @@ object OAuthParameterManager {
     createRepresentation(triedCommand, triedStorageConfig) {
       CommandConfig(triedCommand.get, triedStorageConfig.get)
     }
-
-  /**
-    * Returns a ''CliProcessor'' for extracting an ''OAuthStorageConfig''
-    * object. Whether a password is required or not is determined by the given
-    * boolean parameter. If it is required, but not provided, it is read from
-    * the console.
-    *
-    * @param needPassword flag whether a password is required
-    * @return the ''CliProcessor'' for the ''OAuthStorageConfig''
-    */
-  private def storageConfigProcessor(needPassword: Boolean): CliProcessor[Try[OAuthStorageConfig]] =
-    for {name <- mandatoryStringOption(NameOption)
-         path <- asMandatory(StoragePathOption, pathOptionValue(StoragePathOption))
-         pwd <- storagePasswordProcessor(needPassword)
-         crypt <- booleanOptionValue(EncryptOption)
-         } yield createStorageConfig(name, path, pwd, crypt)
 
   /**
     * Returns a ''CliProcessor'' for extracting the password of the storage
