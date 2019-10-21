@@ -546,7 +546,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3.xml")
-    stubFor(authorized(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
+    stubFor(BasicAuthFunc(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
@@ -567,7 +567,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val ModifiedNamespace = "modified-urn:"
     createTestFile(srcFolder, FileName)
     stubFolderRequest(WebDavPath, "empty_folder.xml")
-    stubFor(authorized(put(urlPathEqualTo(WebDavPath + "/" + FileName)))
+    stubFor(BasicAuthFunc(put(urlPathEqualTo(WebDavPath + "/" + FileName)))
       .withRequestBody(equalTo(FileName))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
     stubFor(request("PROPPATCH", urlPathEqualTo(WebDavPath + "/" + FileName))
@@ -612,7 +612,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val timeout = 1.second
     stubFolderRequest(WebDavPath, "folder3.xml")
-    stubFor(authorized(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
+    stubFor(BasicAuthFunc(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue).withFixedDelay(2 * timeout.toMillis.toInt)
         .withBodyFile("response.txt")))
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
@@ -629,7 +629,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val timeout = 1.second
     stubFolderRequest(WebDavPath, "folder3.xml", optDelay = Some(timeout * 2))
-    stubFor(authorized(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
+    stubFor(BasicAuthFunc(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
@@ -791,7 +791,7 @@ class SyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Implici
     * @param responseFile the file to be returned
     */
   private def stubFileRequest(uri: String, responseFile: String): Unit = {
-    stubFor(authorized(get(urlPathEqualTo(uri))
+    stubFor(BasicAuthFunc(get(urlPathEqualTo(uri))
       .willReturn(aResponse()
         .withStatus(StatusCodes.OK.intValue)
         .withBodyFile(responseFile))))

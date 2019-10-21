@@ -57,6 +57,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
 
   import DavSourceFileProviderSpec._
   import system.dispatcher
+  import WireMockSupport.BasicAuthFunc
 
   /**
     * Returns a config for WebDav operations.
@@ -81,7 +82,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
   }
 
   "A DavSourceFileProvider" should "provide a source for a requested existing file" in {
-    stubFor(authorized(get(urlPathEqualTo(RootPath + "/my%20data/request.txt")))
+    stubFor(BasicAuthFunc(get(urlPathEqualTo(RootPath + "/my%20data/request.txt")))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
     val file = FsFile("/my data/request.txt", 2, Instant.now(), 42)
@@ -96,7 +97,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "return a failed future for a failed request" in {
     val elemUri = "/test"
-    stubFor(authorized(get(urlPathEqualTo(RootPath + elemUri)))
+    stubFor(BasicAuthFunc(get(urlPathEqualTo(RootPath + elemUri)))
       .willReturn(aResponse().withStatus(StatusCodes.InternalServerError.intValue)))
     val file = FsFile(elemUri, 0, Instant.now(), 5)
     val config = createConfig()
@@ -116,7 +117,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     stubFor(get(anyUrl()).atPriority(PriorityDefault)
       .willReturn(aResponse().withStatus(StatusCodes.NotFound.intValue)
         .withBody("The file you are looking for was not found!")))
-    stubFor(authorized(get(urlPathEqualTo(RootPath + fileUri)).atPriority(PrioritySpecific))
+    stubFor(BasicAuthFunc(get(urlPathEqualTo(RootPath + fileUri)).atPriority(PrioritySpecific))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
     val file = FsFile(fileUri, 1, Instant.now(), 100)

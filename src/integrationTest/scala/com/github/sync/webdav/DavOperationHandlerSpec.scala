@@ -102,6 +102,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
   }
 
   import DavOperationHandlerSpec._
+  import WireMockSupport.BasicAuthFunc
 
   /**
     * Creates the configuration object for the simulated WebDav server.
@@ -206,10 +207,10 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     val failedFolders = (1 to FailureCount) map (i => createFolder("/failed" + i))
     val operations = failedFolders.map(fld => SyncOperation(fld, ActionRemove, 1, null, orgUri(fld, DstSuffix)))
       .foldLeft(List(successOperation)) { (lst, op) => op :: lst }
-    stubFor(authorized(any(anyUrl()).atPriority(PriorityDefault))
+    stubFor(BasicAuthFunc(any(anyUrl()).atPriority(PriorityDefault))
       .willReturn(aResponse().withStatus(StatusCodes.BadRequest.intValue)
         .withBody("<status>failed</status>")))
-    stubFor(authorized(delete(elemUri(successFolder, DstSuffix, trailingSlash = true))
+    stubFor(BasicAuthFunc(delete(elemUri(successFolder, DstSuffix, trailingSlash = true))
       .atPriority(PrioritySpecific))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
 
@@ -219,7 +220,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
   it should "create a folder" in {
     val folder = createFolder("/new-folder")
     val operations = List(SyncOperation(folder, ActionCreate, 1, null, orgUri(folder, DstSuffix)))
-    stubFor(authorized(request("MKCOL", elemUri(folder, DstSuffix)))
+    stubFor(BasicAuthFunc(request("MKCOL", elemUri(folder, DstSuffix)))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
 
     runSync(operations) should contain theSameElementsAs operations
