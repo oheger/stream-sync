@@ -18,15 +18,17 @@ package com.github.sync.cli
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement}
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
+import com.github.sync.crypt.Secret
 import com.github.sync.webdav._
+import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenActor, OAuthTokenData, OAuthTokenRetrieverServiceImpl}
 
-object DavComponentsFactory {
+object DavHttpActorFactory {
   /** The name of the HTTP request actor for the source structure. */
   val RequestActorSourceName = "httpRequestActorSrc"
 
@@ -42,28 +44,68 @@ object DavComponentsFactory {
 }
 
 /**
-  * A base trait for factories that create components for accessing a WebDav
-  * server.
+  * A trait that knows how to create the HTTP request actor for Dav operations.
   *
-  * This trait defines common functionality that is used both by the source and
-  * destination factory.
+  * Depending on the authentication scheme used for the Dav server, the actor
+  * has to be created differently. This is abstracted via this trait.
   */
-trait DavComponentsFactory {
-
+sealed trait DavHttpActorFactory {
   /**
-    * Creates the actor for executing HTTP requests.
+    * Creates the actor for sending HTTP requests to the Dav server.
     *
-    * @param conf        the DAV configuration
+    * @param config      the DAV configuration
     * @param system      the actor system
     * @param clientCount the number of clients for the actor
-    * @param name        the name of the request actor
-    * @return the actor for HTTP requests
+    * @param name        the name of the actor
+    * @return the actor for sending HTTP requests
     */
-  protected def createHttpRequestActor(conf: DavConfig, system: ActorSystem, clientCount: Int, name: String)
-  : ActorRef = {
-    //TODO evaluate authentication mechanism
-    val httpActor = system.actorOf(HttpRequestActor(conf.rootUri), name)
-    system.actorOf(HttpBasicAuthActor(httpActor, conf.optBasicAuthConfig.get, clientCount), name + "_auth")
+  def createHttpRequestActor(config: DavConfig, system: ActorSystem, clientCount: Int, name: String): ActorRef = {
+    val httpActor = system.actorOf(HttpRequestActor(config.rootUri), name)
+    system.actorOf(authActorProps(config, system, clientCount, name, httpActor), name + "_auth")
+  }
+
+  /**
+    * Creates a ''Props'' object for creating the actor that wraps the request
+    * actor and handles authentication.
+    *
+    * @param config      the DAV configuration
+    * @param system      the actor system
+    * @param clientCount the number of clients for the actor
+    * @param name        the (base) name of the actor
+    * @param httpActor   the request actor to be wrapped
+    * @return ''Props'' for the authentication actor
+    */
+  protected def authActorProps(config: DavConfig, system: ActorSystem, clientCount: Int, name: String,
+                               httpActor: ActorRef): Props
+}
+
+/**
+  * A factory for HTTP request actors using Basic Auth for authentication.
+  */
+object BasicAuthHttpActorFactory extends DavHttpActorFactory {
+  override protected def authActorProps(config: DavConfig, system: ActorSystem, clientCount: Int, name: String,
+                                        httpActor: ActorRef): Props =
+    HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get, clientCount)
+}
+
+/**
+  * A factory for HTTP request actors using OAuth for authentication.
+  *
+  * @param storageConfig the storage configuration for the IDP
+  * @param oauthConfig   the OAuth configuration
+  * @param clientSecret  the client secret for the IDP
+  * @param initTokenData initial token material
+  */
+class OAuthHttpActorFactory(storageConfig: OAuthStorageConfig,
+                            oauthConfig: OAuthConfig,
+                            clientSecret: Secret,
+                            initTokenData: OAuthTokenData) extends DavHttpActorFactory {
+  override protected def authActorProps(config: DavConfig, system: ActorSystem, clientCount: Int, name: String,
+                                        httpActor: ActorRef): Props = {
+    val idpActor = system.actorOf(HttpRequestActor(oauthConfig.tokenEndpoint), name + "_idp")
+    //TODO set kill switch
+    OAuthTokenActor(httpActor, clientCount, idpActor, storageConfig, oauthConfig, clientSecret,
+      initTokenData, OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, null)
   }
 }
 
@@ -71,21 +113,24 @@ trait DavComponentsFactory {
   * A special factory implementation for source components if the source
   * structure is a WebDav server.
   *
-  * @param config the configuration of the WebDav server
-  * @param system the actor system
+  * @param config           the configuration of the WebDav server
+  * @param httpActorFactory the factory for creating the HTTP actor
+  * @param system           the actor system
+  * @param mat              the object to materialize streams
   */
-private class DavComponentsSourceFactory(val config: DavConfig)
+private class DavComponentsSourceFactory(val config: DavConfig, httpActorFactory: DavHttpActorFactory)
                                         (implicit system: ActorSystem, mat: ActorMaterializer)
-  extends SourceComponentsFactory with DavComponentsFactory {
+  extends SourceComponentsFactory {
 
-  import DavComponentsFactory._
+  import DavHttpActorFactory._
 
   /**
     * The actor serving HTTP requests. Note this must be lazy, so that it is
     * only created when this factory is actually accessed. Otherwise, it will
     * not be cleaned up correctly.
     */
-  private lazy val requestActor = createHttpRequestActor(config, system, clientCount = 0, RequestActorSourceName)
+  private lazy val requestActor =
+    httpActorFactory.createHttpRequestActor(config, system, clientCount = 0, RequestActorSourceName)
 
   override def createSource(sourceFactory: ElementSourceFactory): Source[FsElement, Any] = {
     DavFsElementSource(config, sourceFactory, useRequestActor())
@@ -113,13 +158,16 @@ private class DavComponentsSourceFactory(val config: DavConfig)
   * A special factory implementation for destination components if the
   * destination structure is a WebDav server.
   *
-  * @param config the configuration of the WebDav server
+  * @param config           the configuration of the WebDav server
+  * @param httpActorFactory the factory for creating the HTTP actor
+  * @param system           the actor system
+  * @param mat              the object to materialize streams
   */
-private class DavComponentsDestinationFactory(val config: DavConfig)
+private class DavComponentsDestinationFactory(val config: DavConfig, httpActorFactory: DavHttpActorFactory)
                                              (implicit system: ActorSystem, mat: ActorMaterializer)
-  extends DestinationComponentsFactory with DavComponentsFactory {
+  extends DestinationComponentsFactory {
 
-  import DavComponentsFactory._
+  import DavHttpActorFactory._
 
   /** A counter for generating names for the destination request actor. */
   private val httpRequestActorDestCount = new AtomicInteger
@@ -132,7 +180,7 @@ private class DavComponentsDestinationFactory(val config: DavConfig)
     createDavSource(sourceFactory, startFolderUri)
 
   override def createApplyStage(targetUri: String, fileProvider: SourceFileProvider): ApplyStageData = {
-    val requestActor = createHttpRequestActor(config, system, 1, RequestActorSyncName)
+    val requestActor = httpActorFactory.createHttpRequestActor(config, system, 1, RequestActorSyncName)
     val opFlow = DavOperationHandler.webDavProcessingFlow(config, fileProvider, requestActor)
     ApplyStageData(opFlow)
   }
@@ -148,7 +196,8 @@ private class DavComponentsDestinationFactory(val config: DavConfig)
     */
   private def createDavSource(sourceFactory: ElementSourceFactory, startFolderUri: String = ""):
   Source[FsElement, Any] = {
-    val requestActor = createHttpRequestActor(config, system, clientCount = 1, httpRequestActorDestName)
+    val requestActor = httpActorFactory.createHttpRequestActor(config, system, clientCount = 1,
+      httpRequestActorDestName)
     DavFsElementSource(config, sourceFactory, requestActor, startFolderUri)
   }
 

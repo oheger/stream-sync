@@ -31,6 +31,7 @@ import com.github.sync.cli.ParameterManager._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
 import com.github.sync.local.LocalFsConfig
+import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
 import com.github.sync.webdav.{BasicAuthConfig, DavConfig, OAuthStorageConfig}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -439,6 +440,31 @@ object SyncComponentsFactory {
       List(BasicAuthConfig(triedUser.get, Secret(triedPassword.get)))
     }
 
+  /**
+    * Creates the factory for creating HTTP actors for interacting with WebDav
+    * servers based on the given configuration. Depending on the authentication
+    * scheme configured, a different factory has to be used.
+    *
+    * @param davConfig      the WebDav configuration
+    * @param storageService the storage service to be used
+    * @param ec             the execution context
+    * @param mat            the object to materialize streams
+    * @return a ''Future'' with the factory for HTTP actors
+    */
+  private def createDavHttpActorFactory(davConfig: DavConfig,
+                                        storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+                                          Secret, OAuthTokenData])
+                                       (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[DavHttpActorFactory] =
+    davConfig.optOAuthConfig match {
+      case Some(storageConfig) =>
+        for {oauthConfig <- storageService.loadConfig(storageConfig)
+             secret <- storageService.loadClientSecret(storageConfig)
+             tokens <- storageService.loadTokens(storageConfig)
+             } yield new OAuthHttpActorFactory(storageConfig, oauthConfig, secret, tokens)
+      case None =>
+        Future.successful(BasicAuthHttpActorFactory)
+    }
 }
 
 /**
@@ -455,8 +481,16 @@ object SyncComponentsFactory {
   * structures. These parameters are extracted and removed from the
   * ''Parameters'' object. That way a verification of all input parameters is
   * possible.
+  *
+  * @param oauthStorageService the service for storing OAuth data
   */
-class SyncComponentsFactory {
+class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+  Secret, OAuthTokenData]) {
+  /**
+    * Creates a new instance of ''SyncComponentsFactory'' with default
+    * dependencies.
+    */
+  def this() = this(OAuthStorageServiceImpl)
 
   import SyncComponentsFactory._
 
@@ -480,8 +514,9 @@ class SyncComponentsFactory {
                                     ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(Parameters, SourceComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
-      extractDavConfig(davUri, timeout, parameters, SourceStructureType)
-        .map(t => (t._2, new DavComponentsSourceFactory(t._1)))
+      for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, SourceStructureType)
+           httpFactory <- createDavHttpActorFactory(config, oauthStorageService)
+           } yield (nextParams, new DavComponentsSourceFactory(config, httpFactory))
     case _ =>
       extractLocalFsConfig(uri, parameters, SourceStructureType)
         .map(t => (t._2, new LocalFsSourceComponentsFactory(t._1)))
@@ -507,8 +542,9 @@ class SyncComponentsFactory {
                                          ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(Parameters, DestinationComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
-      extractDavConfig(davUri, timeout, parameters, DestinationStructureType)
-        .map(t => (t._2, new DavComponentsDestinationFactory(t._1)))
+      for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, DestinationStructureType)
+           httpFactory <- createDavHttpActorFactory(config, oauthStorageService)
+           } yield (nextParams, new DavComponentsDestinationFactory(config, httpFactory))
     case _ =>
       extractLocalFsConfig(uri, parameters, DestinationStructureType)
         .map(t => (t._2, new LocalFsDestinationComponentsFactory(t._1, timeout)))

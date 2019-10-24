@@ -28,12 +28,16 @@ import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, SourceComponentsFactory, SourceStructureType}
 import com.github.sync.cli.oauth.OAuthParameterManager
+import com.github.sync.crypt.Secret
 import com.github.sync.local.LocalFsConfig
-import com.github.sync.webdav.DavConfig
+import com.github.sync.webdav.{DavConfig, OAuthStorageConfig}
+import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
 import org.mockito.Mockito._
+import org.mockito.Matchers.any
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.implicitConversions
 
@@ -122,6 +126,21 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       case davFactory: DavComponentsSourceFactory => davFactory.config
       case f => fail("Unexpected source factory: " + f)
     }
+
+  /**
+    * Creates a mock storage service that is prepared to expect some
+    * invocations of load methods.
+    *
+    * @return the initialized service mock
+    */
+  private def createMockOAuthStorageService():
+  OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData] = {
+    val service = mock[OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData]]
+    when(service.loadConfig(any())(any(), any())).thenReturn(Future.successful(mock[OAuthConfig]))
+    when(service.loadClientSecret(any())(any(), any())).thenReturn(Future.successful(mock[Secret]))
+    when(service.loadTokens(any())(any(), any())).thenReturn(Future.successful(mock[OAuthTokenData]))
+    service
+  }
 
   "SyncComponentsFactory" should "create a correct file system config for the source structure" in {
     val TimeZoneId = "UTC+02:00"
@@ -244,7 +263,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     )
     val expAccessedKeys = args.keySet +
       SourceStructureType.configPropertyName(OAuthParameterManager.EncryptOptionName)
-    val syncFactory = new SyncComponentsFactory
+    val syncFactory = new SyncComponentsFactory(createMockOAuthStorageService())
 
     val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
       TestTimeout, args))
@@ -267,7 +286,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       SourceStructureType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password,
       SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User
     )
-    val syncFactory = new SyncComponentsFactory
+    val syncFactory = new SyncComponentsFactory(createMockOAuthStorageService())
 
     val exception = expectFailedFuture[IllegalArgumentException] {
       for {
