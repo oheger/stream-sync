@@ -110,6 +110,17 @@ trait HttpExtensionActor {
   }
 
   /**
+    * Handles the final [[Release]] message to this actor. This implementation
+    * stops this actor and the underlying HTTP actor. It can be overridden if
+    * some further clean-up actions are required. (But then the super method
+    * should be called.)
+    */
+  protected def release(): Unit = {
+    httpActor ! PoisonPill
+    context stop self
+  }
+
+  /**
     * A receive function to be implemented by derived classes to handle
     * specific messages. Derived actors must place their message handling code
     * here. In the normal ''receive'' function the default message handling of
@@ -129,8 +140,7 @@ trait HttpExtensionActor {
     case Release =>
       releaseCount += 1
       if (releaseCount >= clientCount + additionalClientCount) {
-        httpActor ! PoisonPill
-        context stop self
+        release()
       }
 
     case RegisterClient =>

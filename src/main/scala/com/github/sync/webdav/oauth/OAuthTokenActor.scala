@@ -16,7 +16,7 @@
 
 package com.github.sync.webdav.oauth
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props, Status}
+import akka.actor.{Actor, ActorLogging, ActorRef, PoisonPill, Props, Status}
 import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
 import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.pattern.ask
@@ -173,6 +173,15 @@ class OAuthTokenActor(override val httpActor: ActorRef,
         pendingRequests = pendingRequest :: Nil
         refreshTokens()
       } else self.tell(pendingRequest.request, pendingRequest.caller)
+  }
+
+  /**
+    * @inheritdoc This implementation stops the actor used for interaction with
+    *             the IDP.
+    */
+  override protected def release(): Unit = {
+    idpHttpActor ! PoisonPill
+    super.release()
   }
 
   /**
