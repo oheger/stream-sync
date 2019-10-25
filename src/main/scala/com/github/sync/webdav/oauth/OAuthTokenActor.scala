@@ -80,17 +80,17 @@ object OAuthTokenActor {
     * @param initTokenData  the initial token pair
     * @param storageService the storage service for OAuth data
     * @param tokenService   the token retriever service
-    * @param killSwitch     an object to terminate the stream in case of a
-    *                       fatal error
+    * @param optKillSwitch  an optional object to terminate the stream in case
+    *                       of a fatal error
     * @return the ''Props'' for creating a new actor instance
     */
   def apply(httpActor: ActorRef, clientCount: Int, idpHttpActor: ActorRef, storageConfig: OAuthStorageConfig,
             oauthConfig: OAuthConfig, clientSecret: Secret, initTokenData: OAuthTokenData,
             storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData],
             tokenService: OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData],
-            killSwitch: KillSwitch): Props =
+            optKillSwitch: Option[KillSwitch]): Props =
     Props(classOf[OAuthTokenActor], httpActor, clientCount, idpHttpActor, storageConfig, oauthConfig,
-      clientSecret, initTokenData, storageService, tokenService, killSwitch)
+      clientSecret, initTokenData, storageService, tokenService, optKillSwitch)
 }
 
 /**
@@ -117,8 +117,8 @@ object OAuthTokenActor {
   * @param initTokenData  the initial token pair
   * @param storageService the storage service for OAuth data
   * @param tokenService   the token retriever service
-  * @param killSwitch     an object to terminate the stream in case of a
-  *                       fatal error
+  * @param optKillSwitch  an optional object to terminate the stream in case
+  *                       of a fatal error
   */
 class OAuthTokenActor(override val httpActor: ActorRef,
                       override val clientCount: Int,
@@ -130,7 +130,7 @@ class OAuthTokenActor(override val httpActor: ActorRef,
                       storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                         Secret, OAuthTokenData],
                       tokenService: OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData],
-                      killSwitch: KillSwitch)
+                      optKillSwitch: Option[KillSwitch])
   extends Actor with ActorLogging with HttpExtensionActor {
   /** Execution context in implicit scope. */
   private implicit val ec: ExecutionContext = context.dispatcher
@@ -205,13 +205,17 @@ class OAuthTokenActor(override val httpActor: ActorRef,
       pendingRequests = Nil
 
     case RefreshFailure(exception) =>
+      log.error(exception, "Could not refresh access token.")
       val respUnauthorized = HttpResponse(status = StatusCodes.Unauthorized)
       pendingRequests foreach { pr =>
         val respEx = RequestException("Could not refresh access token",
           FailedResponseException(respUnauthorized), pr.request)
         pr.caller ! Status.Failure(respEx)
       }
-      killSwitch abort exception
+      optKillSwitch foreach { ks =>
+        log.warning("Canceling current stream.")
+        ks abort exception
+      }
 
     case DoRefresh(pendingRequest, _) =>
       // a refresh is already in progress

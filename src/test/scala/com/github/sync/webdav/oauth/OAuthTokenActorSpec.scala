@@ -408,7 +408,7 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
       * @return this test helper
       */
     def verifyKillSwitchTriggered(expException: Throwable): TokenActorTestHelper = {
-      verify(killSwitch).abort(expException)
+      verify(killSwitch, timeout(100)).abort(expException)
       this
     }
 
@@ -419,7 +419,7 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
       */
     private def createTokenActor(): ActorRef =
       system.actorOf(OAuthTokenActor(targetHttpActor, 1, idpHttpActor, TestStorageConfig, TestConfig,
-        ClientSecret, TestTokens, storageService, tokenService, killSwitch))
+        ClientSecret, TestTokens, storageService, tokenService, Some(killSwitch)))
   }
 
 }
