@@ -29,7 +29,7 @@ import com.github.sync.WireMockSupport.{BasicAuthFunc, Password, TokenAuthFunc, 
 import com.github.sync.crypt.{DecryptOpHandler, Secret}
 import com.github.sync.util.UriEncodingHelper
 import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenData}
-import com.github.sync.webdav.{BasicAuthConfig, DavConfig, DavSourceFileProvider, OAuthStorageConfig}
+import com.github.sync.webdav.{BasicAuthConfig, DavConfig, DavSourceFileProvider, HttpRequestActor, OAuthStorageConfig}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
 
@@ -432,5 +432,30 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport {
       "--dst-password", Password, "--ignore-time-delta", Int.MaxValue.toString)
 
     futureResult(Sync.syncProcess(factory, options)).successfulOperations should be(1)
+  }
+
+  it should "cancel a sync operation if the access token cannot be refreshed" in {
+    val factory = new SyncComponentsFactory
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val WebDavPath = "/destination"
+    val FileCount = 8
+    (1 to FileCount) map (i => s"testDataFile$i.dat") foreach (name => createTestFile(srcFolder, name))
+    val ModifiedProperty = "Win32LastModifiedTime"
+    val ModifiedNamespace = "modified-urn:"
+    val storageConfig = prepareIdpConfig()
+    val authFunc = TokenAuthFunc(CurrentTokenData.accessToken)
+    stubFolderRequest(WebDavPath, "empty_folder.xml", status = StatusCodes.Unauthorized.intValue,
+      authFunc = authFunc)
+    stubFor(post(urlPathEqualTo(TokenEndpoint))
+      .willReturn(aResponse().withStatus(StatusCodes.BadRequest.intValue)))
+    stubFolderRequest(WebDavPath, "empty_folder.xml", authFunc = authFunc)
+    stubFor(authFunc(put(anyUrl()))
+      .willReturn(aResponse().withStatus(StatusCodes.Unauthorized.intValue)))
+    val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "--dst-modified-property", ModifiedProperty, "--dst-modified-namespace", ModifiedNamespace,
+      "--dst-storage-path", testDirectory.toAbsolutePath.toString, "--dst-idp-name", storageConfig.baseName,
+      "--dst-idp-password", storageConfig.optPassword.get.secret)
+
+    expectFailedFuture[HttpRequestActor.RequestException](Sync.syncProcess(factory, options))
   }
 }

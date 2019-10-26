@@ -19,7 +19,7 @@ package com.github.sync.cli
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.{ActorRef, ActorSystem, Props}
-import akka.stream.ActorMaterializer
+import akka.stream.{ActorMaterializer, KillSwitches, SharedKillSwitch}
 import akka.stream.scaladsl.Source
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement}
@@ -41,6 +41,9 @@ object DavHttpActorFactory {
 
   /** The name of the HTTP request actor for executing sync operations. */
   val RequestActorSyncName = "httpRequestActorSync"
+
+  /** The name of the kill switch to cancel the stream. */
+  val KillSwitchName = "httpFatalErrorKillSwitch"
 }
 
 /**
@@ -51,32 +54,43 @@ object DavHttpActorFactory {
   */
 sealed trait DavHttpActorFactory {
   /**
+    * A kill switch that can be used to cancel the current sync stream if a
+    * fatal error related to HTTP requests is detected.
+    */
+  lazy val killSwitch: SharedKillSwitch = KillSwitches.shared(DavHttpActorFactory.KillSwitchName)
+
+  /**
     * Creates the actor for sending HTTP requests to the Dav server.
     *
-    * @param config      the DAV configuration
-    * @param system      the actor system
-    * @param clientCount the number of clients for the actor
-    * @param name        the name of the actor
+    * @param config         the DAV configuration
+    * @param system         the actor system
+    * @param clientCount    the number of clients for the actor
+    * @param name           the name of the actor
+    * @param withKillSwitch flag whether the kill switch should be used by the
+    *                       resulting actor
     * @return the actor for sending HTTP requests
     */
-  def createHttpRequestActor(config: DavConfig, system: ActorSystem, clientCount: Int, name: String): ActorRef = {
+  def createHttpRequestActor(config: DavConfig, system: ActorSystem, clientCount: Int, name: String,
+                             withKillSwitch: Boolean = false): ActorRef = {
     val httpActor = system.actorOf(HttpRequestActor(config.rootUri), name)
-    system.actorOf(authActorProps(config, system, clientCount, name, httpActor), name + "_auth")
+    system.actorOf(authActorProps(config, system, clientCount, name, withKillSwitch, httpActor), name + "_auth")
   }
 
   /**
     * Creates a ''Props'' object for creating the actor that wraps the request
     * actor and handles authentication.
     *
-    * @param config      the DAV configuration
-    * @param system      the actor system
-    * @param clientCount the number of clients for the actor
-    * @param name        the (base) name of the actor
-    * @param httpActor   the request actor to be wrapped
+    * @param config         the DAV configuration
+    * @param system         the actor system
+    * @param clientCount    the number of clients for the actor
+    * @param name           the (base) name of the actor
+    * @param withKillSwitch flag whether the kill switch should be used by the
+    *                       resulting actor
+    * @param httpActor      the request actor to be wrapped
     * @return ''Props'' for the authentication actor
     */
   protected def authActorProps(config: DavConfig, system: ActorSystem, clientCount: Int, name: String,
-                               httpActor: ActorRef): Props
+                               withKillSwitch: Boolean, httpActor: ActorRef): Props
 }
 
 /**
@@ -84,7 +98,7 @@ sealed trait DavHttpActorFactory {
   */
 object BasicAuthHttpActorFactory extends DavHttpActorFactory {
   override protected def authActorProps(config: DavConfig, system: ActorSystem, clientCount: Int, name: String,
-                                        httpActor: ActorRef): Props =
+                                        withKillSwitch: Boolean, httpActor: ActorRef): Props =
     HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get, clientCount)
 }
 
@@ -101,11 +115,11 @@ class OAuthHttpActorFactory(storageConfig: OAuthStorageConfig,
                             clientSecret: Secret,
                             initTokenData: OAuthTokenData) extends DavHttpActorFactory {
   override protected def authActorProps(config: DavConfig, system: ActorSystem, clientCount: Int, name: String,
-                                        httpActor: ActorRef): Props = {
+                                        withKillSwitch: Boolean, httpActor: ActorRef): Props = {
     val idpActor = system.actorOf(HttpRequestActor(oauthConfig.tokenEndpoint), name + "_idp")
-    //TODO set kill switch
+    val optKillSwitch = if (withKillSwitch) Some(killSwitch) else None
     OAuthTokenActor(httpActor, clientCount, idpActor, storageConfig, oauthConfig, clientSecret,
-      initTokenData, OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, null)
+      initTokenData, OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, optKillSwitch)
   }
 }
 
@@ -180,8 +194,10 @@ private class DavComponentsDestinationFactory(val config: DavConfig, httpActorFa
     createDavSource(sourceFactory, startFolderUri)
 
   override def createApplyStage(targetUri: String, fileProvider: SourceFileProvider): ApplyStageData = {
-    val requestActor = httpActorFactory.createHttpRequestActor(config, system, 1, RequestActorSyncName)
+    val requestActor = httpActorFactory.createHttpRequestActor(config, system, 1, RequestActorSyncName,
+      withKillSwitch = true)
     val opFlow = DavOperationHandler.webDavProcessingFlow(config, fileProvider, requestActor)
+      .via(httpActorFactory.killSwitch.flow)
     ApplyStageData(opFlow)
   }
 
