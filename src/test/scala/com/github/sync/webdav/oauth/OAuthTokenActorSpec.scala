@@ -233,6 +233,20 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     checkAuthorization(result, RefreshedTokens.accessToken)
   }
 
+  it should "save refreshed token material" in {
+    val response1 = HttpResponse(status = StatusCodes.Unauthorized)
+    val response2 = HttpResponse(status = StatusCodes.Created)
+    val responses = List(StubResponse(failedResponse(response1)),
+      StubResponse(Success(response2)))
+    val helper = new TokenActorTestHelper
+
+    helper.initResponses(responses)
+      .expectTokenRequest(Future.successful(RefreshedTokens))
+      .sendTestRequest()
+    expectMsgType[HttpRequestActor.Result]
+    helper.verifyTokenSaved(RefreshedTokens)
+  }
+
   it should "hold incoming requests until the access token has been refreshed" in {
     val promise = Promise[OAuthTokenData]()
     val response1 = HttpResponse(status = StatusCodes.Unauthorized)
@@ -408,7 +422,20 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
       * @return this test helper
       */
     def verifyKillSwitchTriggered(expException: Throwable): TokenActorTestHelper = {
-      verify(killSwitch, timeout(100)).abort(expException)
+      verify(killSwitch, timeout(1000)).abort(expException)
+      this
+    }
+
+    /**
+      * Verifies that the storage service was invoked to store the given token
+      * material.
+      *
+      * @param tokenData the token expected to be stored
+      * @return this test helper
+      */
+    def verifyTokenSaved(tokenData: OAuthTokenData): TokenActorTestHelper = {
+      verify(storageService, timeout(1000))
+        .saveTokens(argEq(TestStorageConfig), argEq(tokenData))(any(), any())
       this
     }
 

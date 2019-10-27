@@ -198,6 +198,7 @@ class OAuthTokenActor(override val httpActor: ActorRef,
     case TokensRefreshed(tokenData) =>
       log.info("Got updated token data.")
       currentTokenData = tokenData
+      storageService.saveTokens(storageConfig, tokenData)
       become(customReceive)
       pendingRequests foreach { pr =>
         self.tell(pr.request, pr.caller)
