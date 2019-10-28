@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav
+package com.github.sync.http
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source, SourceQueueWithComplete}
 import akka.stream.{ActorMaterializer, OverflowStrategy, QueueOfferResult}
+import com.github.sync.webdav.createPoolClientFlow
 
 import scala.concurrent.{Future, Promise}
 import scala.util.{Failure, Success, Try}

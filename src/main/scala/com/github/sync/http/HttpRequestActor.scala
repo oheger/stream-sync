@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav
+package com.github.sync.http
 
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props, Status}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.stream.ActorMaterializer
-import com.github.sync.webdav.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
+import com.github.sync.http.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -141,7 +141,7 @@ class HttpRequestActor(uri: Uri, queueSize: Int) extends Actor with ActorLogging
     *
     * @return the request queue
     */
-  private[webdav] def createRequestQueue(): RequestQueue = {
+  private[http] def createRequestQueue(): RequestQueue = {
     implicit val actorSystem: ActorSystem = context.system
     new RequestQueue(uri, queueSize)
   }

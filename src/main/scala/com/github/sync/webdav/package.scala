@@ -22,6 +22,7 @@ import akka.http.scaladsl.{Http, HttpExt}
 import akka.pattern.ask
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
+import com.github.sync.http.HttpRequestActor
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try

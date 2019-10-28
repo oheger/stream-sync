@@ -22,6 +22,7 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import com.github.sync.SyncTypes.SyncOperation
+import com.github.sync.http.HttpRequestActor
 import com.github.sync.webdav.SyncOperationRequestActor.{SyncOperationExecutionData, SyncOperationRequestData}
 
 import scala.concurrent.{ExecutionContext, Future}

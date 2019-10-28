@@ -21,6 +21,7 @@ import akka.http.scaladsl.model.HttpRequest
 import akka.stream.scaladsl.Source
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SourceFileProvider
+import com.github.sync.http.HttpRequestActor
 
 import scala.concurrent.Future
 

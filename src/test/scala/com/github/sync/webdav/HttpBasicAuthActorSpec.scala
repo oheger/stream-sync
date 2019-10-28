@@ -21,6 +21,7 @@ import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import com.github.sync.crypt.Secret
+import com.github.sync.http.HttpRequestActor
 import com.github.sync.webdav.HttpExtensionActor.{RegisterClient, Release}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 

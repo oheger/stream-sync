@@ -18,8 +18,8 @@ package com.github.sync.webdav
 
 import akka.actor.{Actor, ActorRef, PoisonPill}
 import akka.http.scaladsl.model.HttpRequest
+import com.github.sync.http.HttpRequestActor.SendRequest
 import com.github.sync.webdav.HttpExtensionActor.{RegisterClient, Release}
-import com.github.sync.webdav.HttpRequestActor.SendRequest
 
 object HttpExtensionActor {
 

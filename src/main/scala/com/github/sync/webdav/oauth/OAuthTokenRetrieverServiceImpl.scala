@@ -27,7 +27,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.{ByteString, Timeout}
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.HttpRequestActor
+import com.github.sync.http.HttpRequestActor
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._

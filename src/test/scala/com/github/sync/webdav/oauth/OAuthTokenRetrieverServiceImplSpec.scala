@@ -29,7 +29,7 @@ import akka.testkit.TestKit
 import akka.util.ByteString
 import com.github.sync.AsyncTestHelper
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.HttpRequestActor
+import com.github.sync.http.HttpRequestActor
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.{ExecutionContext, Future}

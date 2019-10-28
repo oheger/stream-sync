@@ -28,6 +28,7 @@ import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes.FsFile
 import com.github.sync.WireMockSupport._
 import com.github.sync.crypt.Secret
+import com.github.sync.http.HttpRequestActor
 import com.github.sync.{AsyncTestHelper, FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}

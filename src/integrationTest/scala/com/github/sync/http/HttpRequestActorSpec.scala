@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav
+package com.github.sync.http
 
 import akka.actor.{ActorSystem, Props, Terminated}
 import akka.http.scaladsl.model.{HttpRequest, StatusCodes}
@@ -23,7 +23,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
-import com.github.sync.webdav.HttpRequestActor.SendRequest
+import com.github.sync.http.HttpRequestActor.SendRequest
 import com.github.sync.{AsyncTestHelper, FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.Fault
@@ -127,7 +127,7 @@ class HttpRequestActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
   it should "shutdown the request queue when it is stopped" in {
     val queue = mock[RequestQueue]
     val actor = system.actorOf(Props(new HttpRequestActor(serverUri(""), 2) {
-      override private[webdav] def createRequestQueue(): RequestQueue = queue
+      override private[http] def createRequestQueue(): RequestQueue = queue
     }))
 
     system stop actor
