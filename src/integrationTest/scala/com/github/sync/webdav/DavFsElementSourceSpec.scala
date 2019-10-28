@@ -30,7 +30,7 @@ import akka.util.Timeout
 import com.github.sync.SyncTypes._
 import com.github.sync._
 import com.github.sync.crypt.Secret
-import com.github.sync.http.HttpRequestActor
+import com.github.sync.http.{HttpBasicAuthActor, HttpExtensionActor, HttpRequestActor}
 import com.github.sync.impl.ElementSource
 import com.github.sync.util.UriEncodingHelper
 import com.github.tomakehurst.wiremock.client.WireMock._

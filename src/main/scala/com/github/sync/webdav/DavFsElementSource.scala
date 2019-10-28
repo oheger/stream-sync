@@ -29,7 +29,7 @@ import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes._
-import com.github.sync.http.HttpRequestActor
+import com.github.sync.http.{HttpExtensionActor, HttpRequestActor}
 import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec

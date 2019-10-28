@@ -25,7 +25,7 @@ import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement}
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.crypt.Secret
-import com.github.sync.http.HttpRequestActor
+import com.github.sync.http.{HttpBasicAuthActor, HttpExtensionActor, HttpRequestActor}
 import com.github.sync.webdav._
 import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenActor, OAuthTokenData, OAuthTokenRetrieverServiceImpl}
 

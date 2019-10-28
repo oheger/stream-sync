@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav
+package com.github.sync.http
 
 import akka.actor.{Actor, ActorRef, PoisonPill}
 import akka.http.scaladsl.model.HttpRequest
+import com.github.sync.http.HttpExtensionActor.{RegisterClient, Release}
 import com.github.sync.http.HttpRequestActor.SendRequest
-import com.github.sync.webdav.HttpExtensionActor.{RegisterClient, Release}
 
 object HttpExtensionActor {
 
