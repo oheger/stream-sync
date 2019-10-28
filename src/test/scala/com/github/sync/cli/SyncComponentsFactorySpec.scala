@@ -31,7 +31,7 @@ import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.webdav.{DavConfig, OAuthStorageConfig}
-import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
+import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
 import org.mockito.Mockito._
 import org.mockito.Matchers.any
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}

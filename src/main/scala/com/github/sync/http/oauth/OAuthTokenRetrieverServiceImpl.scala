@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav.oauth
+package com.github.sync.http.oauth
 
 import java.io.IOException
 import java.util.regex.Pattern

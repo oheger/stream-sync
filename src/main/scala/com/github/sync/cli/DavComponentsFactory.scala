@@ -27,7 +27,7 @@ import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationCom
 import com.github.sync.crypt.Secret
 import com.github.sync.http.{HttpBasicAuthActor, HttpExtensionActor, HttpRequestActor}
 import com.github.sync.webdav._
-import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenActor, OAuthTokenData, OAuthTokenRetrieverServiceImpl}
+import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenActor, OAuthTokenData, OAuthTokenRetrieverServiceImpl}
 
 object DavHttpActorFactory {
   /** The name of the HTTP request actor for the source structure. */

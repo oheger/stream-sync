@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav.oauth
+package com.github.sync.http.oauth
 
 import akka.actor.{Actor, ActorLogging, ActorRef, PoisonPill, Props, Status}
 import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
@@ -26,7 +26,7 @@ import com.github.sync.crypt.Secret
 import com.github.sync.http.HttpExtensionActor
 import com.github.sync.http.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
 import com.github.sync.webdav.OAuthStorageConfig
-import com.github.sync.webdav.oauth.OAuthTokenActor.{DoRefresh, PendingRequestData, RefreshFailure, TokensRefreshed}
+import com.github.sync.http.oauth.OAuthTokenActor.{DoRefresh, PendingRequestData, RefreshFailure, TokensRefreshed}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._

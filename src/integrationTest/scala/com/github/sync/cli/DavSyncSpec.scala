@@ -29,7 +29,7 @@ import com.github.sync.WireMockSupport.{BasicAuthFunc, Password, TokenAuthFunc, 
 import com.github.sync.crypt.{DecryptOpHandler, Secret}
 import com.github.sync.http.HttpRequestActor
 import com.github.sync.util.UriEncodingHelper
-import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenData}
+import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenData}
 import com.github.sync.webdav.{BasicAuthConfig, DavConfig, DavSourceFileProvider, OAuthStorageConfig}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod

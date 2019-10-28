@@ -31,7 +31,7 @@ import com.github.sync.cli.ParameterManager._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
 import com.github.sync.local.LocalFsConfig
-import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
+import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
 import com.github.sync.webdav.{BasicAuthConfig, DavConfig, OAuthStorageConfig}
 
 import scala.concurrent.{ExecutionContext, Future}

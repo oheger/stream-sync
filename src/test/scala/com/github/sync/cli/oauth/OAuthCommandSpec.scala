@@ -23,7 +23,7 @@ import com.github.sync.cli.ConsoleReader
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import com.github.sync.crypt.Secret
 import com.github.sync.webdav.OAuthStorageConfig
-import com.github.sync.webdav.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
+import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav.oauth
+package com.github.sync.http.oauth
 
 /**
   * A data class collecting the properties required for an OAuth client

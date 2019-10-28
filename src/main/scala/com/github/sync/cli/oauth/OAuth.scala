@@ -20,7 +20,7 @@ import java.util.Locale
 
 import com.github.sync.cli.oauth.OAuthParameterManager.CommandConfig
 import com.github.sync.cli.{ActorSystemLifeCycle, ConsoleReader, DefaultConsoleReader, ParameterManager}
-import com.github.sync.webdav.oauth.OAuthStorageServiceImpl
+import com.github.sync.http.oauth.OAuthStorageServiceImpl
 
 import scala.concurrent.Future
 
