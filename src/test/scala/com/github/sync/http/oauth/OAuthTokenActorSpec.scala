@@ -248,6 +248,18 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     helper.verifyTokenSaved(RefreshedTokens)
   }
 
+  /**
+    * Checks that result messages are received from the test actor (in
+    * arbitrary order) that refer to the given HTTP responses.
+    *
+    * @param expResponses the expected responses
+    */
+  private def expectResponses(expResponses: HttpResponse*): Unit = {
+    val results = (1 to expResponses.size) map (_ => expectMsgType[HttpRequestActor.Result])
+    results.map(_.response) should contain only (expResponses: _*)
+    results foreach (checkAuthorization(_, RefreshedTokens.accessToken))
+  }
+
   it should "hold incoming requests until the access token has been refreshed" in {
     val promise = Promise[OAuthTokenData]()
     val response1 = HttpResponse(status = StatusCodes.Unauthorized)
@@ -263,12 +275,7 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     expectNoMessage(100.millis)
     helper.sendTestRequest()
     promise.complete(Success(RefreshedTokens))
-    val result1 = expectMsgType[HttpRequestActor.Result]
-    val result2 = expectMsgType[HttpRequestActor.Result]
-    result1.response should be(response2)
-    result2.response should be(response3)
-    checkAuthorization(result1, RefreshedTokens.accessToken)
-    checkAuthorization(result2, RefreshedTokens.accessToken)
+    expectResponses(response2, response3)
     helper.verifyTokenRefreshed()
   }
 
@@ -289,12 +296,7 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
       .sendTestRequest()
     expectNoMessage(100.millis)
     promise.complete(Success(RefreshedTokens))
-    val result1 = expectMsgType[HttpRequestActor.Result]
-    val result2 = expectMsgType[HttpRequestActor.Result]
-    result1.response should be(response3)
-    result2.response should be(response4)
-    checkAuthorization(result1, RefreshedTokens.accessToken)
-    checkAuthorization(result2, RefreshedTokens.accessToken)
+    expectResponses(response3, response4)
     helper.verifyTokenRefreshed()
   }
 
@@ -312,12 +314,7 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
       .expectTokenRequest(Future.successful(RefreshedTokens))
       .sendTestRequest()
       .sendTestRequest()
-    val result1 = expectMsgType[HttpRequestActor.Result]
-    val result2 = expectMsgType[HttpRequestActor.Result]
-    result1.response should be(response3)
-    result2.response should be(response4)
-    checkAuthorization(result1, RefreshedTokens.accessToken)
-    checkAuthorization(result2, RefreshedTokens.accessToken)
+    expectResponses(response3, response4)
     helper.verifyTokenRefreshed()
   }
 
