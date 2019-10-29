@@ -16,9 +16,11 @@
 
 package com.github.sync.http
 
-import akka.actor.{Actor, ActorLogging, ActorSystem, Props, Status}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Status}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
+import akka.pattern.ask
 import akka.stream.ActorMaterializer
+import akka.util.Timeout
 import com.github.sync.http.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -76,6 +78,29 @@ object HttpRequestActor {
     */
   def apply(uri: Uri, queueSize: Int = DefaultQueueSize): Props =
     Props(classOf[HttpRequestActor], uri, queueSize)
+
+  /**
+    * Sends a request to an HTTP actor and allows processing of the result.
+    * This function passes the given request to the actor and expects the
+    * future with the result. The future is then mapped with the specified
+    * mapping function to come to the final result. Note that error handling is
+    * already done by the actor, including an evaluation of the HTTP response
+    * status.
+    *
+    * @param httpActor the actor to execute the request
+    * @param request   the request to be executed
+    * @param f         the processing function
+    * @param ec        the execution context
+    * @param timeout   a timeout
+    * @tparam T the type of the result of the processing function
+    * @return a ''Future'' with the processing result
+    */
+  def sendAndProcess[T](httpActor: ActorRef, request: HttpRequestActor.SendRequest)
+                       (f: HttpRequestActor.Result => T)
+                       (implicit ec: ExecutionContext, timeout: Timeout): Future[T] =
+    (httpActor ? request)
+      .mapTo[HttpRequestActor.Result]
+      .map(f)
 }
 
 /**

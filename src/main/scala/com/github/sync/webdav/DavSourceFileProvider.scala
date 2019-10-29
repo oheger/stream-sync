@@ -67,7 +67,7 @@ class DavSourceFileProvider(config: DavConfig, httpActor: ActorRef)
     *             successful.
     */
   override def fileSource(uri: String): Future[Source[ByteString, Any]] =
-    sendAndProcess(httpActor, createFileRequest(uri))(_.response.entity.dataBytes)
+    HttpRequestActor.sendAndProcess(httpActor, createFileRequest(uri))(_.response.entity.dataBytes)
 
   /**
     * @inheritdoc This implementation frees the resources used for HTTP

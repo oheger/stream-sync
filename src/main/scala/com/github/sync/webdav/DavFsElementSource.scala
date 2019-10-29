@@ -237,7 +237,7 @@ object DavFsElementSource {
                         (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[List[ElemData]] = {
     implicit val timeout: Timeout = state.config.timeout
     val request = createFolderRequest(state, folderData)
-    sendAndProcess(state.requestActor, request)(parseFolderResponse(state, folderData.folder)).flatten
+    HttpRequestActor.sendAndProcess(state.requestActor, request)(parseFolderResponse(state, folderData.folder)).flatten
   }
 
   /**
