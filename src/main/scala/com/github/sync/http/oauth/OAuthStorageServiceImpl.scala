@@ -23,7 +23,7 @@ import akka.stream.{ActorMaterializer, IOResult}
 import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.util.ByteString
 import com.github.sync.crypt.{CryptOpHandler, CryptStage, DecryptOpHandler, EncryptOpHandler, Secret}
-import com.github.sync.webdav.OAuthStorageConfig
+import com.github.sync.http.OAuthStorageConfig
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.xml.{Elem, XML}

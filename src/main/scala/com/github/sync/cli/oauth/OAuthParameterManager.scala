@@ -21,7 +21,7 @@ import java.nio.file.Path
 import com.github.sync.cli.ParameterManager._
 import com.github.sync.cli.{ConsoleReader, ParameterManager}
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.OAuthStorageConfig
+import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.OAuthConfig
 
 import scala.concurrent.{ExecutionContext, Future}

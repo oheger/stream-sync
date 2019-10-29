@@ -23,9 +23,8 @@ import akka.pattern.ask
 import akka.stream.{ActorMaterializer, KillSwitch}
 import akka.util.Timeout
 import com.github.sync.crypt.Secret
-import com.github.sync.http.HttpExtensionActor
+import com.github.sync.http.{HttpExtensionActor, OAuthStorageConfig}
 import com.github.sync.http.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
-import com.github.sync.webdav.OAuthStorageConfig
 import com.github.sync.http.oauth.OAuthTokenActor.{DoRefresh, PendingRequestData, RefreshFailure, TokensRefreshed}
 
 import scala.concurrent.ExecutionContext

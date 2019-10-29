@@ -19,7 +19,6 @@ package com.github.sync.http
 import akka.actor.{Actor, ActorRef, Props}
 import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import com.github.sync.http.HttpRequestActor.SendRequest
-import com.github.sync.webdav.BasicAuthConfig
 
 object HttpBasicAuthActor {
   /**

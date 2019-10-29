@@ -19,18 +19,18 @@ package com.github.sync.cli
 import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
 import akka.http.scaladsl.model.headers.`Content-Type`
+import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
 import akka.pattern.AskTimeoutException
 import akka.testkit.TestProbe
 import akka.util.{ByteString, Timeout}
-import com.github.sync.{FileTestHelper, WireMockSupport}
 import com.github.sync.WireMockSupport.{BasicAuthFunc, Password, TokenAuthFunc, UserId}
 import com.github.sync.crypt.{DecryptOpHandler, Secret}
-import com.github.sync.http.HttpRequestActor
-import com.github.sync.util.UriEncodingHelper
+import com.github.sync.http.{BasicAuthConfig, HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenData}
-import com.github.sync.webdav.{BasicAuthConfig, DavConfig, DavSourceFileProvider, OAuthStorageConfig}
+import com.github.sync.util.UriEncodingHelper
+import com.github.sync.webdav.{DavConfig, DavSourceFileProvider}
+import com.github.sync.{FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
 
@@ -59,8 +59,8 @@ object DavSyncSpec {
   */
 class DavSyncSpec extends BaseSyncSpec with WireMockSupport {
 
-  import system.dispatcher
   import DavSyncSpec._
+  import system.dispatcher
 
   /**
     * Stubs a GET request to access a file from a DAV server.

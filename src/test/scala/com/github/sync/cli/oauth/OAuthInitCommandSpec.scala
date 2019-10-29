@@ -26,7 +26,7 @@ import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ConsoleReader
 import com.github.sync.cli.ParameterManager.ParametersMap
 import com.github.sync.crypt.Secret
-import com.github.sync.webdav.OAuthStorageConfig
+import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito._

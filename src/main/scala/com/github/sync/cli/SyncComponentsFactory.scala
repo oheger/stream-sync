@@ -30,9 +30,10 @@ import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation
 import com.github.sync.cli.ParameterManager._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
-import com.github.sync.local.LocalFsConfig
+import com.github.sync.http.{BasicAuthConfig, OAuthStorageConfig}
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
-import com.github.sync.webdav.{BasicAuthConfig, DavConfig, OAuthStorageConfig}
+import com.github.sync.local.LocalFsConfig
+import com.github.sync.webdav.DavConfig
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try

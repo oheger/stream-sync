@@ -30,7 +30,7 @@ import com.github.sync.SyncTypes._
 import com.github.sync.WireMockSupport.{Password, PriorityDefault, PrioritySpecific, UserId}
 import com.github.sync._
 import com.github.sync.crypt.Secret
-import com.github.sync.http.{HttpBasicAuthActor, HttpRequestActor}
+import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpRequestActor}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.matching.UrlPathPattern
 import org.mockito.Mockito

@@ -25,15 +25,15 @@ import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse, StatusC
 import akka.stream.KillSwitch
 import akka.testkit.{ImplicitSender, TestKit}
 import com.github.sync.crypt.Secret
-import com.github.sync.http.HttpRequestActor
-import com.github.sync.webdav.{DepthHeader, OAuthStorageConfig}
-import org.mockito.Mockito._
+import com.github.sync.http.{HttpRequestActor, OAuthStorageConfig}
+import com.github.sync.webdav.DepthHeader
 import org.mockito.Matchers.{any, eq => argEq}
+import org.mockito.Mockito._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success, Try}
 
 object OAuthTokenActorSpec {
