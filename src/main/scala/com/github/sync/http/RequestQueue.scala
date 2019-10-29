@@ -17,14 +17,64 @@
 package com.github.sync.http
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.Http
+import akka.http.scaladsl.{Http, HttpExt}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source, SourceQueueWithComplete}
 import akka.stream.{ActorMaterializer, OverflowStrategy, QueueOfferResult}
-import com.github.sync.webdav.createPoolClientFlow
 
 import scala.concurrent.{Future, Promise}
 import scala.util.{Failure, Success, Try}
+
+private object RequestQueue {
+  /** The HTTPS scheme. */
+  private val SchemeHttps = "https"
+
+  /** Default port for HTTPS requests. */
+  private val PortHttps = 443
+
+  /** Default port for plain HTTP requests. */
+  private val PortHttp = 80
+
+  /**
+    * Extracts the port from the specified URI. If a port is explicitly
+    * provided, it is used. Otherwise the default port for the scheme is used.
+    *
+    * @param uri the URI
+    * @return the port of this URI
+    */
+  def extractPort(uri: Uri): Int = {
+    val port = uri.authority.port
+    if (port != 0) port
+    else extractPortFromScheme(uri)
+  }
+
+  /**
+    * Creates a flow to execute HTTP requests to the host identified by the
+    * given URI. From the URI host and port are extracted. Whether the flow is
+    * for sending HTTP or HTTPS requests is determined from the URI's scheme.
+    *
+    * @param uri the URI
+    * @tparam T the type of objects passed to the flow
+    * @return the flow for sending HTTP requests to this URI
+    */
+  def createPoolClientFlow[T](uri: Uri, ext: HttpExt): Flow[(HttpRequest, T),
+    (Try[HttpResponse], T), Http.HostConnectionPool] = {
+    val host = uri.authority.host.toString()
+    val port = extractPort(uri)
+    if (SchemeHttps == uri.scheme)
+      ext.cachedHostConnectionPoolHttps(host, port)
+    else ext.cachedHostConnectionPool(host, port)
+  }
+
+  /**
+    * Determines the port to be used for an URI based on its scheme.
+    *
+    * @param uri the URI
+    * @return the port to be used for this URI
+    */
+  private def extractPortFromScheme(uri: Uri): Int =
+    if (SchemeHttps == uri.scheme) PortHttps else PortHttp
+}
 
 /**
   * A helper class to manage a flow for sending requests to the WebDav server.
@@ -38,6 +88,9 @@ import scala.util.{Failure, Success, Try}
   * @param mat       the object to materialize streams
   */
 private class RequestQueue(uri: Uri, queueSize: Int = 2)(implicit system: ActorSystem, mat: ActorMaterializer) {
+
+  import RequestQueue._
+
   /** The flow for generating HTTP requests. */
   val poolClientFlow: Flow[(HttpRequest, Promise[HttpResponse]),
     (Try[HttpResponse], Promise[HttpResponse]), Http.HostConnectionPool] =

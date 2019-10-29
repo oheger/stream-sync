@@ -14,54 +14,55 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav
+package com.github.sync.http
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.http.scaladsl.{Http, HttpExt}
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.stream.scaladsl.Flow
 import akka.testkit.TestKit
-import org.mockito.Mockito._
+import org.mockito.Mockito.when
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.util.Try
 
-object packageSpec {
+object RequestQueueSpec {
   /** A host name to be used by tests. */
   private val Host = "localhost"
 }
 
 /**
-  * Test class for the package object of the webdav package.
+  * Test class for ''RequestQueue'' (mainly the companion object).
   */
-class packageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with
+class RequestQueueSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with
   BeforeAndAfterAll with Matchers with MockitoSugar {
-  def this() = this(ActorSystem("packageSpec"))
+
+  def this() = this(ActorSystem("RequestQueueSpec"))
 
   override protected def afterAll(): Unit = {
     TestKit shutdownActorSystem system
   }
 
-  import packageSpec._
+  import RequestQueueSpec._
 
-  "The package object" should "extract the port of an HTTPS URI" in {
+  "The RequestQueue object" should "extract the port of an HTTPS URI" in {
     val uri = Uri("https://secure.webdav.org")
 
-    extractPort(uri) should be(443)
+    RequestQueue.extractPort(uri) should be(443)
   }
 
   it should "extract the port of an HTTP URI" in {
     val uri = Uri("http://simple.webdav.org")
 
-    extractPort(uri) should be(80)
+    RequestQueue.extractPort(uri) should be(80)
   }
 
   it should "extract the port from an URI if it is provided" in {
     val port = 8080
     val uri = Uri(s"https://special.webdav.org:$port/test")
 
-    extractPort(uri) should be(port)
+    RequestQueue.extractPort(uri) should be(port)
   }
 
   /**
@@ -82,7 +83,7 @@ class packageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Flat
       path = Uri.Path("/somePath"))
     when(httpExt.cachedHostConnectionPool[Any](Host, 80)).thenReturn(flow)
 
-    createPoolClientFlow(uri, httpExt) should be(flow)
+    RequestQueue.createPoolClientFlow(uri, httpExt) should be(flow)
   }
 
   it should "create an HTTPS request flow to a host" in {
@@ -92,7 +93,7 @@ class packageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Flat
       path = Uri.Path("/securePath"))
     when(httpExt.cachedHostConnectionPoolHttps[Any](Host, 443)).thenReturn(flow)
 
-    createPoolClientFlow(uri, httpExt) should be(flow)
+    RequestQueue.createPoolClientFlow(uri, httpExt) should be(flow)
   }
 
   it should "create an HTTP request flow with a non-standard port to a host" in {
@@ -102,6 +103,6 @@ class packageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Flat
     val uri = Uri(authority = Uri.Authority(Uri.Host(Host), port = Port), scheme = "http")
     when(httpExt.cachedHostConnectionPool[Any](Host, Port)).thenReturn(flow)
 
-    createPoolClientFlow(uri, httpExt) should be(flow)
+    RequestQueue.createPoolClientFlow(uri, httpExt) should be(flow)
   }
 }

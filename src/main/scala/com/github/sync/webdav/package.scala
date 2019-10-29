@@ -17,60 +17,16 @@
 package com.github.sync
 
 import akka.actor.ActorRef
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
-import akka.http.scaladsl.{Http, HttpExt}
 import akka.pattern.ask
-import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.github.sync.http.HttpRequestActor
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
 
 /**
   * Object with some common functionality for the ''webdav'' package.
   */
 package object webdav {
-  /** The HTTPS scheme. */
-  private val SchemeHttps = "https"
-
-  /** Default port for HTTPS requests. */
-  private val PortHttps = 443
-
-  /** Default port for plain HTTP requests. */
-  private val PortHttp = 80
-
-  /**
-    * Extracts the port from the specified URI. If a port is explicitly
-    * provided, it is used. Otherwise the default port for the scheme is used.
-    *
-    * @param uri the URI
-    * @return the port of this URI
-    */
-  def extractPort(uri: Uri): Int = {
-    val port = uri.authority.port
-    if (port != 0) port
-    else extractPortFromScheme(uri)
-  }
-
-  /**
-    * Creates a flow to execute HTTP requests to the host identified by the
-    * given URI. From the URI host and port are extracted. Whether the flow is
-    * for sending HTTP or HTTPS requests is determined from the URI's scheme.
-    *
-    * @param uri the URI
-    * @tparam T the type of objects passed to the flow
-    * @return the flow for sending HTTP requests to this URI
-    */
-  def createPoolClientFlow[T](uri: Uri, ext: HttpExt): Flow[(HttpRequest, T),
-    (Try[HttpResponse], T), Http.HostConnectionPool] = {
-    val host = uri.authority.host.toString()
-    val port = extractPort(uri)
-    if (SchemeHttps == uri.scheme)
-      ext.cachedHostConnectionPoolHttps(host, port)
-    else ext.cachedHostConnectionPool(host, port)
-  }
-
   /**
     * Sends a request to an HTTP actor and allows processing of the result.
     * This function passes the given request to the actor and expects the
@@ -93,13 +49,4 @@ package object webdav {
     (httpActor ? request)
       .mapTo[HttpRequestActor.Result]
       .map(f)
-
-  /**
-    * Determines the port to be used for an URI based on its scheme.
-    *
-    * @param uri the URI
-    * @return the port to be used for this URI
-    */
-  private def extractPortFromScheme(uri: Uri): Int =
-    if (SchemeHttps == uri.scheme) PortHttps else PortHttp
 }
