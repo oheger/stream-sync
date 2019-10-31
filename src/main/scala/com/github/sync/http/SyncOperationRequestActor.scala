@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav
+package com.github.sync.http
 
 import akka.actor.{Actor, ActorRef, Props}
 import akka.http.scaladsl.model.HttpRequest
@@ -22,8 +22,7 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import com.github.sync.SyncTypes.SyncOperation
-import com.github.sync.http.{HttpExtensionActor, HttpRequestActor}
-import com.github.sync.webdav.SyncOperationRequestActor.{SyncOperationExecutionData, SyncOperationRequestData}
+import com.github.sync.http.SyncOperationRequestActor.{SyncOperationExecutionData, SyncOperationRequestData}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -109,7 +108,7 @@ object SyncOperationRequestActor {
 /**
   * An actor class for executing the requests of a single sync operation.
   *
-  * This actor is used by the operation handler for a WebDav target. It is sent
+  * This actor is used by the operation handler for an HTTP target. It is sent
   * messages that contain multiple requests that need to be executed to
   * complete a single sync operation. These requests are executed against the
   * request actor passed to the constructor. If all of them are successful, the

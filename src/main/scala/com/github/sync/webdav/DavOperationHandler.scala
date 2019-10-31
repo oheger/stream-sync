@@ -25,8 +25,9 @@ import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.github.sync.SyncTypes._
 import com.github.sync._
+import com.github.sync.http.SyncOperationRequestActor
+import com.github.sync.http.SyncOperationRequestActor.{SyncOperationRequestData, SyncOperationResult}
 import com.github.sync.impl.CleanupStage
-import com.github.sync.webdav.SyncOperationRequestActor.{SyncOperationRequestData, SyncOperationResult}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
