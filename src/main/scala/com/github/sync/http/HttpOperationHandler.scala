@@ -121,7 +121,7 @@ trait HttpOperationHandler[C <: HttpConfig] {
     * @return a ''Future'' with request information
     */
   protected def simpleRequest(op: SyncOperation, request: HttpRequest): Future[SyncOperationRequestData] =
-    Future.successful(SyncOperationRequestData(op, List(request)))
+    Future.successful(SyncOperationRequestData(op, Source.single(request)))
 
   /**
     * Creates an object describing the request to remove a folder.

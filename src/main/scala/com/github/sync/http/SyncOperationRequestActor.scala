@@ -20,9 +20,10 @@ import akka.actor.{Actor, ActorRef, Props}
 import akka.http.scaladsl.model.HttpRequest
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Sink, Source}
 import akka.util.Timeout
 import com.github.sync.SyncTypes.SyncOperation
-import com.github.sync.http.SyncOperationRequestActor.{SyncOperationExecutionData, SyncOperationRequestData}
+import com.github.sync.http.SyncOperationRequestActor.{SyncOperationRequestData, SyncOperationResult}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -33,14 +34,14 @@ object SyncOperationRequestActor {
     * A data class storing the requests to be executed for a single sync
     * operation.
     *
-    * For some operations multiple requests are to be executed. They are held
-    * in a list. The processing flow processes an instance in a cycle until all
-    * requests are handled.
+    * For some operations multiple requests are to be executed. They are
+    * represented as a stream source. This stream is executed yielding a
+    * success or failure result.
     *
     * @param op       the sync operation
-    * @param requests the list with requests for this operation
+    * @param requests the source with requests for this operation
     */
-  case class SyncOperationRequestData(op: SyncOperation, requests: List[HttpRequest])
+  case class SyncOperationRequestData(op: SyncOperation, requests: Source[HttpRequest, Any])
 
   /**
     * A data class representing the result of the execution of a sync
@@ -54,45 +55,6 @@ object SyncOperationRequestActor {
     * @param optFailure an ''Option'' with the exception in case of a failure
     */
   case class SyncOperationResult(op: SyncOperation, optFailure: Option[Throwable])
-
-  /**
-    * An internal data class that is used to keep track on the execution of
-    * the requests of a sync operation.
-    *
-    * @param request the data object with the requests to be executed
-    * @param sender  the sender of the request
-    */
-  private case class SyncOperationExecutionData(request: SyncOperationRequestData, sender: ActorRef) {
-    /**
-      * Checks whether the execution is already complete. This is the case if
-      * all the single requests associated with the operation have been
-      * executed.
-      *
-      * @return a flag whether execution is complete
-      */
-    def isDone: Boolean = request.requests.isEmpty
-
-    /**
-      * Returns a ''SyncOperationExecutionData'' object that points to the
-      * next request to be executed. This function is called after a request
-      * has been processed to continue with the next one.
-      *
-      * @return a data object pointing to the next request
-      */
-    def nextRequest: SyncOperationExecutionData = {
-      val nextRequests = request.requests.tail
-      copy(request = request.copy(requests = nextRequests))
-    }
-
-    /**
-      * Sends a message with the execution result to the original sender.
-      *
-      * @param optFailure an ''Option'' with an exception
-      */
-    def sendResult(optFailure: Option[Throwable]): Unit = {
-      sender ! SyncOperationResult(request.op, optFailure)
-    }
-  }
 
   /**
     * Returns a ''Props'' object for creating a new actor instance.
@@ -126,15 +88,15 @@ class SyncOperationRequestActor(requestActor: ActorRef, timeout: Timeout) extend
   /** The object to materialize streams. */
   private implicit val mat: ActorMaterializer = ActorMaterializer()
 
+  /** The execution context in implicit scope. */
+  private implicit val ec: ExecutionContext = context.system.dispatcher
+
+  /** A timeout for asynchronous operations in implicit scope. */
+  private implicit val askTimeout: Timeout = timeout
+
   override def receive: Receive = {
     case request: SyncOperationRequestData =>
-      self ! SyncOperationExecutionData(request, sender())
-
-    case request: SyncOperationExecutionData if request.isDone =>
-      request.sendResult(None)
-
-    case request: SyncOperationExecutionData =>
-      executeNextRequest(request)
+      handleOperationRequest(request, sender())
   }
 
   override def postStop(): Unit = {
@@ -143,22 +105,35 @@ class SyncOperationRequestActor(requestActor: ActorRef, timeout: Timeout) extend
   }
 
   /**
+    * Handles the execution of all the requests defined in a
+    * ''SyncOperationRequestData'' object and sends a corresponding success or
+    * failure response back to the caller.
+    *
+    * @param request the request to be executed
+    * @param caller  the caller
+    */
+  private def handleOperationRequest(request: SyncOperationRequestData, caller: ActorRef): Unit = {
+    val sink = Sink.ignore
+    request.requests
+      .mapAsync(1)(executeNextRequest)
+      .runWith(sink) onComplete { result =>
+      val optFailure = result match {
+        case Success(_) => None
+        case Failure(exception) => Some(exception)
+      }
+      caller ! SyncOperationResult(request.op, optFailure)
+    }
+  }
+
+  /**
     * Executes the next request of the sync operation associated with the given
     * data object.
     *
     * @param request the object representing the execution of the operation
     */
-  private def executeNextRequest(request: SyncOperationExecutionData): Unit = {
-    implicit val askTimeout: Timeout = timeout
-    implicit val ec: ExecutionContext = context.system.dispatcher
-    val sendRequest = HttpRequestActor.SendRequest(request.request.requests.head, request)
-    val futResponse = requestActor ? sendRequest
-    processResult(futResponse) onComplete {
-      case Success(_) =>
-        self ! request.nextRequest
-      case Failure(exception) =>
-        request.sendResult(Some(exception))
-    }
+  private def executeNextRequest(request: HttpRequest): Future[HttpRequestActor.Result] = {
+    val sendRequest = HttpRequestActor.SendRequest(request, null)
+    processResult(requestActor ? sendRequest)
   }
 
   /**
@@ -169,7 +144,7 @@ class SyncOperationRequestActor(requestActor: ActorRef, timeout: Timeout) extend
     * @param futAsk the future with the result from the request actor
     * @return the processed and correctly typed future
     */
-  private def processResult(futAsk: Future[Any])(implicit ec: ExecutionContext): Future[HttpRequestActor.Result] =
+  private def processResult(futAsk: Future[Any]): Future[HttpRequestActor.Result] =
     futAsk.mapTo[HttpRequestActor.Result]
       .flatMap(result => result.response.entity.discardBytes().future().map(_ => result))
 }

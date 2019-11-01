@@ -125,7 +125,7 @@ object DavOperationHandler {
             HttpRequest(method = HttpMethods.DELETE,
               uri = uriResolver.resolveElementUri(op.dstUri)) :: standardRequests
           else standardRequests
-          SyncOperationRequestData(op, requests)
+          SyncOperationRequestData(op, Source(requests))
         }
       }
     }
