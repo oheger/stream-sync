@@ -17,20 +17,17 @@
 package com.github.sync.webdav
 
 import akka.NotUsed
-import akka.actor.{ActorRef, ActorSystem, PoisonPill}
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model._
-import akka.pattern.ask
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.Flow
-import akka.util.Timeout
+import akka.stream.scaladsl.{Flow, Source}
+import akka.util.ByteString
 import com.github.sync.SyncTypes._
 import com.github.sync._
-import com.github.sync.http.SyncOperationRequestActor
-import com.github.sync.http.SyncOperationRequestActor.{SyncOperationRequestData, SyncOperationResult}
-import com.github.sync.impl.CleanupStage
+import com.github.sync.http.HttpOperationHandler
+import com.github.sync.http.SyncOperationRequestActor.SyncOperationRequestData
 
-import scala.concurrent.Future
-import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * A module implementing functionality to execute ''SyncOperation'' objects
@@ -47,103 +44,131 @@ object DavOperationHandler {
   /** The WebDav HTTP method for setting attributes of an element. */
   private val MethodPropPatch = HttpMethod.custom("PROPPATCH")
 
-  /** The configuration property for the size of the connection pool. */
-  private val PropMaxConnections = "akka.http.host-connection-pool.max-connections"
-
   /**
-    * Returns a ''Flow'' to apply [[SyncOperation]] objects against a WebDav
-    * server. The flow executes the operations from upstream and passes all
-    * that were successful to downstream.
+    * Creates the ''Flow'' for applying sync operations against the WebDav
+    * server defined by the passed in configuration object.
     *
-    * @param config       the configuration for the WebDav server
-    * @param fileProvider the object providing access to files to upload
-    * @param requestActor the actor for sending HTTP requests
+    * @param config       the WebDav configuration
+    * @param fileProvider the file provider
+    * @param requestActor the request actor
     * @param system       the actor system
     * @param mat          the object to materialize streams
-    * @return the flow to process operations against a WebDav server
+    * @return the ''Flow'' for applying sync operations
     */
-  def webDavProcessingFlow(config: DavConfig, fileProvider: SourceFileProvider, requestActor: ActorRef)
-                          (implicit system: ActorSystem, mat: ActorMaterializer):
+  def apply(config: DavConfig, fileProvider: SourceFileProvider, requestActor: ActorRef)
+           (implicit system: ActorSystem, mat: ActorMaterializer):
   Flow[SyncOperation, SyncOperation, NotUsed] = {
-    val uriResolver = ElementUriResolver(config.rootUri)
     val modifiedTimeTemplate = ModifiedTimeRequestFactory.requestTemplate(config)
-    val syncRequestActor =
-      system.actorOf(SyncOperationRequestActor(requestActor, config.timeout), "syncOperationRequestActor")
-    // set a long implicit timeout; timeouts are handled by the request actor
-    implicit val syncOpTimeout: Timeout = Timeout(1.day)
-    import system.dispatcher
+    val handler: HttpOperationHandler[DavConfig] = new HttpOperationHandler[DavConfig] {
+      override protected def createRemoveFolderRequest(uriResolver: ElementUriResolver, op: SyncOperation,
+                                                       folder: FsFolder)(implicit ec: ExecutionContext):
+      Future[SyncOperationRequestData] = createDeleteRequest(uriResolver, op, isFolder = true)
 
-    /**
-      * Returns the size of the HTTP connection pool from the configuration of
-      * the actor system. This is used to determine the parallelism in the
-      * stream for the request execution stage.
-      *
-      * @return the size of the HTTP connection pool
-      */
-    def httpPoolSize: Int =
-      system.settings.config.getInt(PropMaxConnections)
+      override protected def createRemoveFileRequest(uriResolver: ElementUriResolver, op: SyncOperation,
+                                                     file: FsFile)(implicit ec: ExecutionContext):
+      Future[SyncOperationRequestData] = createDeleteRequest(uriResolver, op, isFolder = false)
 
-    // Creates the object with requests for a single sync operation
-    def createRequestData(op: SyncOperation): Future[SyncOperationRequestData] = {
-      op match {
-        case SyncOperation(elem, ActionRemove, _, _, dstUri) =>
-          simpleRequest(op, HttpRequest(method = HttpMethods.DELETE,
-            uri = resolveRemoveUri(elem, dstUri)))
-        case SyncOperation(FsFolder(_, _, _), ActionCreate, _, _, dstUri) =>
-          simpleRequest(op, HttpRequest(method = MethodMkCol,
-            uri = uriResolver.resolveElementUri(dstUri)))
-        case SyncOperation(file@FsFile(_, _, _, _, _), action, _, srcUri, dstUri) =>
-          createUploadRequest(file, srcUri, dstUri) map { req =>
-            val needDelete = config.deleteBeforeOverride && action == ActionOverride
-            val standardRequests = List(req, createPatchRequest(op))
-            val requests = if (needDelete)
-              HttpRequest(method = HttpMethods.DELETE,
-                uri = uriResolver.resolveElementUri(dstUri)) :: standardRequests
-            else standardRequests
-            SyncOperationRequestData(op, requests)
-          }
-        case _ =>
-          Future.failed(new IllegalStateException("Invalid SyncOperation: " + op))
+      override protected def createNewFolderRequest(uriResolver: ElementUriResolver, op: SyncOperation,
+                                                    folder: FsFolder)(implicit ec: ExecutionContext):
+      Future[SyncOperationRequestData] =
+        simpleRequest(op, HttpRequest(method = MethodMkCol, uri = uriResolver.resolveElementUri(op.dstUri)))
+
+      override protected def createNewFileRequest(uriResolver: ElementUriResolver, op: SyncOperation, file: FsFile,
+                                                  fileSize: Long, source: Future[Source[ByteString, Any]])
+                                                 (implicit ec: ExecutionContext, mat: ActorMaterializer):
+      Future[SyncOperationRequestData] =
+        createFileUploadRequest(uriResolver, op, file, fileSize, source, isUpdate = false)
+
+      override protected def createUpdateFileRequest(uriResolver: ElementUriResolver, op: SyncOperation, file: FsFile,
+                                                     fileSize: Long, source: Future[Source[ByteString, Any]])
+                                                    (implicit ec: ExecutionContext, mat: ActorMaterializer):
+      Future[SyncOperationRequestData] =
+        createFileUploadRequest(uriResolver, op, file, fileSize, source, isUpdate = true)
+
+      /**
+        * Returns the request to delete an element from the WebDav server. This
+        * is basically the same for files and folders; however, for folders the
+        * URI must explicitly end on a slash.
+        *
+        * @param uriResolver the URI resolver
+        * @param op          the sync operation
+        * @param isFolder    flag whether a folder is affected
+        * @return request information for a DELETE operation
+        */
+      private def createDeleteRequest(uriResolver: ElementUriResolver, op: SyncOperation, isFolder: Boolean):
+      Future[SyncOperationRequestData] =
+        simpleRequest(op, HttpRequest(HttpMethods.DELETE,
+          uri = uriResolver.resolveElementUri(op.dstUri, isFolder)))
+
+      /**
+        * Creates the request information for a sync operation that requires a
+        * file upload. Here multiple requests are needed: an optional DELETE
+        * request for an update, the actual upload request, and a request to
+        * update the meta data of the file.
+        *
+        * @param uriResolver the URI resolver
+        * @param op          the sync operation
+        * @param file        the file affected
+        * @param fileSize    the adjusted file size
+        * @param source      the source with the file's content
+        * @param isUpdate    flag whether this is an update
+        * @param ec          the execution context
+        * @return request information for an upload operation
+        */
+      private def createFileUploadRequest(uriResolver: ElementUriResolver, op: SyncOperation, file: FsFile,
+                                          fileSize: Long, source: Future[Source[ByteString, Any]], isUpdate: Boolean)
+                                         (implicit ec: ExecutionContext): Future[SyncOperationRequestData] = {
+        createUploadRequest(uriResolver, file, fileSize, source, op.dstUri) map { req =>
+          val needDelete = isUpdate && config.deleteBeforeOverride
+          val standardRequests = List(req, createPatchRequest(uriResolver, op, modifiedTimeTemplate))
+          val requests = if (needDelete)
+            HttpRequest(method = HttpMethods.DELETE,
+              uri = uriResolver.resolveElementUri(op.dstUri)) :: standardRequests
+          else standardRequests
+          SyncOperationRequestData(op, requests)
+        }
       }
     }
 
-    // Resolves the URI to remove an element. Ensures that URIs for folders
-    // end on a slash.
-    def resolveRemoveUri(elem: FsElement, uri: String): Uri =
-      uriResolver.resolveElementUri(uri, withTrailingSlash = elem.isInstanceOf[FsFolder])
+    handler.webDavProcessingFlow(config, fileProvider, requestActor)
+  }
 
-    // Creates a SyncOpRequestData future object for a simple request
-    def simpleRequest(op: SyncOperation, request: HttpRequest): Future[SyncOperationRequestData] =
-      Future.successful(SyncOperationRequestData(op, List(request)))
-
-    // Creates a request to upload a file
-    def createUploadRequest(file: FsFile, srcUri: String, dstUri: String): Future[HttpRequest] = {
-      fileProvider.fileSource(srcUri) map { content =>
-        val entity = HttpEntity(ContentTypes.`application/octet-stream`,
-          fileProvider.fileSize(file.size), content)
-        HttpRequest(method = HttpMethods.PUT, entity = entity,
-          uri = uriResolver.resolveElementUri(dstUri))
-      }
+  /**
+    * Creates a request to upload a file.
+    *
+    * @param uriResolver the URI resolver
+    * @param fileSize    the adjusted file size
+    * @param source      a ''Future'' with the content source of the file
+    * @param file        the file affected
+    * @param dstUri      the destination URI for the upload
+    * @param ec          the execution context
+    * @return a ''Future'' with the upload request
+    */
+  private def createUploadRequest(uriResolver: ElementUriResolver, file: FsFile, fileSize: Long,
+                                  source: Future[Source[ByteString, Any]], dstUri: String)
+                                 (implicit ec: ExecutionContext): Future[HttpRequest] = {
+    source map { content =>
+      val entity = HttpEntity(ContentTypes.`application/octet-stream`, fileSize, content)
+      HttpRequest(method = HttpMethods.PUT, entity = entity,
+        uri = uriResolver.resolveElementUri(dstUri))
     }
+  }
 
-    // Creates a request to update the modified date of an uploaded file
-    def createPatchRequest(op: SyncOperation): HttpRequest = {
-      val modifiedTime = op.element.asInstanceOf[FsFile].lastModified
-      val content = ModifiedTimeRequestFactory
-        .createModifiedTimeRequest(modifiedTimeTemplate, modifiedTime)
-      HttpRequest(method = MethodPropPatch,
-        uri = uriResolver.resolveElementUri(op.dstUri),
-        entity = HttpEntity(ContentTypes.`text/xml(UTF-8)`, content))
-    }
-
-    // Sends a request to the actor for executing sync operations
-    def executeRequest(request: SyncOperationRequestData): Future[SyncOperationResult] =
-      (syncRequestActor ? request).mapTo[SyncOperationResult]
-
-    Flow[SyncOperation].mapAsync(1)(createRequestData)
-      .mapAsync(httpPoolSize)(executeRequest)
-      .filter(_.optFailure.isEmpty)
-      .map(_.op)
-      .via(new CleanupStage[SyncOperation](() => syncRequestActor ! PoisonPill))
+  /**
+    * Creates a request to update the modified date of an uploaded file.
+    *
+    * @param uriResolver          the URI resolver
+    * @param op                   the current sync operation
+    * @param modifiedTimeTemplate the template string to generate the request
+    * @return
+    */
+  private def createPatchRequest(uriResolver: ElementUriResolver, op: SyncOperation, modifiedTimeTemplate: String):
+  HttpRequest = {
+    val modifiedTime = op.element.asInstanceOf[FsFile].lastModified
+    val content = ModifiedTimeRequestFactory
+      .createModifiedTimeRequest(modifiedTimeTemplate, modifiedTime)
+    HttpRequest(method = MethodPropPatch,
+      uri = uriResolver.resolveElementUri(op.dstUri),
+      entity = HttpEntity(ContentTypes.`text/xml(UTF-8)`, content))
   }
 }

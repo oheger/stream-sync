@@ -197,7 +197,7 @@ private class DavComponentsDestinationFactory(val config: DavConfig, httpActorFa
   override def createApplyStage(targetUri: String, fileProvider: SourceFileProvider): ApplyStageData = {
     val requestActor = httpActorFactory.createHttpRequestActor(config, system, 1, RequestActorSyncName,
       withKillSwitch = true)
-    val opFlow = DavOperationHandler.webDavProcessingFlow(config, fileProvider, requestActor)
+    val opFlow = DavOperationHandler(config, fileProvider, requestActor)
       .via(httpActorFactory.killSwitch.flow)
     ApplyStageData(opFlow)
   }

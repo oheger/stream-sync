@@ -172,7 +172,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
       op :: lst
     }
     val futResult = source
-      .via(DavOperationHandler.webDavProcessingFlow(config, fileProvider, requestActor))
+      .via(DavOperationHandler(config, fileProvider, requestActor))
       .runWith(sink)
     futureResult(futResult).reverse
   }
