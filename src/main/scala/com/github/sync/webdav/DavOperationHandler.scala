@@ -24,7 +24,7 @@ import akka.stream.scaladsl.{Flow, Source}
 import akka.util.ByteString
 import com.github.sync.SyncTypes._
 import com.github.sync._
-import com.github.sync.http.HttpOperationHandler
+import com.github.sync.http.{ElementUriResolver, HttpOperationHandler}
 import com.github.sync.http.SyncOperationRequestActor.SyncOperationRequestData
 
 import scala.concurrent.{ExecutionContext, Future}

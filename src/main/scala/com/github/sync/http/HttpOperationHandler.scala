@@ -27,7 +27,6 @@ import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes._
 import com.github.sync.http.SyncOperationRequestActor.{SyncOperationRequestData, SyncOperationResult}
 import com.github.sync.impl.CleanupStage
-import com.github.sync.webdav.ElementUriResolver
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}

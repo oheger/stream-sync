@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.webdav
+package com.github.sync.http
 
 import akka.http.scaladsl.model.Uri
 import org.scalatest.{FlatSpec, Matchers}
