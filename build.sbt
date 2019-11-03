@@ -15,8 +15,8 @@
  */
 
 /** Definition of versions. */
-lazy val AkkaVersion = "2.5.25"
-lazy val AkkaHttpVersion = "10.1.9"
+lazy val AkkaVersion = "2.5.26"
+lazy val AkkaHttpVersion = "10.1.10"
 lazy val VersionScala = "2.12.9"
 lazy val VersionScalaXml = "1.1.0"
 lazy val VersionScalaTest = "3.0.8"
@@ -30,6 +30,7 @@ lazy val akkaDependencies = Seq(
   "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
   "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
   "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
+  "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
   "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
   "org.scala-lang" % "scala-reflect" % VersionScala
 )
