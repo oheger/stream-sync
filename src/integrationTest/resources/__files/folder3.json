@@ -1,0 +1,55 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('test.user%test-user.org')/drives('xxxyyyzzz1234567')/root/children",
+  "@odata.count": 3,
+  "value": [
+    {
+      "@microsoft.graph.downloadUrl": "https://public.db.files.1drv.com/y4mRSBRkvnXdwIlmgOyHa2hsVxglb6UUSnPa-aaO1ZBaIYGah8zPbYHybLuvpf4JLaMc5Ida0O-OWz6RdOOcLtOIgLXhmZkA3-WJnjpshUJDnJMaWXvYVe10-85bb434gghXUJgd3g-QIeGOLIuJGuTFJdolsjeugcEXZzeCMkTgXpfd4sAsVnb975abNJVMrfxnW7diHeRmBILdxuFJ2x_3XNx4IsdoejD9GdAY",
+      "createdDateTime": "2019-10-27T16:45:12.443Z",
+      "cTag": "aYzozRUU1MzkyMUNGRUQzRkI2ITI2OTkwLjI1Nw",
+      "eTag": "aM0VFNTM5MjFDRkVEM0ZCNiEyNjk5MC4x",
+      "id": "xxxyyyzzz1234567!26990",
+      "lastModifiedDateTime": "2019-10-27T16:45:12.627Z",
+      "name": "file (5).mp3",
+      "size": 500,
+      "webUrl": "https://1drv.ms/u/s!XXX_XXXXXXXX-XXXX",
+      "createdBy": {
+        "application": {
+          "displayName": "StreamSync",
+          "id": "4c2e9422"
+        },
+        "user": {
+          "displayName": "Test User",
+          "id": "xxxyyyzzz1234567"
+        }
+      },
+      "lastModifiedBy": {
+        "application": {
+          "displayName": "StreamSync",
+          "id": "4c2e9422"
+        },
+        "user": {
+          "displayName": "Test User",
+          "id": "xxxyyyzzz1234567"
+        }
+      },
+      "parentReference": {
+        "driveId": "xxxyyyzzz1234567",
+        "driveType": "personal",
+        "id": "xxxyyyzzz1234567!26987",
+        "name": "test",
+        "path": "/drive/root:/test"
+      },
+      "file": {
+        "mimeType": "application/json",
+        "hashes": {
+          "quickXorHash": "IGwtls2AaRDoB2jk3pfomXh6FeQ=",
+          "sha1Hash": "579087E1CDCBEC248B159C33355E7599538A533A"
+        }
+      },
+      "fileSystemInfo": {
+        "createdDateTime": "2019-10-27T16:45:12.443Z",
+        "lastModifiedDateTime": "2018-09-19T20:14:00Z"
+      }
+    }
+  ]
+}
