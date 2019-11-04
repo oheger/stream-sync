@@ -47,6 +47,12 @@ object WireMockSupport {
   type AuthFunc = MappingBuilder => MappingBuilder
 
   /**
+    * Constant for an authorization function that does not apply any
+    * authorization information.
+    */
+  val NoAuthFunc: AuthFunc = identity
+
+  /**
     * Constant for an authorization function that adds a Basic Auth header with
     * default user credentials to a request.
     */

@@ -22,32 +22,21 @@ import akka.stream.scaladsl.Source
 import com.github.sync.BaseHttpFsElementSourceSpec
 import com.github.sync.SyncTypes.{FsElement, FsFolder}
 import com.github.sync.http.HttpRequestActor
-import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, equalTo, stubFor, urlPathEqualTo, _}
+import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, stubFor, _}
 import spray.json.{DeserializationException, JsonParser}
 
-import scala.concurrent.duration._
-
-object OneDriveFsElementSourceSpec {
-  /** The drive ID used by tests. */
-  private val DriveID = "test-drive"
-
-  /** The content type reported by OneDrive for JSON documents. */
-  private val ContentType =
-    "application/json;odata.metadata=minimal;odata.streaming=true;IEEE754Compatible=false;charset=utf-8"
-}
-
-class OneDriveFsElementSourceSpec extends BaseHttpFsElementSourceSpec(ActorSystem("OneDriveFsElementSourceSpec")) {
+class OneDriveFsElementSourceSpec extends BaseHttpFsElementSourceSpec(ActorSystem("OneDriveFsElementSourceSpec"))
+  with OneDriveStubbingSupport {
 
   import BaseHttpFsElementSourceSpec._
-  import OneDriveFsElementSourceSpec._
+  import OneDriveStubbingSupport._
 
   /**
     * Creates a test configuration pointing to the mock server.
     *
     * @return the configuration for the test source
     */
-  private def createConfig(): OneDriveConfig =
-    OneDriveConfig(DriveID, RootPath, 1, 3.seconds, None, Some(serverUri("")))
+  private def createConfig(): OneDriveConfig = createOneDriveConfig(RootPath)
 
   /**
     * Creates an initialized OneDrive source that can be used by tests.
@@ -59,33 +48,6 @@ class OneDriveFsElementSourceSpec extends BaseHttpFsElementSourceSpec(ActorSyste
   private def createTestSource(config: OneDriveConfig, startFolderUri: String = ""): Source[FsElement, Any] =
     OneDriveFsElementSource(config, new SourceFactoryImpl,
       system.actorOf(HttpRequestActor(serverUri(""))), startFolderUri)
-
-  /**
-    * Maps a relative folder URI to the URI expected by the OneDrive server.
-    *
-    * @param config the current OneDrive config
-    * @param uri    the relative URI to be mapped
-    * @return the mapped URI
-    */
-  private def mapFolderUri(config: OneDriveConfig)(uri: String): String =
-    s"/$DriveID/root:$uri:/children"
-
-  /**
-    * Adds a stubbing declaration for a request to a OneDrive folder that is
-    * served with the file specified.
-    *
-    * @param config       the OneDrive config
-    * @param uri          the URI of the folder
-    * @param responseFile the file to serve the request
-    */
-  private def stubOneDriveFolderRequest(config: OneDriveConfig, uri: String, responseFile: String): Unit = {
-    stubFor(get(urlPathEqualTo(mapFolderUri(config)(uri)))
-      .withHeader("Accept", equalTo("application/json"))
-      .willReturn(aResponse()
-        .withStatus(StatusCodes.OK.intValue)
-        .withHeader("Content-Type", ContentType)
-        .withBodyFile(responseFile)))
-  }
 
   /**
     * Adds stubbing declarations for all test folders. Each folder is mapped to
