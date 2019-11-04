@@ -29,7 +29,7 @@ import com.github.sync.crypt.{DecryptOpHandler, Secret}
 import com.github.sync.http.{BasicAuthConfig, HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenData}
 import com.github.sync.util.UriEncodingHelper
-import com.github.sync.webdav.{DavConfig, DavSourceFileProvider}
+import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, DavStubbingSupport}
 import com.github.sync.{FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
@@ -57,7 +57,7 @@ object DavSyncSpec {
   * Integration test class for sync processes that contains tests related to
   * WebDav servers. The tests typically make use of a WireMock server.
   */
-class DavSyncSpec extends BaseSyncSpec with WireMockSupport {
+class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupport {
 
   import DavSyncSpec._
   import system.dispatcher

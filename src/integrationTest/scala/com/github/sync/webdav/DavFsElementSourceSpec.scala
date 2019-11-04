@@ -37,7 +37,8 @@ import scala.xml.SAXParseException
 /**
   * Integration test class for ''DavFsElementSource''.
   */
-class DavFsElementSourceSpec() extends BaseHttpFsElementSourceSpec(ActorSystem("DavFsElementSourceSpec")) {
+class DavFsElementSourceSpec() extends BaseHttpFsElementSourceSpec(ActorSystem("DavFsElementSourceSpec"))
+  with DavStubbingSupport {
 
   import BaseHttpFsElementSourceSpec._
   import WireMockSupport._
