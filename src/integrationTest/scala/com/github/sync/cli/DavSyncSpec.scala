@@ -19,48 +19,31 @@ package com.github.sync.cli
 import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.http.scaladsl.model.headers.`Content-Type`
-import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
+import akka.http.scaladsl.model.StatusCodes
 import akka.pattern.AskTimeoutException
 import akka.testkit.TestProbe
 import akka.util.{ByteString, Timeout}
 import com.github.sync.WireMockSupport.{BasicAuthFunc, Password, TokenAuthFunc, UserId}
 import com.github.sync.crypt.{DecryptOpHandler, Secret}
-import com.github.sync.http.{BasicAuthConfig, HttpRequestActor, OAuthStorageConfig}
-import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenData}
+import com.github.sync.http.{BasicAuthConfig, HttpRequestActor}
 import com.github.sync.util.UriEncodingHelper
 import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, DavStubbingSupport}
-import com.github.sync.{FileTestHelper, WireMockSupport}
+import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-
-object DavSyncSpec {
-  /** Path to the token endpoint of the simulated IDP. */
-  private val TokenEndpoint = "/token"
-
-  /** Token material that is available initially. */
-  private val CurrentTokenData = OAuthTokenData(accessToken = "accessOld", refreshToken = "make-it-fresh")
-
-  /** Token material after a refresh. */
-  private val RefreshedTokenData = OAuthTokenData(accessToken = "accessNew", refreshToken = "nextRefresh")
-
-  /** The client secret for the test IDP. */
-  private val ClientSecret = Secret("secretOfMyTestIDP")
-
-  /** The secret for encrypting the data of the test IDP. */
-  private val PwdIdpData = Secret("idpDataEncryption")
-}
 
 /**
   * Integration test class for sync processes that contains tests related to
   * WebDav servers. The tests typically make use of a WireMock server.
   */
-class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupport {
+class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupport with OAuthMockSupport {
 
-  import DavSyncSpec._
-  import system.dispatcher
+  import OAuthMockSupport._
+
+  override implicit val ec: ExecutionContext = system.dispatcher
 
   /**
     * Stubs a GET request to access a file from a DAV server.
@@ -73,67 +56,6 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
       .willReturn(aResponse()
         .withStatus(StatusCodes.OK.intValue)
         .withBodyFile(responseFile))))
-  }
-
-  /**
-    * Creates an OAuth configuration that points to the mock server.
-    *
-    * @return the test OAuth configuration
-    */
-  private def createOAuthConfig(): OAuthConfig =
-    OAuthConfig(authorizationEndpoint = "https://auth.org", tokenEndpoint = serverUri(TokenEndpoint),
-      scope = "test", redirectUri = "https://redirect.org", clientID = "testClient")
-
-  /**
-    * Creates an OAuth storage configuration that can be used in tests.
-    *
-    * @param optPassword optional password to encrypt IDP data
-    * @return the storage configuration
-    */
-  private def createOAuthStorageConfig(optPassword: Option[Secret] = Some(PwdIdpData)): OAuthStorageConfig =
-    OAuthStorageConfig(rootDir = testDirectory, baseName = "testIdp",
-      optPassword = optPassword)
-
-  /**
-    * Stores the data of an OAuth IDP, so that it can be referenced in tests.
-    *
-    * @param storageConfig the OAuth storage configuration
-    * @param oauthConfig   the OAuth configuration
-    * @param secret        the client secret
-    * @param tokens        the current token pair
-    */
-  private def saveIdpData(storageConfig: OAuthStorageConfig, oauthConfig: OAuthConfig, secret: Secret,
-                          tokens: OAuthTokenData): Unit = {
-    futureResult(for {
-      _ <- OAuthStorageServiceImpl.saveConfig(storageConfig, oauthConfig)
-      _ <- OAuthStorageServiceImpl.saveClientSecret(storageConfig, secret)
-      done <- OAuthStorageServiceImpl.saveTokens(storageConfig, tokens)
-    } yield done)
-  }
-
-  /**
-    * Creates the objects required to access the test IDP and stores them, so
-    * that they can be accessed via the storage configuration returned.
-    *
-    * @param optPassword optional password to encrypt IDP data
-    * @return the OAuth storage configuration
-    */
-  private def prepareIdpConfig(optPassword: Option[Secret] = Some(PwdIdpData)): OAuthStorageConfig = {
-    val storageConfig = createOAuthStorageConfig(optPassword)
-    val oauthConfig = createOAuthConfig()
-    saveIdpData(storageConfig, oauthConfig, ClientSecret, CurrentTokenData)
-    storageConfig
-  }
-
-  /**
-    * Stubs a request to refresh an access token. The request is answered with
-    * the refreshed token pair.
-    */
-  private def stubTokenRefresh(): Unit = {
-    stubFor(post(urlPathEqualTo(TokenEndpoint))
-      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
-        .withHeader(`Content-Type`.name, ContentTypes.`application/json`.value)
-        .withBodyFile("token_response.json")))
   }
 
   "Sync" should "support a WebDav URI for the source structure" in {
@@ -163,10 +85,9 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     stubFolderRequest(WebDavPath, "folder3.xml", authFunc = TokenAuthFunc(RefreshedTokenData.accessToken))
     stubTokenRefresh()
     val logFile = createFileReference()
-    val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
-      "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--src-storage-path",
-      testDirectory.toAbsolutePath.toString, "--src-idp-name", storageConfig.baseName,
-      "--src-idp-password", storageConfig.optPassword.get.secret)
+    val options = withOAuthOptions(storageConfig, "--src-",
+      "dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
+      "--log", logFile.toAbsolutePath.toString, "--apply", "None")
 
     val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
@@ -236,9 +157,8 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     stubFor(authFunc(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
-    val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
-      "--src-storage-path", testDirectory.toAbsolutePath.toString, "--src-idp-name", storageConfig.baseName,
-      "--src-encrypt-idp-data", "false")
+    val options = withOAuthOptions(storageConfig, "--src-",
+      "dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString)
 
     val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
@@ -295,10 +215,9 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
       .withRequestBody(matching(".*xmlns:ssync=\"" + ModifiedNamespace + ".*"))
       .withRequestBody(matching(s".*<ssync:$ModifiedProperty>.*"))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
-    val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
-      "--dst-modified-property", ModifiedProperty, "--dst-modified-namespace", ModifiedNamespace,
-      "--dst-storage-path", testDirectory.toAbsolutePath.toString, "--dst-idp-name", storageConfig.baseName,
-      "--dst-idp-password", storageConfig.optPassword.get.secret)
+    val options = withOAuthOptions(storageConfig, "--dst-",
+      srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "--dst-modified-property", ModifiedProperty, "--dst-modified-namespace", ModifiedNamespace)
 
     val result = futureResult(Sync.syncProcess(factory, options))
     result.successfulOperations should be(1)
@@ -452,10 +371,9 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     stubFolderRequest(WebDavPath, "empty_folder.xml", authFunc = authFunc)
     stubFor(authFunc(put(anyUrl()))
       .willReturn(aResponse().withStatus(StatusCodes.Unauthorized.intValue)))
-    val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
-      "--dst-modified-property", ModifiedProperty, "--dst-modified-namespace", ModifiedNamespace,
-      "--dst-storage-path", testDirectory.toAbsolutePath.toString, "--dst-idp-name", storageConfig.baseName,
-      "--dst-idp-password", storageConfig.optPassword.get.secret)
+    val options = withOAuthOptions(storageConfig, "--dst-",
+      srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "--dst-modified-property", ModifiedProperty, "--dst-modified-namespace", ModifiedNamespace)
 
     expectFailedFuture[HttpRequestActor.RequestException](Sync.syncProcess(factory, options))
   }
