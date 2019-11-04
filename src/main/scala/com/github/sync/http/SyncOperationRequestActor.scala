@@ -18,7 +18,6 @@ package com.github.sync.http
 
 import akka.actor.{Actor, ActorRef, Props}
 import akka.http.scaladsl.model.HttpRequest
-import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.Timeout
@@ -133,7 +132,7 @@ class SyncOperationRequestActor(requestActor: ActorRef, timeout: Timeout) extend
     */
   private def executeNextRequest(request: HttpRequest): Future[HttpRequestActor.Result] = {
     val sendRequest = HttpRequestActor.SendRequest(request, null)
-    processResult(requestActor ? sendRequest)
+    processResult(HttpRequestActor.sendRequest(requestActor, sendRequest))
   }
 
   /**
@@ -141,10 +140,9 @@ class SyncOperationRequestActor(requestActor: ActorRef, timeout: Timeout) extend
     * future is successful only if a success response from the server has been
     * received. In this case, the entity has to be discarded.
     *
-    * @param futAsk the future with the result from the request actor
+    * @param futResult the future with the result from the request actor
     * @return the processed and correctly typed future
     */
-  private def processResult(futAsk: Future[Any]): Future[HttpRequestActor.Result] =
-    futAsk.mapTo[HttpRequestActor.Result]
-      .flatMap(result => result.response.entity.discardBytes().future().map(_ => result))
+  private def processResult(futResult: Future[HttpRequestActor.Result]): Future[HttpRequestActor.Result] =
+    HttpRequestActor.discardEntityBytes(futResult)
 }

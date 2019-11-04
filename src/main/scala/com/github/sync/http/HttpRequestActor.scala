@@ -80,6 +80,21 @@ object HttpRequestActor {
     Props(classOf[HttpRequestActor], uri, queueSize)
 
   /**
+    * Sends a request to an HTTP actor and returns a ''Future'' with the
+    * result. This is a convenience function that does the correct result
+    * mapping.
+    *
+    * @param httpActor the actor to execute the request
+    * @param request   the request to be executed
+    * @param ec        the execution context
+    * @param timeout   a timeout
+    * @return a ''Future'' with the result
+    */
+  def sendRequest(httpActor: ActorRef, request: HttpRequestActor.SendRequest)
+                 (implicit ec: ExecutionContext, timeout: Timeout): Future[HttpRequestActor.Result] =
+    (httpActor ? request).mapTo[HttpRequestActor.Result]
+
+  /**
     * Sends a request to an HTTP actor and allows processing of the result.
     * This function passes the given request to the actor and expects the
     * future with the result. The future is then mapped with the specified
@@ -98,9 +113,36 @@ object HttpRequestActor {
   def sendAndProcess[T](httpActor: ActorRef, request: HttpRequestActor.SendRequest)
                        (f: HttpRequestActor.Result => T)
                        (implicit ec: ExecutionContext, timeout: Timeout): Future[T] =
-    (httpActor ? request)
-      .mapTo[HttpRequestActor.Result]
-      .map(f)
+    sendRequest(httpActor, request) map f
+
+  /**
+    * Discards the bytes of the entity from the given result from an HTTP
+    * actor. This function is useful for requests for which the entity is
+    * irrelevant. (Nevertheless, it has to be dealt with to avoid blocking of
+    * the HTTP stream.)
+    *
+    * @param result the result object
+    * @param ec     the execution context
+    * @param mat    the object to materialize streams
+    * @return a ''Future'' of the result with the entity discarded
+    */
+  def discardEntityBytes(result: HttpRequestActor.Result)
+                        (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[HttpRequestActor.Result] =
+    result.response.entity.discardBytes().future().map(_ => result)
+
+  /**
+    * Discards the bytes of the entity from the given ''Future'' result from an
+    * HTTP actor. Works like the method with the same name, but operates on the
+    * result future rather than the actual result.
+    *
+    * @param futResult the ''Future'' with the result object
+    * @param ec        the execution context
+    * @param mat       the object to materialize streams
+    * @return a ''Future'' of the result with the entity discarded
+    */
+  def discardEntityBytes(futResult: Future[HttpRequestActor.Result])
+                        (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[HttpRequestActor.Result] =
+    futResult flatMap discardEntityBytes
 }
 
 /**
