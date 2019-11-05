@@ -83,6 +83,14 @@ class LRUCache[K, V] private(val capacity: Int,
   def size: Int = entries.size
 
   /**
+    * Returns a set with all the keys that are currently contained in this
+    * cache.
+    *
+    * @return the current key set of this cache
+    */
+  def keySet: Set[K] = entries.keySet
+
+  /**
     * Adds or updates the given elements to the cache. If keys in the list
     * already exist, they are removed and then added with the new value (which
     * causes them to be moved to the front). If necessary, elements at the end
@@ -132,10 +140,11 @@ class LRUCache[K, V] private(val capacity: Int,
     * @param lru the LRU list
     * @return a tuple with the updated collections
     */
+  @scala.annotation.tailrec
   private def ensureCapacity(map: Map[K, CacheEntry[V]], lru: SortedMap[Int, K]):
   (Map[K, CacheEntry[V]], SortedMap[Int, K]) =
     if (map.size > capacity) {
       val oldestKey = lru.firstKey
-      (map - lru(oldestKey), lru - oldestKey)
+      ensureCapacity(map - lru(oldestKey), lru - oldestKey)
     } else (map, lru)
 }
