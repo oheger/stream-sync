@@ -456,7 +456,7 @@ object SyncComponentsFactory {
                                         storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                           Secret, OAuthTokenData])
                                        (implicit ec: ExecutionContext, mat: ActorMaterializer):
-  Future[DavHttpActorFactory] =
+  Future[HttpActorFactory] =
     davConfig.optOAuthConfig match {
       case Some(storageConfig) =>
         for {oauthConfig <- storageService.loadConfig(storageConfig)
