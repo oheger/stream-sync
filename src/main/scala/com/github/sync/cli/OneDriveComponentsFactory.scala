@@ -16,39 +16,39 @@
 
 package com.github.sync.cli
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
+import com.github.sync.cli.SyncComponentsFactory.DestinationComponentsFactory
+import com.github.sync.onedrive.{OneDriveConfig, OneDriveFsElementSource, OneDriveSourceFileProvider}
 import com.github.sync.{SourceFileProvider, SyncTypes}
-import com.github.sync.cli.SyncComponentsFactory.{DestinationComponentsFactory, SourceComponentsFactory}
-import com.github.sync.onedrive.OneDriveConfig
 
 import scala.concurrent.ExecutionContext
 
+/**
+  * A special factory implementation for source components if the source is a
+  * OneDrive server.
+  *
+  * @param config           the configuration
+  * @param httpActorFactory the HTTP actor factory
+  * @param ec               the execution context
+  * @param system           the actor system
+  * @param mat              the object to materialize streams
+  */
 private class OneDriveComponentsSourceFactory(val config: OneDriveConfig, val httpActorFactory: HttpActorFactory)
                                              (implicit ec: ExecutionContext, system: ActorSystem,
-                                              mat: ActorMaterializer) extends SourceComponentsFactory {
-  /**
-    * Creates the ''Source''for iterating over the source structure of the sync
-    * process.
-    *
-    * @param sourceFactory the factory for creating an element source
-    * @return the source for iterating the source structure
-    */
-  override def createSource(sourceFactory: SyncTypes.ElementSourceFactory): Source[SyncTypes.FsElement, Any] = ???
+                                              mat: ActorMaterializer)
+  extends HttpComponentsSourceFactory[OneDriveConfig](config, httpActorFactory) {
+  override protected def doCreateSource(sourceFactory: SyncTypes.ElementSourceFactory, httpRequestActor: ActorRef):
+  Source[SyncTypes.FsElement, Any] = OneDriveFsElementSource(config, sourceFactory, httpRequestActor)
 
-  /**
-    * Creates a ''SourceFileProvider'' to access files in the source
-    * structure.
-    *
-    * @return the ''SourceFileProvider''
-    */
-  override def createSourceFileProvider(): SourceFileProvider = ???
+  override protected def doCreateSourceFileProvider(httpRequestActor: ActorRef): SourceFileProvider =
+    new OneDriveSourceFileProvider(config, httpRequestActor)
 }
 
 private class OneDriveComponentsDestinationFactory(val config: OneDriveConfig, val httpActorFactory: HttpActorFactory)
                                                   (implicit system: ActorSystem, mat: ActorMaterializer)
-extends DestinationComponentsFactory {
+  extends DestinationComponentsFactory {
   /**
     * Creates the ''Source''for iterating over the destination structure of the sync
     * process.
