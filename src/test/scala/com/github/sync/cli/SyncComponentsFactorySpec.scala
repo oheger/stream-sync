@@ -32,6 +32,7 @@ import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
 import com.github.sync.local.LocalFsConfig
+import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.webdav.DavConfig
 import org.mockito.Matchers.any
 import org.mockito.Mockito._
@@ -69,6 +70,12 @@ object SyncComponentsFactorySpec {
 
   /** Test IDP name. */
   private val IdpName = "MyTestIDP"
+
+  /** A test OneDrive drive ID. */
+  private val OneDriveID = "my-drive"
+
+  /** The OneDrive drive ID with the corresponding OneDrive prefix. */
+  private val PrefixOneDriveID = SyncComponentsFactory.PrefixOneDrive + OneDriveID
 
   /**
     * A conversion function for parameter maps. This makes it possible to use
@@ -125,6 +132,18 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   private def extractDavSourceConfig(sourceFactory: SourceComponentsFactory): DavConfig =
     sourceFactory match {
       case davFactory: DavComponentsSourceFactory => davFactory.config
+      case f => fail("Unexpected source factory: " + f)
+    }
+
+  /**
+    * Returns the OneDrive config from a source factory.
+    *
+    * @param sourceFactory the source factory
+    * @return the OneDrive config from this factory
+    */
+  private def extractOneDriveSourceConfig(sourceFactory: SourceComponentsFactory): OneDriveConfig =
+    sourceFactory match {
+      case oneFactory: OneDriveComponentsSourceFactory => oneFactory.config
       case f => fail("Unexpected source factory: " + f)
     }
 
@@ -341,5 +360,107 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val config = extractDavSourceConfig(srcFactory)
     config.optBasicAuthConfig.get.user should be(User)
     config.optBasicAuthConfig.get.password.secret should be(Password)
+  }
+
+  it should "create a correct OneDriveConfig for the source structure with basic auth properties" in {
+    val ChunkSize = 42
+    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveServer) -> DavRootUri,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) -> StoragePath,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) -> ChunkSize.toString)
+    val expAccessedKeys = args.keySet + SourceStructureType.configPropertyName(OAuthParameterManager.NameOptionName)
+    val syncFactory = new SyncComponentsFactory
+
+    val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixOneDriveID,
+      TestTimeout, args))
+    processedArgs.accessedParameters should be(expAccessedKeys)
+    val config = extractOneDriveSourceConfig(srcFactory)
+    config.rootUri.toString() should be(s"$DavRootUri/$OneDriveID/root:$StoragePath")
+    config.uploadChunkSize should be(ChunkSize * 1024 * 1024)
+    config.timeout should be(TestTimeout)
+    config.optBasicAuthConfig.get.user should be(User)
+    config.optBasicAuthConfig.get.password.secret should be(Password)
+    config.optOAuthConfig should be(None)
+  }
+
+  it should "create a correct OneDriveConfig for the source structure with defaults" in {
+    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) -> StoragePath)
+    val syncFactory = new SyncComponentsFactory
+
+    val (_, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixOneDriveID,
+      TestTimeout, args))
+    val config = extractOneDriveSourceConfig(srcFactory)
+    config.rootUri.toString() should be(s"${OneDriveConfig.OneDriveServerUri}/$OneDriveID/root:$StoragePath")
+    config.uploadChunkSize should be(OneDriveConfig.DefaultUploadChunkSizeMB * 1024 * 1024)
+  }
+
+  it should "generate failure messages for all invalid properties of a OneDrive configuration" in {
+    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) -> "xx",
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
+    val syncFactory = new SyncComponentsFactory
+
+    val exception = expectFailedFuture[IllegalArgumentException] {
+      syncFactory.createSourceComponentsFactory(PrefixOneDriveID, TestTimeout, args)
+    }
+    exception.getMessage should include(SourceStructureType.configPropertyName(
+      SyncComponentsFactory.PropOneDriveUploadChunkSize))
+    exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser))
+    exception.getMessage should include(SourceStructureType.configPropertyName(
+      SyncComponentsFactory.PropOneDrivePath))
+  }
+
+  it should "create a correct OneDriveConfig for the source structure if OAuth properties are defined" in {
+    val args = Map(
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) -> "/a-path",
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) -> "4",
+      SourceStructureType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
+      SourceStructureType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
+      SourceStructureType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
+    )
+    val expAccessedKeys = args.keySet +
+      SourceStructureType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
+      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveServer)
+    val syncFactory = new SyncComponentsFactory(createMockOAuthStorageService())
+
+    val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixOneDriveID,
+      TestTimeout, args))
+    processedArgs.accessedParameters should be(expAccessedKeys)
+    val config = extractOneDriveSourceConfig(srcFactory)
+    config.optBasicAuthConfig should be(None)
+    val oauthConfig = config.optOAuthConfig.get
+    oauthConfig.baseName should be(IdpName)
+    oauthConfig.optPassword.get.secret should be(Password)
+    oauthConfig.rootDir.toString should be(StoragePath)
+  }
+
+  it should "create a correct OneDriveConfig for the destination structure" in {
+    val ChunkSize = 11
+    val args = Map(DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
+      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveServer) ->
+        DavRootUri,
+      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) ->
+        StoragePath,
+      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) ->
+        ChunkSize.toString)
+    val expAccessedKeys = args.keySet +
+      DestinationStructureType.configPropertyName(OAuthParameterManager.NameOptionName)
+    val syncFactory = new SyncComponentsFactory
+
+    val (processedArgs, srcFactory) = futureResult(syncFactory.createDestinationComponentsFactory(PrefixOneDriveID,
+      TestTimeout, args))
+    processedArgs.accessedParameters should be(expAccessedKeys)
+    srcFactory match {
+      case oneFactory: OneDriveComponentsDestinationFactory =>
+        oneFactory.config.rootUri.toString() should be(s"$DavRootUri/$OneDriveID/root:$StoragePath")
+        oneFactory.config.optBasicAuthConfig.get.user should be(User)
+        oneFactory.config.optBasicAuthConfig.get.password.secret should be(Password)
+        oneFactory.config.uploadChunkSize should be(ChunkSize * 1024 * 1024)
+        oneFactory.config.timeout should be(TestTimeout)
+      case r => fail("Unexpected result: " + r)
+    }
   }
 }

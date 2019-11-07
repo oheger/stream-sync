@@ -30,9 +30,10 @@ import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation
 import com.github.sync.cli.ParameterManager._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
-import com.github.sync.http.{BasicAuthConfig, OAuthStorageConfig}
+import com.github.sync.http.{BasicAuthConfig, HttpConfig, OAuthStorageConfig}
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
 import com.github.sync.local.LocalFsConfig
+import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.webdav.DavConfig
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -41,6 +42,9 @@ import scala.util.Try
 object SyncComponentsFactory {
   /** URI prefix indicating a WebDav structure. */
   val PrefixWebDav = "dav:"
+
+  /** URI prefix indicating a OneDrive structure. */
+  val PrefixOneDrive = "onedrive:"
 
   /**
     * Property for the time zone to be applied to the last-modified timestamps
@@ -101,8 +105,28 @@ object SyncComponentsFactory {
     */
   val PropDavDeleteBeforeOverride = "delete-before-override"
 
+  /**
+    * Property for the relative path to be synced on a OneDrive drive.
+    */
+  val PropOneDrivePath = "path"
+
+  /**
+    * Property for the URI of the OneDrive server. This property is optional;
+    * the default server URI is used if not specified.
+    */
+  val PropOneDriveServer = "server-uri"
+
+  /**
+    * Property for the chunk size (in MB) for file uploads to a OneDrive
+    * server. This is an optional property.
+    */
+  val PropOneDriveUploadChunkSize = "upload-chunk-size"
+
   /** Regular expression for parsing a WebDav URI. */
   private val RegDavUri = (PrefixWebDav + "(.+)").r
+
+  /** Regular expression for parsing a OneDrive drive ID. */
+  private val RegOneDriveID = (PrefixOneDrive + "(.+)").r
 
   /**
     * A trait defining the type of a structure to be synced.
@@ -343,6 +367,49 @@ object SyncComponentsFactory {
   }
 
   /**
+    * Extracts the configuration for a OneDrive server from the given
+    * parameters, handling errors and updating the map with parameters.
+    *
+    * @param driveID       the OneDrive drive ID
+    * @param timeout       the timeout for requests
+    * @param parameters    the parameters object
+    * @param structureType the structure type
+    * @param ec            the execution context
+    * @param consoleReader the object for reading from the console
+    * @return a ''Future'' with the extracted configuration and updated
+    *         parameters
+    */
+  private def extractOneDriveConfig(driveID: String, timeout: Timeout, parameters: Parameters,
+                                    structureType: StructureType)
+                                   (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
+  Future[(OneDriveConfig, Parameters)] =
+    extractConfig(oneDriveConfigProcessor(driveID, timeout, structureType), parameters)
+
+  /**
+    * Returns a ''CliProcessor'' that extracts the configuration for a OneDrive
+    * server from the current command line arguments.
+    *
+    * @param driveID       the OneDrive drive ID
+    * @param timeout       the timeout for requests
+    * @param structureType the structure type
+    * @return the ''CliProcessor'' for the OneDrive configuration
+    */
+  private def oneDriveConfigProcessor(driveID: String, timeout: Timeout, structureType: StructureType):
+  CliProcessor[Try[OneDriveConfig]] = {
+    val keyPath = structureType.configPropertyName(PropOneDrivePath)
+    val keyChunkSize = structureType.configPropertyName(PropOneDriveUploadChunkSize)
+    for {
+      triedChunkSize <- asMandatory(keyChunkSize, intOptionValue(keyChunkSize,
+        Some(OneDriveConfig.DefaultUploadChunkSizeMB)))
+      triedPath <- asMandatory(keyPath, stringOptionValue(keyPath))
+      triedServer <- stringOptionValue(structureType.configPropertyName(PropOneDriveServer))
+      triedBasicAuth <- basicAuthProcessor(structureType)
+      triedOAuth <- oauthConfigProcessor(structureType)
+    } yield createOneDriveConfig(driveID, timeout, triedPath, triedChunkSize, triedServer,
+      triedBasicAuth, triedOAuth)
+  }
+
+  /**
     * Returns a ''CliProcessor'' for obtaining the password of the Dav server.
     * The password is mandatory; if it is not specified in the arguments, it is
     * read from the console.
@@ -428,6 +495,30 @@ object SyncComponentsFactory {
   }
 
   /**
+    * Creates a ''OneDriveConfig'' object from the given components. Errors are
+    * aggregated in the resulting ''Try''.
+    *
+    * @param driveID              the OneDrive drive ID
+    * @param timeout              the timeout for requests
+    * @param triedPath            the sync path component
+    * @param triedChunkSize       the upload chunk size component
+    * @param triedServerUri       the server URI component
+    * @param triedBasicAuthConfig the component for basic auth config
+    * @param triedOAuthConfig     the component for OAuth config
+    * @return a ''Try'' with the OneDrive configuration
+    */
+  private def createOneDriveConfig(driveID: String, timeout: Timeout,
+                                   triedPath: Try[String], triedChunkSize: Try[Int],
+                                   triedServerUri: Try[Option[String]],
+                                   triedBasicAuthConfig: Try[Option[BasicAuthConfig]],
+                                   triedOAuthConfig: Try[Option[OAuthStorageConfig]]): Try[OneDriveConfig] =
+    ParameterManager.createRepresentation(triedPath, triedChunkSize, triedServerUri,
+      triedBasicAuthConfig, triedOAuthConfig) {
+      OneDriveConfig(driveID, triedPath.get, triedChunkSize.get, timeout, triedOAuthConfig.get,
+        triedServerUri.get, triedBasicAuthConfig.get)
+    }
+
+  /**
     * Creates an ''OptionValue'' with a ''BasicAuthConfig'' based on the given
     * components.
     *
@@ -442,22 +533,22 @@ object SyncComponentsFactory {
     }
 
   /**
-    * Creates the factory for creating HTTP actors for interacting with WebDav
-    * servers based on the given configuration. Depending on the authentication
+    * Creates the factory for creating HTTP actors for interacting with an HTTP
+    * server based on the given configuration. Depending on the authentication
     * scheme configured, a different factory has to be used.
     *
-    * @param davConfig      the WebDav configuration
+    * @param httpConfig     the HTTP configuration
     * @param storageService the storage service to be used
     * @param ec             the execution context
     * @param mat            the object to materialize streams
     * @return a ''Future'' with the factory for HTTP actors
     */
-  private def createDavHttpActorFactory(davConfig: DavConfig,
-                                        storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
-                                          Secret, OAuthTokenData])
-                                       (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  private def createHttpActorFactory(httpConfig: HttpConfig,
+                                     storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+                                       Secret, OAuthTokenData])
+                                    (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Future[HttpActorFactory] =
-    davConfig.optOAuthConfig match {
+    httpConfig.optOAuthConfig match {
       case Some(storageConfig) =>
         for {oauthConfig <- storageService.loadConfig(storageConfig)
              secret <- storageService.loadClientSecret(storageConfig)
@@ -516,8 +607,12 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
   Future[(Parameters, SourceComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
       for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, SourceStructureType)
-           httpFactory <- createDavHttpActorFactory(config, oauthStorageService)
+           httpFactory <- createHttpActorFactory(config, oauthStorageService)
            } yield (nextParams, new DavComponentsSourceFactory(config, httpFactory))
+    case RegOneDriveID(driveID) =>
+      for {(config, nextParams) <- extractOneDriveConfig(driveID, timeout, parameters, SourceStructureType)
+           httpFactory <- createHttpActorFactory(config, oauthStorageService)
+           } yield (nextParams, new OneDriveComponentsSourceFactory(config, httpFactory))
     case _ =>
       extractLocalFsConfig(uri, parameters, SourceStructureType)
         .map(t => (t._2, new LocalFsSourceComponentsFactory(t._1)))
@@ -544,8 +639,12 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
   Future[(Parameters, DestinationComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
       for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, DestinationStructureType)
-           httpFactory <- createDavHttpActorFactory(config, oauthStorageService)
+           httpFactory <- createHttpActorFactory(config, oauthStorageService)
            } yield (nextParams, new DavComponentsDestinationFactory(config, httpFactory))
+    case RegOneDriveID(driveID) =>
+      for {(config, nextParams) <- extractOneDriveConfig(driveID, timeout, parameters, DestinationStructureType)
+           httpFactory <- createHttpActorFactory(config, oauthStorageService)
+           } yield (nextParams, new OneDriveComponentsDestinationFactory(config, httpFactory))
     case _ =>
       extractLocalFsConfig(uri, parameters, DestinationStructureType)
         .map(t => (t._2, new LocalFsDestinationComponentsFactory(t._1, timeout)))
