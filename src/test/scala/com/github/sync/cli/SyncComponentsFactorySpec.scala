@@ -29,7 +29,7 @@ import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, SourceComponentsFactory, SourceStructureType}
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.{HttpMultiHostRequestActor, HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
@@ -131,7 +131,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     */
   private def extractDavSourceConfig(sourceFactory: SourceComponentsFactory): DavConfig =
     sourceFactory match {
-      case davFactory: DavComponentsSourceFactory => davFactory.config
+      case davFactory: DavComponentsSourceFactory =>
+        davFactory.httpActorFactory.httpRequestActorProps should be(HttpRequestActor(DavRootUri))
+        davFactory.config
       case f => fail("Unexpected source factory: " + f)
     }
 
@@ -143,7 +145,10 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     */
   private def extractOneDriveSourceConfig(sourceFactory: SourceComponentsFactory): OneDriveConfig =
     sourceFactory match {
-      case oneFactory: OneDriveComponentsSourceFactory => oneFactory.config
+      case oneFactory: OneDriveComponentsSourceFactory =>
+        oneFactory.httpActorFactory.httpRequestActorProps should be(HttpMultiHostRequestActor(
+          SyncComponentsFactory.OneDriveHostCacheSize, 1))
+        oneFactory.config
       case f => fail("Unexpected source factory: " + f)
     }
 
@@ -341,6 +346,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
         davFactory.config.lastModifiedNamespace should be(Some(LastModifiedNamespace))
         davFactory.config.deleteBeforeOverride shouldBe true
         davFactory.config.timeout should be(TestTimeout)
+        davFactory.httpActorFactory.httpRequestActorProps should be(HttpRequestActor(DavRootUri))
       case r => fail("Unexpected result: " + r)
     }
   }
@@ -460,6 +466,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
         oneFactory.config.optBasicAuthConfig.get.password.secret should be(Password)
         oneFactory.config.uploadChunkSize should be(ChunkSize * 1024 * 1024)
         oneFactory.config.timeout should be(TestTimeout)
+        oneFactory.httpActorFactory.httpRequestActorProps should be(HttpMultiHostRequestActor(
+          SyncComponentsFactory.OneDriveHostCacheSize, 1))
       case r => fail("Unexpected result: " + r)
     }
   }

@@ -20,7 +20,7 @@ import java.nio.file.Paths
 import java.time.ZoneId
 
 import akka.NotUsed
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.model.Uri
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
@@ -30,7 +30,7 @@ import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation
 import com.github.sync.cli.ParameterManager._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
-import com.github.sync.http.{BasicAuthConfig, HttpConfig, OAuthStorageConfig}
+import com.github.sync.http.{BasicAuthConfig, HttpConfig, HttpMultiHostRequestActor, HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
@@ -121,6 +121,12 @@ object SyncComponentsFactory {
     * server. This is an optional property.
     */
   val PropOneDriveUploadChunkSize = "upload-chunk-size"
+
+  /**
+    * Constant for the size of the cache with different hosts for a OneDrive
+    * server.
+    */
+  val OneDriveHostCacheSize = 8
 
   /** Regular expression for parsing a WebDav URI. */
   private val RegDavUri = (PrefixWebDav + "(.+)").r
@@ -537,13 +543,14 @@ object SyncComponentsFactory {
     * server based on the given configuration. Depending on the authentication
     * scheme configured, a different factory has to be used.
     *
-    * @param httpConfig     the HTTP configuration
-    * @param storageService the storage service to be used
-    * @param ec             the execution context
-    * @param mat            the object to materialize streams
+    * @param requestActorProps ''Props'' to create the HTTP actor
+    * @param httpConfig        the HTTP configuration
+    * @param storageService    the storage service to be used
+    * @param ec                the execution context
+    * @param mat               the object to materialize streams
     * @return a ''Future'' with the factory for HTTP actors
     */
-  private def createHttpActorFactory(httpConfig: HttpConfig,
+  private def createHttpActorFactory(requestActorProps: Props, httpConfig: HttpConfig,
                                      storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                        Secret, OAuthTokenData])
                                     (implicit ec: ExecutionContext, mat: ActorMaterializer):
@@ -553,9 +560,9 @@ object SyncComponentsFactory {
         for {oauthConfig <- storageService.loadConfig(storageConfig)
              secret <- storageService.loadClientSecret(storageConfig)
              tokens <- storageService.loadTokens(storageConfig)
-             } yield new OAuthHttpActorFactory(storageConfig, oauthConfig, secret, tokens)
+             } yield new OAuthHttpActorFactory(requestActorProps, storageConfig, oauthConfig, secret, tokens)
       case None =>
-        Future.successful(BasicAuthHttpActorFactory)
+        Future.successful(new BasicAuthHttpActorFactory(requestActorProps))
     }
 }
 
@@ -607,11 +614,12 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
   Future[(Parameters, SourceComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
       for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, SourceStructureType)
-           httpFactory <- createHttpActorFactory(config, oauthStorageService)
+           httpFactory <- createHttpActorFactory(HttpRequestActor(davUri), config, oauthStorageService)
            } yield (nextParams, new DavComponentsSourceFactory(config, httpFactory))
     case RegOneDriveID(driveID) =>
       for {(config, nextParams) <- extractOneDriveConfig(driveID, timeout, parameters, SourceStructureType)
-           httpFactory <- createHttpActorFactory(config, oauthStorageService)
+           httpFactory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
+             config, oauthStorageService)
            } yield (nextParams, new OneDriveComponentsSourceFactory(config, httpFactory))
     case _ =>
       extractLocalFsConfig(uri, parameters, SourceStructureType)
@@ -639,11 +647,12 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
   Future[(Parameters, DestinationComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
       for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, DestinationStructureType)
-           httpFactory <- createHttpActorFactory(config, oauthStorageService)
+           httpFactory <- createHttpActorFactory(HttpRequestActor(davUri), config, oauthStorageService)
            } yield (nextParams, new DavComponentsDestinationFactory(config, httpFactory))
     case RegOneDriveID(driveID) =>
       for {(config, nextParams) <- extractOneDriveConfig(driveID, timeout, parameters, DestinationStructureType)
-           httpFactory <- createHttpActorFactory(config, oauthStorageService)
+           httpFactory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
+             config, oauthStorageService)
            } yield (nextParams, new OneDriveComponentsDestinationFactory(config, httpFactory))
     case _ =>
       extractLocalFsConfig(uri, parameters, DestinationStructureType)

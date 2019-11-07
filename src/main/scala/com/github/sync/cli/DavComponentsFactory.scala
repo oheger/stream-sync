@@ -36,7 +36,7 @@ import com.github.sync.webdav._
   * @param system           the actor system
   * @param mat              the object to materialize streams
   */
-private class DavComponentsSourceFactory(val config: DavConfig, httpActorFactory: HttpActorFactory)
+private class DavComponentsSourceFactory(val config: DavConfig, val httpActorFactory: HttpActorFactory)
                                         (implicit system: ActorSystem, mat: ActorMaterializer)
   extends SourceComponentsFactory {
 
@@ -81,7 +81,7 @@ private class DavComponentsSourceFactory(val config: DavConfig, httpActorFactory
   * @param system           the actor system
   * @param mat              the object to materialize streams
   */
-private class DavComponentsDestinationFactory(val config: DavConfig, httpActorFactory: HttpActorFactory)
+private class DavComponentsDestinationFactory(val config: DavConfig, val httpActorFactory: HttpActorFactory)
                                              (implicit system: ActorSystem, mat: ActorMaterializer)
   extends DestinationComponentsFactory {
 

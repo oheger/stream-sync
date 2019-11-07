@@ -44,7 +44,7 @@ object HttpActorFactory {
   * A trait that knows how to create the HTTP request actor for sync processes
   * against an HTTP server.
   *
-  * Depending on the authentication scheme used for the Dav server, the actor
+  * Depending on the authentication scheme used by the HTTP server, the actor
   * has to be created differently. This is abstracted via this trait.
   */
 sealed trait HttpActorFactory {
@@ -53,6 +53,15 @@ sealed trait HttpActorFactory {
     * fatal error related to HTTP requests is detected.
     */
   lazy val killSwitch: SharedKillSwitch = KillSwitches.shared(HttpActorFactory.KillSwitchName)
+
+  /**
+    * Returns a ''Props'' object for creating the basic HTTP request actor. The
+    * concrete actor type also depends on the specific HTTP protocol; therefore
+    * the creation ''Props'' have to be passed in.
+    *
+    * @return ''Props'' to create the HTTP request actor
+    */
+  def httpRequestActorProps: Props
 
   /**
     * Creates the actor for sending HTTP requests to the HTTP server.
@@ -67,7 +76,7 @@ sealed trait HttpActorFactory {
     */
   def createHttpRequestActor(config: HttpConfig, system: ActorSystem, clientCount: Int, name: String,
                              withKillSwitch: Boolean = false): ActorRef = {
-    val httpActor = system.actorOf(HttpRequestActor(config.rootUri), name)
+    val httpActor = system.actorOf(httpRequestActorProps, name)
     system.actorOf(authActorProps(config, system, clientCount, name, withKillSwitch, httpActor), name + "_auth")
   }
 
@@ -90,8 +99,10 @@ sealed trait HttpActorFactory {
 
 /**
   * A factory for HTTP request actors using Basic Auth for authentication.
+  *
+  * @param httpRequestActorProps ''Props'' to create the request actor
   */
-object BasicAuthHttpActorFactory extends HttpActorFactory {
+class BasicAuthHttpActorFactory(override val httpRequestActorProps: Props) extends HttpActorFactory {
   override protected def authActorProps(config: HttpConfig, system: ActorSystem, clientCount: Int, name: String,
                                         withKillSwitch: Boolean, httpActor: ActorRef): Props =
     HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get, clientCount)
@@ -100,12 +111,14 @@ object BasicAuthHttpActorFactory extends HttpActorFactory {
 /**
   * A factory for HTTP request actors using OAuth for authentication.
   *
-  * @param storageConfig the storage configuration for the IDP
-  * @param oauthConfig   the OAuth configuration
-  * @param clientSecret  the client secret for the IDP
-  * @param initTokenData initial token material
+  * @param httpRequestActorProps ''Props'' to create the request actor
+  * @param storageConfig         the storage configuration for the IDP
+  * @param oauthConfig           the OAuth configuration
+  * @param clientSecret          the client secret for the IDP
+  * @param initTokenData         initial token material
   */
-class OAuthHttpActorFactory(storageConfig: OAuthStorageConfig,
+class OAuthHttpActorFactory(override val httpRequestActorProps: Props,
+                            storageConfig: OAuthStorageConfig,
                             oauthConfig: OAuthConfig,
                             clientSecret: Secret,
                             initTokenData: OAuthTokenData) extends HttpActorFactory {
