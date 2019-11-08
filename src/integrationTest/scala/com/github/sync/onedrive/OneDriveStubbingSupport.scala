@@ -16,7 +16,7 @@
 
 package com.github.sync.onedrive
 
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{StatusCodes, Uri}
 import com.github.sync.WireMockSupport
 import com.github.sync.WireMockSupport.AuthFunc
 import com.github.tomakehurst.wiremock.client.WireMock._
@@ -30,6 +30,12 @@ object OneDriveStubbingSupport {
   /** The content type reported by OneDrive for JSON documents. */
   val ContentType =
     "application/json;odata.metadata=minimal;odata.streaming=true;IEEE754Compatible=false;charset=utf-8"
+
+  /** The prefix for the root path. */
+  val PrefixRoot = "/root:"
+
+  /** The prefix to access the items resource with a path. */
+  val PrefixItems: String = "/items" + PrefixRoot
 }
 
 /**
@@ -62,18 +68,33 @@ trait OneDriveStubbingSupport {
         .withBodyFile(responseFile)))
   }
 
-  protected def mapElementUri(config: OneDriveConfig, uri: String): String =
-    s"/$DriveID/root:$uri:"
+  /**
+    * Returns the path of the given URI.
+    * @param uri the URI
+    * @return the path of this URI as string
+    */
+  protected def path(uri: Uri): String = uri.path.toString()
+
+  /**
+    * Maps a relative element URI to the URI expected by the OneDrive server.
+    *
+    * @param config the OneDrive config
+    * @param uri    the relative URI to be mapped
+    * @param prefix the prefix to match a resource
+    * @return the mapped URI
+    */
+  protected def mapElementUri(config: OneDriveConfig, uri: String, prefix: String = PrefixRoot): Uri =
+    s"${config.driveRootUri}$prefix${config.syncPath}$uri"
 
   /**
     * Maps a relative folder URI to the URI expected by the OneDrive server.
     *
-    * @param config the current OneDrive config
+    * @param config the OneDrive config
     * @param uri    the relative URI to be mapped
     * @return the mapped URI
     */
   protected def mapFolderUri(config: OneDriveConfig, uri: String): String =
-    mapElementUri(config, uri) + "/children"
+    path(mapElementUri(config, uri)) + ":/children"
 
   /**
     * Creates a test configuration pointing to the mock server that uses the

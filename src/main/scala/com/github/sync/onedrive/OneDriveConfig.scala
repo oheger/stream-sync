@@ -59,7 +59,8 @@ object OneDriveConfig {
             optBasicAuthConfig: Option[BasicAuthConfig] = None): OneDriveConfig = {
     val driveRoot = UriEncodingHelper.withTrailingSeparator(optServerUri.getOrElse(OneDriveServerUri)) + driveID
     val rootUri = driveRoot + "/root:/" + UriEncodingHelper.removeLeadingSeparator(syncPath)
-    new OneDriveConfig(rootUri, timeout, optBasicAuthConfig, optOAuthConfig, driveRoot, uploadChunkSizeMB * FactorMB)
+    new OneDriveConfig(rootUri, timeout, optBasicAuthConfig, optOAuthConfig, driveRoot, syncPath,
+      uploadChunkSizeMB * FactorMB)
   }
 }
 
@@ -77,6 +78,7 @@ object OneDriveConfig {
   * @param optBasicAuthConfig optional config with basic auth settings
   * @param optOAuthConfig     optional config with OAuth config settings
   * @param driveRootUri       the root URI of the drive to be synced
+  * @param syncPath           the relative path of the folder to be synced
   * @param uploadChunkSize    the chunk size for file upload operations (Bytes)
   */
 case class OneDriveConfig(override val rootUri: Uri,
@@ -84,4 +86,5 @@ case class OneDriveConfig(override val rootUri: Uri,
                           override val optBasicAuthConfig: Option[BasicAuthConfig],
                           override val optOAuthConfig: Option[OAuthStorageConfig],
                           driveRootUri: String,
+                          syncPath: String,
                           uploadChunkSize: Int) extends HttpConfig

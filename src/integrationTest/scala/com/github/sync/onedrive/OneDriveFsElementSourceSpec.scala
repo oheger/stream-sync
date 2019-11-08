@@ -56,11 +56,11 @@ class OneDriveFsElementSourceSpec extends BaseHttpFsElementSourceSpec(ActorSyste
     * @param config the current OneDrive config
     */
   private def stubTestFolders(config: OneDriveConfig): Unit = {
-    stubOneDriveFolderRequest(config, RootPath, "root.json")
+    stubOneDriveFolderRequest(config, "", "root.json")
     ExpectedElements foreach {
       case FsFolder(relativeUri, _, _) =>
         val fileName = folderFileName(relativeUri, ".json", "")
-        val httpUri = Uri(RootPath + encodedFolderUri(relativeUri))
+        val httpUri = Uri(encodedFolderUri(relativeUri))
         stubOneDriveFolderRequest(config, httpUri.toString(), fileName)
       case _ => // ignore other elements
     }
