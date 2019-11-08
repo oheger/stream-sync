@@ -16,6 +16,7 @@
 
 package com.github.sync.webdav
 
+import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
 import com.github.sync._
 import org.scalatest.{FlatSpec, Matchers}
@@ -62,5 +63,46 @@ class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
     val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout)
 
     config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
+  }
+
+  it should "remove a trailing slash from the root URI" in {
+    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout)
+
+    config.rootPath should be("")
+  }
+
+  it should "correctly resolve a URI" in {
+    val rootUri = Uri("https://github.com/oheger/stream-sync")
+    val elemUri = "/test/some stuff/action.txt"
+    val expectedUri = Uri("/oheger/stream-sync/test/some%20stuff/action.txt")
+    val config = DavConfig(rootUri, None, None, deleteBeforeOverride = false, DavTimeout)
+
+    config resolveRelativeUri elemUri should be(expectedUri)
+  }
+
+  it should "handle a root URI with a trailing slash" in {
+    val elemUri = "/stream-sync"
+    val expectedUri = Uri("/stream-sync")
+    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout)
+
+    config resolveRelativeUri elemUri should be(expectedUri)
+  }
+
+  it should "support URIs ending with a slash" in {
+    val rootUri = Uri("https://github.com/oheger/stream-sync")
+    val elemUri = "/test/some stuff/sub"
+    val expectedUri = Uri("/oheger/stream-sync/test/some%20stuff/sub/")
+    val config = DavConfig(rootUri, None, None, deleteBeforeOverride = false, DavTimeout)
+
+    config.resolveRelativeUri(elemUri, withTrailingSlash = true) should be(expectedUri)
+  }
+
+  it should "support an alternative prefix for relative URIs" in {
+    val prefix = "/a%20path"
+    val elemUri = "/foo/elem.txt"
+    val expectedUri = Uri(prefix + elemUri)
+    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout)
+
+    config.resolveRelativeUri(elemUri, prefix = prefix) should be(expectedUri)
   }
 }

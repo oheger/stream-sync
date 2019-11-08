@@ -19,6 +19,7 @@ package com.github.sync.webdav
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
 import com.github.sync.http.{BasicAuthConfig, HttpConfig, OAuthStorageConfig}
+import com.github.sync.util.UriEncodingHelper
 
 object DavConfig {
   /**
@@ -51,9 +52,9 @@ object DavConfig {
             optModifiedNamespace: Option[String], deleteBeforeOverride: Boolean,
             timeout: Timeout, optBasicAuthConfig: Option[BasicAuthConfig] = None,
             optOAuthConfig: Option[OAuthStorageConfig] = None): DavConfig =
-    new DavConfig(rootUri, optModifiedProperty getOrElse DefaultModifiedProperty,
-      optModifiedNamespace, deleteBeforeOverride, createModifiedProperties(optModifiedProperty), timeout,
-      optBasicAuthConfig, optOAuthConfig)
+    new DavConfig(UriEncodingHelper.removeTrailingSeparator(rootUri.toString()),
+      optModifiedProperty getOrElse DefaultModifiedProperty, optModifiedNamespace, deleteBeforeOverride,
+      createModifiedProperties(optModifiedProperty), timeout, optBasicAuthConfig, optOAuthConfig)
 
   /**
     * Generates the list of modified properties. If a custom modified property
@@ -96,7 +97,7 @@ object DavConfig {
   * @param optBasicAuthConfig    optional config with basic auth settings
   * @param optOAuthConfig        optional config with OAuth settings
   */
-case class DavConfig(override  val rootUri: Uri,
+case class DavConfig(override val rootUri: Uri,
                      lastModifiedProperty: String,
                      lastModifiedNamespace: Option[String],
                      deleteBeforeOverride: Boolean,

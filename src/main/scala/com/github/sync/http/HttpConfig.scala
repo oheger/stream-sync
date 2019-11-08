@@ -21,6 +21,7 @@ import java.nio.file.Path
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
 import com.github.sync.crypt.Secret
+import com.github.sync.util.UriEncodingHelper
 
 /**
   * A data class that collects user credentials for accessing a WebDav server
@@ -105,4 +106,30 @@ trait HttpConfig {
     * @return an optional ''OAuthStorageConfig''
     */
   def optOAuthConfig: Option[OAuthStorageConfig]
+
+  /**
+    * Returns the root path of the HTTP server. This path is derived from the
+    * root URI by extracting the path component.
+    *
+    * @return the root path
+    */
+  def rootPath: String = rootUri.path.toString()
+
+  /**
+    * Provides basic functionality to resolve relative URIs against the root
+    * path of the HTTP server. The function is passed an un-encoded relative
+    * URI, which can consist of multiple components. The single components are
+    * encoded and appended to the given prefix. Optionally, a trailing slash is
+    * added.
+    *
+    * @param uri               the relative URI to be resolved
+    * @param prefix            the prefix to be added
+    * @param withTrailingSlash flag whether the result should end on a slash
+    * @return the resolved URI
+    */
+  def resolveRelativeUri(uri: String, prefix: String = rootPath, withTrailingSlash: Boolean = false): Uri = {
+    val encodedUri = UriEncodingHelper encodeComponents uri
+    val relativeUri = if (withTrailingSlash) encodedUri + UriEncodingHelper.UriSeparator else encodedUri
+    Uri(prefix + relativeUri)
+  }
 }
