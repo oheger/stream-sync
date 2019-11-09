@@ -63,7 +63,6 @@ trait HttpOperationHandler[C <: HttpConfig] {
   def webDavProcessingFlow(config: C, fileProvider: SourceFileProvider, requestActor: ActorRef)
                           (implicit system: ActorSystem, mat: ActorMaterializer):
   Flow[SyncOperation, SyncOperation, NotUsed] = {
-    val uriResolver = ElementUriResolver(config.rootUri)
     val syncRequestActor =
       system.actorOf(SyncOperationRequestActor(requestActor, config.timeout), "syncOperationRequestActor")
     // set a long implicit timeout; timeouts are handled by the request actor
@@ -84,16 +83,16 @@ trait HttpOperationHandler[C <: HttpConfig] {
     def createRequestData(op: SyncOperation): Future[SyncOperationRequestData] = {
       op match {
         case SyncOperation(file@FsFile(_, _, _, _, _), ActionRemove, _, _, _) =>
-          createRemoveFileRequest(uriResolver, op, file)
+          createRemoveFileRequest(op, file)
         case SyncOperation(folder@FsFolder(_, _, _), ActionRemove, _, _, _) =>
-          createRemoveFolderRequest(uriResolver, op, folder)
+          createRemoveFolderRequest(op, folder)
         case SyncOperation(folder@FsFolder(_, _, _), ActionCreate, _, _, _) =>
-          createNewFolderRequest(uriResolver, op, folder)
+          createNewFolderRequest(op, folder)
         case SyncOperation(file@FsFile(_, _, _, _, _), ActionCreate, _, srcUri, _) =>
-          createNewFileRequest(uriResolver, op, file, fileProvider.fileSize(file.size),
+          createNewFileRequest(op, file, fileProvider.fileSize(file.size),
             fileProvider.fileSource(srcUri))
         case SyncOperation(file@FsFile(_, _, _, _, _), ActionOverride, _, srcUri, _) =>
-          createUpdateFileRequest(uriResolver, op, file, fileProvider.fileSize(file.size),
+          createUpdateFileRequest(op, file, fileProvider.fileSize(file.size),
             fileProvider.fileSource(srcUri))
         case _ =>
           Future.failed(new IllegalStateException("Invalid SyncOperation: " + op))
@@ -126,52 +125,48 @@ trait HttpOperationHandler[C <: HttpConfig] {
   /**
     * Creates an object describing the request to remove a folder.
     *
-    * @param uriResolver the URI resolver
-    * @param op          the sync operation
-    * @param folder      the folder affected
-    * @param ec          the execution context
+    * @param op     the sync operation
+    * @param folder the folder affected
+    * @param ec     the execution context
     * @return a ''Future'' with request information
     */
-  protected def createRemoveFolderRequest(uriResolver: ElementUriResolver, op: SyncOperation, folder: FsFolder)
+  protected def createRemoveFolderRequest(op: SyncOperation, folder: FsFolder)
                                          (implicit ec: ExecutionContext): Future[SyncOperationRequestData]
 
   /**
     * Creates an object describing the request to remove a file.
     *
-    * @param uriResolver the URI resolver
-    * @param op          the sync operation
-    * @param file        the file affected
-    * @param ec          the execution context
+    * @param op   the sync operation
+    * @param file the file affected
+    * @param ec   the execution context
     * @return a ''Future'' with request information
     */
-  protected def createRemoveFileRequest(uriResolver: ElementUriResolver, op: SyncOperation, file: FsFile)
+  protected def createRemoveFileRequest(op: SyncOperation, file: FsFile)
                                        (implicit ec: ExecutionContext): Future[SyncOperationRequestData]
 
   /**
     * Creates an object describing the request to create a new folder.
     *
-    * @param uriResolver the URI resolver
-    * @param op          the sync operation
-    * @param folder      the folder affected
-    * @param ec          the execution context
+    * @param op     the sync operation
+    * @param folder the folder affected
+    * @param ec     the execution context
     * @return a ''Future'' with request information
     */
-  protected def createNewFolderRequest(uriResolver: ElementUriResolver, op: SyncOperation, folder: FsFolder)
+  protected def createNewFolderRequest(op: SyncOperation, folder: FsFolder)
                                       (implicit ec: ExecutionContext): Future[SyncOperationRequestData]
 
   /**
     * Creates an object describing the request to create a new file.
     *
-    * @param uriResolver the URI resolver
-    * @param op          the sync operation
-    * @param fileSize    the adjusted file size
-    * @param file        the file affected
-    * @param source      a ''Source'' with the content of the file
-    * @param ec          the execution context
-    * @param mat         the object to materialize streams
+    * @param op       the sync operation
+    * @param fileSize the adjusted file size
+    * @param file     the file affected
+    * @param source   a ''Source'' with the content of the file
+    * @param ec       the execution context
+    * @param mat      the object to materialize streams
     * @return a ''Future'' with request information
     */
-  protected def createNewFileRequest(uriResolver: ElementUriResolver, op: SyncOperation, file: FsFile,
+  protected def createNewFileRequest(op: SyncOperation, file: FsFile,
                                      fileSize: Long, source: Future[Source[ByteString, Any]])
                                     (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Future[SyncOperationRequestData]
@@ -179,16 +174,15 @@ trait HttpOperationHandler[C <: HttpConfig] {
   /**
     * Creates an object describing the request to replace a file on the server.
     *
-    * @param uriResolver the URI resolver
-    * @param op          the sync operation
-    * @param fileSize    the adjusted file size
-    * @param file        the file affected
-    * @param source      a ''Source'' with the content of the file
-    * @param ec          the execution context
-    * @param mat         the object to materialize streams
+    * @param op       the sync operation
+    * @param fileSize the adjusted file size
+    * @param file     the file affected
+    * @param source   a ''Source'' with the content of the file
+    * @param ec       the execution context
+    * @param mat      the object to materialize streams
     * @return a ''Future'' with request information
     */
-  protected def createUpdateFileRequest(uriResolver: ElementUriResolver, op: SyncOperation, file: FsFile,
+  protected def createUpdateFileRequest(op: SyncOperation, file: FsFile,
                                         fileSize: Long, source: Future[Source[ByteString, Any]])
                                        (implicit ec: ExecutionContext, mat: ActorMaterializer):
   Future[SyncOperationRequestData]
