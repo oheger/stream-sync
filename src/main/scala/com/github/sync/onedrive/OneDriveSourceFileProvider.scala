@@ -23,7 +23,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SourceFileProvider
-import com.github.sync.http.{ElementUriResolver, HttpExtensionActor, HttpRequestActor}
+import com.github.sync.http.{HttpExtensionActor, HttpRequestActor}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -48,9 +48,6 @@ import scala.concurrent.{ExecutionContext, Future}
 class OneDriveSourceFileProvider(config: OneDriveConfig, httpActor: ActorRef)
                                 (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer)
   extends SourceFileProvider {
-  /** The object to resolve element URIs. */
-  private val uriResolver = ElementUriResolver(config.rootUri)
-
   /** The timeout for HTTP requests. */
   private implicit val timeout: Timeout = config.timeout
 
@@ -78,7 +75,7 @@ class OneDriveSourceFileProvider(config: OneDriveConfig, httpActor: ActorRef)
     * @return the request
     */
   private def createContentRequest(uri: String): HttpRequestActor.SendRequest = {
-    val httpUri = uriResolver.resolveElementUri(uri + ":/content").withAuthority(config.rootUri.authority)
+    val httpUri = config.resolveItemsUri(uri + ":/content").withAuthority(config.rootUri.authority)
     val request = HttpRequest(uri = httpUri)
     HttpRequestActor.SendRequest(request, null)
   }

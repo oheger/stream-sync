@@ -37,7 +37,7 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
   private def stubDownloadRequest(config: OneDriveConfig, uri: String, authFunc: AuthFunc,
                                   content: String = FileTestHelper.TestData): Unit = {
     val downloadPath = "/" + UUID.randomUUID()
-    stubFor(authFunc(get(urlPathEqualTo(path(mapElementUri(config, uri)) + ":/content")))
+    stubFor(authFunc(get(urlPathEqualTo(path(mapElementUri(config, uri, prefix = PrefixItems)) + ":/content")))
       .willReturn(aResponse().withStatus(302)
         .withHeader("Location", serverUri(downloadPath))))
     stubFor(authFunc(get(urlPathEqualTo(downloadPath)))
