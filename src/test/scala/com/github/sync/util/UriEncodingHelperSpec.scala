@@ -66,6 +66,18 @@ class UriEncodingHelperSpec extends FlatSpec with Matchers {
     UriEncodingHelper.withTrailingSeparator(Uri) should be(Uri + "/")
   }
 
+  it should "not modify a URI that already starts with a separator" in {
+    val Uri = "/path/with/leading/separator"
+
+    UriEncodingHelper withLeadingSeparator Uri should be(Uri)
+  }
+
+  it should "add a leading separator to a URI if necessary" in {
+    val Uri = "path/without/leading/separator"
+
+    UriEncodingHelper withLeadingSeparator Uri should be("/" + Uri)
+  }
+
   it should "not modify a URI if no trailing separator can be removed" in {
     val Uri = "/this/has/no/trailing/separator"
 

@@ -90,6 +90,17 @@ object UriEncodingHelper {
     if (hasTrailingSeparator(uri)) uri else uri + UriSeparator
 
   /**
+    * Makes sure that the passed in URI starts with a separator. A separator is
+    * added in front if and only if the passed in string does not already start
+    * with one.
+    *
+    * @param uri the URI to be checked
+    * @return the URI with a leading separator
+    */
+  def withLeadingSeparator(uri: String): String =
+    if (hasLeadingSeparator(uri)) uri else UriSeparator + uri
+
+  /**
     * Removes a trailing separator from the passed in URI if it is present. If
     * the URI does not end with a separator, it is returned as is.
     *
@@ -108,6 +119,16 @@ object UriEncodingHelper {
     *         otherwise
     */
   def hasTrailingSeparator(uri: String): Boolean = uri.endsWith(UriSeparator)
+
+  /**
+    * Returns a flag whether the passed in URI string starts with a separator
+    * character.
+    *
+    * @param uri the URI to be checked
+    * @return '''true''' if the URI starts with a seprator; '''false'''
+    *         otherwise
+    */
+  def hasLeadingSeparator(uri: String): Boolean = uri startsWith UriSeparator
 
   /**
     * Removes a leading separator from the given URI if it is present.
