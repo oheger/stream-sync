@@ -25,6 +25,15 @@ object OneDriveConfig {
   /** The default root URI for the OneDrive API. */
   val OneDriveServerUri = "https://graph.microsoft.com/v1.0/me/drives"
 
+  /** The URI prefix representing the root path of a drive structure. */
+  val PrefixRoot = "/root:"
+
+  /** The URI prefix for accessing the items resource with a path. */
+  val ItemsPrefix: String = "/items" + PrefixRoot
+
+  /** The URI suffix to access the children of a folder. */
+  val PathChildren = ":/children"
+
   /**
     * Default value for the upload chunk size (in MB). OneDrive accepts only
     * uploads of a limited size (60 MB currently). Larger files need to be
@@ -58,8 +67,9 @@ object OneDriveConfig {
             optOAuthConfig: Option[OAuthStorageConfig], optServerUri: Option[String] = None,
             optBasicAuthConfig: Option[BasicAuthConfig] = None): OneDriveConfig = {
     val driveRoot = UriEncodingHelper.withTrailingSeparator(optServerUri.getOrElse(OneDriveServerUri)) + driveID
-    val rootUri = driveRoot + "/root:/" + UriEncodingHelper.removeLeadingSeparator(syncPath)
-    new OneDriveConfig(rootUri, timeout, optBasicAuthConfig, optOAuthConfig, driveRoot, syncPath,
+    val normalizedSyncPath = UriEncodingHelper withLeadingSeparator syncPath
+    val rootUri = driveRoot + PrefixRoot + normalizedSyncPath
+    new OneDriveConfig(rootUri, timeout, optBasicAuthConfig, optOAuthConfig, driveRoot, normalizedSyncPath,
       uploadChunkSizeMB * FactorMB)
   }
 }
@@ -85,6 +95,25 @@ case class OneDriveConfig(override val rootUri: Uri,
                           override val timeout: Timeout,
                           override val optBasicAuthConfig: Option[BasicAuthConfig],
                           override val optOAuthConfig: Option[OAuthStorageConfig],
-                          driveRootUri: String,
+                          driveRootUri: Uri,
                           syncPath: String,
-                          uploadChunkSize: Int) extends HttpConfig
+                          uploadChunkSize: Int) extends HttpConfig {
+  /**
+    * Resolves a relative URI as a sub path of the ''Items'' resource.
+    *
+    * @param uri the relative URI
+    * @return the resolved URI
+    */
+  def resolveItemsUri(uri: String): Uri =
+    resolveRelativeUri(uri, prefix = driveRootUri.path.toString() + OneDriveConfig.ItemsPrefix + syncPath)
+
+  /**
+    * Resolves a relative URI of a folder and appends the suffix to access the
+    * children of this folder.
+    *
+    * @param uri the relative folder URI
+    * @return the resolved URI pointing to this folder's children
+    */
+  def resolveFolderChildrenUri(uri: String): Uri =
+    resolveRelativeUri(uri + OneDriveConfig.PathChildren)
+}
