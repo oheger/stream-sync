@@ -21,7 +21,7 @@ import akka.http.scaladsl.model.HttpRequest
 import akka.stream.scaladsl.Source
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SourceFileProvider
-import com.github.sync.http.{ElementUriResolver, HttpExtensionActor, HttpRequestActor}
+import com.github.sync.http.{HttpExtensionActor, HttpRequestActor}
 
 import scala.concurrent.Future
 
@@ -50,12 +50,8 @@ object DavSourceFileProvider {
   * @param httpActor the actor for sending HTTP requests
   * @param system    the actor system
   */
-class DavSourceFileProvider(config: DavConfig, httpActor: ActorRef)
-                           (implicit system: ActorSystem)
+class DavSourceFileProvider(config: DavConfig, httpActor: ActorRef)(implicit system: ActorSystem)
   extends SourceFileProvider {
-  /** The object to resolve element URIs. */
-  private val uriResolver = ElementUriResolver(config.rootUri)
-
   /** The timeout for HTTP requests. */
   private implicit val timeout: Timeout = config.timeout
 
@@ -85,7 +81,7 @@ class DavSourceFileProvider(config: DavConfig, httpActor: ActorRef)
     * @return the corresponding HTTP request
     */
   private def createFileRequest(uri: String): HttpRequestActor.SendRequest = {
-    val httpRequest = HttpRequest(uri = uriResolver resolveElementUri uri)
+    val httpRequest = HttpRequest(uri = config resolveRelativeUri uri)
     HttpRequestActor.SendRequest(httpRequest, null)
   }
 }
