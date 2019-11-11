@@ -63,6 +63,15 @@ case class OneDriveItem(name: String,
 case class OneDriveModel(value: List[OneDriveItem])
 
 /**
+  * A data class representing the response of a request for an upload session.
+  * From this response the URL where to upload the file's content is
+  * extracted.
+  *
+  * @param uploadUrl the upload URL for the file
+  */
+case class UploadSessionResponse(uploadUrl: String)
+
+/**
   * An object defining converters for the data classes to be extracted from
   * OneDrive JSON responses.
   *
@@ -74,4 +83,5 @@ object OneDriveJsonProtocol extends DefaultJsonProtocol {
   implicit val fileSystemFormat: RootJsonFormat[OneDriveFileSystemInfo] = jsonFormat1(OneDriveFileSystemInfo)
   implicit val itemFormat: RootJsonFormat[OneDriveItem] = jsonFormat4(OneDriveItem)
   implicit val modelFormat: RootJsonFormat[OneDriveModel] = jsonFormat1(OneDriveModel.apply)
+  implicit val uploadSessionFormat: RootJsonFormat[UploadSessionResponse] = jsonFormat1(UploadSessionResponse)
 }
