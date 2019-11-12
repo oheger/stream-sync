@@ -22,7 +22,7 @@ import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.headers.Accept
-import akka.http.scaladsl.model.{HttpCharsets, HttpRequest, MediaRange, MediaType}
+import akka.http.scaladsl.model.{HttpCharsets, HttpRequest, MediaRange, MediaType, Uri}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
@@ -70,8 +70,8 @@ object OneDriveFsElementSource extends HttpFsElementSource[OneDriveConfig] {
   override protected def createFolderRequest(state: HttpFsElementSource.HttpIterationState[OneDriveConfig],
                                              folderData: SyncFolderData[HttpFsElementSource.HttpFolder]):
   HttpRequestActor.SendRequest = {
-    val request = HttpRequest(uri = UriEncodingHelper.removeTrailingSeparator(folderData.data.ref) + PathChildren,
-      headers = Headers)
+    val uri = Uri(UriEncodingHelper.removeTrailingSeparator(folderData.data.ref) + PathChildren)
+    val request = HttpRequest(uri = uri, headers = Headers)
     HttpRequestActor.SendRequest(request, null)
   }
 
@@ -121,7 +121,7 @@ object OneDriveFsElementSource extends HttpFsElementSource[OneDriveConfig] {
   private def convertItemToElement(state: HttpIterationState[OneDriveConfig], parent: FsFolder,
                                    item: OneDriveItem): HttpFsElementSource.ElemData = {
     val elemUri = parent.relativeUri + UriEncodingHelper.UriSeparator + item.name
-    val ref = state.rootUriPrefix + UriEncodingHelper.encodeComponents(elemUri)
+    val ref = state.config.resolveRelativeUri(elemUri).toString()
     val elem = item.file match {
       case None =>
         FsFolder(elemUri, parent.level + 1)

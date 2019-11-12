@@ -60,7 +60,7 @@ trait OneDriveStubbingSupport {
   protected def stubOneDriveFolderRequest(config: OneDriveConfig, uri: String, responseFile: String,
                                           status: Int = StatusCodes.OK.intValue,
                                           authFunc: AuthFunc = WireMockSupport.NoAuthFunc): Unit = {
-    stubFor(authFunc(get(urlPathEqualTo(mapFolderUri(config, uri))))
+    stubFor(authFunc(get(urlPathEqualTo(path(config.resolveFolderChildrenUri(uri)))))
       .withHeader("Accept", equalTo("application/json"))
       .willReturn(aResponse()
         .withStatus(status)

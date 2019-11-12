@@ -17,7 +17,7 @@
 package com.github.sync.onedrive
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.{StatusCodes, Uri}
+import akka.http.scaladsl.model.StatusCodes
 import akka.stream.scaladsl.Source
 import com.github.sync.BaseHttpFsElementSourceSpec
 import com.github.sync.SyncTypes.{FsElement, FsFolder}
@@ -60,8 +60,7 @@ class OneDriveFsElementSourceSpec extends BaseHttpFsElementSourceSpec(ActorSyste
     ExpectedElements foreach {
       case FsFolder(relativeUri, _, _) =>
         val fileName = folderFileName(relativeUri, ".json", "")
-        val httpUri = Uri(encodedFolderUri(relativeUri))
-        stubOneDriveFolderRequest(config, httpUri.toString(), fileName)
+        stubOneDriveFolderRequest(config, relativeUri, fileName)
       case _ => // ignore other elements
     }
   }
