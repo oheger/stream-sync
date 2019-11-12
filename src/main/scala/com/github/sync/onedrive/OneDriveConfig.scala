@@ -99,6 +99,15 @@ case class OneDriveConfig(override val rootUri: Uri,
                           syncPath: String,
                           uploadChunkSize: Int) extends HttpConfig {
   /**
+    * @inheritdoc This implementation always returns absolute URIs. This is
+    *             required by the multi-host request actor.
+    */
+  override def resolveRelativeUri(uri: String, prefix: String, withTrailingSlash: Boolean): Uri = {
+    val relUri = super.resolveRelativeUri(uri, prefix, withTrailingSlash)
+    relUri.resolvedAgainst(rootUri)
+  }
+
+  /**
     * Resolves a relative URI as a sub path of the ''Items'' resource.
     *
     * @param uri the relative URI
@@ -115,5 +124,5 @@ case class OneDriveConfig(override val rootUri: Uri,
     * @return the resolved URI pointing to this folder's children
     */
   def resolveFolderChildrenUri(uri: String): Uri =
-    resolveRelativeUri(uri + OneDriveConfig.PathChildren)
+    UriEncodingHelper.removeTrailingSeparator(resolveRelativeUri(uri).toString()) + OneDriveConfig.PathChildren
 }

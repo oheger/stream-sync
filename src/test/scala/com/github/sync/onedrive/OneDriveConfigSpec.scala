@@ -75,10 +75,18 @@ class OneDriveConfigSpec extends FlatSpec with Matchers {
     config.driveRootUri should be(Uri(ServerUri + "/" + DriveID))
   }
 
+  it should "resolve relative URIs to absolute URIs" in {
+    val ServerUri = "http://www.test-uri.org"
+    val relUri = "/path/file.txt"
+    val expUri = Uri(s"$ServerUri/$DriveID/root:$SyncPath$relUri")
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, None, optServerUri = Some(ServerUri))
+
+    config resolveRelativeUri relUri should be(expUri)
+  }
+
   it should "resolve a URI for the items resource" in {
     val relUri = "/a test/path/elem.txt"
-    val serverUri = Uri(OneDriveConfig.OneDriveServerUri)
-    val expUri = Uri(s"${serverUri.path}/$DriveID/items/root:$SyncPath/a%20test/path/elem.txt")
+    val expUri = Uri(s"${OneDriveConfig.OneDriveServerUri}/$DriveID/items/root:$SyncPath/a%20test/path/elem.txt")
     val config = OneDriveConfig(DriveID, SyncPath, 1, 1.minute, None)
 
     config resolveItemsUri relUri should be(expUri)
@@ -87,8 +95,7 @@ class OneDriveConfigSpec extends FlatSpec with Matchers {
   it should "handle a sync path that does not start with a slash" in {
     val SyncPathNoSlash = SyncPath drop 1
     val relUri = "/foo/bar/baz.txt"
-    val serverUri = Uri(OneDriveConfig.OneDriveServerUri)
-    val expUri = Uri(s"${serverUri.path}/$DriveID/items/root:$SyncPath$relUri")
+    val expUri = Uri(s"${OneDriveConfig.OneDriveServerUri}/$DriveID/items/root:$SyncPath$relUri")
     val config = OneDriveConfig(DriveID, SyncPathNoSlash, 1, 1.minute, None)
 
     config.syncPath should be(SyncPath)
@@ -97,10 +104,16 @@ class OneDriveConfigSpec extends FlatSpec with Matchers {
 
   it should "resolve a URI to a folder's children" in {
     val relUri = "my/special/test folder"
-    val serverUri = Uri(OneDriveConfig.OneDriveServerUri)
-    val expUri = Uri(s"${serverUri.path}/$DriveID/root:$SyncPath/my/special/test%20folder:/children")
+    val expUri = Uri(s"${OneDriveConfig.OneDriveServerUri}/$DriveID/root:$SyncPath/my/special/test%20folder:/children")
     val config = OneDriveConfig(DriveID, SyncPath, 1, 1.minute, None)
 
     config resolveFolderChildrenUri relUri should be(expUri)
+  }
+
+  it should "resolve a URI to the root folder's children" in {
+    val expUri = Uri(s"${OneDriveConfig.OneDriveServerUri}/$DriveID/root:$SyncPath:/children")
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 1.minute, None)
+
+    config resolveFolderChildrenUri "" should be(expUri)
   }
 }

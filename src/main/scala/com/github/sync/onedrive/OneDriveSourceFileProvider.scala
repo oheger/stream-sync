@@ -75,7 +75,7 @@ class OneDriveSourceFileProvider(config: OneDriveConfig, httpActor: ActorRef)
     * @return the request
     */
   private def createContentRequest(uri: String): HttpRequestActor.SendRequest = {
-    val httpUri = config.resolveItemsUri(uri + ":/content").withAuthority(config.rootUri.authority)
+    val httpUri = config.resolveItemsUri(uri + ":/content")
     val request = HttpRequest(uri = httpUri)
     HttpRequestActor.SendRequest(request, null)
   }
