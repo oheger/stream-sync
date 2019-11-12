@@ -16,12 +16,13 @@
 
 package com.github.sync.cli
 
+import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.Source
-import com.github.sync.cli.SyncComponentsFactory.DestinationComponentsFactory
-import com.github.sync.onedrive.{OneDriveConfig, OneDriveFsElementSource, OneDriveSourceFileProvider}
-import com.github.sync.{SourceFileProvider, SyncTypes}
+import akka.stream.scaladsl.{Flow, Source}
+import com.github.sync.SourceFileProvider
+import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
+import com.github.sync.onedrive.{OneDriveConfig, OneDriveFsElementSource, OneDriveOperationHandler, OneDriveSourceFileProvider}
 
 import scala.concurrent.ExecutionContext
 
@@ -39,45 +40,32 @@ private class OneDriveComponentsSourceFactory(val config: OneDriveConfig, val ht
                                              (implicit ec: ExecutionContext, system: ActorSystem,
                                               mat: ActorMaterializer)
   extends HttpComponentsSourceFactory[OneDriveConfig](config, httpActorFactory) {
-  override protected def doCreateSource(sourceFactory: SyncTypes.ElementSourceFactory, httpRequestActor: ActorRef):
-  Source[SyncTypes.FsElement, Any] = OneDriveFsElementSource(config, sourceFactory, httpRequestActor)
+  override protected def doCreateSource(sourceFactory: ElementSourceFactory, httpRequestActor: ActorRef):
+  Source[FsElement, Any] = OneDriveFsElementSource(config, sourceFactory, httpRequestActor)
 
   override protected def doCreateSourceFileProvider(httpRequestActor: ActorRef): SourceFileProvider =
     new OneDriveSourceFileProvider(config, httpRequestActor)
 }
 
+/**
+  * A special factory implementation for destination components if the
+  * destination is a OneDrive server.
+  *
+  * @param config           the configuration
+  * @param httpActorFactory the HTTP actor factory
+  * @param ec               the execution context
+  * @param system           the actor system
+  * @param mat              the object to materialize streams
+  */
 private class OneDriveComponentsDestinationFactory(val config: OneDriveConfig, val httpActorFactory: HttpActorFactory)
-                                                  (implicit system: ActorSystem, mat: ActorMaterializer)
-  extends DestinationComponentsFactory {
-  /**
-    * Creates the ''Source''for iterating over the destination structure of the sync
-    * process.
-    *
-    * @param sourceFactory the factory for creating an element source
-    * @return the source for iterating the destination structure
-    */
-  override def createDestinationSource(sourceFactory: SyncTypes.ElementSourceFactory): Source[SyncTypes.FsElement, Any] = ???
+                                                  (implicit ec: ExecutionContext, system: ActorSystem,
+                                                   mat: ActorMaterializer)
+  extends HttpComponentsDestinationFactory[OneDriveConfig](config, httpActorFactory) {
+  override protected def doCreateSource(sourceFactory: ElementSourceFactory, startFolderUri: String,
+                                        requestActor: ActorRef): Source[FsElement, Any] =
+    OneDriveFsElementSource(config, sourceFactory, requestActor, startFolderUri)
 
-  /**
-    * Creates a ''Source'' for iterating over the destination structure
-    * starting with a given folder. This is needed for some use cases to
-    * resolve files in the destination structure; e.g. if folder names are
-    * encrypted.
-    *
-    * @param sourceFactory  the factory for creating an element source
-    * @param startFolderUri the URI of the start folder of the iteration
-    * @return the source for a partial iteration
-    */
-  override def createPartialSource(sourceFactory: SyncTypes.ElementSourceFactory, startFolderUri: String): Source[SyncTypes.FsElement, Any] = ???
-
-  /**
-    * Creates the flow stage that interprets sync operations and applies them
-    * to the destination structure and returns a data object with this flow
-    * and a function for cleaning up resources.
-    *
-    * @param targetUri    the target URI of the destination structure
-    * @param fileProvider the provider for files from the source structure
-    * @return the data object about the stage to process sync operations
-    */
-  override def createApplyStage(targetUri: String, fileProvider: SourceFileProvider): SyncComponentsFactory.ApplyStageData = ???
+  override protected def createApplyFlow(fileProvider: SourceFileProvider, requestActor: ActorRef):
+  Flow[SyncOperation, SyncOperation, NotUsed] =
+    OneDriveOperationHandler(config, fileProvider, requestActor)
 }

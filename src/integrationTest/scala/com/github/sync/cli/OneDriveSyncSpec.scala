@@ -87,4 +87,49 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
     result.totalOperations should be(1)
     readFileInPath(dstFolder, FileName) should be(FileTestHelper.TestData)
   }
+
+  it should "support a OneDrive URI for the destination structure with OAuth" in {
+    val factory = new SyncComponentsFactory
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
+    val FileNameEnc = "file%20(5).mp3"
+    val config = createOneDriveConfig(ServerPath)
+    val ExpUri = mapElementUri(config, "/" + FileNameEnc)
+    val storageConfig = prepareIdpConfig()
+    val oldTokenAuth = TokenAuthFunc(CurrentTokenData.accessToken)
+    val newTokenAuth = TokenAuthFunc(RefreshedTokenData.accessToken)
+    stubOneDriveFolderRequest(config, "", "folder3.json",
+      status = StatusCodes.Unauthorized.intValue,
+      authFunc = oldTokenAuth)
+    stubOneDriveFolderRequest(config, "", "folder3.json", authFunc = newTokenAuth)
+    stubTokenRefresh()
+    stubFor(oldTokenAuth(delete(anyUrl())).willReturn(aResponse().withStatus(StatusCodes.Unauthorized.intValue)))
+    stubFor(newTokenAuth(delete(anyUrl())).willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
+    val options = withOAuthOptions(storageConfig, "--dst-",
+      srcFolder.toAbsolutePath.toString, "onedrive:" + DriveID, "--dst-path", ServerPath,
+      "--dst-server-uri", serverUri("/"))
+
+    val result = futureResult(Sync.syncProcess(factory, options))
+    result.successfulOperations should be(1)
+    result.totalOperations should be(1)
+    verify(deleteRequestedFor(urlPathEqualTo(path(ExpUri))))
+  }
+
+  it should "support a OneDrive URI for the destination structure with basic auth" in {
+    val factory = new SyncComponentsFactory
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
+    val FileNameEnc = "file%20(5).mp3"
+    val config = createOneDriveConfig(ServerPath)
+    val ExpUri = mapElementUri(config, "/" + FileNameEnc)
+    stubOneDriveFolderRequest(config, "", "folder3.json", authFunc = BasicAuthFunc)
+    stubFor(BasicAuthFunc(delete(anyUrl())).willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
+    val options = Array(srcFolder.toAbsolutePath.toString, "onedrive:" + DriveID, "--dst-path", ServerPath,
+      "--dst-server-uri", serverUri("/"), "--dst-user", UserId, "--dst-password", Password)
+
+    val result = futureResult(Sync.syncProcess(factory, options))
+    result.successfulOperations should be(1)
+    result.totalOperations should be(1)
+    verify(deleteRequestedFor(urlPathEqualTo(path(ExpUri))))
+  }
 }
