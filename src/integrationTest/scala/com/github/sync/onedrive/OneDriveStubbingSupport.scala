@@ -18,7 +18,6 @@ package com.github.sync.onedrive
 
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import com.github.sync.WireMockSupport
-import com.github.sync.WireMockSupport.AuthFunc
 import com.github.tomakehurst.wiremock.client.WireMock._
 
 import scala.concurrent.duration._
@@ -46,6 +45,31 @@ trait OneDriveStubbingSupport {
   this: WireMockSupport =>
 
   import OneDriveStubbingSupport._
+  import WireMockSupport._
+
+  /**
+    * Adds a stubbing declaration for a request to a OneDrive folder that is
+    * served with content defined by the given content function.
+    *
+    * @param config   the OneDrive config
+    * @param uri      the URI of the folder
+    * @param status   the status code to be returned for the request
+    * @param authFunc the authentication function
+    * @param fContent the function defining the content
+    * @return the URI to request the folder
+    */
+  protected def stubOneDriveFolderRequestContent(config: OneDriveConfig, uri: String,
+                                                 status: Int = StatusCodes.OK.intValue,
+                                                 authFunc: AuthFunc = WireMockSupport.NoAuthFunc)
+                                                (fContent: ResponseFunc): String = {
+    val stubUri = config.resolveFolderChildrenUri(uri)
+    stubFor(authFunc(get(urlPathEqualTo(path(stubUri))))
+      .withHeader("Accept", equalTo("application/json"))
+      .willReturn(fContent(aResponse()
+        .withStatus(status)
+        .withHeader("Content-Type", ContentType))))
+    stubUri.toString()
+  }
 
   /**
     * Adds a stubbing declaration for a request to a OneDrive folder that is
@@ -56,20 +80,17 @@ trait OneDriveStubbingSupport {
     * @param responseFile the file to serve the request
     * @param status       the status code to be returned for the request
     * @param authFunc     the authentication function
+    * @return the URI to request the folder
     */
   protected def stubOneDriveFolderRequest(config: OneDriveConfig, uri: String, responseFile: String,
                                           status: Int = StatusCodes.OK.intValue,
-                                          authFunc: AuthFunc = WireMockSupport.NoAuthFunc): Unit = {
-    stubFor(authFunc(get(urlPathEqualTo(path(config.resolveFolderChildrenUri(uri)))))
-      .withHeader("Accept", equalTo("application/json"))
-      .willReturn(aResponse()
-        .withStatus(status)
-        .withHeader("Content-Type", ContentType)
-        .withBodyFile(responseFile)))
+                                          authFunc: AuthFunc = WireMockSupport.NoAuthFunc): String = {
+    stubOneDriveFolderRequestContent(config, uri, status, authFunc)(bodyFile(responseFile))
   }
 
   /**
     * Returns the path of the given URI.
+    *
     * @param uri the URI
     * @return the path of this URI as string
     */

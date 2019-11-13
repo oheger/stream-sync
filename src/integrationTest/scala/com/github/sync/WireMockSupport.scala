@@ -19,7 +19,7 @@ package com.github.sync
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.Authorization
 import com.github.tomakehurst.wiremock.WireMockServer
-import com.github.tomakehurst.wiremock.client.MappingBuilder
+import com.github.tomakehurst.wiremock.client.{MappingBuilder, ResponseDefinitionBuilder}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
 import org.scalatest.{BeforeAndAfterEach, Suite}
@@ -67,6 +67,33 @@ object WireMockSupport {
     */
   def TokenAuthFunc(token: String): AuthFunc = mappingBuilder =>
     mappingBuilder.withHeader(Authorization.name, equalTo(s"Bearer $token"))
+
+  /**
+    * Type definition of a function that can manipulate the response of a
+    * stubbed request. This can be used for instance to add a response body in
+    * various formats.
+    */
+  type ResponseFunc = ResponseDefinitionBuilder => ResponseDefinitionBuilder
+
+  /**
+    * Returns a response function that adds the given string body to a
+    * response.
+    *
+    * @param body the body as string
+    * @return the response function that adds a string body
+    */
+  def bodyString(body: String): ResponseFunc = builder =>
+    builder.withBody(body)
+
+  /**
+    * Returns a response function that adds the given file body to a
+    * response.
+    *
+    * @param file the file name containing the response body
+    * @return the response function that adds a body file
+    */
+  def bodyFile(file: String): ResponseFunc = builder =>
+    builder.withBodyFile(file)
 
   /** The path to the directory where resource files are located. */
   private val ResourceDir = "src/integrationTest/resources"
