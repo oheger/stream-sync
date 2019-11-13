@@ -227,7 +227,7 @@ class HttpRequestActor(uri: Uri, queueSize: Int) extends Actor with ActorLogging
     if (response.status.isSuccess())
       Future.successful(response)
     else response.entity.discardBytes().future()
-      .map(_ => throw RequestException("Failure response", FailedResponseException(response), req))
+      .map(_ => throw RequestException("Failure response: " + response.status, FailedResponseException(response), req))
 
   /**
     * Wraps an exception into a ''RequestException'' if necessary. If the
