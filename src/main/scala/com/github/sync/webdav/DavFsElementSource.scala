@@ -29,7 +29,7 @@ import akka.stream._
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.github.sync.SyncTypes._
-import com.github.sync.http.HttpFsElementSource.{ElemData, HttpFolder, HttpIterationState}
+import com.github.sync.http.HttpFsElementSource.{ElemData, HttpFolder, HttpIterationState, ParsedFolderData}
 import com.github.sync.http.{HttpFsElementSource, HttpRequestActor}
 import com.github.sync.util.UriEncodingHelper
 
@@ -110,15 +110,16 @@ object DavFsElementSource extends HttpFsElementSource[DavConfig] {
     * @param result the result of the request for this folder
     * @param ec     the execution context
     * @param mat    the object to materialize streams
-    * @return a ''Future'' with the elements that have been extracted
+    * @return a ''Future'' with the result of the parse operation
     */
   override protected def parseFolderResponse(state: HttpIterationState[DavConfig], folder: FsFolder)
                                             (result: HttpRequestActor.Result)
                                             (implicit ec: ExecutionContext, mat: ActorMaterializer):
-  Future[List[ElemData]] =
+  Future[ParsedFolderData] =
     readResponse(result.response)
       .map(toXml)
       .map(elem => extractFolderElements(state, elem, folder.level + 1))
+      .map(elements => ParsedFolderData(elements, None))
 
   /**
     * Parses the given string to an XML document.

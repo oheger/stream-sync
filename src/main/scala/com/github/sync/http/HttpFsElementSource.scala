@@ -23,7 +23,7 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{ActorMaterializer, Graph, SourceShape}
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes._
-import com.github.sync.http.HttpFsElementSource.{ElemData, HttpFolder, HttpIterationState}
+import com.github.sync.http.HttpFsElementSource.{ElemData, HttpFolder, HttpIterationState, ParsedFolderData}
 import com.github.sync.util.UriEncodingHelper
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -70,6 +70,19 @@ object HttpFsElementSource {
     * @param elem the element itself
     */
   case class ElemData(ref: String, elem: FsElement)
+
+  /**
+    * A data class for the result of a parse operation of a folder's content.
+    *
+    * The result of course contains a list with the elements contained in the
+    * folder. If a protocol supports paging, it may be necessary to issue
+    * another request to obtain the full content of the folder. Therefore, an
+    * ''Option'' with such a request is supported.
+    *
+    * @param elements    a list with the elements of this folder
+    * @param nextRequest an ''Option'' with another request to be sent
+    */
+  case class ParsedFolderData(elements: List[ElemData], nextRequest: Option[HttpRequestActor.SendRequest])
 
 }
 
@@ -170,11 +183,11 @@ trait HttpFsElementSource[C <: HttpConfig] {
     * @param result the result of the request for this folder
     * @param ec     the execution context
     * @param mat    the object to materialize streams
-    * @return a ''Future'' with the elements that have been extracted
+    * @return a ''Future'' with the result of the parse operation
     */
   protected def parseFolderResponse(state: HttpIterationState[C], folder: FsFolder)(result: HttpRequestActor.Result)
                                    (implicit ec: ExecutionContext, mat: ActorMaterializer):
-  Future[List[ElemData]]
+  Future[ParsedFolderData]
 
   /**
     * Creates the data object for the folder to start the iteration from.
@@ -233,7 +246,8 @@ trait HttpFsElementSource[C <: HttpConfig] {
 
   /**
     * Sends a request for the content of the specified folder and parses
-    * the response.
+    * the response. This may yield more requests to be sent until the full
+    * content of the folder has been obtained.
     *
     * @param state      the current iteration state
     * @param folderData the data of the folder to be loaded
@@ -243,8 +257,49 @@ trait HttpFsElementSource[C <: HttpConfig] {
     */
   private def loadFolder(state: HttpIterationState[C], folderData: SyncFolderData[HttpFolder])
                         (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[List[ElemData]] = {
-    implicit val timeout: Timeout = state.config.timeout
     val request = createFolderRequest(state, folderData)
+    loadAndAggregateFolderContent(state, folderData, request, Nil)
+  }
+
+  /**
+    * Obtains the complete content of a folder by sending content requests and
+    * aggregating the results until everything has been loaded.
+    *
+    * @param state       the current iteration state
+    * @param folderData  the data of the folder to be loaded
+    * @param nextRequest the next request to be executed
+    * @param content     the current aggregated content of the folder
+    * @param ec          the execution context
+    * @param mat         the object to materialize streams
+    * @return a ''Future'' with the aggregated folder content
+    */
+  private def loadAndAggregateFolderContent(state: HttpIterationState[C], folderData: SyncFolderData[HttpFolder],
+                                            nextRequest: HttpRequestActor.SendRequest, content: List[ElemData])
+                                           (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[List[ElemData]] =
+    executeFolderContentRequest(state, folderData, nextRequest) flatMap { parsedData =>
+      val elements = parsedData.elements ::: content
+      parsedData.nextRequest.fold(Future.successful(elements)) { req =>
+        loadAndAggregateFolderContent(state, folderData, req, elements)
+      }
+    }
+
+  /**
+    * Executes a single request for the content of a folder and parses the
+    * response.
+    *
+    * @param state      the current iteration state
+    * @param folderData the data of the folder to be loaded
+    * @param request    the request to be executed
+    * @param ec         the execution context
+    * @param mat        the object to materialize streams
+    * @return a ''Future'' with the result of the parse operation
+    */
+  private def executeFolderContentRequest(state: HttpIterationState[C], folderData: SyncFolderData[HttpFolder],
+                                          request: HttpRequestActor.SendRequest)
+                                         (implicit ec: ExecutionContext, mat: ActorMaterializer):
+  Future[ParsedFolderData] = {
+    implicit val timeout: Timeout = state.config.timeout
     HttpRequestActor
       .sendAndProcess(state.requestActor, request)(parseFolderResponse(state, folderData.folder)).flatten
   }

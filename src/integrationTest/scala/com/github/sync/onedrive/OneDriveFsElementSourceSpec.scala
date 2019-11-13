@@ -16,19 +16,25 @@
 
 package com.github.sync.onedrive
 
+import java.nio.file.Paths
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.scaladsl.Source
-import com.github.sync.BaseHttpFsElementSourceSpec
+import com.github.sync.{BaseHttpFsElementSourceSpec, FileTestHelper}
 import com.github.sync.SyncTypes.{FsElement, FsFolder}
 import com.github.sync.http.HttpRequestActor
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, stubFor, _}
 import spray.json.{DeserializationException, JsonParser}
 
+/**
+  * Test class for ''OneDriveFsElementSource''.
+  */
 class OneDriveFsElementSourceSpec extends BaseHttpFsElementSourceSpec(ActorSystem("OneDriveFsElementSourceSpec"))
-  with OneDriveStubbingSupport {
+  with OneDriveStubbingSupport with FileTestHelper {
 
   import BaseHttpFsElementSourceSpec._
+  import com.github.sync.WireMockSupport._
   import OneDriveStubbingSupport._
 
   /**
@@ -51,18 +57,27 @@ class OneDriveFsElementSourceSpec extends BaseHttpFsElementSourceSpec(ActorSyste
 
   /**
     * Adds stubbing declarations for all test folders. Each folder is mapped to
-    * a file defining its representation in the target format.
+    * a file defining its representation in the target format - except for
+    * folder 1, which is defined by two files. (OneDrive has a page size; this
+    * feature needs to be tested as well.)
     *
     * @param config the current OneDrive config
     */
   private def stubTestFolders(config: OneDriveConfig): Unit = {
+    val pagedFolder = folderName(1)
     stubOneDriveFolderRequest(config, "", "root.json")
-    ExpectedElements foreach {
+    ExpectedElements.filterNot(_.relativeUri.contains(pagedFolder)) foreach {
       case FsFolder(relativeUri, _, _) =>
         val fileName = folderFileName(relativeUri, ".json", "")
         stubOneDriveFolderRequest(config, relativeUri, fileName)
       case _ => // ignore other elements
     }
+
+    val pageUri = stubOneDriveFolderRequest(config, "/next/folder/listing.json", "folder1_next.json")
+    val pathPagedFolder = Paths.get(getClass.getResource("/__files/" + folderFileName(pagedFolder,
+      ".json", "")).toURI)
+    val pagedFolderContent = readDataFile(pathPagedFolder).replace("${next.folder}", pageUri)
+    stubOneDriveFolderRequestContent(config, "/" + pagedFolder)(bodyString(pagedFolderContent))
   }
 
   "A DavFsElementSource" should "iterate over a WebDav structure" in {

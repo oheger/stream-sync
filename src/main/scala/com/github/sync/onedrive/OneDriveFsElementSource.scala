@@ -27,7 +27,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import com.github.sync.SyncTypes._
-import com.github.sync.http.HttpFsElementSource.HttpIterationState
+import com.github.sync.http.HttpFsElementSource.{HttpIterationState, ParsedFolderData}
 import com.github.sync.http.{HttpFsElementSource, HttpRequestActor}
 import com.github.sync.util.UriEncodingHelper
 
@@ -85,15 +85,18 @@ object OneDriveFsElementSource extends HttpFsElementSource[OneDriveConfig] {
     * @param result the result of the request for this folder
     * @param ec     the execution context
     * @param mat    the object to materialize streams
-    * @return a ''Future'' with the elements that have been extracted
+    * @return a ''Future'' with the result of the parse operation
     */
   override protected def parseFolderResponse(state: HttpFsElementSource.HttpIterationState[OneDriveConfig],
                                              folder: FsFolder)(result: HttpRequestActor.Result)
                                             (implicit ec: ExecutionContext, mat: ActorMaterializer):
-  Future[List[HttpFsElementSource.ElemData]] = {
+  Future[ParsedFolderData] = {
     import OneDriveJsonProtocol._
     val model = Unmarshal(result.response).to[OneDriveModel]
-    model map (m => extractElements(state, folder, m.value))
+    model map { m =>
+      ParsedFolderData(extractElements(state, folder, m.value),
+        m.nextLink map (uri => HttpRequestActor.SendRequest(HttpRequest(uri = uri, headers = Headers), null)))
+    }
   }
 
   /**
