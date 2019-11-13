@@ -110,11 +110,11 @@ class OneDriveOperationHandler(config: OneDriveConfig, requestActor: ActorRef)(i
 
   override protected def createNewFolderRequest(op: SyncOperation, folder: FsFolder)(implicit ec: ExecutionContext):
   Future[SyncOperationRequestData] = {
-    val (parent, encName) = UriEncodingHelper.splitParent(op.dstUri)
+    val (_, encName) = UriEncodingHelper.splitParent(op.dstUri)
     val name = UriEncodingHelper.decode(encName)
     val body = String.format(Locale.ROOT, CreateFolderTemplate, name)
-    val request = HttpRequest(method = HttpMethods.POST, uri = config.resolveFolderChildrenUri(parent),
-      entity = HttpEntity(body))
+    val request = HttpRequest(method = HttpMethods.POST, uri = config.resolveFolderChildrenUri(op.dstUri),
+      entity = HttpEntity(ContentTypes.`application/json`, body))
     simpleRequest(op, request)
   }
 

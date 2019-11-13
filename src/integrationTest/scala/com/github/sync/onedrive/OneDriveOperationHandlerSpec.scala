@@ -126,8 +126,7 @@ class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(test
   it should "create a new folder" in {
     val newName = "new folder"
     val folder = FsFolder("/some/path/" + newName, 3)
-    val parentUri = "/the/parent/folder"
-    val dstUri = parentUri + "/" + UriEncodingHelper.encode(newName)
+    val dstUri = "/the/parent/folder/" + newName
     val op = SyncOperation(folder, ActionCreate, 0, null, dstUri)
     val expRequest =
       s"""
@@ -142,8 +141,9 @@ class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(test
 
     val syncRes = runSync(List(op), config)
     syncRes should contain only op
-    verify(postRequestedFor(urlPathEqualTo(path(mapFolderUri(config, parentUri))))
-      .withRequestBody(equalToJson(expRequest)))
+    verify(postRequestedFor(urlPathEqualTo(path(mapFolderUri(config, UriEncodingHelper.encodeComponents(dstUri)))))
+      .withRequestBody(equalToJson(expRequest))
+      .withHeader("Content-Type", equalTo("application/json")))
   }
 
   /**
