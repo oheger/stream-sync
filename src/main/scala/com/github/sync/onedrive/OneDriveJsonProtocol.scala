@@ -56,11 +56,13 @@ case class OneDriveItem(name: String,
 /**
   * A data class representing the OneDrive JSON response for a folder request.
   * Here we are only interested in the list with the child items of the
-  * current folder.
+  * current folder. For large folders, the content is distributed over multiple
+  * pages. In this case, a link for the next page is available.
   *
-  * @param value a list with the child items of this folder
+  * @param value    a list with the child items of this folder
+  * @param nextLink an optional link to the next page
   */
-case class OneDriveModel(value: List[OneDriveItem])
+case class OneDriveModel(value: List[OneDriveItem], nextLink: Option[String])
 
 /**
   * A data class representing the response of a request for an upload session.
@@ -82,6 +84,7 @@ object OneDriveJsonProtocol extends DefaultJsonProtocol {
   implicit val fileFormat: RootJsonFormat[OneDriveFile] = jsonFormat1(OneDriveFile)
   implicit val fileSystemFormat: RootJsonFormat[OneDriveFileSystemInfo] = jsonFormat1(OneDriveFileSystemInfo)
   implicit val itemFormat: RootJsonFormat[OneDriveItem] = jsonFormat4(OneDriveItem)
-  implicit val modelFormat: RootJsonFormat[OneDriveModel] = jsonFormat1(OneDriveModel.apply)
+  implicit val modelFormat: RootJsonFormat[OneDriveModel] =
+    jsonFormat(OneDriveModel.apply, "value", "@odata.nextLink")
   implicit val uploadSessionFormat: RootJsonFormat[UploadSessionResponse] = jsonFormat1(UploadSessionResponse)
 }
