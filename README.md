@@ -422,6 +422,19 @@ As you can see in this example, the name of the system properties is derived
 from the hierarchical structure of the configuration options for Akka HTTP as
 described in the referenced documentation.
 
+### Timeouts
+To prevent that sync processes hang when servers involved respond very slowly,
+a timeout is applied to all operations. The timeout in seconds can be 
+configured via the ``--timeout`` command line option; the default value is one
+minute.
+
+If a sync process needs to upload large files to a server via a not so fast
+internet connection, the timeout probably has to be increased; otherwise,
+operations will fail because they take too long. The following example shows
+how to set the timeout to 10 minutes to deal with larger uploads:
+
+``Sync C:\data\work dav:https://sd2dav.1und1.de/backup/work --timeout 600``
+
 ### Reading passwords from the console
 For some use cases, e.g. connecting to a WebDav server or encrypting files,
 StreamSync needs passwords. Per default, such passwords can be specified as
@@ -548,6 +561,7 @@ Sync C:\data\work dav:https://sd2dav.1und1.de/backup/work \
 --dst-crypt-mode filesAndNames
 --crypt-cache-size 1024
 --ops-per-second 2
+--timeout 600
 ```
 
 This command specifies that both the content and the names of files are
@@ -556,7 +570,9 @@ an encryption mode of _files_ only the files' content would be encrypted, but
 the file names would remain in plain text. The size of the cache for encrypted
 names is increased to avoid unnecessary crypt operations. In the example the
 number of sync operations per second is limited to 2 to avoid that the server
-rejects requests because its load is too high.
+rejects requests because its load is too high. Also, a larger timeout has been
+set (600 seconds = 10 minutes), so that uploads of larger files will not cause
+operations to fail.
 
 ## Architecture
 The Stream Sync tool makes use of [Reactive streams](http://www.reactive-streams.org/)
