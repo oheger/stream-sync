@@ -123,7 +123,7 @@ object OneDriveFsElementSource extends HttpFsElementSource[OneDriveConfig] {
     */
   private def convertItemToElement(state: HttpIterationState[OneDriveConfig], parent: FsFolder,
                                    item: OneDriveItem): HttpFsElementSource.ElemData = {
-    val elemUri = parent.relativeUri + UriEncodingHelper.UriSeparator + item.name
+    val elemUri = parent.originalUri + UriEncodingHelper.UriSeparator + item.name
     val ref = state.config.resolveRelativeUri(elemUri).toString()
     val elem = item.file match {
       case None =>

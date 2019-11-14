@@ -35,14 +35,13 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
   override implicit val ec: ExecutionContext = system.dispatcher
 
   private def stubDownloadRequest(config: OneDriveConfig, uri: String, authFunc: AuthFunc,
-                                  content: String = FileTestHelper.TestData): Unit = {
+                                  contentFunc: ResponseFunc = bodyString(FileTestHelper.TestData)): Unit = {
     val downloadPath = "/" + UUID.randomUUID()
     stubFor(authFunc(get(urlPathEqualTo(path(mapElementUri(config, uri, prefix = PrefixItems)) + ":/content")))
       .willReturn(aResponse().withStatus(302)
         .withHeader("Location", serverUri(downloadPath))))
     stubFor(authFunc(get(urlPathEqualTo(downloadPath)))
-      .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
-        .withBody(content)))
+      .willReturn(contentFunc(aResponse().withStatus(StatusCodes.OK.intValue))))
   }
 
   "Sync" should "support a OneDrive URI for the source structure with OAuth" in {
@@ -131,5 +130,36 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
     result.successfulOperations should be(1)
     result.totalOperations should be(1)
     verify(deleteRequestedFor(urlPathEqualTo(path(ExpUri))))
+  }
+
+  it should "support a OneDrive source with encrypted file names" in {
+    val factory = new SyncComponentsFactory
+    val CryptPassword = Password
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val ServerPath = "/encrypted"
+    val config = createOneDriveConfig(ServerPath)
+    stubOneDriveFolderRequest(config, "", "root_encrypted.json", authFunc = BasicAuthFunc)
+    stubOneDriveFolderRequest(config, "/Q8Xcluxx2ADWaUAtUHLurqSmvw==", "folder_encrypted.json",
+      authFunc = BasicAuthFunc)
+    stubDownloadRequest(config, "/HLL2gCNjWKvwRnp4my1U2ex0QLKWpZs=", BasicAuthFunc,
+      bodyFile("encrypted1.dat"))
+    stubDownloadRequest(config, "/uBQQYWockOWLuCROIHviFhU2XayMtps=", BasicAuthFunc,
+      bodyFile("encrypted2.dat"))
+    stubDownloadRequest(config, "/Q8Xcluxx2ADWaUAtUHLurqSmvw==/Oe3_2W9y1fFSrTj15xaGdt9_rovvGSLPY7NN",
+      BasicAuthFunc, bodyFile("encrypted3.dat"))
+    stubDownloadRequest(config, "/Q8Xcluxx2ADWaUAtUHLurqSmvw==/Z3BDvmY89rQwUqJ3XzMUWgtBE9bcOCYxiTq-Zfo-sNlIGA==",
+      BasicAuthFunc, bodyFile("encrypted4.dat"))
+    val options = Array("onedrive:" + DriveID, dstFolder.toAbsolutePath.toString, "--src-path", ServerPath,
+      "--src-server-uri", serverUri("/"), "--src-user", UserId, "--src-password", Password,
+      "--src-encrypt-password", CryptPassword, "--src-crypt-mode", "filesAndNames")
+
+    val result = futureResult(Sync.syncProcess(factory, options))
+    result.successfulOperations should be(result.totalOperations)
+    val rootFiles = dstFolder.toFile.listFiles()
+    rootFiles.map(_.getName) should contain only("foo.txt", "bar.txt", "sub")
+    checkFile(dstFolder, "foo.txt")
+    val subFolder = dstFolder.resolve("sub")
+    checkFile(subFolder, "subFile.txt")
+    checkFile(subFolder, "anotherSubFile.dat")
   }
 }
