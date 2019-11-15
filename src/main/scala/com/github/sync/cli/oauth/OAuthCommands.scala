@@ -17,8 +17,10 @@
 package com.github.sync.cli.oauth
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Sink
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import com.github.sync.cli.oauth.OAuthParameterManager.IdpConfig
 import com.github.sync.cli.{ConsoleReader, ParameterManager}
@@ -26,7 +28,7 @@ import com.github.sync.crypt.Secret
 import com.github.sync.http.{HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.http.oauth._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Success, Try}
 
 /**
@@ -199,7 +201,7 @@ class OAuthLoginCommand(val tokenService: OAuthTokenRetrieverService[OAuthConfig
                                    (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
   Future[String] = for {config <- storageService.loadConfig(storageConfig)
                         authUri <- tokenService.authorizeUrl(config)
-                        code <- obtainCode(authUri, reader)
+                        code <- obtainCode(config, authUri, reader)
                         secret <- storageService.loadClientSecret(storageConfig)
                         tokens <- fetchTokens(config, secret, code)
                         _ <- storageService.saveTokens(storageConfig, tokens)
@@ -217,23 +219,98 @@ class OAuthLoginCommand(val tokenService: OAuthTokenRetrieverService[OAuthConfig
 
   /**
     * Handles the authorization step of the code flow and tries to obtain the
-    * code. This is done by opening the browser at the authorization URI and
-    * prompting the user to enter the resulting code.
+    * code. This is done by opening the browser at the authorization URI.
+    * Depending on the redirect URI, either a HTTP server is opened (if it
+    * points to ''localhost''), and the redirect is expected or the user is
+    * prompted to enter the resulting code manually.
     *
+    * @param config  the OAuth config
     * @param authUri the authorization URI
     * @param reader  the console reader to prompt the user
     * @param ec      the execution context
+    * @param system  the actor system
+    * @param mat     the object to materialize streams
     * @return a ''Future'' with the code
     */
-  private def obtainCode(authUri: Uri, reader: ConsoleReader)
-                        (implicit ec: ExecutionContext): Future[String] = Future {
+  private def obtainCode(config: OAuthConfig, authUri: Uri, reader: ConsoleReader)
+                        (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer): Future[String] =
+    checkLocalRedirectUri(config) match {
+      case Some(port) =>
+        val futCode = obtainCodeFromRedirect(port)
+        openBrowser(authUri)
+        futCode
+      case None =>
+        openBrowser(authUri)
+        Future {
+          reader.readOption("Enter authorization code", password = true)
+        }
+    }
+
+  /**
+    * Checks whether the redirect URI points to localhost. If so, the port is
+    * extracted and returned.
+    *
+    * @param config the OAuth configuration
+    * @return an ''Option'' with the extracted local redirect port
+    */
+  private def checkLocalRedirectUri(config: OAuthConfig): Option[Int] = {
+    val RegLocalPort = "http://localhost:(\\d+).*".r
+    config.redirectUri match {
+      case RegLocalPort(sPort) => Some(sPort.toInt)
+      case _ => None
+    }
+  }
+
+  /**
+    * Tries to open the Web browser with the authorization URI. If this fails,
+    * a corresponding message is printed.
+    *
+    * @param authUri the authorization URI
+    */
+  private def openBrowser(authUri: Uri): Unit = {
     output("Opening Web browser to login into identity provider...")
     if (!browserHandler.openBrowser(authUri.toString())) {
       output("Could not open Web browser!")
       output("Please open the browser manually and navigate to this URL:")
       output(s"\t${authUri.toString()}")
     }
-    reader.readOption("Enter authorization code: ", password = true)
+  }
+
+  /**
+    * Tries to obtain the authorization code from a redirect to a local port.
+    * This method is called for redirect URIs referring to ''localhost''. It
+    * opens a web server at the port specified and waits for a request that
+    * contains the code as parameter.
+    *
+    * @param port   the port to bind the server
+    * @param ec     the execution context
+    * @param system the actor system
+    * @param mat    the object to materialize streams
+    * @return a ''Future'' with the authorization code
+    */
+  private def obtainCodeFromRedirect(port: Int)(implicit ec: ExecutionContext, system: ActorSystem,
+                                                mat: ActorMaterializer): Future[String] = {
+    val promiseCode = Promise[String]()
+    val handler: HttpRequest => HttpResponse = request => {
+      val status = request.uri.query().get("code") match {
+        case Some(code) =>
+          promiseCode.success(code)
+          StatusCodes.OK
+        case None =>
+          promiseCode.failure(new IllegalStateException("No authorization code passed to redirect URI."))
+          StatusCodes.BadRequest
+      }
+      HttpResponse(status)
+    }
+
+    val serverSource = Http().bind(interface = "localhost", port = port)
+    val bindFuture = serverSource.to(Sink.foreach { con =>
+      con handleWithSyncHandler handler
+    }).run()
+
+    promiseCode.future.andThen {
+      case _ => bindFuture foreach (_.unbind())
+    }
   }
 
   /**

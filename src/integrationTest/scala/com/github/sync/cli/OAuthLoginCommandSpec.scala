@@ -16,11 +16,14 @@
 
 package com.github.sync.cli
 
+import java.io.IOException
+import java.net.{ServerSocket, Socket}
 import java.nio.file.Paths
 
 import akka.Done
 import akka.actor.{ActorRef, ActorSystem}
-import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import com.github.sync.cli.ParameterManager.Parameters
@@ -75,6 +78,42 @@ object OAuthLoginCommandSpec {
        |  "refresh_token": "${TestTokenData.refreshToken}"
        |}
        |""".stripMargin
+
+
+  /**
+    * Obtains a free network port.
+    *
+    * @return the port number
+    */
+  private def fetchFreePort(): Int = {
+    var socket: ServerSocket = null
+    try {
+      socket = new ServerSocket(0)
+      socket.getLocalPort
+    } finally {
+      socket.close()
+    }
+  }
+
+  /**
+    * Checks whether the given port has been released. Tries to connect to the
+    * port. If the HTTP server at this port has been terminated, the connection
+    * should fail.
+    *
+    * @param port the port to be tested
+    * @return a flag whether the given port has been released
+    */
+  private def portIsReleased(port: Int): Boolean = {
+    var socket: Socket = null
+    try {
+      socket = new Socket("localhost", port)
+      false
+    } catch {
+      case _: IOException => true
+    } finally {
+      if (socket != null) socket.close()
+    }
+  }
 }
 
 /**
@@ -106,6 +145,25 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       .withRequestBody(containing(s"code=$Code"))
       .willReturn(aResponse().withStatus(200)
         .withBody(TokenResponse)))
+  }
+
+  /**
+    * Creates a test OAuth configuration from the basic configuration and the
+    * current token endpoint URL pointing to the mock server.
+    *
+    * @return the test OAuth configuration
+    */
+  private def createTestOAuthConfig(): OAuthConfig =
+    BaseOAuthConfig.copy(tokenEndpoint = serverUri(TokenEndpoint))
+
+  /**
+    * Checks whether the HTTP server at the given port has been properly
+    * closed.
+    *
+    * @param port the port the server has been listening on
+    */
+  private def checkHttpServerClosed(port: Int): Unit = {
+    awaitCond(portIsReleased(port))
   }
 
   "OAuthLoginCommand" should "create a default browser helper" in {
@@ -147,18 +205,44 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     val helper = new CommandTestHelper
 
     expectFailedFuture[IllegalStateException](helper.failAuthorizationUri(exception)
-      .runCommand()) should be(exception)
+      .runCommandWithCodeInput()) should be(exception)
     getAllServeEvents should have size 0
+  }
+
+  it should "handle the redirect for localhost redirect URIs" in {
+    val port = fetchFreePort()
+    val config = createTestOAuthConfig().copy(redirectUri = s"http://localhost:$port")
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val helper = new CommandTestHelper(config)
+
+    val result = futureResult(helper.prepareBrowserHandlerToCallRedirectUri(config.redirectUri + "?code=" + Code)
+      .runCommand())
+    result should include("successful")
+    helper.verifyTokenStored()
+    checkHttpServerClosed(port)
+  }
+
+  it should "handle a local redirect URI if no code parameter is passed" in {
+    val port = fetchFreePort()
+    val config = createTestOAuthConfig().copy(redirectUri = s"http://localhost:$port")
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val helper = new CommandTestHelper(config)
+
+    val exception = expectFailedFuture[IllegalStateException] {
+      helper.prepareBrowserHandlerToCallRedirectUri(config.redirectUri, StatusCodes.BadRequest)
+        .runCommand()
+    }
+    exception.getMessage should include("authorization code")
+    checkHttpServerClosed(port)
   }
 
   /**
     * A test helper class managing a command instance to be tested and its
     * dependencies.
+    *
+    * @param testOAutConfig the OAuth configuration to be used
     */
-  private class CommandTestHelper {
-    /** Configuration of an IDP used by test cases. */
-    val testOAutConfig: OAuthConfig = BaseOAuthConfig.copy(tokenEndpoint = serverUri(TokenEndpoint))
-
+  private class CommandTestHelper(val testOAutConfig: OAuthConfig = createTestOAuthConfig()) {
     /** Mock for the token retriever service. */
     private val tokenService = createTokenService()
 
@@ -177,12 +261,23 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     /**
       * Executes the test command and returns the resulting ''Future''.
       *
+      * @param consoleReader the console reader to be used
       * @return the ''Future'' returned by the command
       */
-    def runCommand(): Future[String] = {
-      implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-      when(consoleReader.readOption("Enter authorization code: ", password = true)).thenReturn(Code)
+    def runCommand()(implicit consoleReader: ConsoleReader): Future[String] =
       command.run(TestStorageConfig, storageService, Parameters(Map.empty, Set.empty))
+
+    /**
+      * Executes the test command with an initialized console reader mock and
+      * returns the resulting ''Future''. Here it is expected that the code is
+      * entered manually via the console.
+      *
+      * @return the ''Future'' returned by the command
+      */
+    def runCommandWithCodeInput(): Future[String] = {
+      implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+      when(consoleReader.readOption("Enter authorization code", password = true)).thenReturn(Code)
+      runCommand()
     }
 
     /**
@@ -190,7 +285,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return the message from the test command
       */
-    def runCommandSuccessful(): String = futureResult(runCommand())
+    def runCommandSuccessful(): String = futureResult(runCommandWithCodeInput())
 
     /**
       * Executes the test command and expects a successful execution that
@@ -247,6 +342,24 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       */
     def commandOutputNotContaining(sub: String): CommandTestHelper = {
       outputBuf.toString should not include sub
+      this
+    }
+
+    /**
+      * Prepares the mock for the browser handler to invoke the redirect URI
+      * with the code as parameter. This is used to test whether localhost
+      * redirect URIs are handled in a special way.
+      *
+      * @return this test helper
+      */
+    def prepareBrowserHandlerToCallRedirectUri(uri: String, expStatus: StatusCode = StatusCodes.OK):
+    CommandTestHelper = {
+      when(browserHandler.openBrowser(AuthorizationUri)).thenAnswer((_: InvocationOnMock) => {
+        val redirectRequest = HttpRequest(uri = uri)
+        val response = futureResult(Http().singleRequest(redirectRequest))
+        response.status should be(expStatus)
+        true
+      })
       this
     }
 
