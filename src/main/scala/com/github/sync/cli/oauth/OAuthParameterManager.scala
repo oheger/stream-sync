@@ -35,7 +35,7 @@ import scala.util.{Failure, Success, Try}
   */
 object OAuthParameterManager {
   /** Name of the option that defines the storage path for OAuth data. */
-  val StoragePathOptionName = "storage-path"
+  val StoragePathOptionName = "idp-storage-path"
 
   /** The option that defines the storage path for OAuth data. */
   val StoragePathOption: String = OptionPrefix + StoragePathOptionName

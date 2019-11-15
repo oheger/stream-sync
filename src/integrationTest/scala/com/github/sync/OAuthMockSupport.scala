@@ -135,6 +135,6 @@ trait OAuthMockSupport {
       case None => ("encrypt-idp-data", "false")
     }
     options.toArray ++ Array(prefix + pwdOpt, value, prefix + "idp-name", storageConfig.baseName,
-      prefix + "storage-path", testDirectory.toAbsolutePath.toString)
+      prefix + "idp-storage-path", testDirectory.toAbsolutePath.toString)
   }
 }
