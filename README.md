@@ -356,13 +356,16 @@ the source or destination structure.)
 
 | Option | Description | Mandatory |
 | ------ | ----------- | --------- |
-| user | The user ID to log into the server. | Yes |
-| password | The password to log into the server. | Yes |
 | modified-property | The name of the property that holds the last-modified time of files on the server (see below). | No |
 | modified-namespace | Defines a namespace to be used together with the last-modified property (see below). | No |
 | delete-before-override | Determines whether a file to be overridden on the WebDav server is deleted first. Experiments have shown that for some WebDav servers override operations are not reliable; in some cases, the old file stays on the server although a success status is returned. For such servers this property can be set to *true*. StreamSync will then send a DELETE request for this file before it is uploaded again. All other values disable this mode. | No |
 
+In addition to these options, the mechanism to authenticate with the server has
+to be defined. Refer to the [Authentication](#authentication) section for more
+information.
+
 **Notes**
+
 Using WebDav in sync operations can be problematic as the standard does not
 define an official way to update a file's last-modified time. Files have a
 _getlastmodified_ property, but this is typically set by the server to the
@@ -387,6 +390,151 @@ When a WebDav directory acts as destination structure, after each file upload
 another request is sent to update the file's modification time to match the one
 of the source structure. Here again the configured property (with the optional
 namespace) is used or the standard property if unspecified.
+
+### Authentication
+Structure types that involve a server typically require an authentication
+mechanism. Stream Sync supports multiple ways to authenticate with the server.
+
+#### Basic Auth
+The easiest authentication mechanism is _Basic Auth_, which requires that a 
+user name and password are provided. This information is then passed to the
+server in the `Authorization` header. (Therefore, this mechanism makes only
+sense when HTTPS is used for the server communication.)
+
+To make use of Basic Auth, just define the command line options
+`user` and `password`. Note that these options have to be prefixed with
+`src-` or `dst-` to assign them to either the source or destination structure.
+Examples how to use these options can be found in the
+[Examples section](#examples-and-use-cases), for instance under
+[Sync from a local directory to a WebDav directory](#sync-from-a-local-directory-to-a-webdav-directory).
+
+#### OAuth 2
+[OAuth 2](https://oauth.net/2/) is another popular way for authentication.
+Stream Sync supports the [Authorization code flow](https://oauth.net/2/grant-types/authorization-code/).
+In this flow the authentication is done by an external server, a so-called
+identity provider (IDP). In a first step, an _authorization code_ is retrieved.
+In this step, the user basically grants Stream Sync the permission to access
+her account with a set of pre-defined rights. This is done by opening a Web
+page at a URL specific to the IDP in the user's Web browser. The user then
+authenticates against the IDP, e.g. by filling out a login form or using 
+another means. If login is successful, the IDP invokes a so-called
+_redirect URL_ and passes the authorization code as a query parameter.
+
+In a second step, the authorization code has to be exchanged against an
+_access token_. This is done by calling another endpoint provided by the IDP
+and passing the authorization code as a form parameter. If everything goes 
+well, the IDP replies with a document that contains both an access token and a
+refresh token. The access token must be passed in the `Authorization` header
+for all requests sent to the target server. Its validity period is limited;
+when it expires, the refresh token can be used to obtain a new access token.
+The refresh token is typically valid for a longer time; so the user has to do
+the login (i.e. the first step) only once, and then Stream Sync can access the
+target server as long as the refresh token stays valid.
+
+The authorization code flow is interactive; it requires that the user executes
+some actions in a Web browser. This is not a great fit for a command line tool
+like Stream Sync. To close this gap, in addition to the main class of Stream
+Sync, there is a second CLI class responsible for the configuration and 
+management of OAuth identity providers:
+`com.github.sync.cli.oauth.OAuth`.
+
+What this class basically does is updating a storage with information about
+known IDPs: First, an IDP has to be added to the system. In this step a number
+of properties for this IDP has to be provided, such as the URLs to specific
+endpoints or the client ID and secret to be used for the interaction with the
+IDP. For this purpose, the `init` command is used. An example invocation could
+look as follows:
+
+```
+$ java -cp stream-sync-assembly-<version>.jar com.github.sync.cli.oauth.OAuth init \
+  --idp-storage-path ~/tokens/ \
+  --idp-name microsoft \
+  --auth-url https://login.live.com/oauth20_authorize.srf \
+  --token-url https://login.live.com/oauth20_token.srf \
+  --scope "files.readwrite offline_access" \
+  --redirect-url http://localhost:8080 \
+  --client-id <client-id> \
+  --client-secret <secret>
+```
+
+The command supports the following options:
+
+| Option | Description | Mandatory |
+| ------ | ----------- | --------- |
+| idp-name | Assigns a logical name to the IDP. This name is then used by other commands or within Stream Sync to reference this IDP. An arbitrary name can be chosen. | Yes |
+| idp-storage-path | Defines a path on the local file system where information about the IDP affected is stored. In this path a couple of files are created whose names are derived from the name of the IDP. | Yes |
+| auth-url | The URL of the authorization endpoint of the IDP. This URL is needed to obtain an authorization code; a GET request is sent to it with some specific properties added as query parameters. | Yes |
+| token-url | The URL of the token endpoint of the IDP. This URL is used to obtain an access and refresh token pair for the authorization code, and later also for refresh token requests. | Yes |
+| scope | This parameter defines a list of values that are passed in the _scope_ parameter to the IDP. The values are specific to a concrete IDP; they determine the access rights that are granted to a client that has a valid access token. | Yes |
+| redirect-url | Defines the redirect URL, which plays an important role in the authorization code flow. This URL is invoked by the IDP after a successful login of the user. The URLs to be used depend on the concrete use case; URLs referencing `localhost` are typically possible as well. | Yes |
+| client-id | An ID identifying the client. This ID is provided by the IDP as part of some kind of on-boarding process. | Yes |
+| client-secret | A secret assigned to the client. Like the client ID, the secret is provided by the IDP. | No; if missing the secret is read from the console. |
+| encrypt-idp-data | This is a boolean option that determines whether some sensitive information related to the IDP should be encrypted. Affected are the client secret and the token information obtained from the IDP. With an access token - as long as it is valid - an attacker can access the target server on behalf of the user; therefore, it makes sense to protect this data. | No, defaults to **true**. |
+| idp-password | The password to be used to encrypt sensitive information related to the IDP. This property is relevant if the _encrypt-idp-data_ option is evaluated to **true**. | No; it is read from the console if necessary. |
+
+After the execution of this command, the IDP-related information is stored 
+under the path specified, but no access token is retrieved yet. This is done
+using the `login` command as follows:
+
+```
+$ java -cp stream-sync-assembly-<version>.jar com.github.sync.cli.oauth.OAuth login \
+  --idp-storage-path ~/tokens/ \
+  --idp-name microsoft
+```
+
+The parameters correspond to the ones of the `init` command; encryption is 
+supported in the same way. (If an encryption password has been specified to the
+`init` command, the same password must be entered here as well.)
+
+The `login` command does the actual interaction with the IDP as required by the
+authorization code flow. It tries to open the standard Web browser at the
+authorization URL configured for the IDP in question. If this fails for some
+reason, a message is printed asking the user to open the browser manually and
+navigate to this URL. The Web page served at this URL is under the control of 
+the IDP; it should give the relevant instructions to do a successful 
+authentication, e.g. by filling out a login form. If this is the first login
+attempt, the user is typically asked whether she wants to grant the access
+rights defined by the _scope_ parameter to this client application. If
+authentication is successful, the IDP then redirects the user's browser to the
+redirect URL. Depending on the configured redirect URL, there are two options:
+
+* If the redirect URL is of the form `http://localhost:<port>`, the command
+  opens a small HTTP server at the configured port and waits for the redirect.
+  It can then obtain the authorization code automatically without any further
+  user interaction.
+
+* For other types of redirect URLs, the user is responsible to extract the
+  code; for instance from the URL displayed in the browser's address bar. The
+  command opens a prompt on the console where the code can be entered.
+
+If everything goes well, the command creates a new file in the specified
+storage path with the access and refresh tokens obtained from the IDP; the
+file is optionally encrypted.
+
+With this information in place, Stream Sync can now be directed to use this IDP
+for authentication. To do this, the _user_ and _password_ options used for
+basic auth have to be replaced by ones pointing to the desired IDP:
+
+```
+Sync C:\data\work dav:https://target.dav.io/backup/work \
+--log C:\Temp\sync.log \
+--dst-idp-storage-path /home/hacker/temp/tokens --dst-idp-name microsoft \
+```
+
+Note how, analogous to the OAuth commands, the IDP is referenced by its name
+and the path where its data is stored; the _encrypt-idp-data_ and
+_idp-password_ options are supported as well.
+
+With one final OAuth command the data of a specific IDP can be removed again:
+
+```
+$ java -cp stream-sync-assembly-<version>.jar com.github.sync.cli.oauth.OAuth remove \
+  --idp-storage-path ~/tokens/ \
+  --idp-name microsoft
+```
+
+This command deletes all files for the selected IDP in the path specified. As
+the files are just deleted, no encryption password is required here.
 
 ### Throttling sync streams
 
@@ -458,7 +606,8 @@ and another one for the encryption. Either of them can be omitted from the
 command line; the user is prompted for all missing passwords.
 
 ### Examples and use cases
-**Sync a local directory to an external USB hard disk**
+
+#### Sync a local directory to an external USB hard disk
 
 This should be a frequent use case, in which some local work is saved on an
 external hard disk. The command line is pretty straight-forward, as the target
@@ -473,7 +622,7 @@ granularity below seconds do not cause unnecessary copy operations.
 
 `Sync C:\data\work D:\backup\work --dst-time-zone UTC+02:00 --ignore-time-delta 2`
 
-**Do not remove archived data**
+#### Do not remove archived data
 
 Consider the case that a directory structure stores the data of different
 projects: the top-level folder contains a sub folder for each project; all
@@ -498,7 +647,7 @@ In the existing folders, however, (which are on level 1 and greater) full sync
 operations are applied; so all changes done on a specific project folder are
 transferred to the backup medium.
 
-**Interrupt and resume long-running sync processes**
+#### Interrupt and resume long-running sync processes
 
 As described under _Sync log files_, with the correct options sync processes
 can be stopped at any time and resumed at a later point in time. The first
@@ -523,7 +672,7 @@ line. It will execute the operations listed in the sync log, but ignore the
 ones contained in the progress log. Therefore, the whole sync process can be
 split in a number of incremental sync processes.
 
-**Sync from a local directory to a WebDav directory**
+#### Sync from a local directory to a WebDav directory
 The following command can be used to mirror a local directory structure to an
 online storage:
 
@@ -546,7 +695,7 @@ correctly for each file that is uploaded during a sync process.
 Note that the _--dst-password_ parameter could have been omitted. Then the user
 would have been prompted for the password.
 
-**Sync from a local directory to a WebDav server with encryption**
+#### Sync from a local directory to a WebDav server with encryption
 Building upon the previous example, with some additional options it is possible
 to protect the data on the WebDav server using encryption: 
 
