@@ -46,7 +46,7 @@ lazy val StreamSync = (project in file("."))
   .configs(ITest)
   .settings(inConfig(ITest)(Defaults.testSettings): _*)
   .settings(
-    version := "0.10-SNAPSHOT",
+    version := "0.10",
     scalaVersion := VersionScala,
     libraryDependencies ++= akkaDependencies,
     libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
