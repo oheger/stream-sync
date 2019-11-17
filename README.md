@@ -391,6 +391,31 @@ another request is sent to update the file's modification time to match the one
 of the source structure. Here again the configured property (with the optional
 namespace) is used or the standard property if unspecified.
 
+#### Microsoft OneDrive
+Most Windows users will have a Microsoft account and thus access to a free
+cloud storage area referred to as _OneDrive_. For Windows there is an
+integrated OneDrive client that automatically syncs this storage area to the
+local machine. For Linux, however, no official client exists.
+
+Stream Sync supports a OneDrive storage as both source or destination structure
+of a sync process. The storage is identified by using an URL of the form
+`onedrive:<driveID>` where _driveID_ is a string referencing a specific
+Microsoft OneDrive account. In addition, the following special command line
+options are supported: 
+
+| Option | Description | Mandatory |
+| ------ | ----------- | --------- |
+| path | Defines the relative sub path of the storage which should be synced. | Yes |
+| upload-chunk-size | File uploads to the OneDrive server have to be split to multiple chunks if the file size exceeds a certain limit (about 60 MB). With this parameter the chunk size in MB to be used by Stream Sync can be configured. | No, defaults to 10 MB. |
+
+OneDrive uses OAuth 2 as authentication mechanism with a special identity
+provider from Microsoft. Therefore, the corresponding credentials have to be
+setup (refer to the [OAuth 2](#oauth-2) section for further information). This
+requires a bunch of preparation steps before sync processes can be run
+successfully. The example
+[Sync from a local directory to Microsoft OneDrive](#sync-from-a-local-directory-to-microsoft-onedrive)
+contains a full description of the steps necessary.
+
 ### Authentication
 Structure types that involve a server typically require an authentication
 mechanism. Stream Sync supports multiple ways to authenticate with the server.
@@ -706,10 +731,10 @@ Sync C:\data\work dav:https://sd2dav.1und1.de/backup/work \
 --dst-modified-property Win32LastModifiedTime \
 --dst-modified-namespace urn:schemas-microsoft-com: \
 --filter exclude:*.bak \
---dst-encrypt-password s3cr3t
---dst-crypt-mode filesAndNames
---crypt-cache-size 1024
---ops-per-second 2
+--dst-encrypt-password s3cr3t \
+--dst-crypt-mode filesAndNames \
+--crypt-cache-size 1024 \
+--ops-per-second 2 \
 --timeout 600
 ```
 
@@ -722,6 +747,135 @@ number of sync operations per second is limited to 2 to avoid that the server
 rejects requests because its load is too high. Also, a larger timeout has been
 set (600 seconds = 10 minutes), so that uploads of larger files will not cause
 operations to fail.
+
+#### Sync from a local directory to Microsoft OneDrive
+As described in the [Microsoft OneDrive](#microsoft-onedrive) section, some
+preparations are necessary before OneDrive can be used as source or destination
+structure of a sync process. These are mainly related to authentication
+because an OAuth client for the Microsoft Identity Provider (IDP) has to be
+registered and integrated with Stream Sync.
+
+As a first step, the OAuth client application has to be created in the Azure
+Portal. The application is assigned a client ID and a client secret and is then
+able to interact with the Microsoft IDP to obtain valid access tokens. Note
+that if Stream Sync was a closed source application, it could have been
+registered as a client application and be shipped with its client secret. But
+because the full source is available in a public repository, such a
+registration cannot be done; the client secret would not be very secret, would 
+it?
+
+The steps necessary to create a client application are described in detail in 
+the official Microsoft documentation under
+[OneDrive authentication and sign-in](https://docs.microsoft.com/de-de/onedrive/developer/rest-api/getting-started/msa-oauth?view=odsp-graph-online).
+Here we will give a short outline.
+
+Log into the Microsoft Azure Portal and navigate to the page for
+[App registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade).
+Here you can create a new application. You are then presented a form where you
+can enter some data about the new application. Choose a name and select the
+type of accounts to be supported. You also have to enter a redirect URI, which
+will be invoked by the Microsoft IDP as part of the code authorization flow.
+It is up to you, which redirect URI you choose; if you intend to run sync
+processes on your personal machine, it is recommended to use a URI pointing to
+localhost with a port number that is not in use on your computer, such as
+`http://localhost:8080`. This simplifies the integration with Stream Sync as
+described below.
+
+After all information has been entered, the app can be registered. The app is
+then assigned an ID that is displayed in the overview page. On the
+_certificates and secrets_ page, you can request a new client secret. Copy this
+secret, it is required later on.
+
+Next you have to add the information about your OAuth client application to
+Stream Sync. This is done with some command line operations. For the following
+steps we assume that you have defined some environment variables that are
+referenced in the commands below:
+
+| Variable | Description |
+| -------- | ----------- |
+| SYNC_JAR | Points to the assembly jar of Stream Sync; this is used to set the classpath for Java invocations. |
+| CLIENT_ID | Contains the client ID of the app you have just registered at the Azure Portal. |
+| CLIENT_SECRET | Contains the secret of this app. |
+| TOKEN_STORE | Points to the directory where Stream Sync should store information about OAuth client applications, e.g. `~/token-store`. | 
+
+With a first command, basic properties of the client application are specified:
+
+```
+$ java -cp $SYNC_JAR com.github.sync.cli.oauth.OAuth init \
+  --idp-storage-path $TOKEN_STORE \
+  --idp-name microsoft \
+  --auth-url https://login.live.com/oauth20_authorize.srf \
+  --token-url https://login.live.com/oauth20_token.srf \
+  --scope "files.readwrite offline_access" \
+  --redirect-url http://localhost:8080 \
+  --client-id $CLIENT_ID \
+  --client-secret $CLIENT_SECRET
+```
+
+Here we use the name _microsoft_ to reference this IDP and a localhost redirect
+URI. The other options, the URLs and the scope values, are defined by the
+OneDrive API and must have exactly these values. This command will prompt you
+for a password for the IDP; sensitive data in the token directory is encrypted
+with this password. (If you do not want the files to be encrypted, add the 
+option `--encrypt-idp-data false`.)
+
+Now we can do a login against the Microsoft IDP and obtain an initial pair of
+an access and refresh token:
+
+```
+$ java -cp $SYNC_JAR com.github.sync.cli.oauth.OAuth login \
+  --idp-storage-path $TOKEN_STORE \
+  --idp-name microsoft
+```
+
+This command will open your standard Web browser and point it to the
+authorization URL of the Microsoft IDP. You are presented a form to enter the
+credentials of your Microsoft account. You are then asked whether you want to
+grant access to your client application. Confirm this.
+
+Because we have used a redirect URI of the form `http://localhost:<port>` the
+authorization code can be obtained automatically, and the command should finish
+with a message that the login was successful. (For other redirect URIs you have
+to determine the code yourself and enter it at the prompt in the console.)
+
+After completion of these steps, Stream Sync has all the information to
+authenticate against your OneDrive account. So you can run a sync process. One
+piece of information you still need is the ID of your OneDrive account. This
+can be obtained by signing in into the
+[OneDrive Web application](https://onedrive.live.com/about/de-de/signin/).
+The browser's address bar shows a URL of the form
+`https://onedrive.live.com/?id=root&cid=xxxxxx`. The ID in question is the
+alphanumeric string after the _cid_ parameter. We assume that you create an
+environment variable _DRIVE_ID_ with this value.
+
+The following command shows how the local `work` directory can be synced
+against the `data` folder of your OneDrive account:
+
+```
+Sync ~/work onedrive:$DRIVE_ID \
+--dst-path /data \
+--dst-idp-storage-path $TOKEN_STORE \
+--dst-idp-name microsoft
+```
+
+Of course, you can use other standard options as well, for instance for setting
+timeouts, configuring encryption or set filters. The following example uses the
+same options as the one in the section about
+[WebDav and encryption](#sync-from-a-local-directory-to-a-webdav-server-with-encryption):
+
+```
+Sync ~/work onedrive:$DRIVE_ID \
+--dst-path /data \
+--dst-idp-storage-path $TOKEN_STORE \
+--dst-idp-name microsoft \
+--log C:\Temp\sync.log \
+--filter exclude:*.bak \
+--dst-encrypt-password s3cr3t \
+--dst-crypt-mode filesAndNames \
+--crypt-cache-size 1024 \
+--ops-per-second 2 \
+--timeout 600
+```
 
 ## Architecture
 The Stream Sync tool makes use of [Reactive streams](http://www.reactive-streams.org/)
