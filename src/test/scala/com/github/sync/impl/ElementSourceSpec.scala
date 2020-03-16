@@ -21,11 +21,10 @@ import java.time.Instant
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
-import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, FutureResultFunc, IterateFunc, IterateFuncResult, IterateResult, NextFolderFunc, ResultTransformer, SyncFolderData}
+import com.github.sync.SyncTypes._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
 import scala.concurrent.Future
@@ -357,7 +356,6 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
       * @return the future result of the stream execution
       */
     def executeStream(): Future[List[FsElement]] = {
-      implicit val mat: ActorMaterializer = ActorMaterializer()
       val source = new ElementSource(InitState, RootFolder, Some(completionFunc _), optTransformFunc)(iterateFunc)
       val sink = Sink.fold[List[FsElement], FsElement](Nil)((lst, e) => e :: lst)
       Source.fromGraph(source).runWith(sink)

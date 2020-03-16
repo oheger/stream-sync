@@ -19,7 +19,6 @@ package com.github.sync.http.oauth
 import java.nio.file.Files
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
@@ -62,9 +61,6 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
 
   import OAuthStorageServiceImplSpec._
   import system.dispatcher
-
-  /** The object to materialize streams. */
-  private implicit val mat: ActorMaterializer = ActorMaterializer()
 
   /**
     * Creates a test storage configuration with some default values. Files are

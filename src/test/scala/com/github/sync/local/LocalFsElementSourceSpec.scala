@@ -166,10 +166,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @param source the source to be run
     * @return the future with the result of the execution
     */
-  private def obtainSourceFuture(source: Source[FsElement, Any]): Future[List[FsElement]] = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
-    source.runWith(foldSink())
-  }
+  private def obtainSourceFuture(source: Source[FsElement, Any]): Future[List[FsElement]] = source.runWith(foldSink())
 
   /**
     * Creates a special directory stream factory that returns stream wrapper
@@ -255,7 +252,6 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "support canceling stream processing" in {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     val Count = 32
     val root = FsFolder("", 0)
     (1 to Count).foreach(i => createFile(root, s"test$i.txt"))

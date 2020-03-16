@@ -20,7 +20,7 @@ import java.security.Key
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.stream.ActorMaterializer
+import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
 import com.github.sync.SyncTypes._
@@ -56,12 +56,12 @@ object CryptService {
     * @param optCryptCount     an optional counter for crypt operations; mainly
     *                          used for testing purposes
     * @param ec                the execution context
-    * @param mat               the object to materialize streams
+    * @param system            the actor system
     * @return the transformer for encrypted folder structures
     */
   def cryptTransformer(optNameDecryptKey: Option[Key], cryptCacheSize: Int,
                        optCryptCount: Option[AtomicInteger] = None)
-                      (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                      (implicit ec: ExecutionContext, system: ActorSystem):
   ResultTransformer[LRUCache[String, String]] =
     new ResultTransformer[LRUCache[String, String]] {
       override def initialState: LRUCache[String, String] = LRUCache(cryptCacheSize)
@@ -92,13 +92,13 @@ object CryptService {
     * operation is done in background. The encrypted result is returned as a
     * base64-encoded string.
     *
-    * @param key  the key to be used for encrypting
-    * @param name the name to be encrypted
-    * @param ec   the execution context
-    * @param mat  the object to materialize streams
+    * @param key    the key to be used for encrypting
+    * @param name   the name to be encrypted
+    * @param ec     the execution context
+    * @param system the actor system
     * @return a future with the encrypted result (in base64)
     */
-  def encryptName(key: Key, name: String)(implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] =
+  def encryptName(key: Key, name: String)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     cryptName(key, name, EncryptOpHandler)(ByteString(_))(buf => Base64.getUrlEncoder.encodeToString(buf.toArray))
 
   /**
@@ -107,13 +107,13 @@ object CryptService {
     * is base64-encoded. It is decoded and then decrypted using the provided
     * key. The result is converted to a string.
     *
-    * @param key  the key to be used for decrypting
-    * @param name the name to be decrypted (in base64-encoding)
-    * @param ec   the execution context
-    * @param mat  the object to materialize streams
+    * @param key    the key to be used for decrypting
+    * @param name   the name to be decrypted (in base64-encoding)
+    * @param ec     the execution context
+    * @param system the actor system
     * @return a future with the decrypted name
     */
-  def decryptName(key: Key, name: String)(implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] =
+  def decryptName(key: Key, name: String)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     cryptName(key, name, DecryptOpHandler)(n => ByteString(Base64.getUrlDecoder.decode(n)))(_.utf8String)
 
   /**
@@ -133,10 +133,10 @@ object CryptService {
     * @param key     the key for crypt operations
     * @param srcFunc a function to obtain a source for a given relative folder
     * @param ec      the execution context
-    * @param mat     the object to materialize streams
+    * @param system  the actor system
     * @return the mapping function for sync operations
     */
-  def mapOperationFunc(key: Key, srcFunc: IterateSourceFunc)(implicit ec: ExecutionContext, mat: ActorMaterializer):
+  def mapOperationFunc(key: Key, srcFunc: IterateSourceFunc)(implicit ec: ExecutionContext, system: ActorSystem):
   (SyncOperation, LRUCache[String, String]) => Future[(SyncOperation, LRUCache[String, String])] =
     (op, cache) => {
       op match {
@@ -167,12 +167,12 @@ object CryptService {
     * @param updateCache a flag whether the cache should be updated for the
     *                    current element (only true for folders)
     * @param ec          the execution context
-    * @param mat         the object to materialize streams
+    * @param system      the actor system
     * @return
     */
   private def mapCreateOperation(key: Key, srcFunc: IterateSourceFunc, op: SyncOperation,
                                  cache: LRUCache[String, String], uri: String, updateCache: Boolean)
-                                (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                (implicit ec: ExecutionContext, system: ActorSystem):
   Future[(SyncOperation, LRUCache[String, String])] = {
     val (parent, name) = UriEncodingHelper.splitParent(uri)
     val futEncName = encryptName(key, name)
@@ -181,7 +181,7 @@ object CryptService {
     val futEncPath = resolveEncryptedPath(encPrefix, prefix, components, key, srcFunc, cache)
     for {encName <- futEncName
          (encPath, updCache) <- futEncPath
-    } yield {
+         } yield {
       val destUri = encPath + UriEncodingHelper.UriSeparator + encName
       val nextCache = if (updateCache) updCache.put(uri -> destUri) else updCache
       (op.copy(dstUri = destUri), nextCache)
@@ -201,12 +201,11 @@ object CryptService {
     * @param srcFunc     a function to obtain a source for a given relative folder
     * @param cache       the current cache
     * @param ec          the execution context
-    * @param mat         the object to materialize streams
     * @return a future with the resolved path and the updated cache
     */
   private def resolveEncryptedPath(encPrefix: String, plainPrefix: String, components: Seq[String], key: Key,
                                    srcFunc: IterateSourceFunc, cache: LRUCache[String, String])
-                                  (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                  (implicit ec: ExecutionContext, system: ActorSystem):
   Future[(String, LRUCache[String, String])] = {
     val init = Future.successful((encPrefix, plainPrefix, cache))
     components.foldLeft(init) { (fut, comp) =>
@@ -230,11 +229,11 @@ object CryptService {
     * @param key     the key for crypt operations
     * @param srcFunc a function to obtain a source for a given relative folder
     * @param ec      the execution context
-    * @param mat     the object to materialize streams
+    * @param system  the actor system
     * @return a future with the resolved encrypted name
     */
   private def searchEncryptedName(parent: String, name: String, key: Key, srcFunc: IterateSourceFunc)
-                                 (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] = {
+                                 (implicit ec: ExecutionContext, system: ActorSystem): Future[String] = {
     val sink = Sink.last[String]
     srcFunc(parent) flatMap { source =>
       source
@@ -273,12 +272,12 @@ object CryptService {
     * @param decode    the function to decode the input
     * @param encode    the function to encode the output
     * @param ec        the execution context
-    * @param mat       the object to materialize streams
+    * @param system    the actor system
     * @return a future with the processed string
     */
   private def cryptName(key: Key, name: String, opHandler: CryptOpHandler)(decode: String => ByteString)
                        (encode: ByteString => String)
-                       (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] = {
+                       (implicit ec: ExecutionContext, system: ActorSystem): Future[String] = {
     val source = Source.single(decode(name))
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     val stage = new CryptStage(opHandler, key)
@@ -311,19 +310,19 @@ object CryptService {
     * @param result the result object to be transformed
     * @param cache  the cache
     * @param ec     the execution context
-    * @param mat    the object to materialize streams
+    * @param system the actor system
     * @param cnt    a counter for crypt operations
     * @tparam F the type of folder data
     * @return a future with the transformed result and the updated cache
     */
   private def processResult[F](key: Key, result: IterateResult[F], cache: LRUCache[String, String])
-                              (implicit ec: ExecutionContext, mat: ActorMaterializer, cnt: AtomicInteger):
+                              (implicit ec: ExecutionContext, system: ActorSystem, cnt: AtomicInteger):
   Future[(IterateResult[F], LRUCache[String, String])] = {
     val futDecryptedFolderUri = decryptCurrentDirectory(key, result, cache)
     for {(decryptedFolderUri, cache2) <- futDecryptedFolderUri
          (files, folders) <- decryptResultElements(key, result,
            UriEncodingHelper.withTrailingSeparator(decryptedFolderUri))
-    } yield {
+         } yield {
       val decryptedResult = createDecryptedResult(result, decryptedFolderUri, files, folders)
       val updatedCache = updateCacheWithResultFolders(decryptedResult, cache2)
       (decryptedResult, updatedCache)
@@ -339,13 +338,13 @@ object CryptService {
     * @param result the result object to be transformed
     * @param cache  the cache
     * @param ec     the execution context
-    * @param mat    the object to materialize streams
+    * @param system the actor system
     * @param cnt    a counter for crypt operations
     * @tparam F the type of folder data
     * @return a future with the decrypted directory path and the updated cache
     */
   private def decryptCurrentDirectory[F](key: Key, result: IterateResult[F], cache: LRUCache[String, String])
-                                        (implicit ec: ExecutionContext, mat: ActorMaterializer,
+                                        (implicit ec: ExecutionContext, system: ActorSystem,
                                          cnt: AtomicInteger):
   Future[(String, LRUCache[String, String])] = {
     val (prefixCrypt, components) = splitUnknownPathComponents(result.currentFolder.originalUri, cache)
@@ -405,12 +404,12 @@ object CryptService {
     * @param decryptedPrefix the prefix of the processed URI
     * @param uris            the URIs to be processed
     * @param ec              the execution context
-    * @param mat             the object to materialize streams
+    * @param system          the actor system
     * @param cnt             a counter for crypt operations
     * @return a future with the resulting URIs
     */
   private def decryptPaths(key: Key, prefixLen: Int, decryptedPrefix: String, uris: List[String])
-                          (implicit ec: ExecutionContext, mat: ActorMaterializer, cnt: AtomicInteger):
+                          (implicit ec: ExecutionContext, system: ActorSystem, cnt: AtomicInteger):
   Future[List[String]] = {
     val processedUris = uris.map(_.substring(prefixLen))
       .map(decryptName(key, _).map(decryptedPrefix + _))
@@ -426,20 +425,20 @@ object CryptService {
     * @param iterateResult   the result to be processed
     * @param decryptedFolder the URI of the decrypted current folder
     * @param ec              the execution context
-    * @param mat             the object to materialize streams
+    * @param system          the actor system
     * @param cnt             a counter for crypt operations
     * @tparam F the type of folder results
     * @return a tuple with the decrypted file and folder names
     */
   private def decryptResultElements[F](key: Key, iterateResult: IterateResult[F], decryptedFolder: String)
-                                      (implicit ec: ExecutionContext, mat: ActorMaterializer, cnt: AtomicInteger):
+                                      (implicit ec: ExecutionContext, system: ActorSystem, cnt: AtomicInteger):
   Future[(List[String], List[String])] = {
     val prefixLength = UriEncodingHelper.withTrailingSeparator(iterateResult.currentFolder.originalUri).length
     val futFiles = decryptPaths(key, prefixLength, decryptedFolder, iterateResult.files.map(_.relativeUri))
     val futFolders = decryptPaths(key, prefixLength, decryptedFolder, iterateResult.folders.map(_.folder.relativeUri))
     for {files <- futFiles
          folders <- futFolders
-    } yield (files, folders)
+         } yield (files, folders)
   }
 
   /**

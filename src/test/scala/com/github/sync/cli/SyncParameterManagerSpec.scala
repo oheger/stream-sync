@@ -19,7 +19,6 @@ package com.github.sync.cli
 import java.nio.file.{Path, Paths}
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.Parameters
@@ -130,10 +129,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @param args the list of parameters to be parsed
     * @return the ''Future'' with the parse result
     */
-  private def parseParametersFuture(args: Seq[String]): Future[Parameters] = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
-    ParameterManager.parseParameters(args)
-  }
+  private def parseParametersFuture(args: Seq[String]): Future[Parameters] = ParameterManager.parseParameters(args)
 
   "ParameterManager" should "parse an empty sequence of arguments" in {
     val params = parseParameters(Nil)

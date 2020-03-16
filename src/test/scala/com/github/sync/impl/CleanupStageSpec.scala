@@ -19,7 +19,6 @@ package com.github.sync.impl
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
@@ -38,7 +37,6 @@ class CleanupStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
 
   "A CleanupStage" should "forward stream elements and invoke the cleanup action" in {
     val Elements = List(1, 2, 3, 4, 42)
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     val source = Source(Elements)
     val sink = Sink.fold[List[Int], Int](List.empty)((lst, e) => e :: lst)
     val cleanUpCount = new AtomicInteger

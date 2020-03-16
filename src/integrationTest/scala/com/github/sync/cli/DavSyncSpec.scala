@@ -258,8 +258,8 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--src-user", UserId, "--src-password", Password, "--timeout", timeout.toSeconds.toString)
 
-    val sync = createSync()
-    val result = futureResult(Sync.syncProcess(factory, options)(system, sync.createStreamMat(), system.dispatcher))
+    createSync()
+    val result = futureResult(Sync.syncProcess(factory, options)(system, system.dispatcher))
     result.successfulOperations should be(0)
   }
 

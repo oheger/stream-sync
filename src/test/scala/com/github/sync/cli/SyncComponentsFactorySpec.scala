@@ -21,7 +21,6 @@ import java.time.ZoneId
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
-import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.AsyncTestHelper
@@ -29,8 +28,8 @@ import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, SourceComponentsFactory, SourceStructureType}
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
-import com.github.sync.http.{HttpMultiHostRequestActor, HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
+import com.github.sync.http.{HttpMultiHostRequestActor, HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.webdav.DavConfig
@@ -104,9 +103,6 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   import SyncComponentsFactorySpec._
   import system.dispatcher
-
-  /** An object to materialize streams; needed as implicit parameter. */
-  implicit val mat: ActorMaterializer = ActorMaterializer()
 
   /** A mock for a console reader; needed as implicit parameter. */
   implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
@@ -361,7 +357,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val syncFactory = new SyncComponentsFactory
 
     val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
-      TestTimeout, args)(system, mat, system.dispatcher, reader))
+      TestTimeout, args)(system, system.dispatcher, reader))
     processedArgs.accessedParameters should contain(propPwd)
     val config = extractDavSourceConfig(srcFactory)
     config.optBasicAuthConfig.get.user should be(User)

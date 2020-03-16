@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
@@ -40,12 +39,11 @@ import scala.concurrent.ExecutionContext
   * @param httpActorFactory the HTTP actor factory
   * @param ec               the execution context
   * @param system           the actor system
-  * @param mat              the object to materialize streams
   * @tparam C the type of the configuration
   */
 private abstract class HttpComponentsSourceFactory[C <: HttpConfig](config: C, httpActorFactory: HttpActorFactory)
-                                                                   (implicit ec: ExecutionContext, system: ActorSystem,
-                                                                    mat: ActorMaterializer) extends SourceComponentsFactory {
+                                                                   (implicit ec: ExecutionContext, system: ActorSystem)
+  extends SourceComponentsFactory {
 
   import HttpActorFactory._
 
@@ -110,12 +108,11 @@ private abstract class HttpComponentsSourceFactory[C <: HttpConfig](config: C, h
   * @param httpActorFactory the HTTP actor factory
   * @param ec               the execution context
   * @param system           the actor system
-  * @param mat              the object to materialize streams
   * @tparam C the type of the configuration
   */
 private abstract class HttpComponentsDestinationFactory[C <: HttpConfig](config: C, httpActorFactory: HttpActorFactory)
-                                                                        (implicit ec: ExecutionContext, system: ActorSystem,
-                                                                         mat: ActorMaterializer)
+                                                                        (implicit ec: ExecutionContext,
+                                                                         system: ActorSystem)
   extends DestinationComponentsFactory {
 
   import HttpActorFactory._

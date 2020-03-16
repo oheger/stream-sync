@@ -20,11 +20,10 @@ import java.time.Instant
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
-import com.github.sync.SyncTypes.{ActionCreate, ActionOverride, ActionRemove, FsElement, FsFile, FsFolder, IterateResult, SyncFolderData, SyncOperation}
+import com.github.sync.SyncTypes._
 import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.util.{LRUCache, UriEncodingHelper}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
@@ -130,9 +129,6 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
 
   import CryptServiceSpec._
   import system.dispatcher
-
-  /** The object to materialize streams. */
-  implicit val mat: ActorMaterializer = ActorMaterializer()
 
   /**
     * A convenience function to encrypt some text and wait for the result.
@@ -372,7 +368,6 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     */
   private def invokeMapOpFunc(srcData: List[(String, List[String])], op: SyncOperation, cache: LRUCache[String, String]):
   (SyncOperation, LRUCache[String, String]) = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     val mapFunc = CryptService.mapOperationFunc(SecretKey, sourceFunction(srcData))
     futureResult(mapFunc(op, cache))
   }

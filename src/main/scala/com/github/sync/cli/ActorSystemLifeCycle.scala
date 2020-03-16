@@ -18,7 +18,6 @@ package com.github.sync.cli
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.stream.ActorMaterializer
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -42,22 +41,12 @@ trait ActorSystemLifeCycle {
   /** The field that stores the managed actor system. */
   private var system: ActorSystem = _
 
-  /** The field that stores the managed object to materialize streams. */
-  private var mat: ActorMaterializer = _
-
   /**
     * Returns the actor system managed by this trait.
     *
     * @return the managed actor system
     */
   implicit def actorSystem: ActorSystem = system
-
-  /**
-    * Returns the object to materialize streams managed by this trait.
-    *
-    * @return the object to materialize streams
-    */
-  implicit def streamMat: ActorMaterializer = mat
 
   /**
     * Returns an execution context for concurrent operations.
@@ -78,7 +67,6 @@ trait ActorSystemLifeCycle {
     */
   def run(args: Array[String]): Unit = {
     system = createActorSystem()
-    mat = createStreamMat()
     val futResult = futureWithShutdown(runApp(args))
     val resultMsg = Await.result(futResult, 365.days)
     println(resultMsg)
@@ -92,14 +80,6 @@ trait ActorSystemLifeCycle {
     * @return the newly created actor system
     */
   protected def createActorSystem(): ActorSystem = ActorSystem(name)
-
-  /**
-    * Creates the object to materialize streams. This base implementation
-    * creates a default ''ActorMaterializer''.
-    *
-    * @return the object to materialize streams
-    */
-  protected def createStreamMat(): ActorMaterializer = ActorMaterializer()
 
   /**
     * Executes the logic of this application. A concrete implementation can

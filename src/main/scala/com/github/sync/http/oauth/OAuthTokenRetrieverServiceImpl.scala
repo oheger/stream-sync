@@ -19,18 +19,17 @@ package com.github.sync.http.oauth
 import java.io.IOException
 import java.util.regex.Pattern
 
-import akka.actor.ActorRef
-import akka.http.scaladsl.model.{FormData, HttpMethods, HttpRequest, Uri}
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.Uri.Query
+import akka.http.scaladsl.model.{FormData, HttpMethods, HttpRequest, Uri}
 import akka.pattern.ask
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.{ByteString, Timeout}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.HttpRequestActor
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
 
 object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData] {
@@ -83,14 +82,14 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[OAuthCo
   }
 
   override def fetchTokens(httpActor: ActorRef, config: OAuthConfig, secret: Secret, code: String)
-                          (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[OAuthTokenData] = {
+                          (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] = {
     val params = Map(ParamClientId -> config.clientID, ParamRedirectUri -> config.redirectUri,
       ParamClientSecret -> secret.secret, ParamCode -> code, ParamGrantType -> GrantTypeAuthorizationCode)
     sendTokenRequest(httpActor, config, params)
   }
 
   override def refreshToken(httpActor: ActorRef, config: OAuthConfig, secret: Secret, refreshToken: String)
-                           (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[OAuthTokenData] = {
+                           (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] = {
     val params = Map(ParamClientId -> config.clientID, ParamRedirectUri -> config.redirectUri,
       ParamClientSecret -> secret.secret, ParamRefreshToken -> refreshToken, ParamGrantType -> GrantTypeRefreshToken)
     sendTokenRequest(httpActor, config, params)
@@ -104,10 +103,12 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[OAuthCo
     * @param httpActor the actor for sending HTTP requests
     * @param config    the OAuth configuration
     * @param params    the parameters for the request
+    * @param ec        the execution context
+    * @param system    the actor system
     * @return a ''Future'' with the tokens obtained from the IDP
     */
   private def sendTokenRequest(httpActor: ActorRef, config: OAuthConfig, params: Map[String, String])
-                              (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[OAuthTokenData] = {
+                              (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] = {
     val request = HttpRequestActor.SendRequest(request = HttpRequest(uri = config.tokenEndpoint,
       entity = FormData(params).toEntity, method = HttpMethods.POST), null)
     for {result <- (httpActor ? request).mapTo[HttpRequestActor.Result]
@@ -121,11 +122,11 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[OAuthCo
     *
     * @param result the result object
     * @param ec     the execution context
-    * @param mat    the object to materialize streams
+    * @param system the actor system
     * @return the text content of the response
     */
   private def responseBody(result: HttpRequestActor.Result)
-                          (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] = {
+                          (implicit ec: ExecutionContext, system: ActorSystem): Future[String] = {
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     result.response.entity.dataBytes.runWith(sink).map(_.utf8String)
   }

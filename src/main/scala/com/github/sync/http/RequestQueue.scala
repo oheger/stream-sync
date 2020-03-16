@@ -17,10 +17,10 @@
 package com.github.sync.http
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.{Http, HttpExt}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
+import akka.http.scaladsl.{Http, HttpExt}
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source, SourceQueueWithComplete}
-import akka.stream.{ActorMaterializer, OverflowStrategy, QueueOfferResult}
+import akka.stream.{OverflowStrategy, QueueOfferResult}
 
 import scala.concurrent.{Future, Promise}
 import scala.util.{Failure, Success, Try}
@@ -85,9 +85,8 @@ private object RequestQueue {
   * @param uri       the URI requests are to be sent to
   * @param queueSize the size of the request queue
   * @param system    the actor system
-  * @param mat       the object to materialize streams
   */
-private class RequestQueue(uri: Uri, queueSize: Int = 2)(implicit system: ActorSystem, mat: ActorMaterializer) {
+private class RequestQueue(uri: Uri, queueSize: Int = 2)(implicit system: ActorSystem) {
 
   import RequestQueue._
 

@@ -22,8 +22,8 @@ import java.time.Instant
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.StatusCodes
+import akka.stream.{ActorAttributes, Supervision}
 import akka.stream.scaladsl.{Sink, Source}
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import akka.testkit.TestKit
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes._
@@ -163,8 +163,6 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
       ex.printStackTrace()
       Supervision.Resume
     }
-    implicit val mat: ActorMaterializer =
-      ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
     val httpActor = system.actorOf(HttpRequestActor(config.rootUri))
     val requestActor = system.actorOf(HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get))
     val source = Source(operations)
@@ -173,6 +171,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
     }
     val futResult = source
       .via(DavOperationHandler(config, fileProvider, requestActor))
+      .withAttributes(ActorAttributes.supervisionStrategy(decider))
       .runWith(sink)
     futureResult(futResult).reverse
   }

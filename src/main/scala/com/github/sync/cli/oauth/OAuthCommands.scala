@@ -19,14 +19,13 @@ package com.github.sync.cli.oauth
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import com.github.sync.cli.oauth.OAuthParameterManager.IdpConfig
 import com.github.sync.cli.{ConsoleReader, ParameterManager}
 import com.github.sync.crypt.Secret
-import com.github.sync.http.{HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.http.oauth._
+import com.github.sync.http.{HttpRequestActor, OAuthStorageConfig}
 
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Success, Try}
@@ -73,15 +72,13 @@ trait OAuthCommand[C] {
     * @param parameters     the current command line arguments
     * @param ec             the execution context
     * @param system         the actor system
-    * @param mat            the object to materialize streams
     * @param consoleReader  the console reader
     * @return a ''Future'' with the result of this command
     */
   def run(storageConfig: OAuthStorageConfig,
           storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData],
           parameters: Parameters)
-         (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer,
-          consoleReader: ConsoleReader): Future[String] = {
+         (implicit ec: ExecutionContext, system: ActorSystem, consoleReader: ConsoleReader): Future[String] = {
     val cliResult = ParameterManager.tryProcessor(cliProcessor, parameters)
     for {(config, updParams) <- Future.fromTry(cliResult)
          _ <- ParameterManager.checkParametersConsumed(updParams)
@@ -99,13 +96,12 @@ trait OAuthCommand[C] {
     * @param config         the configuration for this command
     * @param ec             the execution context
     * @param system         the actor system
-    * @param mat            the object to materialize streams
     * @return a ''Future'' with the result of this command
     */
   protected def runCommand(storageConfig: OAuthStorageConfig,
                            storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret,
                              OAuthTokenData], config: C)
-                          (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer): Future[String]
+                          (implicit ec: ExecutionContext, system: ActorSystem): Future[String]
 }
 
 /**
@@ -130,7 +126,7 @@ class OAuthInitCommand extends OAuthCommand[IdpConfig] {
   override protected def runCommand(storageConfig: OAuthStorageConfig,
                                     storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                       Secret, OAuthTokenData], config: IdpConfig)
-                                   (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
+                                   (implicit ec: ExecutionContext, system: ActorSystem):
   Future[String] =
     for {_ <- storageService.saveConfig(storageConfig, config.oauthConfig)
          _ <- storageService.saveClientSecret(storageConfig, config.clientSecret)
@@ -155,8 +151,7 @@ class OAuthRemoveCommand extends OAuthCommand[Unit] {
   override protected def runCommand(storageConfig: OAuthStorageConfig,
                                     storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                       Secret, OAuthTokenData], config: Unit)
-                                   (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
-  Future[String] =
+                                   (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     storageService.removeStorage(storageConfig) map {
       case paths@_ :: _ =>
         val removeMsg = paths.mkString(", ")
@@ -198,8 +193,8 @@ class OAuthLoginCommand(val tokenService: OAuthTokenRetrieverService[OAuthConfig
   override protected def runCommand(storageConfig: OAuthStorageConfig,
                                     storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                       Secret, OAuthTokenData], reader: ConsoleReader)
-                                   (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
-  Future[String] = for {config <- storageService.loadConfig(storageConfig)
+                                   (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
+    for {config <- storageService.loadConfig(storageConfig)
                         authUri <- tokenService.authorizeUrl(config)
                         code <- obtainCode(config, authUri, reader)
                         secret <- storageService.loadClientSecret(storageConfig)
@@ -229,11 +224,10 @@ class OAuthLoginCommand(val tokenService: OAuthTokenRetrieverService[OAuthConfig
     * @param reader  the console reader to prompt the user
     * @param ec      the execution context
     * @param system  the actor system
-    * @param mat     the object to materialize streams
     * @return a ''Future'' with the code
     */
   private def obtainCode(config: OAuthConfig, authUri: Uri, reader: ConsoleReader)
-                        (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer): Future[String] =
+                        (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     checkLocalRedirectUri(config) match {
       case Some(port) =>
         val futCode = obtainCodeFromRedirect(port)
@@ -285,11 +279,9 @@ class OAuthLoginCommand(val tokenService: OAuthTokenRetrieverService[OAuthConfig
     * @param port   the port to bind the server
     * @param ec     the execution context
     * @param system the actor system
-    * @param mat    the object to materialize streams
     * @return a ''Future'' with the authorization code
     */
-  private def obtainCodeFromRedirect(port: Int)(implicit ec: ExecutionContext, system: ActorSystem,
-                                                mat: ActorMaterializer): Future[String] = {
+  private def obtainCodeFromRedirect(port: Int)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] = {
     val promiseCode = Promise[String]()
     val handler: HttpRequest => HttpResponse = request => {
       val status = request.uri.query().get("code") match {
@@ -322,11 +314,10 @@ class OAuthLoginCommand(val tokenService: OAuthTokenRetrieverService[OAuthConfig
     * @param code   the authorization code
     * @param ec     the execution context
     * @param system the actor system
-    * @param mat    the object to materialize streams
     * @return a ''Future'' with the token pair
     */
   private def fetchTokens(config: OAuthConfig, secret: Secret, code: String)
-                         (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
+                         (implicit ec: ExecutionContext, system: ActorSystem):
   Future[OAuthTokenData] = {
     val httpActor = system.actorOf(HttpRequestActor(config.tokenEndpoint), "httpRequestActor")
     tokenService.fetchTokens(httpActor, config, secret, code) andThen {

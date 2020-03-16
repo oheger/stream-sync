@@ -19,7 +19,7 @@ package com.github.sync.http.oauth
 import java.nio.file.Path
 
 import akka.Done
-import akka.stream.ActorMaterializer
+import akka.actor.ActorSystem
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -43,11 +43,11 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS] {
     * @param storageConfig the storage configuration
     * @param config        the OAuth configuration to be stored
     * @param ec            the execution context
-    * @param mat           the object to materialize streams
+    * @param system        the actor system
     * @return a future indicating the success of this operation
     */
   def saveConfig(storageConfig: STORAGE_CONFIG, config: CONFIG)
-                (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[Done]
+                (implicit ec: ExecutionContext, system: ActorSystem): Future[Done]
 
   /**
     * Loads the ''OAuthConfig'' defined by the given storage config. If
@@ -55,11 +55,11 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS] {
     *
     * @param storageConfig the storage configuration
     * @param ec            the execution context
-    * @param mat           the object to materialize streams
+    * @param system        the actor system
     * @return a ''Future'' with the ''OAuthConfig''
     */
   def loadConfig(storageConfig: STORAGE_CONFIG)
-                (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[CONFIG]
+                (implicit ec: ExecutionContext, system: ActorSystem): Future[CONFIG]
 
   /**
     * Saves the given OAuth client secret according to the given storage
@@ -69,22 +69,22 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS] {
     * @param storageConfig the storage configuration
     * @param secret        the OAuth client secret to be saved
     * @param ec            the execution context
-    * @param mat           the object to materialize streams
+    * @param system        the actor system
     * @return a ''Future'' indicating the success of this operation
     */
   def saveClientSecret(storageConfig: STORAGE_CONFIG, secret: CLIENT_SECRET)
-                      (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[Done]
+                      (implicit ec: ExecutionContext, system: ActorSystem): Future[Done]
 
   /**
     * Loads the OAuth client secret defined by the given storage configuration.
     *
     * @param storageConfig the storage configuration
     * @param ec            the execution context
-    * @param mat           the object to materialize streams
+    * @param system        the actor system
     * @return a ''Future'' with the OAuth client secret
     */
   def loadClientSecret(storageConfig: STORAGE_CONFIG)
-                      (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[CLIENT_SECRET]
+                      (implicit ec: ExecutionContext, system: ActorSystem): Future[CLIENT_SECRET]
 
   /**
     * Saves the given OAuth token data according to the given storage
@@ -94,22 +94,22 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS] {
     * @param storageConfig the storage configuration
     * @param tokens        the object with token data
     * @param ec            the execution context
-    * @param mat           the object to materialize streams
+    * @param system        the actor system
     * @return a ''Future'' indicating the success of this operation
     */
   def saveTokens(storageConfig: STORAGE_CONFIG, tokens: TOKENS)
-                (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[Done]
+                (implicit ec: ExecutionContext, system: ActorSystem): Future[Done]
 
   /**
     * Loads token information defined by the given storage configuration.
     *
     * @param storageConfig the storage configuration
     * @param ec            the execution context
-    * @param mat           the object to materialize streams
+    * @param system        the actor system
     * @return a ''Future'' with the token material that has been loaded
     */
   def loadTokens(storageConfig: STORAGE_CONFIG)
-                (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[TOKENS]
+                (implicit ec: ExecutionContext, system: ActorSystem): Future[TOKENS]
 
   /**
     * Removes all files related to a specific identity provider defined by the

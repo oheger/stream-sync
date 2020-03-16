@@ -18,7 +18,6 @@ package com.github.sync.cli
 
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
@@ -34,11 +33,9 @@ import scala.concurrent.ExecutionContext
   * @param httpActorFactory the HTTP actor factory
   * @param ec               the execution context
   * @param system           the actor system
-  * @param mat              the object to materialize streams
   */
 private class OneDriveComponentsSourceFactory(val config: OneDriveConfig, val httpActorFactory: HttpActorFactory)
-                                             (implicit ec: ExecutionContext, system: ActorSystem,
-                                              mat: ActorMaterializer)
+                                             (implicit ec: ExecutionContext, system: ActorSystem)
   extends HttpComponentsSourceFactory[OneDriveConfig](config, httpActorFactory) {
   override protected def doCreateSource(sourceFactory: ElementSourceFactory, httpRequestActor: ActorRef):
   Source[FsElement, Any] = OneDriveFsElementSource(config, sourceFactory, httpRequestActor)
@@ -55,11 +52,9 @@ private class OneDriveComponentsSourceFactory(val config: OneDriveConfig, val ht
   * @param httpActorFactory the HTTP actor factory
   * @param ec               the execution context
   * @param system           the actor system
-  * @param mat              the object to materialize streams
   */
 private class OneDriveComponentsDestinationFactory(val config: OneDriveConfig, val httpActorFactory: HttpActorFactory)
-                                                  (implicit ec: ExecutionContext, system: ActorSystem,
-                                                   mat: ActorMaterializer)
+                                                  (implicit ec: ExecutionContext, system: ActorSystem)
   extends HttpComponentsDestinationFactory[OneDriveConfig](config, httpActorFactory) {
   override protected def doCreateSource(sourceFactory: ElementSourceFactory, startFolderUri: String,
                                         requestActor: ActorRef): Source[FsElement, Any] =

@@ -19,8 +19,7 @@ package com.github.sync.local
 import java.nio.file.{Files, Path}
 import java.time.ZoneId
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
-import akka.stream.ActorMaterializer
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.stream.scaladsl.FileIO
 import com.github.sync.SyncTypes._
 import com.github.sync._
@@ -76,8 +75,8 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
                              destinationResolver: LocalUriResolver,
                              optTimeZone: Option[ZoneId]) extends Actor with
   ActorLogging {
-  /** The object to materialize streams. */
-  private implicit val materializer: ActorMaterializer = ActorMaterializer()
+  /** The actor system in implicit scope. */
+  private implicit val system: ActorSystem = context.system
 
   import context.dispatcher
 

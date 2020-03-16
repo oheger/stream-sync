@@ -20,8 +20,8 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import akka.actor.ActorSystem
+import akka.stream.ClosedShape
 import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
-import akka.stream.{ActorMaterializer, ClosedShape}
 import akka.testkit.TestKit
 import com.github.sync.SyncTypes._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
@@ -100,7 +100,6 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with Fl
     */
   private def runStage(source1: Source[FsElement, Any], source2: Source[FsElement, Any],
                        ignoreTimeDelta: Int = 0): Seq[SyncOperation] = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     val foldSink =
       Sink.fold[List[SyncOperation], SyncOperation](List.empty[SyncOperation]) { (lst, e) =>
         e :: lst

@@ -17,7 +17,6 @@
 package com.github.sync.impl
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
@@ -46,8 +45,8 @@ class StatefulStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     TestKit shutdownActorSystem system
   }
 
-  import system.dispatcher
   import StatefulStageSpec._
+  import system.dispatcher
 
   /**
     * Runs a stream with test data and returns a list with all elements
@@ -57,7 +56,6 @@ class StatefulStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     * @return a future with the stream result
     */
   private def runStream(func: StateMapFunction[String, String, Int]): Future[List[String]] = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     val source = Source(SourceData)
     val sink = Sink.fold[List[String], String](Nil)((lst, e) => e :: lst)
     source.via(new StatefulStage(0)(func))

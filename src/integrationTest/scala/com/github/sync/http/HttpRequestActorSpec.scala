@@ -19,7 +19,6 @@ package com.github.sync.http
 import akka.actor.{ActorSystem, Props, Terminated}
 import akka.http.scaladsl.model.{HttpRequest, StatusCodes}
 import akka.pattern.ask
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
@@ -71,7 +70,6 @@ class HttpRequestActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     result.request should be(request)
     result.response.status should be(StatusCodes.Accepted)
 
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     val content = futureResult(result.response.entity.dataBytes.runWith(sink))
     content.utf8String should be(FileTestHelper.TestDataSingleLine)

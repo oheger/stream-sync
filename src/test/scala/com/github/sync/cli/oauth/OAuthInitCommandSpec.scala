@@ -21,7 +21,6 @@ import java.nio.file.Paths
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ConsoleReader
 import com.github.sync.cli.ParameterManager.ParametersMap
@@ -29,8 +28,8 @@ import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
 import org.mockito.ArgumentCaptor
-import org.mockito.Mockito._
 import org.mockito.Matchers.{any, eq => eqArg}
+import org.mockito.Mockito._
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -113,9 +112,6 @@ class OAuthInitCommandSpec extends FlatSpec with Matchers with MockitoSugar with
     /** Implicit actor system required for command execution. */
     private implicit val actorSystem: ActorSystem = mock[ActorSystem]
 
-    /** Implicit object to materialize streams required by commands. */
-    private implicit val streamMat: ActorMaterializer = mock[ActorMaterializer]
-
     /** Mock for the storage service. */
     private val storageService = mock[OAuthStorageService[OAuthStorageConfig, OAuthConfig,
       Secret, OAuthTokenData]]
@@ -132,7 +128,7 @@ class OAuthInitCommandSpec extends FlatSpec with Matchers with MockitoSugar with
                               saveSecretResult: Future[Done] = Future.successful(Done)): CommandTestHelper = {
       when(storageService.saveConfig(StorageConfig, TestConfig)).thenReturn(saveConfigResult)
       when(storageService.saveClientSecret(eqArg(StorageConfig), any())(eqArg(implicitly[ExecutionContext]),
-        eqArg(streamMat))).thenReturn(saveSecretResult)
+        eqArg(actorSystem))).thenReturn(saveSecretResult)
       this
     }
 
@@ -146,7 +142,7 @@ class OAuthInitCommandSpec extends FlatSpec with Matchers with MockitoSugar with
       verify(storageService).saveConfig(StorageConfig, TestConfig)
       val capt = ArgumentCaptor.forClass(classOf[Secret])
       verify(storageService).saveClientSecret(eqArg(StorageConfig), capt.capture())(eqArg(implicitly[ExecutionContext]),
-        eqArg(streamMat))
+        eqArg(actorSystem))
       capt.getValue.secret should be(ClientSecret)
       this
     }

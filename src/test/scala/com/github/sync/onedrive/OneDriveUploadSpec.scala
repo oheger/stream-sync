@@ -22,7 +22,6 @@ import akka.Done
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.HttpRequest
 import akka.pattern.AskTimeoutException
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.stage.AsyncCallback
 import akka.testkit.{TestKit, TestProbe}
@@ -122,7 +121,6 @@ class OneDriveUploadSpec(testSystem: ActorSystem) extends TestKit(testSystem) wi
     */
   private def checkStreamCoordinatorActorIsStopped(source: Source[ByteString, Any], chunkSize: Int): Unit = {
     val config = createConfig(chunkSize)
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     import system.dispatcher
     val flow = new UploadFlowTestImpl(config)
     val sink = Sink.foreach[HttpRequest] { request =>
@@ -154,7 +152,6 @@ class OneDriveUploadSpec(testSystem: ActorSystem) extends TestKit(testSystem) wi
   }
 
   "UploadRequestSource" should "handle a failure when requesting data from the coordinator actor" in {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     import system.dispatcher
     val config = createConfig(1024, timeout = 200.millis)
     val requestSource = new UploadRequestSource(config, TestProbe().ref)

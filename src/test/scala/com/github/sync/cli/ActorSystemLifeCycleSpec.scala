@@ -37,7 +37,6 @@ class ActorSystemLifeCycleSpec extends FlatSpec with Matchers {
 
       override protected def runApp(args: Array[String]): Future[String] = {
         args should be(CommandLine)
-        streamMat should not be null
         val actor = actorSystem.actorOf(Props(new Actor {
           override def receive: Receive = {
             case x: Int => sender() ! x + 1

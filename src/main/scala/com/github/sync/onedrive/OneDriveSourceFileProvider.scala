@@ -19,7 +19,6 @@ package com.github.sync.onedrive
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.headers.Location
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SourceFileProvider
@@ -43,10 +42,9 @@ import scala.concurrent.{ExecutionContext, Future}
   * @param httpActor the actor for sending HTTP requests
   * @param ec        the execution context
   * @param system    the actor system
-  * @param mat       the object to materialize streams
   */
 class OneDriveSourceFileProvider(config: OneDriveConfig, httpActor: ActorRef)
-                                (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer)
+                                (implicit ec: ExecutionContext, system: ActorSystem)
   extends SourceFileProvider {
   /** The timeout for HTTP requests. */
   private implicit val timeout: Timeout = config.timeout

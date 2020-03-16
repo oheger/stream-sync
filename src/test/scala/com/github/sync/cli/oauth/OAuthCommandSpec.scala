@@ -17,7 +17,6 @@
 package com.github.sync.cli.oauth
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ConsoleReader
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
@@ -64,9 +63,6 @@ class OAuthCommandSpec extends FlatSpec with Matchers with AsyncTestHelper with 
 
   /** Mock for the implicit actor system. */
   private implicit val actorSystem: ActorSystem = mock[ActorSystem]
-
-  /** Mock for an object to materialize streams. */
-  private implicit val streamMat: ActorMaterializer = mock[ActorMaterializer]
 
   /**
     * Creates a generic test Cli processor that checks the context passed to it
@@ -160,13 +156,11 @@ class OAuthCommandSpec extends FlatSpec with Matchers with AsyncTestHelper with 
       override protected def runCommand(storageConfig: OAuthStorageConfig,
                                         storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                           Secret, OAuthTokenData], config: Int)
-                                       (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer):
-      Future[String] = {
+                                       (implicit ec: ExecutionContext, system: ActorSystem): Future[String] = {
         storageConfig should be(mockStorageConfig)
         storageService should be(mockStorageService)
         config should be(Config)
         system should be(actorSystem)
-        mat should be(streamMat)
         result
       }
     }

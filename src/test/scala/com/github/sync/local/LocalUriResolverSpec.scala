@@ -17,14 +17,11 @@
 package com.github.sync.local
 
 import java.nio.file.{Files, Paths}
-import java.time.Instant
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import akka.util.ByteString
-import com.github.sync.SyncTypes.FsFile
 import com.github.sync._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
 
@@ -61,7 +58,6 @@ class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) 
     * @return a future with the string content of this file
     */
   private def readFileSource(source: Source[ByteString, Any]): Future[String] = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     implicit val ec: ExecutionContext = system.dispatcher
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     source.runWith(sink) map (_.utf8String)

@@ -16,16 +16,16 @@
 
 package com.github.sync.http.oauth
 
-import akka.actor.{Actor, ActorLogging, ActorRef, PoisonPill, Props, Status}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, PoisonPill, Props, Status}
 import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
 import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.pattern.ask
-import akka.stream.{ActorMaterializer, KillSwitch}
+import akka.stream.KillSwitch
 import akka.util.Timeout
 import com.github.sync.crypt.Secret
-import com.github.sync.http.{HttpExtensionActor, OAuthStorageConfig}
 import com.github.sync.http.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
 import com.github.sync.http.oauth.OAuthTokenActor.{DoRefresh, PendingRequestData, RefreshFailure, TokensRefreshed}
+import com.github.sync.http.{HttpExtensionActor, OAuthStorageConfig}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -135,8 +135,8 @@ class OAuthTokenActor(override val httpActor: ActorRef,
   /** Execution context in implicit scope. */
   private implicit val ec: ExecutionContext = context.dispatcher
 
-  /** The object to materialize streams. */
-  private implicit val mat: ActorMaterializer = ActorMaterializer()
+  /** The actor system in implicit scope. */
+  private implicit val system: ActorSystem = context.system
 
   /**
     * A timeout for the ask patter. Note that here a huge value is used;

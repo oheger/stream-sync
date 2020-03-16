@@ -16,9 +16,8 @@
 
 package com.github.sync.http.oauth
 
-import akka.actor.ActorRef
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.Uri
-import akka.stream.ActorMaterializer
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -53,11 +52,11 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS] {
     * @param secret    the client secret
     * @param code      the authorization code
     * @param ec        the execution context
-    * @param mat       the object to materialize streams
+    * @param system    the actor system
     * @return a ''Future'' with the tokens retrieved from the IDP
     */
   def fetchTokens(httpActor: ActorRef, config: CONFIG, secret: CLIENT_SECRET, code: String)
-                 (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[TOKENS]
+                 (implicit ec: ExecutionContext, system: ActorSystem): Future[TOKENS]
 
   /**
     * Sends a request to the token endpoint of the referenced IDP to obtain
@@ -68,9 +67,9 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS] {
     * @param secret       the client secret
     * @param refreshToken the refresh token
     * @param ec           the execution context
-    * @param mat          the object to materialize streams
+    * @param system       the actor system
     * @return a ''Future'' with the tokens retrieved from the IDP
     */
   def refreshToken(httpActor: ActorRef, config: CONFIG, secret: CLIENT_SECRET, refreshToken: String)
-                  (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[TOKENS]
+                  (implicit ec: ExecutionContext, system: ActorSystem): Future[TOKENS]
 }

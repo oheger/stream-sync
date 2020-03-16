@@ -17,7 +17,6 @@
 package com.github.sync.impl
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.SyncTypes.{FsElement, FsFolder}
@@ -65,7 +64,6 @@ class FolderSortStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     * @return the output produced by the stream
     */
   private def runStage(source: Source[FsElement, Any]): Seq[FsElement] = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     val sink = Sink.fold[List[FsElement], FsElement](List.empty) { (lst, e) => e :: lst }
     val futStream = source.via(new FolderSortStage)
       .runWith(sink)

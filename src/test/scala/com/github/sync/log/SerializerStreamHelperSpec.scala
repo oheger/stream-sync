@@ -19,7 +19,6 @@ package com.github.sync.log
 import java.time.Instant
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.SyncTypes._
@@ -50,10 +49,7 @@ class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSy
     * @return the materialized value of the sink
     */
   private def readStream[Data, Mat](source: Source[Data, Any],
-                                    sink: Sink[Data, Mat]): Mat = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
-    source.runWith(sink)
-  }
+                                    sink: Sink[Data, Mat]): Mat = source.runWith(sink)
 
   /**
     * Generates a sink that adds the stream elements to a list (in reverse
@@ -92,7 +88,7 @@ class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSy
     val Content = "Line1\nLine2  \r\n  Line3\n\r\nLine4"
     val logFile = createDataFile(Content)
 
-    val lines = futureResult(SerializerStreamHelper.readProcessedLog(logFile)(ActorMaterializer()))
+    val lines = futureResult(SerializerStreamHelper.readProcessedLog(logFile))
     lines should contain theSameElementsAs List("Line4", "Line3", "Line2", "Line1")
   }
 }

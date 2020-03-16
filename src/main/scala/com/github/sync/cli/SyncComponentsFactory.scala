@@ -22,7 +22,6 @@ import java.time.ZoneId
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.model.Uri
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.github.sync.SourceFileProvider
@@ -30,8 +29,8 @@ import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation
 import com.github.sync.cli.ParameterManager._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
-import com.github.sync.http.{BasicAuthConfig, HttpConfig, HttpMultiHostRequestActor, HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
+import com.github.sync.http._
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.webdav.DavConfig
@@ -547,13 +546,13 @@ object SyncComponentsFactory {
     * @param httpConfig        the HTTP configuration
     * @param storageService    the storage service to be used
     * @param ec                the execution context
-    * @param mat               the object to materialize streams
+    * @param system            the actor system
     * @return a ''Future'' with the factory for HTTP actors
     */
   private def createHttpActorFactory(requestActorProps: Props, httpConfig: HttpConfig,
                                      storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
                                        Secret, OAuthTokenData])
-                                    (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                    (implicit ec: ExecutionContext, system: ActorSystem):
   Future[HttpActorFactory] =
     httpConfig.optOAuthConfig match {
       case Some(storageConfig) =>
@@ -603,14 +602,13 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
     * @param timeout       a timeout when applying a sync operation
     * @param parameters    the object with command line parameters
     * @param system        the actor system
-    * @param mat           the object to materialize streams
     * @param ec            the execution context
     * @param consoleReader the object for reading from the console
     * @return updated parameters and the factory for creating source components
     */
   def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
-                                   (implicit system: ActorSystem, mat: ActorMaterializer,
-                                    ec: ExecutionContext, consoleReader: ConsoleReader):
+                                   (implicit system: ActorSystem, ec: ExecutionContext,
+                                    consoleReader: ConsoleReader):
   Future[(Parameters, SourceComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
       for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, SourceStructureType)
@@ -636,14 +634,13 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
     * @param timeout       a timeout when applying a sync operation
     * @param parameters    the object with command line parameters
     * @param system        the actor system
-    * @param mat           the object to materialize streams
     * @param ec            the execution context
     * @param consoleReader the object for reading from the console
     * @return updated parameters and the factory for creating dest components
     */
   def createDestinationComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
-                                        (implicit system: ActorSystem, mat: ActorMaterializer,
-                                         ec: ExecutionContext, consoleReader: ConsoleReader):
+                                        (implicit system: ActorSystem, ec: ExecutionContext,
+                                         consoleReader: ConsoleReader):
   Future[(Parameters, DestinationComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
       for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, DestinationStructureType)

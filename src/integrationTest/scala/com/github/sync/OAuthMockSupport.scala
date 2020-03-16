@@ -16,9 +16,9 @@
 
 package com.github.sync
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.`Content-Type`
 import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
-import akka.stream.ActorMaterializer
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenData}
@@ -31,16 +31,16 @@ object OAuthMockSupport {
   val TokenEndpoint = "/token"
 
   /** Token material that is available initially. */
-  val CurrentTokenData = OAuthTokenData(accessToken = "accessOld", refreshToken = "make-it-fresh")
+  val CurrentTokenData: OAuthTokenData = OAuthTokenData(accessToken = "accessOld", refreshToken = "make-it-fresh")
 
   /** Token material after a refresh. */
-  val RefreshedTokenData = OAuthTokenData(accessToken = "accessNew", refreshToken = "nextRefresh")
+  val RefreshedTokenData: OAuthTokenData = OAuthTokenData(accessToken = "accessNew", refreshToken = "nextRefresh")
 
   /** The client secret for the test IDP. */
-  val ClientSecret = Secret("secretOfMyTestIDP")
+  val ClientSecret: Secret = Secret("secretOfMyTestIDP")
 
   /** The secret for encrypting the data of the test IDP. */
-  val PwdIdpData = Secret("idpDataEncryption")
+  val PwdIdpData: Secret = Secret("idpDataEncryption")
 }
 
 /**
@@ -56,7 +56,7 @@ trait OAuthMockSupport {
   import OAuthMockSupport._
 
   protected implicit val ec: ExecutionContext
-  protected implicit val mat: ActorMaterializer
+  protected implicit val system: ActorSystem
 
   /**
     * Creates an OAuth configuration that points to the mock server.

@@ -67,12 +67,11 @@ object Sync {
     * @param factory the factory for the sync stream
     * @param args    the array with command line arguments
     * @param system  the actor system
-    * @param mat     the object to materialize streams
     * @param ec      the execution context
     * @return a future with information about the result of the process
     */
   def syncProcess(factory: SyncComponentsFactory, args: Array[String])
-                 (implicit system: ActorSystem, mat: ActorMaterializer, ec: ExecutionContext):
+                 (implicit system: ActorSystem, ec: ExecutionContext):
   Future[SyncResult] = {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
 
@@ -96,12 +95,11 @@ object Sync {
     * @param srcFactory the factory for creating source components
     * @param dstFactory the factory for creating destination components
     * @param system     the actor system
-    * @param mat        the object to materialize streams
     * @return a future with information about the result of the process
     */
   private def runSync(config: SyncConfig, filterData: SyncFilterData,
                       srcFactory: SourceComponentsFactory, dstFactory: DestinationComponentsFactory)
-                     (implicit system: ActorSystem, mat: ActorMaterializer): Future[SyncResult] = {
+                     (implicit system: ActorSystem): Future[SyncResult] = {
     import system.dispatcher
     for {
       source <- createSyncSource(config, srcFactory, dstFactory)
@@ -122,12 +120,12 @@ object Sync {
     * @param srcFactory the factory for creating source components
     * @param dstFactory the factory for creating destination components
     * @param ec         the execution context
-    * @param mat        the object to materialize streams
+    * @param system     the actor system
     * @return the source for the sync process
     */
   private def createSyncSource(config: SyncConfig, srcFactory: SourceComponentsFactory,
                                dstFactory: DestinationComponentsFactory)
-                              (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                              (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Source[SyncOperation, Any]] = config.syncLogPath match {
     case Some(path) =>
       createSyncSourceFromLog(config, path)
@@ -189,12 +187,12 @@ object Sync {
     * @param cryptMode      the crypt mode
     * @param cryptCacheSize size of the cache for encrypted names
     * @param ec             the execution context
-    * @param mat            the object to materialize streams
+    * @param system         the actor system
     * @return the ''ResultTransformer'' for these parameters
     */
   private[cli] def createResultTransformer(optCryptPwd: Option[String], cryptMode: CryptMode.Value,
                                            cryptCacheSize: Int)
-                                          (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                          (implicit ec: ExecutionContext, system: ActorSystem):
   Option[ResultTransformer[LRUCache[String, String]]] =
     optCryptPwd.map { pwd =>
       val optNameKey = if (cryptMode == CryptMode.FilesAndNames) Some(CryptStage.keyFromString(pwd)) else None
@@ -227,11 +225,11 @@ object Sync {
     * @param config      the sync configuration
     * @param syncLogPath the path to the sync log
     * @param ec          the execution context
-    * @param mat         the object to materialize streams
+    * @param system      the actor system
     * @return the source to read from a sync log file
     */
   private def createSyncSourceFromLog(config: SyncConfig, syncLogPath: Path)
-                                     (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                     (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Source[SyncOperation, Any]] = config.logFilePath match {
     case Some(processedLog) =>
       SerializerStreamHelper.createSyncOperationSourceWithProcessedLog(syncLogPath, processedLog)
@@ -248,13 +246,12 @@ object Sync {
     * @param srcFactory the factory for creating source components
     * @param dstFactory the factory for creating destination components
     * @param ec         the execution context
-    * @param mat        the object to materialize streams
+    * @param system     the actor system
     * @return a future with the flow to apply sync operations
     */
   private def createApplyStage(config: SyncConfig, srcFactory: SourceComponentsFactory,
                                dstFactory: DestinationComponentsFactory)
-                              (implicit ec: ExecutionContext,
-                               mat: ActorMaterializer):
+                              (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Flow[SyncOperation, SyncOperation, NotUsed]] = Future {
     config.applyMode match {
       case SyncParameterManager.ApplyModeTarget(targetUri) =>
@@ -276,12 +273,12 @@ object Sync {
     * @param dstFactory the factory for creating destination components
     * @param stage      the apply stage to be decorated
     * @param ec         the execution context
-    * @param mat        the object to materialize streams
+    * @param system     the actor system
     * @return the decorated apply stage
     */
   private def decorateApplyStage(config: SyncConfig, dstFactory: DestinationComponentsFactory,
                                  stage: Flow[SyncOperation, SyncOperation, NotUsed])
-                                (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                (implicit ec: ExecutionContext, system: ActorSystem):
   Flow[SyncOperation, SyncOperation, NotUsed] =
     if (config.dstPassword.isEmpty || config.dstCryptMode != CryptMode.FilesAndNames) stage
     else {
@@ -352,6 +349,11 @@ object Sync {
   Future[RunnableGraph[Future[(Int, Int)]]] = Future {
     val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
     val sinkLogFile = createLogSink(logFile)
+    val decider: Supervision.Decider = ex => {
+      ex.printStackTrace()
+      Supervision.Resume
+    }
+
     RunnableGraph.fromGraph(GraphDSL.create(sinkCount, sinkCount, sinkLogFile)(combineMat) {
       implicit builder =>
         (sinkTotal, sinkSuccess, sinkLog) =>
@@ -362,7 +364,7 @@ object Sync {
           broadcastSink ~> flowProc ~> broadcastSuccess ~> sinkSuccess.in
           broadcastSuccess ~> sinkLog
           ClosedShape
-    })
+    }).withAttributes(ActorAttributes.supervisionStrategy(decider))
   }
 
   /**
@@ -441,12 +443,11 @@ object Sync {
     * @param factory the factory for creating stream components
     * @param args    the array with command line arguments
     * @param system  the actor system
-    * @param mat     the object to materialize streams
     * @param ec      the execution context
     * @return a ''Future'' with a result message
     */
   private def syncWithResultMessage(factory: SyncComponentsFactory, args: Array[String])
-                                   (implicit system: ActorSystem, mat: ActorMaterializer, ec: ExecutionContext):
+                                   (implicit system: ActorSystem, ec: ExecutionContext):
   Future[String] =
     syncProcess(factory, args)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
@@ -469,14 +470,5 @@ class Sync extends ActorSystemLifeCycle {
   override protected def runApp(args: Array[String]): Future[String] = {
     val factory = new SyncComponentsFactory
     Sync.syncWithResultMessage(factory, args)
-  }
-
-  /**
-    * @inheritdoc This implementation creates a special materializer that can
-    *             resume the stream on errors.
-    */
-  override def createStreamMat(): ActorMaterializer = {
-    val decider: Supervision.Decider = _ => Supervision.Resume
-    ActorMaterializer(ActorMaterializerSettings(actorSystem).withSupervisionStrategy(decider))
   }
 }

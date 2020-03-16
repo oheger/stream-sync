@@ -21,7 +21,6 @@ import java.nio.file.{Files, Path}
 import java.time.Instant
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.{ImplicitSender, TestKit}
 import akka.util.{ByteString, Timeout}
@@ -62,9 +61,6 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @inheritdoc Use a higher timeout because of more complex operations.
     */
   override val timeout: Duration = 10.seconds
-
-  /** The object to materialize streams. */
-  implicit protected val mat: ActorMaterializer = ActorMaterializer()
 
   /**
     * Creates a test file with the given name in the directory specified. The
@@ -142,7 +138,7 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
   protected def factoryWithMockSourceProvider(provider: SourceFileProvider): SyncComponentsFactory =
     new SyncComponentsFactory {
       override def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
-                                                (implicit system: ActorSystem, mat: ActorMaterializer,
+                                                (implicit system: ActorSystem,
                                                  ec: ExecutionContext, consoleReader: ConsoleReader):
       Future[(Parameters, SyncComponentsFactory.SourceComponentsFactory)] =
         super.createSourceComponentsFactory(uri, timeout, parameters) map { t =>

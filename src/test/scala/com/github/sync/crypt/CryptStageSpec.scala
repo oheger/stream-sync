@@ -17,7 +17,7 @@
 package com.github.sync.crypt
 
 import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, FlowShape}
+import akka.stream.FlowShape
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.stage.GraphStage
 import akka.testkit.TestKit
@@ -75,7 +75,6 @@ class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with F
     */
   private def runCryptStream(data: List[ByteString], cryptStage: GraphStage[FlowShape[ByteString, ByteString]]):
   List[ByteString] = {
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     val source = Source(data)
     val sink = Sink.fold[List[ByteString], ByteString](Nil)((list, bs) => bs :: list)
     val futResult = source.via(cryptStage)

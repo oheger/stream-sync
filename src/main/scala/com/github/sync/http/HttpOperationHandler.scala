@@ -20,7 +20,6 @@ import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem, PoisonPill}
 import akka.http.scaladsl.model.HttpRequest
 import akka.pattern.ask
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SourceFileProvider
@@ -57,12 +56,10 @@ trait HttpOperationHandler[C <: HttpConfig] {
     * @param fileProvider the object providing access to files to upload
     * @param requestActor the actor for sending HTTP requests
     * @param system       the actor system
-    * @param mat          the object to materialize streams
     * @return the flow to process operations against an HTTP server
     */
   def webDavProcessingFlow(config: C, fileProvider: SourceFileProvider, requestActor: ActorRef)
-                          (implicit system: ActorSystem, mat: ActorMaterializer):
-  Flow[SyncOperation, SyncOperation, NotUsed] = {
+                          (implicit system: ActorSystem): Flow[SyncOperation, SyncOperation, NotUsed] = {
     val syncRequestActor =
       system.actorOf(SyncOperationRequestActor(requestActor, config.timeout), "syncOperationRequestActor")
     // set a long implicit timeout; timeouts are handled by the request actor
@@ -163,12 +160,12 @@ trait HttpOperationHandler[C <: HttpConfig] {
     * @param file     the file affected
     * @param source   a ''Source'' with the content of the file
     * @param ec       the execution context
-    * @param mat      the object to materialize streams
+    * @param system   the actor system
     * @return a ''Future'' with request information
     */
   protected def createNewFileRequest(op: SyncOperation, file: FsFile,
                                      fileSize: Long, source: Future[Source[ByteString, Any]])
-                                    (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                    (implicit ec: ExecutionContext, system: ActorSystem):
   Future[SyncOperationRequestData]
 
   /**
@@ -179,11 +176,11 @@ trait HttpOperationHandler[C <: HttpConfig] {
     * @param file     the file affected
     * @param source   a ''Source'' with the content of the file
     * @param ec       the execution context
-    * @param mat      the object to materialize streams
+    * @param system   the actor system
     * @return a ''Future'' with request information
     */
   protected def createUpdateFileRequest(op: SyncOperation, file: FsFile,
                                         fileSize: Long, source: Future[Source[ByteString, Any]])
-                                       (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                       (implicit ec: ExecutionContext, system: ActorSystem):
   Future[SyncOperationRequestData]
 }

@@ -19,7 +19,6 @@ package com.github.sync.webdav
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model._
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.ByteString
 import com.github.sync.SyncTypes._
@@ -45,12 +44,10 @@ object DavOperationHandler {
     * @param fileProvider the file provider
     * @param requestActor the request actor
     * @param system       the actor system
-    * @param mat          the object to materialize streams
     * @return the ''Flow'' for applying sync operations
     */
   def apply(config: DavConfig, fileProvider: SourceFileProvider, requestActor: ActorRef)
-           (implicit system: ActorSystem, mat: ActorMaterializer):
-  Flow[SyncOperation, SyncOperation, NotUsed] = {
+           (implicit system: ActorSystem): Flow[SyncOperation, SyncOperation, NotUsed] = {
     val modifiedTimeTemplate = ModifiedTimeRequestFactory.requestTemplate(config)
     val handler = new DavOperationHandler(config, modifiedTimeTemplate)
     handler.webDavProcessingFlow(config, fileProvider, requestActor)
@@ -83,13 +80,13 @@ class DavOperationHandler(config: DavConfig, modifiedTimeTemplate: String) exten
 
   override protected def createNewFileRequest(op: SyncOperation, file: FsFile, fileSize: Long,
                                               source: Future[Source[ByteString, Any]])
-                                             (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                             (implicit ec: ExecutionContext, system: ActorSystem):
   Future[SyncOperationRequestData] =
     createFileUploadRequest(op, file, fileSize, source, isUpdate = false)
 
   override protected def createUpdateFileRequest(op: SyncOperation, file: FsFile, fileSize: Long,
                                                  source: Future[Source[ByteString, Any]])
-                                                (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                                (implicit ec: ExecutionContext, system: ActorSystem):
   Future[SyncOperationRequestData] =
     createFileUploadRequest(op, file, fileSize, source, isUpdate = true)
 

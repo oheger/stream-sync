@@ -22,8 +22,7 @@ import akka.Done
 import akka.actor.{Actor, ActorRef, ActorSystem, Props, Status}
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.headers.`Content-Type`
-import akka.http.scaladsl.model.{ContentTypes, HttpMethods, HttpRequest, HttpResponse, IllegalUriException}
-import akka.stream.ActorMaterializer
+import akka.http.scaladsl.model._
 import akka.stream.scaladsl.Sink
 import akka.testkit.TestKit
 import akka.util.ByteString
@@ -116,11 +115,11 @@ object OAuthTokenRetrieverServiceImplSpec {
     * @param req       the request
     * @param expParams the expected parameters
     * @param ec        the execution context
-    * @param mat       the object to materialize streams
+    * @param system    the actor system
     * @return the validation result
     */
   private def validateFormParameters(req: HttpRequest, expParams: Map[String, String])
-                                    (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[Done] = {
+                                    (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     req.entity.dataBytes.runWith(sink)
       .map(bs => Query(bs.utf8String))
@@ -139,11 +138,11 @@ object OAuthTokenRetrieverServiceImplSpec {
     * @param expPath   the expected path
     * @param expParams the expected parameters
     * @param ec        the execution context
-    * @param mat       the object to materialize streams
+    * @param system    the actor system
     * @return the validation result
     */
   private def validateRequest(req: HttpRequest, expPath: String, expParams: Map[String, String])
-                             (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[Done] =
+                             (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
     for {_ <- validateRequestProperties(req, expPath)
          res <- validateFormParameters(req, expParams)
          } yield res
@@ -158,7 +157,7 @@ object OAuthTokenRetrieverServiceImplSpec {
     * @param response  the response to be returned
     */
   class HttpStubActor(expPath: String, expParams: Map[String, String], response: Try[String]) extends Actor {
-    private implicit val mat: ActorMaterializer = ActorMaterializer()
+    private implicit val system: ActorSystem = context.system
 
     override def receive: Receive = {
       case req: HttpRequestActor.SendRequest =>
@@ -204,9 +203,6 @@ class OAuthTokenRetrieverServiceImplSpec(testSystem: ActorSystem) extends TestKi
 
   import OAuthTokenRetrieverServiceImplSpec._
   import system.dispatcher
-
-  /** Object to materialize streams in implicit scope. */
-  private implicit val mat: ActorMaterializer = ActorMaterializer()
 
   /**
     * Convenience function to create a stub actor with the given parameters.

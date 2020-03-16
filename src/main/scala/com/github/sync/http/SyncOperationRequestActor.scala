@@ -16,9 +16,8 @@
 
 package com.github.sync.http
 
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.model.HttpRequest
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.Timeout
 import com.github.sync.SyncTypes.SyncOperation
@@ -84,8 +83,8 @@ object SyncOperationRequestActor {
   * @param timeout      a timeout for request execution
   */
 class SyncOperationRequestActor(requestActor: ActorRef, timeout: Timeout) extends Actor {
-  /** The object to materialize streams. */
-  private implicit val mat: ActorMaterializer = ActorMaterializer()
+  /** The actor system in implicit scope. */
+  private implicit val system: ActorSystem = context.system
 
   /** The execution context in implicit scope. */
   private implicit val ec: ExecutionContext = context.system.dispatcher

@@ -21,7 +21,6 @@ import java.time.Instant
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{StatusCodes, Uri}
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.testkit.{TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
@@ -53,12 +52,9 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     TestKit shutdownActorSystem system
   }
 
-  /** The object to materialize streams. */
-  implicit val mat: ActorMaterializer = ActorMaterializer()
-
   import DavSourceFileProviderSpec._
-  import system.dispatcher
   import WireMockSupport.BasicAuthFunc
+  import system.dispatcher
 
   /**
     * Returns a config for WebDav operations.

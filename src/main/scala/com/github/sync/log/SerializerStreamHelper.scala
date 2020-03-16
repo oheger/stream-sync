@@ -18,7 +18,7 @@ package com.github.sync.log
 
 import java.nio.file.Path
 
-import akka.stream.ActorMaterializer
+import akka.actor.ActorSystem
 import akka.stream.scaladsl.{FileIO, Framing, Sink, Source}
 import akka.util.ByteString
 import com.github.sync.SyncTypes.SyncOperation
@@ -70,11 +70,11 @@ object SerializerStreamHelper {
     * log the lines are filtered that are already contained in the processed
     * log.
     *
-    * @param file the file with sync operations to be read
-    * @param mat  the object to materialize streams
+    * @param file   the file with sync operations to be read
+    * @param system the actor system
     * @return a future with a set of the single lines read from the file
     */
-  def readProcessedLog(file: Path)(implicit mat: ActorMaterializer): Future[Set[String]] = {
+  def readProcessedLog(file: Path)(implicit system: ActorSystem): Future[Set[String]] = {
     val sink = Sink.fold[Set[String], String](Set.empty)(_ + _)
     createLogFileSource(file).runWith(sink)
   }
@@ -89,13 +89,12 @@ object SerializerStreamHelper {
     *
     * @param syncLog      the path to the sync log file
     * @param processedLog the path to the processed log file
-    * @param mat          the object to materialize streams
     * @param ec           the execution context
+    * @param system       the actor system
     * @return the source to read sync operations ignoring processed operations
     */
   def createSyncOperationSourceWithProcessedLog(syncLog: Path, processedLog: Path)
-                                               (implicit mat: ActorMaterializer,
-                                                ec: ExecutionContext):
+                                               (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Source[SyncOperation, Any]] = readProcessedLog(processedLog)
     .fallbackTo(Future.successful(Set.empty[String])) map { log =>
     toOperationSource(createLogFileSource(syncLog).filterNot(log.contains))

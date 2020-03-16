@@ -20,11 +20,11 @@ import java.util
 import java.util.{Collections, Locale}
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+
 import scala.collection.JavaConverters._
 
 /**
@@ -42,7 +42,6 @@ class LoggingStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val elements = List("These", "elements", "go", "through", "the", "stream.")
     val outElements = elements map (_.toUpperCase(Locale.ROOT))
     val loggedElements = Collections.synchronizedList(new util.ArrayList[String])
-    implicit val mat: ActorMaterializer = ActorMaterializer()
     val source = Source(elements)
     val sink = Sink.fold[List[String], String](List.empty)((lst, e) => e :: lst)
     val operator =

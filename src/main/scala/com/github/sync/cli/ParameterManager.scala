@@ -19,7 +19,7 @@ package com.github.sync.cli
 import java.nio.file.{Path, Paths}
 import java.util.Locale
 
-import akka.stream.ActorMaterializer
+import akka.actor.ActorSystem
 import akka.stream.scaladsl.{FileIO, Framing, Sink}
 import akka.util.ByteString
 
@@ -200,12 +200,12 @@ object ParameterManager {
     * Parses the command line arguments and converts them into a map keyed by
     * options.
     *
-    * @param args the sequence with command line arguments
-    * @param ec   the execution context
-    * @param mat  an object to materialize streams for reading parameter files
+    * @param args   the sequence with command line arguments
+    * @param ec     the execution context
+    * @param system the actor system
     * @return a future with the parsed map of arguments
     */
-  def parseParameters(args: Seq[String])(implicit ec: ExecutionContext, mat: ActorMaterializer): Future[Parameters] = {
+  def parseParameters(args: Seq[String])(implicit ec: ExecutionContext, system: ActorSystem): Future[Parameters] = {
     def appendOptionValue(argMap: InternalParamMap, opt: String, value: String):
     InternalParamMap = {
       val optValues = argMap.getOrElse(opt, List.empty)
@@ -711,13 +711,13 @@ object ParameterManager {
     * Reads a file with parameters asynchronously and returns its single lines
     * as a list of strings.
     *
-    * @param path the path to the parameters
-    * @param mat  the ''ActorMaterializer'' for reading the file
-    * @param ec   the execution context
+    * @param path   the path to the parameters
+    * @param ec     the execution context
+    * @param system the actor system
     * @return a future with the result of the read operation
     */
   private def readParameterFile(path: String)
-                               (implicit mat: ActorMaterializer, ec: ExecutionContext):
+                               (implicit ec: ExecutionContext, system: ActorSystem):
   Future[List[String]] = {
     val source = FileIO.fromPath(Paths get path)
     val sink = Sink.fold[List[String], String](List.empty)((lst, line) => line :: lst)
@@ -733,13 +733,13 @@ object ParameterManager {
     * Reads all parameter files referenced by the provided list. The arguments
     * they contain are combined to a single sequence of strings.
     *
-    * @param files list with the files to be read
-    * @param mat   the ''ActorMaterializer'' for reading files
-    * @param ec    the execution context
+    * @param files  list with the files to be read
+    * @param ec     the execution context
+    * @param system the actor system
     * @return a future with the result of the combined read operation
     */
   private def readAllParameterFiles(files: List[String])
-                                   (implicit mat: ActorMaterializer, ec: ExecutionContext):
+                                   (implicit ec: ExecutionContext, system: ActorSystem):
   Future[List[String]] =
     Future.sequence(files.map(readParameterFile)).map(_.flatten)
 

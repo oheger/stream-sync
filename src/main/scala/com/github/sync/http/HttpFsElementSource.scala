@@ -20,7 +20,7 @@ import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.HttpResponse
 import akka.stream.scaladsl.{Sink, Source}
-import akka.stream.{ActorMaterializer, Graph, SourceShape}
+import akka.stream.{Graph, SourceShape}
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes._
 import com.github.sync.http.HttpFsElementSource.{ElemData, HttpFolder, HttpIterationState, ParsedFolderData}
@@ -115,12 +115,10 @@ trait HttpFsElementSource[C <: HttpConfig] {
     * @param requestActor   the actor for sending HTTP requests
     * @param startFolderUri URI of a folder to start the iteration
     * @param system         the actor system
-    * @param mat            the object to materialize streams
     * @return the new source
     */
   def createSource(config: C, sourceFactory: ElementSourceFactory, requestActor: ActorRef,
-                   startFolderUri: String = "")
-                  (implicit system: ActorSystem, mat: ActorMaterializer):
+                   startFolderUri: String = "")(implicit system: ActorSystem):
   Source[FsElement, NotUsed] = Source.fromGraph(createSourceShape(config, sourceFactory, requestActor, startFolderUri))
 
   /**
@@ -131,12 +129,10 @@ trait HttpFsElementSource[C <: HttpConfig] {
     * @param requestActor   the actor for sending HTTP requests
     * @param startFolderUri URI of a folder to start the iteration
     * @param system         the actor system
-    * @param mat            the object to materialize streams
     * @return the new source
     */
   def createSourceShape(config: C, sourceFactory: ElementSourceFactory, requestActor: ActorRef,
-                        startFolderUri: String = "")
-                       (implicit system: ActorSystem, mat: ActorMaterializer):
+                        startFolderUri: String = "")(implicit system: ActorSystem):
   Graph[SourceShape[FsElement], NotUsed] = {
     implicit val ec: ExecutionContext = system.dispatcher
     val rootUriPrefix = UriEncodingHelper.removeTrailingSeparator(config.rootUri.path.toString())
@@ -152,11 +148,11 @@ trait HttpFsElementSource[C <: HttpConfig] {
     *
     * @param response the response to be read
     * @param ec       the execution context
-    * @param mat      the object to materialize streams
+    * @param system   the actor system
     * @return a future with the ''ByteString'' built from the response
     */
   protected def readResponse(response: HttpResponse)
-                            (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[ByteString] = {
+                            (implicit ec: ExecutionContext, system: ActorSystem): Future[ByteString] = {
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     response.entity.dataBytes.runWith(sink)
   }
@@ -182,11 +178,11 @@ trait HttpFsElementSource[C <: HttpConfig] {
     * @param folder the folder whose content is to be computed
     * @param result the result of the request for this folder
     * @param ec     the execution context
-    * @param mat    the object to materialize streams
+    * @param system the actor system
     * @return a ''Future'' with the result of the parse operation
     */
   protected def parseFolderResponse(state: HttpIterationState[C], folder: FsFolder)(result: HttpRequestActor.Result)
-                                   (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                   (implicit ec: ExecutionContext, system: ActorSystem):
   Future[ParsedFolderData]
 
   /**
@@ -206,11 +202,11 @@ trait HttpFsElementSource[C <: HttpConfig] {
     * Returns the function that iterates over the folder structure of the web
     * dav server.
     *
-    * @param ec  the execution context
-    * @param mat the object to materialize streams
+    * @param ec     the execution context
+    * @param system the actor system
     * @return the iterate function
     */
-  private def iterateFunc(implicit ec: ExecutionContext, mat: ActorMaterializer):
+  private def iterateFunc(implicit ec: ExecutionContext, system: ActorSystem):
   IterateFunc[HttpFolder, HttpIterationState[C]] = (state, nextFolder) => {
     nextFolder() match {
       case Some(folder) =>
@@ -227,11 +223,11 @@ trait HttpFsElementSource[C <: HttpConfig] {
     * @param state         the current iteration state
     * @param currentFolder the current folder
     * @param ec            the execution context
-    * @param mat           the object to materialize streams
+    * @param system        the actor system
     * @return the future with the content of the current folder
     */
   private def futureResultFunc(state: HttpIterationState[C], currentFolder: SyncFolderData[HttpFolder])
-                              (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                              (implicit ec: ExecutionContext, system: ActorSystem):
   FutureResultFunc[HttpFolder, HttpIterationState[C]] = () =>
     loadFolder(state, currentFolder) map (processFolderResult(state, currentFolder.folder, _))
 
@@ -252,11 +248,11 @@ trait HttpFsElementSource[C <: HttpConfig] {
     * @param state      the current iteration state
     * @param folderData the data of the folder to be loaded
     * @param ec         the execution context
-    * @param mat        the object to materialize streams
+    * @param system     the actor system
     * @return a future with the parsed content of the folder
     */
   private def loadFolder(state: HttpIterationState[C], folderData: SyncFolderData[HttpFolder])
-                        (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[List[ElemData]] = {
+                        (implicit ec: ExecutionContext, system: ActorSystem): Future[List[ElemData]] = {
     val request = createFolderRequest(state, folderData)
     loadAndAggregateFolderContent(state, folderData, request, Nil)
   }
@@ -270,12 +266,12 @@ trait HttpFsElementSource[C <: HttpConfig] {
     * @param nextRequest the next request to be executed
     * @param content     the current aggregated content of the folder
     * @param ec          the execution context
-    * @param mat         the object to materialize streams
+    * @param system      the actor system
     * @return a ''Future'' with the aggregated folder content
     */
   private def loadAndAggregateFolderContent(state: HttpIterationState[C], folderData: SyncFolderData[HttpFolder],
                                             nextRequest: HttpRequestActor.SendRequest, content: List[ElemData])
-                                           (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                           (implicit ec: ExecutionContext, system: ActorSystem):
   Future[List[ElemData]] =
     executeFolderContentRequest(state, folderData, nextRequest) flatMap { parsedData =>
       val elements = parsedData.elements ::: content
@@ -292,12 +288,12 @@ trait HttpFsElementSource[C <: HttpConfig] {
     * @param folderData the data of the folder to be loaded
     * @param request    the request to be executed
     * @param ec         the execution context
-    * @param mat        the object to materialize streams
+    * @param system     the actor system
     * @return a ''Future'' with the result of the parse operation
     */
   private def executeFolderContentRequest(state: HttpIterationState[C], folderData: SyncFolderData[HttpFolder],
                                           request: HttpRequestActor.SendRequest)
-                                         (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                         (implicit ec: ExecutionContext, system: ActorSystem):
   Future[ParsedFolderData] = {
     implicit val timeout: Timeout = state.config.timeout
     HttpRequestActor

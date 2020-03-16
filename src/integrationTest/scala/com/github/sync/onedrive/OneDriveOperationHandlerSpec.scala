@@ -22,7 +22,6 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.scaladsl.{Sink, Source}
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import akka.testkit.TestKit
 import akka.util.ByteString
 import com.github.sync.SyncTypes._
@@ -82,12 +81,6 @@ class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(test
   private def runSync(operations: List[SyncOperation],
                       config: OneDriveConfig,
                       fileProvider: SourceFileProvider = mock[SourceFileProvider]): List[SyncOperation] = {
-    val decider: Supervision.Decider = ex => {
-      ex.printStackTrace()
-      Supervision.Resume
-    }
-    implicit val mat: ActorMaterializer =
-      ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
     val requestActor = system.actorOf(HttpRequestActor(config.rootUri))
     val source = Source(operations)
     val sink = Sink.fold[List[SyncOperation], SyncOperation](List.empty) { (lst, op) =>

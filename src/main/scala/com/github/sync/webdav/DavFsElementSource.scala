@@ -25,7 +25,6 @@ import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
-import akka.stream._
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.github.sync.SyncTypes._
@@ -92,12 +91,10 @@ object DavFsElementSource extends HttpFsElementSource[DavConfig] {
     * @param requestActor   the actor for sending HTTP requests
     * @param startFolderUri URI of a folder to start the iteration
     * @param system         the actor system
-    * @param mat            the object to materialize streams
     * @return the new source
     */
   def apply(config: DavConfig, sourceFactory: ElementSourceFactory, requestActor: ActorRef,
-            startFolderUri: String = "")
-           (implicit system: ActorSystem, mat: ActorMaterializer):
+            startFolderUri: String = "")(implicit system: ActorSystem):
   Source[FsElement, NotUsed] = createSource(config, sourceFactory, requestActor, startFolderUri)
 
   /**
@@ -109,12 +106,12 @@ object DavFsElementSource extends HttpFsElementSource[DavConfig] {
     * @param folder the folder whose content is to be computed
     * @param result the result of the request for this folder
     * @param ec     the execution context
-    * @param mat    the object to materialize streams
+    * @param system the actor system
     * @return a ''Future'' with the result of the parse operation
     */
   override protected def parseFolderResponse(state: HttpIterationState[DavConfig], folder: FsFolder)
                                             (result: HttpRequestActor.Result)
-                                            (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                            (implicit ec: ExecutionContext, system: ActorSystem):
   Future[ParsedFolderData] =
     readResponse(result.response)
       .map(toXml)

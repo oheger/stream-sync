@@ -24,7 +24,6 @@ import akka.Done
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
-import akka.stream.ActorMaterializer
 import akka.testkit.TestKit
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.oauth.{BrowserHandler, OAuthLoginCommand}
@@ -130,9 +129,6 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
 
   import OAuthLoginCommandSpec._
   import system.dispatcher
-
-  /** The object to materialize streams in implicit scope. */
-  private implicit val mat: ActorMaterializer = ActorMaterializer()
 
   /**
     * Prepares the mock server to answer a successful token request.
@@ -437,7 +433,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
           OAuthTokenRetrieverServiceImpl.fetchTokens(args.head.asInstanceOf[ActorRef],
             args(1).asInstanceOf[OAuthConfig], args(2).asInstanceOf[Secret],
             args(3).asInstanceOf[String])(args(4).asInstanceOf[ExecutionContext],
-            args(5).asInstanceOf[ActorMaterializer])
+            args(5).asInstanceOf[ActorSystem])
         })
       service
     }

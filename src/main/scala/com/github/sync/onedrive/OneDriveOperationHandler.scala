@@ -21,10 +21,9 @@ import java.util.Locale
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.headers.Accept
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.Accept
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SourceFileProvider
@@ -76,11 +75,10 @@ object OneDriveOperationHandler {
     * @param fileProvider the ''SourceFileProvider''
     * @param requestActor the actor to execute HTTP requests
     * @param system       the actor system
-    * @param mat          the object to materialize streams
     * @return the ''Flow'' to apply sync operations
     */
   def apply(config: OneDriveConfig, fileProvider: SourceFileProvider, requestActor: ActorRef)
-           (implicit system: ActorSystem, mat: ActorMaterializer): Flow[SyncOperation, SyncOperation, NotUsed] = {
+           (implicit system: ActorSystem): Flow[SyncOperation, SyncOperation, NotUsed] = {
     val handler = new OneDriveOperationHandler(config, requestActor)
     handler.webDavProcessingFlow(config, fileProvider, requestActor)
   }
@@ -120,12 +118,12 @@ class OneDriveOperationHandler(config: OneDriveConfig, requestActor: ActorRef)(i
 
   override protected def createNewFileRequest(op: SyncOperation, file: FsFile, fileSize: Long,
                                               source: Future[Source[ByteString, Any]])
-                                             (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                             (implicit ec: ExecutionContext, system: ActorSystem):
   Future[SyncOperationRequestData] = createUploadRequest(op, file, fileSize, source)
 
   override protected def createUpdateFileRequest(op: SyncOperation, file: FsFile, fileSize: Long,
                                                  source: Future[Source[ByteString, Any]])
-                                                (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                                (implicit ec: ExecutionContext, system: ActorSystem):
   Future[SyncOperationRequestData] = createUploadRequest(op, file, fileSize, source)
 
   /**
@@ -148,12 +146,12 @@ class OneDriveOperationHandler(config: OneDriveConfig, requestActor: ActorRef)(i
     * @param fileSize the total file size
     * @param source   the source with the content of the file
     * @param ec       the execution context
-    * @param mat      the object to materialize streams
+    * @param system           the actor system
     * @return a ''Future'' with information about the request
     */
   private def createUploadRequest(op: SyncOperation, file: FsFile, fileSize: Long,
                                   source: Future[Source[ByteString, Any]])
-                                 (implicit ec: ExecutionContext, mat: ActorMaterializer):
+                                 (implicit ec: ExecutionContext, system: ActorSystem):
   Future[SyncOperationRequestData] =
     for {
       uploadUri <- fetchUploadUri(op, file)
@@ -168,11 +166,10 @@ class OneDriveOperationHandler(config: OneDriveConfig, requestActor: ActorRef)(i
     * @param op   the current sync operation
     * @param file the file to be uploaded
     * @param ec   the execution context
-    * @param mat  the object to materialize streams
     * @return a ''Future'' with the upload URI
     */
   private def fetchUploadUri(op: SyncOperation, file: FsFile)
-                            (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[String] = {
+                            (implicit ec: ExecutionContext): Future[String] = {
     val body = String.format(Locale.ROOT, CreateUploadSessionTemplate, file.lastModified)
     val request = HttpRequest(method = HttpMethods.POST, headers = UploadSessionRequestHeaders,
       uri = config.resolveItemsUri(op.dstUri + ":/createUploadSession"),

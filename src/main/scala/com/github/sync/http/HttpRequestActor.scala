@@ -19,7 +19,6 @@ package com.github.sync.http
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Status}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.pattern.ask
-import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import com.github.sync.http.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
 
@@ -123,11 +122,11 @@ object HttpRequestActor {
     *
     * @param result the result object
     * @param ec     the execution context
-    * @param mat    the object to materialize streams
+    * @param system the actor system
     * @return a ''Future'' of the result with the entity discarded
     */
   def discardEntityBytes(result: HttpRequestActor.Result)
-                        (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[HttpRequestActor.Result] =
+                        (implicit ec: ExecutionContext, system: ActorSystem): Future[HttpRequestActor.Result] =
     result.response.entity.discardBytes().future().map(_ => result)
 
   /**
@@ -137,12 +136,12 @@ object HttpRequestActor {
     *
     * @param futResult the ''Future'' with the result object
     * @param ec        the execution context
-    * @param mat       the object to materialize streams
+    * @param system    the actor system
     * @return a ''Future'' of the result with the entity discarded
     */
   def discardEntityBytes(futResult: Future[HttpRequestActor.Result])
-                        (implicit ec: ExecutionContext, mat: ActorMaterializer): Future[HttpRequestActor.Result] =
-    futResult flatMap discardEntityBytes
+                        (implicit ec: ExecutionContext, system: ActorSystem): Future[HttpRequestActor.Result] =
+    futResult flatMap (result => discardEntityBytes(result))
 }
 
 /**
@@ -161,11 +160,11 @@ object HttpRequestActor {
   * @param queueSize the size of the request queue
   */
 class HttpRequestActor(uri: Uri, queueSize: Int) extends Actor with ActorLogging {
-  /** The object to materialize streams. */
-  private implicit val mat: ActorMaterializer = ActorMaterializer()
-
   /** The execution context for operations with futures. */
   private implicit val ec: ExecutionContext = context.system.dispatcher
+
+  /** The actor system in implicit scope. */
+  private implicit val system: ActorSystem = context.system
 
   /** The queue for sending requests. */
   private var queue: RequestQueue = _
@@ -208,10 +207,7 @@ class HttpRequestActor(uri: Uri, queueSize: Int) extends Actor with ActorLogging
     *
     * @return the request queue
     */
-  private[http] def createRequestQueue(): RequestQueue = {
-    implicit val actorSystem: ActorSystem = context.system
-    new RequestQueue(uri, queueSize)
-  }
+  private[http] def createRequestQueue(): RequestQueue = new RequestQueue(uri, queueSize)
 
   /**
     * Checks the status code of an HTTP response and handles failure

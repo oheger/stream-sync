@@ -18,7 +18,6 @@ package com.github.sync.cli
 
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement}
 import com.github.sync.webdav._
@@ -34,10 +33,9 @@ import scala.concurrent.ExecutionContext
   * @param httpActorFactory the factory for creating the HTTP actor
   * @param ec               the execution context
   * @param system           the actor system
-  * @param mat              the object to materialize streams
   */
 private class DavComponentsSourceFactory(val config: DavConfig, val httpActorFactory: HttpActorFactory)
-                                        (implicit ec: ExecutionContext, system: ActorSystem, mat: ActorMaterializer)
+                                        (implicit ec: ExecutionContext, system: ActorSystem)
   extends HttpComponentsSourceFactory[DavConfig](config, httpActorFactory) {
   override protected def doCreateSource(sourceFactory: ElementSourceFactory, httpRequestActor: ActorRef):
   Source[FsElement, Any] = DavFsElementSource(config, sourceFactory, httpRequestActor)
@@ -53,11 +51,9 @@ private class DavComponentsSourceFactory(val config: DavConfig, val httpActorFac
   * @param config           the configuration of the WebDav server
   * @param httpActorFactory the factory for creating the HTTP actor
   * @param system           the actor system
-  * @param mat              the object to materialize streams
   */
 private class DavComponentsDestinationFactory(val config: DavConfig, val httpActorFactory: HttpActorFactory)
-                                             (implicit ec: ExecutionContext, system: ActorSystem,
-                                              mat: ActorMaterializer)
+                                             (implicit ec: ExecutionContext, system: ActorSystem)
   extends HttpComponentsDestinationFactory[DavConfig](config, httpActorFactory) {
   override protected def doCreateSource(sourceFactory: ElementSourceFactory, startFolderUri: String,
                                         requestActor: ActorRef): Source[FsElement, Any] =
