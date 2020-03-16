@@ -98,9 +98,9 @@ class ElementSource[F, S, T](val initState: S, initFolder: SyncFolderData[F],
           continueIteration()
         }
 
-        override def onDownstreamFinish(): Unit = {
+        override def onDownstreamFinish(cause: Throwable): Unit = {
           onComplete()
-          super.onDownstreamFinish()
+          super.onDownstreamFinish(cause)
         }
       })
 
