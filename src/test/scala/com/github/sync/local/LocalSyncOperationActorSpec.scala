@@ -25,7 +25,9 @@ import akka.actor.{Actor, ActorRef, ActorSystem, OneForOneStrategy, Props, Super
 import akka.testkit.{ImplicitSender, TestKit}
 import com.github.sync.SyncTypes._
 import com.github.sync._
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.annotation.tailrec
 import scala.util.Random
@@ -71,7 +73,7 @@ object LocalSyncOperationActorSpec {
   * Test class for ''FsSyncOperationActor''.
   */
 class LocalSyncOperationActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
-  ImplicitSender with FlatSpecLike with BeforeAndAfterAll with Matchers with FileTestHelper {
+  ImplicitSender with AnyFlatSpecLike with BeforeAndAfterAll with Matchers with FileTestHelper {
   def this() = this(ActorSystem("FsSyncOperationActorSpec"))
 
   override protected def afterAll(): Unit = {

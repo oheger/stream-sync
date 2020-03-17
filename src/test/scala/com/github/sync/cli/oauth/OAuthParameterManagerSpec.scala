@@ -25,7 +25,8 @@ import com.github.sync.cli.{ConsoleReader, ParameterManager}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.oauth.OAuthConfig
 import org.mockito.Mockito._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -131,7 +132,7 @@ object OAuthParameterManagerSpec {
 /**
   * Test class for ''OAuthParameterManager''.
   */
-class OAuthParameterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper with MockitoSugar {
+class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper with MockitoSugar {
 
   import OAuthParameterManagerSpec._
   import ParameterManager._

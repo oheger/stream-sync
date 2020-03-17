@@ -20,7 +20,8 @@ import java.io.StringReader
 import java.time.Instant
 
 import akka.util.Timeout
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 import scala.xml.{Elem, NodeSeq, XML}
@@ -71,7 +72,7 @@ object ModifiedTimeRequestFactorySpec {
 /**
   * Test class for ''ModifiedTimeRequestFactory''.
   */
-class ModifiedTimeRequestFactorySpec extends FlatSpec with Matchers {
+class ModifiedTimeRequestFactorySpec extends AnyFlatSpec with Matchers {
 
   import ModifiedTimeRequestFactorySpec._
 

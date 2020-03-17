@@ -16,12 +16,13 @@
 
 package com.github.sync.util
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Test class for ''UriEncodingHelper''.
   */
-class UriEncodingHelperSpec extends FlatSpec with Matchers {
+class UriEncodingHelperSpec extends AnyFlatSpec with Matchers {
   "UriEncodingHelper" should "URL-encode a string" in {
     UriEncodingHelper.encode("test/ + verify") should be("test%2F%20%2B%20verify")
   }

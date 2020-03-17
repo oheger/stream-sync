@@ -19,14 +19,15 @@ package com.github.sync.log
 import java.time.Instant
 
 import com.github.sync.SyncTypes._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.util.{Failure, Success}
 
 /**
   * Test class for ''ElementSerializer''.
   */
-class ElementSerializerSpec extends FlatSpec with Matchers {
+class ElementSerializerSpec extends AnyFlatSpec with Matchers {
   /**
     * Returns the line-ending character.
     *

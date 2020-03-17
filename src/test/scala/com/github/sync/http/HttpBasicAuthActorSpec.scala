@@ -22,7 +22,9 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.HttpExtensionActor.{RegisterClient, Release}
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object HttpBasicAuthActorSpec {
   /** A test user name. */
@@ -40,7 +42,7 @@ object HttpBasicAuthActorSpec {
   * of the extension trait.
   */
 class HttpBasicAuthActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) with ImplicitSender
-  with FlatSpecLike with BeforeAndAfterAll with Matchers {
+  with AnyFlatSpecLike with BeforeAndAfterAll with Matchers {
   def this() = this(ActorSystem("HttpBasicAuthActorSpec"))
 
   override protected def afterAll(): Unit = {

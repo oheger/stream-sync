@@ -23,7 +23,9 @@ import akka.stream.stage.GraphStage
 import akka.testkit.TestKit
 import akka.util.ByteString
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object CryptStageSpec {
   /** A default key used for encryption / decryption. */
@@ -55,7 +57,8 @@ object CryptStageSpec {
 /**
   * Test class for the graph stages that encrypt and decrypt streams.
   */
-class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with BeforeAndAfterAll with Matchers with AsyncTestHelper {
+class CryptStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike with BeforeAndAfterAll
+  with Matchers with AsyncTestHelper {
   def this() = this(ActorSystem("CryptStagesSpec"))
 
   override protected def afterAll(): Unit = {

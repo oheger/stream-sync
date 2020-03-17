@@ -17,7 +17,8 @@
 package com.github.sync.impl
 
 import com.github.sync.SyncTypes.{FsFolder, SyncFolderData}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 object SyncFolderQueueSpec {
 
@@ -29,6 +30,7 @@ object SyncFolderQueueSpec {
     * @return a list with the elements extracted from the queue
     */
   private def readQueue(queue: SyncFolderQueue[Int]): List[SyncFolderData[Int]] = {
+    @scala.annotation.tailrec
     def dequeueElement(q: SyncFolderQueue[Int],
                        resultList: List[SyncFolderData[Int]]): List[SyncFolderData[Int]] =
       if (q.isEmpty) resultList.reverse
@@ -57,7 +59,7 @@ object SyncFolderQueueSpec {
 /**
   * Test class for ''SyncFolderQueue''.
   */
-class SyncFolderQueueSpec extends FlatSpec with Matchers {
+class SyncFolderQueueSpec extends AnyFlatSpec with Matchers {
 
   import SyncFolderQueueSpec._
 

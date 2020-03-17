@@ -36,7 +36,9 @@ import org.mockito.Matchers.any
 import org.mockito.Mockito
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -118,7 +120,7 @@ object OAuthLoginCommandSpec {
 /**
   * Test class for ''OAuthLoginCommand''.
   */
-class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with Matchers with MockitoSugar with WireMockSupport with AsyncTestHelper {
   def this() = this(ActorSystem("OAuthLoginCommandSpec"))
 

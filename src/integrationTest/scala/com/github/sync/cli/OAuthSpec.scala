@@ -24,7 +24,9 @@ import com.github.sync.FileTestHelper
 import com.github.sync.cli.oauth.{OAuth, OAuthParameterManager}
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.OAuthStorageServiceImpl
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Integration test class for the ''OAuth'' CLI application.
@@ -33,7 +35,7 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
   * unknown commands. This is achieved by directly invoking the ''main()''
   * function. Thus, only black-box testing is possible.
   */
-class OAuthSpec extends FlatSpec with BeforeAndAfterEach with Matchers with FileTestHelper {
+class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with FileTestHelper {
   override protected def afterEach(): Unit = {
     tearDownTestFile()
     super.afterEach()

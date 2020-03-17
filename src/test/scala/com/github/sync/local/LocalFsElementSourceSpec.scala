@@ -30,7 +30,9 @@ import akka.testkit.TestKit
 import com.github.sync.FileTestHelper
 import com.github.sync.SyncTypes._
 import com.github.sync.impl.ElementSource
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
@@ -40,7 +42,7 @@ import scala.concurrent.{Await, Future}
   * Test class for ''LocalFsElementSource''.
   */
 class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
-  FlatSpecLike with BeforeAndAfter with BeforeAndAfterAll with Matchers with FileTestHelper {
+  AnyFlatSpecLike with BeforeAndAfter with BeforeAndAfterAll with Matchers with FileTestHelper {
   def this() = this(ActorSystem("LocalFsElementSourceSpec"))
 
   override protected def afterAll(): Unit = {

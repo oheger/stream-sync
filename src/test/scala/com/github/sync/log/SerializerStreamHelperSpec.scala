@@ -23,7 +23,9 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.SyncTypes._
 import com.github.sync._
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Future
 
@@ -31,7 +33,7 @@ import scala.concurrent.Future
   * Test class for ''SerializerStreamHelper''.
   */
 class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
-  FlatSpecLike with BeforeAndAfterAll with Matchers with FileTestHelper with AsyncTestHelper {
+  AnyFlatSpecLike with BeforeAndAfterAll with Matchers with FileTestHelper with AsyncTestHelper {
   def this() = this(ActorSystem("SerializerStreamHelperSpec"))
 
   override protected def afterAll(): Unit = {

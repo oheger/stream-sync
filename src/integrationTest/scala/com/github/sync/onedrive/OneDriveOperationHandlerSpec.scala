@@ -30,7 +30,9 @@ import com.github.sync.util.UriEncodingHelper
 import com.github.sync.{AsyncTestHelper, FileTestHelper, SourceFileProvider, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.mockito.Mockito
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FlatSpecLike, Matchers}
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.Future
@@ -43,7 +45,7 @@ object OneDriveOperationHandlerSpec {
 /**
   * Test class for ''OneDriveOperationHandler''.
   */
-class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfterEach with Matchers with WireMockSupport with OneDriveStubbingSupport
   with AsyncTestHelper with MockitoSugar {
   def this() = this(ActorSystem("OneDriveOperationHandlerSpec"))

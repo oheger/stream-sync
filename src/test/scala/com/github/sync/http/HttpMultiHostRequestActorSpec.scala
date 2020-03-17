@@ -23,7 +23,9 @@ import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.testkit.{ImplicitSender, TestKit}
 import com.github.sync.http.HttpExtensionActor.Release
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object HttpMultiHostRequestActorSpec {
   /** A data object passed to a request. */
@@ -111,7 +113,7 @@ object HttpMultiHostRequestActorSpec {
   * Test class for ''HttpMultiHostRequestActor''.
   */
 class HttpMultiHostRequestActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) with ImplicitSender
-  with FlatSpecLike with BeforeAndAfterAll with Matchers {
+  with AnyFlatSpecLike with BeforeAndAfterAll with Matchers {
   def this() = this(ActorSystem("HttpMultiHostRequestActorSpec"))
 
   override protected def afterAll(): Unit = {

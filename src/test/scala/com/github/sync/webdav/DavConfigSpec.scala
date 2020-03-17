@@ -19,7 +19,8 @@ package com.github.sync.webdav
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
 import com.github.sync._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
@@ -40,7 +41,7 @@ object DavConfigSpec {
 /**
   * Test class for ''DavConfig''.
   */
-class DavConfigSpec extends FlatSpec with Matchers with AsyncTestHelper {
+class DavConfigSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
 
   import DavConfigSpec._
 

@@ -19,7 +19,8 @@ package com.github.sync.impl
 import com.github.sync.SourceFileProvider
 import com.github.sync.crypt.EncryptOpHandler
 import org.mockito.Mockito._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -30,7 +31,7 @@ import scala.concurrent.Future
   * subset of the functionality implemented by this class. The remaining part
   * is handled by integration tests.
   */
-class CryptAwareSourceFileProviderSpec extends FlatSpec with Matchers with MockitoSugar {
+class CryptAwareSourceFileProviderSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   /**
     * Returns a ''SourceFileProvider'' that can be wrapped by a test instance.
     * Using a real provider object has the advantage that some methods of

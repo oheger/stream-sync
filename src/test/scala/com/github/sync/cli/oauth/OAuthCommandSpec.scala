@@ -23,7 +23,8 @@ import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -54,7 +55,7 @@ object OAuthCommandSpec {
   * Test class for the base functionality provided by the ''OAuthCommand''
   * trait.
   */
-class OAuthCommandSpec extends FlatSpec with Matchers with AsyncTestHelper with MockitoSugar {
+class OAuthCommandSpec extends AnyFlatSpec with Matchers with AsyncTestHelper with MockitoSugar {
 
   import OAuthCommandSpec._
 

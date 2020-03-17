@@ -30,7 +30,9 @@ import com.github.sync.crypt.Secret
 import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpExtensionActor, HttpRequestActor}
 import com.github.sync.{AsyncTestHelper, FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -44,7 +46,7 @@ object DavSourceFileProviderSpec {
   * Test class for ''DavSourceFileProvider''.
   */
 class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
-  FlatSpecLike with BeforeAndAfterAll with Matchers with AsyncTestHelper with WireMockSupport {
+  AnyFlatSpecLike with BeforeAndAfterAll with Matchers with AsyncTestHelper with WireMockSupport {
   def this() = this(ActorSystem("DavSourceFileProviderSpec"))
 
   override protected def afterAll(): Unit = {

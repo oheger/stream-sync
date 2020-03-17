@@ -27,7 +27,9 @@ import akka.util.{ByteString, Timeout}
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage}
 import com.github.sync.{AsyncTestHelper, DelegateSourceComponentsFactory, FileTestHelper, SourceFileProvider}
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FlatSpecLike, Matchers}
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -42,8 +44,9 @@ import scala.concurrent.{ExecutionContext, Future}
   * The original ''SyncSpec'' class became so large that it slowed down the
   * IDE. So splitting this up is beneficial.
   */
-abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with ImplicitSender with FlatSpecLike
-  with BeforeAndAfterAll with BeforeAndAfterEach with Matchers with FileTestHelper with AsyncTestHelper {
+abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with ImplicitSender
+  with AnyFlatSpecLike with BeforeAndAfterAll with BeforeAndAfterEach with Matchers with FileTestHelper
+  with AsyncTestHelper {
   def this() = this(ActorSystem("SyncSpec"))
 
   override protected def afterAll(): Unit = {

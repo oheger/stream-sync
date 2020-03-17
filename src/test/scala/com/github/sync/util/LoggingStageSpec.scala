@@ -23,14 +23,16 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.JavaConverters._
 
 /**
   * Test class for ''LoggingStage''.
   */
-class LoggingStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class LoggingStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with Matchers with AsyncTestHelper {
   def this() = this(ActorSystem("LoggingStageSpec"))
 

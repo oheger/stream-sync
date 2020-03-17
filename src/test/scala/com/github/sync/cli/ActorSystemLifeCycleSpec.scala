@@ -21,7 +21,8 @@ import java.io.ByteArrayOutputStream
 import akka.actor.{Actor, Props}
 import akka.pattern.ask
 import akka.util.Timeout
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -29,7 +30,7 @@ import scala.concurrent.duration._
 /**
   * Test class for ''ActorSystemLifeCycle''.
   */
-class ActorSystemLifeCycleSpec extends FlatSpec with Matchers {
+class ActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
   "ActorSystemLifeCycle" should "manage the life-cycle of an actor system" in {
     val CommandLine = Array("1", "2", "3")
     val myApp = new ActorSystemLifeCycle {

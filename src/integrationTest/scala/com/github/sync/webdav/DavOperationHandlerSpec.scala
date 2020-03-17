@@ -22,8 +22,8 @@ import java.time.Instant
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.StatusCodes
-import akka.stream.{ActorAttributes, Supervision}
 import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.{ActorAttributes, Supervision}
 import akka.testkit.TestKit
 import akka.util.{ByteString, Timeout}
 import com.github.sync.SyncTypes._
@@ -34,7 +34,9 @@ import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpRequestAct
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.matching.UrlPathPattern
 import org.mockito.Mockito
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FlatSpecLike, Matchers}
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.Future
@@ -88,9 +90,8 @@ object DavOperationHandlerSpec {
   * Test class for ''DavOperationHandler''.
   */
 class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
-  FlatSpecLike with BeforeAndAfterAll with BeforeAndAfterEach with Matchers with WireMockSupport
-  with AsyncTestHelper
-  with MockitoSugar with FileTestHelper {
+  AnyFlatSpecLike with BeforeAndAfterAll with BeforeAndAfterEach with Matchers with WireMockSupport
+  with AsyncTestHelper with MockitoSugar with FileTestHelper {
   def this() = this(ActorSystem("DavOperationHandlerSpec"))
 
   override protected def afterAll(): Unit = {

@@ -30,7 +30,8 @@ import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenD
 import org.mockito.ArgumentCaptor
 import org.mockito.Matchers.{any, eq => eqArg}
 import org.mockito.Mockito._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -70,7 +71,7 @@ object OAuthInitCommandSpec {
 /**
   * Test class for ''OAuthInitCommand''.
   */
-class OAuthInitCommandSpec extends FlatSpec with Matchers with MockitoSugar with AsyncTestHelper {
+class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar with AsyncTestHelper {
 
   import OAuthInitCommandSpec._
 

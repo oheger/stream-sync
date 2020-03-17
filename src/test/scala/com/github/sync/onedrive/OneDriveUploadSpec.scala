@@ -28,7 +28,9 @@ import akka.testkit.{TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
 import com.github.sync.onedrive.OneDriveUpload.UploadRequestSource
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -101,7 +103,7 @@ object OneDriveUploadSpec {
   * Test class for the OneDrive upload functionality. This class mainly tests
   * corner cases; for the main functionality, there is an integration test.
   */
-class OneDriveUploadSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class OneDriveUploadSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with Matchers with AsyncTestHelper {
   def this() = this(ActorSystem("OneDriveUploadSpec"))
 

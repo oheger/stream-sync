@@ -24,7 +24,9 @@ import akka.stream.ClosedShape
 import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.SyncTypes._
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -79,7 +81,7 @@ object SyncStageSpec {
 /**
   * Test class for ''SyncStage''.
   */
-class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with
+class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike with
   BeforeAndAfterAll with Matchers {
   def this() = this(ActorSystem("SyncStageSpec"))
 

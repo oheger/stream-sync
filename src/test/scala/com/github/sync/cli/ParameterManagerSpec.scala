@@ -20,7 +20,8 @@ import java.io.IOException
 
 import com.github.sync.cli.ParameterManager.{OptionValue, Parameters}
 import org.mockito.Mockito._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.util.{Failure, Success, Try}
@@ -50,7 +51,7 @@ object ParameterManagerSpec {
   * functionality provided by ''ParameterManager'' is tested together with the
   * Sync-specific functionality.
   */
-class ParameterManagerSpec extends FlatSpec with Matchers with MockitoSugar {
+class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
   import ParameterManager._
   import ParameterManagerSpec._

@@ -21,7 +21,8 @@ import java.io.IOException
 import java.net.URI
 
 import org.mockito.Mockito._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 object BrowserHandlerSpec {
@@ -35,7 +36,7 @@ object BrowserHandlerSpec {
 /**
   * Test class for ''BrowserHandler''.
   */
-class BrowserHandlerSpec extends FlatSpec with Matchers with MockitoSugar {
+class BrowserHandlerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
   import BrowserHandlerSpec._
 

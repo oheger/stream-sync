@@ -25,7 +25,9 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes._
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Future
 
@@ -108,8 +110,8 @@ object ElementSourceSpec {
 /**
   * Test class for ''ElementSource''.
   */
-class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with BeforeAndAfterAll
-  with Matchers with AsyncTestHelper {
+class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
+  with BeforeAndAfterAll with Matchers with AsyncTestHelper {
   def this() = this(ActorSystem("ElementSourceSpec"))
 
   override protected def afterAll(): Unit = {

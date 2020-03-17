@@ -23,7 +23,9 @@ import akka.testkit.TestKit
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.xml.SAXParseException
 
@@ -46,7 +48,7 @@ object OAuthStorageServiceImplSpec {
 /**
   * Test class for ''OAuthStorageServiceImpl''.
   */
-class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfter with Matchers with AsyncTestHelper with FileTestHelper {
   def this() = this(ActorSystem("OAuthStorageServiceSpec"))
 

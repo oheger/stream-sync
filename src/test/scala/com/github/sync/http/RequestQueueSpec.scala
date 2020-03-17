@@ -17,12 +17,14 @@
 package com.github.sync.http
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.{Http, HttpExt}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
+import akka.http.scaladsl.{Http, HttpExt}
 import akka.stream.scaladsl.Flow
 import akka.testkit.TestKit
 import org.mockito.Mockito.when
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.util.Try
@@ -35,7 +37,7 @@ object RequestQueueSpec {
 /**
   * Test class for ''RequestQueue'' (mainly the companion object).
   */
-class RequestQueueSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with
+class RequestQueueSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike with
   BeforeAndAfterAll with Matchers with MockitoSugar {
 
   def this() = this(ActorSystem("RequestQueueSpec"))

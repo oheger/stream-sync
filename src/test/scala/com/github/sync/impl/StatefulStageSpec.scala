@@ -21,7 +21,9 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
 import com.github.sync.impl.StatefulStage.StateMapFunction
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Future
 
@@ -37,8 +39,8 @@ object StatefulStageSpec {
 /**
   * Test class for ''StatefulStage''.
   */
-class StatefulStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with BeforeAndAfterAll
-  with Matchers with AsyncTestHelper {
+class StatefulStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
+  with BeforeAndAfterAll with Matchers with AsyncTestHelper {
   def this() = this(ActorSystem("StatefulStageSpec"))
 
   override protected def afterAll(): Unit = {

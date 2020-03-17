@@ -25,7 +25,9 @@ import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptMode}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito._
-import org.scalatest._
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -51,7 +53,7 @@ object SyncParameterManagerSpec {
   * Test class for ''SyncParameterManager''. This class also tests
   * functionality of the generic ''ParameterManager'' class.
   */
-class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper with MockitoSugar
   with AsyncTestHelper {
   def this() = this(ActorSystem("SyncParameterManagerSpec"))

@@ -16,12 +16,14 @@
 
 package com.github.sync.crypt
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 
 /**
   * Test class for ''Secret''.
   */
-class SecretSpec extends FlatSpec with Matchers {
+class SecretSpec extends AnyFlatSpec with Matchers {
   "A Secret" should "create the password on demand" in {
     val secret = new Secret(Array('S', '3', 'c', 'r', '3', 'T', '!'))
 

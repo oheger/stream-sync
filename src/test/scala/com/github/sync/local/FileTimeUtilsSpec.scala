@@ -22,12 +22,14 @@ import java.time.temporal.ChronoUnit
 import java.time.{Instant, ZoneId}
 
 import com.github.sync.FileTestHelper
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Test class for ''FileTimeUtils''.
   */
-class FileTimeUtilsSpec extends FlatSpec with BeforeAndAfterAll with Matchers with FileTestHelper {
+class FileTimeUtilsSpec extends AnyFlatSpec with BeforeAndAfterAll with Matchers with FileTestHelper {
 
   override protected def afterAll(): Unit = {
     tearDownTestFile()

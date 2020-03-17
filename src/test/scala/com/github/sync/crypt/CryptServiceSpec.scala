@@ -26,7 +26,9 @@ import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes._
 import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.util.{LRUCache, UriEncodingHelper}
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Future
 
@@ -119,7 +121,7 @@ object CryptServiceSpec {
 /**
   * Test class for ''CryptService''.
   */
-class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike with BeforeAndAfterAll
+class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike with BeforeAndAfterAll
   with Matchers with AsyncTestHelper {
   def this() = this(ActorSystem("CryptServiceSpec"))
 

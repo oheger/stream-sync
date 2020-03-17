@@ -22,12 +22,14 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Test class for ''CleanupStage''.
   */
-class CleanupStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class CleanupStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with Matchers with AsyncTestHelper {
   def this() = this(ActorSystem("CleanupStageSpec"))
 

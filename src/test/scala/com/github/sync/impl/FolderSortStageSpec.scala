@@ -20,7 +20,9 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.SyncTypes.{FsElement, FsFolder}
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -28,7 +30,7 @@ import scala.concurrent.duration._
 /**
   * Test class for ''FolderSortStage''.
   */
-class FolderSortStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class FolderSortStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with Matchers {
   def this() = this(ActorSystem("FolderSortStageSpec"))
 

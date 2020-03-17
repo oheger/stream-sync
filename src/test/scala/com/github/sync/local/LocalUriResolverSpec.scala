@@ -23,7 +23,9 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import akka.util.ByteString
 import com.github.sync._
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
@@ -36,7 +38,7 @@ object LocalUriResolverSpec {
 /**
   * Test class for ''LocalUriResolver''.
   */
-class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class LocalUriResolverSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper
   with AsyncTestHelper {
   def this() = this(ActorSystem("LocalUriResolverSpec"))

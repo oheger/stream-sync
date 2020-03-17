@@ -27,7 +27,9 @@ import com.github.sync.{AsyncTestHelper, FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.Fault
 import org.mockito.Mockito
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.duration._
@@ -47,7 +49,7 @@ object HttpRequestActorSpec {
   * Integration test class for ''HttpRequestActor''.
   */
 class HttpRequestActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) with ImplicitSender
-  with FlatSpecLike with BeforeAndAfterAll with Matchers with WireMockSupport with AsyncTestHelper
+  with AnyFlatSpecLike with BeforeAndAfterAll with Matchers with WireMockSupport with AsyncTestHelper
   with MockitoSugar {
   def this() = this(ActorSystem("HttpRequestActorSpec"))
 

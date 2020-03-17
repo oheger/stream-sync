@@ -17,7 +17,8 @@
 package com.github.sync.onedrive
 
 import akka.http.scaladsl.model.Uri
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
@@ -32,7 +33,7 @@ object OneDriveConfigSpec {
 /**
   * Test class for ''OneDriveConfig''.
   */
-class OneDriveConfigSpec extends FlatSpec with Matchers {
+class OneDriveConfigSpec extends AnyFlatSpec with Matchers {
 
   import OneDriveConfigSpec._
 

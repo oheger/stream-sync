@@ -21,15 +21,17 @@ import java.io.IOException
 import akka.Done
 import akka.actor.{Actor, ActorRef, ActorSystem, Props, Status}
 import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model.headers.`Content-Type`
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.`Content-Type`
 import akka.stream.scaladsl.Sink
 import akka.testkit.TestKit
 import akka.util.ByteString
 import com.github.sync.AsyncTestHelper
 import com.github.sync.crypt.Secret
 import com.github.sync.http.HttpRequestActor
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -192,7 +194,7 @@ object OAuthTokenRetrieverServiceImplSpec {
 /**
   * Test class for ''OAuthTokenRetrieverServiceImpl''.
   */
-class OAuthTokenRetrieverServiceImplSpec(testSystem: ActorSystem) extends TestKit(testSystem) with FlatSpecLike
+class OAuthTokenRetrieverServiceImplSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with Matchers with AsyncTestHelper {
   def this() = this(ActorSystem("OAuthTokenRetrieverServiceSpec"))
 

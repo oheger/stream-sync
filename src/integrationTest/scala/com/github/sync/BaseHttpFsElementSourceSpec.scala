@@ -28,7 +28,9 @@ import akka.testkit.TestKit
 import com.github.sync.SyncTypes._
 import com.github.sync.impl.ElementSource
 import com.github.sync.util.UriEncodingHelper
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
@@ -172,7 +174,7 @@ object BaseHttpFsElementSourceSpec {
   * @param testSystem the test actor system
   */
 abstract class BaseHttpFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem)
-  with FlatSpecLike with BeforeAndAfterAll with Matchers with AsyncTestHelper with WireMockSupport {
+  with AnyFlatSpecLike with BeforeAndAfterAll with Matchers with AsyncTestHelper with WireMockSupport {
 
   override protected def afterAll(): Unit = {
     TestKit shutdownActorSystem system

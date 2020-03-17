@@ -22,7 +22,8 @@ import com.github.sync.SyncTypes._
 import com.github.sync._
 import com.github.sync.cli.FilterManager.{ArgActionFilter, ArgCommonFilter, ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter, SyncFilterData, SyncOperationFilter}
 import com.github.sync.cli.ParameterManager.Parameters
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -77,7 +78,7 @@ object FilterManagerSpec {
 /**
   * Test class for ''FilterManager''.
   */
-class FilterManagerSpec extends FlatSpec with Matchers with AsyncTestHelper {
+class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
 
   import FilterManagerSpec._
 
