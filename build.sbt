@@ -17,10 +17,13 @@
 /** Definition of versions. */
 lazy val AkkaVersion = "2.6.4"
 lazy val AkkaHttpVersion = "10.1.11"
-lazy val VersionScala = "2.12.9"
+lazy val VersionScala = "2.12.11"
 lazy val VersionScalaXml = "1.1.0"
-lazy val VersionScalaTest = "3.0.8"
+lazy val VersionScalaTest = "3.1.1"
 lazy val VersionWireMock = "2.26.3"
+lazy val VersionMockito = "1.9.5"
+lazy val VersionScalaTestMockito = "1.0.0-M2"
+lazy val VersionJunit = "4.13"  // needed by mockito
 
 scalacOptions ++= Seq("-deprecation", "-feature")
 
@@ -37,8 +40,10 @@ lazy val akkaDependencies = Seq(
 
 lazy val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % VersionScalaTest % Test,
+  "org.scalatestplus" %% "scalatestplus-mockito" % VersionScalaTestMockito % Test,
   "com.github.tomakehurst" % "wiremock" % VersionWireMock % Test,
-  "org.mockito" % "mockito-core" % "1.9.5" % Test,
+  "org.mockito" % "mockito-core" % VersionMockito % Test,
+  "junit" % "junit" % VersionJunit % Test,
   "org.slf4j" % "slf4j-simple" % "1.7.25" % Test
 )
 
