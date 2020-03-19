@@ -310,7 +310,7 @@ object SyncComponentsFactory {
     */
   private def localFsConfigProcessor(uri: String, structureType: StructureType): CliProcessor[Try[LocalFsConfig]] = {
     val propZoneId = structureType.configPropertyName(PropLocalFsTimeZone)
-    asSingleOptionValue(propZoneId, mapped(propZoneId, optionValue(propZoneId))(ZoneId.of))
+    asSingleOptionValue(mapped(optionValue(propZoneId))(ZoneId.of))
       .map(triedZone => createLocalFsConfig(uri, structureType, triedZone))
   }
 
@@ -364,7 +364,7 @@ object SyncComponentsFactory {
     for {
       triedModProp <- stringOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
       triedModNs <- stringOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
-      triedDel <- asMandatory(keyDelBeforeOverride, booleanOptionValue(keyDelBeforeOverride, Some(false)))
+      triedDel <- asMandatory(booleanOptionValue(keyDelBeforeOverride, Some(false)))
       triedBasicAuth <- basicAuthProcessor(structureType)
       triedOAuth <- oauthConfigProcessor(structureType)
     } yield createDavConfig(uri, timeout, structureType, triedModProp, triedModNs, triedDel,
@@ -404,9 +404,9 @@ object SyncComponentsFactory {
     val keyPath = structureType.configPropertyName(PropOneDrivePath)
     val keyChunkSize = structureType.configPropertyName(PropOneDriveUploadChunkSize)
     for {
-      triedChunkSize <- asMandatory(keyChunkSize, intOptionValue(keyChunkSize,
-        Some(OneDriveConfig.DefaultUploadChunkSizeMB)))
-      triedPath <- asMandatory(keyPath, stringOptionValue(keyPath))
+      triedChunkSize <- asMandatory(intOptionValue(keyChunkSize,
+              Some(OneDriveConfig.DefaultUploadChunkSizeMB)))
+      triedPath <- asMandatory(stringOptionValue(keyPath))
       triedServer <- stringOptionValue(structureType.configPropertyName(PropOneDriveServer))
       triedBasicAuth <- basicAuthProcessor(structureType)
       triedOAuth <- oauthConfigProcessor(structureType)
@@ -424,8 +424,8 @@ object SyncComponentsFactory {
     */
   private def davPasswordOption(structureType: StructureType): CliProcessor[Try[String]] = {
     val prop = structureType.configPropertyName(PropDavPassword)
-    asMandatory(prop, asSingleOptionValue(prop, withFallback(optionValue(prop),
-      consoleReaderValue(prop, password = true))))
+    asMandatory(asSingleOptionValue(withFallback(optionValue(prop),
+              consoleReaderValue(prop, password = true))))
   }
 
   /**
@@ -440,12 +440,11 @@ object SyncComponentsFactory {
   private def basicAuthProcessor(structureType: StructureType): CliProcessor[Try[Option[BasicAuthConfig]]] = {
     val keyUser = structureType.configPropertyName(PropDavUser)
     val proc = for {
-      triedUser <- asMandatory(keyUser, stringOptionValue(keyUser))
+      triedUser <- asMandatory(stringOptionValue(keyUser))
       triedPassword <- davPasswordOption(structureType)
     } yield createBasicAuthConfig(triedUser, triedPassword)
-    asSingleOptionValue("",
-      conditionalValue[BasicAuthConfig](isDefinedProcessor(structureType.configPropertyName(
-        OAuthParameterManager.NameOptionName)), ifProc = emptyProcessor, elseProc = proc))
+    asSingleOptionValue(conditionalValue[BasicAuthConfig](isDefinedProcessor(structureType.configPropertyName(
+            OAuthParameterManager.NameOptionName)), ifProc = emptyProcessor, elseProc = proc))
   }
 
   /**
@@ -464,9 +463,8 @@ object SyncComponentsFactory {
       .map { triedConfig =>
         triedConfig map (config => Iterable(config))
       }
-    asSingleOptionValue("",
-      conditionalValue[OAuthStorageConfig](isDefinedProcessor(structureType.configPropertyName(
-        OAuthParameterManager.NameOptionName)), ifProc = proc))
+    asSingleOptionValue(conditionalValue[OAuthStorageConfig](isDefinedProcessor(structureType.configPropertyName(
+            OAuthParameterManager.NameOptionName)), ifProc = proc))
   }
 
   /**

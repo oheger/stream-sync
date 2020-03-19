@@ -104,7 +104,7 @@ object SyncParameterManager {
   val CryptCacheSizeOption: String = ParameterManager.OptionPrefix + "crypt-cache-size"
 
   /** The default timeout for sync operations. */
-  val DefaultTimeout = Timeout(1.minute)
+  val DefaultTimeout: Timeout = Timeout(1.minute)
 
   /** The default size of the cache for encrypted file names. */
   val DefaultCryptCacheSize = 128
@@ -149,16 +149,16 @@ object SyncParameterManager {
     implicit def valueToCryptModeVal(x: Value): Val = x.asInstanceOf[Val]
 
     /** Crypt mode indicating that encryption is disabled. */
-    val None = Val(requiresPassword = false)
+    val None: Val = Val(requiresPassword = false)
 
     /** Crypt mode indicating that the content of files is encrypted. */
-    val Files = Val()
+    val Files: Val = Val()
 
     /**
       * Crypt mode indicating that both the content of files and the names of
       * folders and files are encrypted.
       */
-    val FilesAndNames = Val()
+    val FilesAndNames: Val = Val()
   }
 
   /**
@@ -330,19 +330,18 @@ object SyncParameterManager {
     * @return the processor to extract the apply mode
     */
   private def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
-    ParameterManager.asMandatory(ApplyModeOption,
-      ParameterManager.asSingleOptionValue(ApplyModeOption,
-        ParameterManager.mappedWithFallback[String, ApplyMode](ApplyModeOption,
-          ParameterManager.optionValue(ApplyModeOption), ApplyModeTarget(destUri)) {
-          case RegApplyTargetUri(uri) =>
-            ApplyModeTarget(uri)
-          case RegApplyTargetDefault(_*) =>
-            ApplyModeTarget(destUri)
-          case RegApplyLog(_*) =>
-            ApplyModeNone
-          case s =>
-            throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
-        }))
+    ParameterManager.asMandatory(ParameterManager.asSingleOptionValue(ParameterManager
+      .mappedWithFallback[String, ApplyMode](
+        ParameterManager.optionValue(ApplyModeOption), ApplyModeTarget(destUri)) {
+        case RegApplyTargetUri(uri) =>
+          ApplyModeTarget(uri)
+        case RegApplyTargetDefault(_*) =>
+          ApplyModeTarget(destUri)
+        case RegApplyLog(_*) =>
+          ApplyModeNone
+        case s =>
+          throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
+      }))
 
   /**
     * Returns a processor that extracts a crypt mode value from a command line
@@ -352,13 +351,11 @@ object SyncParameterManager {
     * @return the processor to extract the crypt mode
     */
   private def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
-    ParameterManager.asMandatory(key,
-      ParameterManager.asSingleOptionValue(key,
-        ParameterManager.mappedWithFallback(key,
-          ParameterManager.optionValue(key), CryptMode.None.asInstanceOf[CryptMode.Value]) { name =>
-          val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
-          mode.fold[CryptMode.Value](throw new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!"))(m => m)
-        }))
+    ParameterManager.asMandatory(ParameterManager.asSingleOptionValue(ParameterManager.mappedWithFallback(
+      ParameterManager.optionValue(key), CryptMode.None.asInstanceOf[CryptMode.Value]) { name =>
+      val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
+      mode.fold[CryptMode.Value](throw new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!"))(m => m)
+    }))
 
   /**
     * Returns a processor that extracts the value of the option for ignoring
@@ -387,17 +384,14 @@ object SyncParameterManager {
     * @return the processor for the crypt cache size
     */
   private def cryptCacheSizeProcessor(): CliProcessor[Try[Int]] =
-    ParameterManager.asMandatory(CryptCacheSizeOption,
-      ParameterManager.asSingleOptionValue(CryptCacheSizeOption,
-        ParameterManager.withFallback(
-          ParameterManager.mapped(CryptCacheSizeOption,
-            ParameterManager.asIntOptionValue(CryptCacheSizeOption,
-              ParameterManager.optionValue(CryptCacheSizeOption))) { size =>
-            if (size < MinCryptCacheSize)
-              throw new IllegalArgumentException(s"Crypt cache size must be greater or equal $MinCryptCacheSize.")
-            else size
-          },
-          ParameterManager.constantOptionValue(DefaultCryptCacheSize))))
+    ParameterManager.asMandatory(ParameterManager.asSingleOptionValue(ParameterManager.withFallback(
+      ParameterManager.mapped(ParameterManager.asIntOptionValue(
+        ParameterManager.optionValue(CryptCacheSizeOption)))({ size =>
+        if (size < MinCryptCacheSize)
+          throw new IllegalArgumentException(s"Crypt cache size must be greater or equal $MinCryptCacheSize.")
+        else size
+      }),
+      ParameterManager.constantOptionValue(DefaultCryptCacheSize))))
 
   /**
     * Returns a processor that obtains the encryption password for one of the
@@ -414,7 +408,7 @@ object SyncParameterManager {
     val condProc = cryptModeProcessor(keyCryptMode).map(_.map(mode => mode.requiresPassword))
     val pwdProc = ParameterManager.withFallback(ParameterManager.optionValue(keyPwd),
       ParameterManager.consoleReaderValue(keyPwd, password = true))
-    ParameterManager.asSingleOptionValue(keyPwd, ParameterManager.conditionalValue(condProc, pwdProc))
+    ParameterManager.asSingleOptionValue(ParameterManager.conditionalValue(condProc, pwdProc))
   }
 
   /**
@@ -425,9 +419,7 @@ object SyncParameterManager {
     * @return the processor to extract the timeout value
     */
   private def timeoutProcessor(): CliProcessor[Try[Timeout]] =
-    ParameterManager.asMandatory(TimeoutOption,
-      ParameterManager.asSingleOptionValue(TimeoutOption,
-        ParameterManager.mappedWithFallback(TimeoutOption,
-          ParameterManager.asIntOptionValue(TimeoutOption,
-            ParameterManager.optionValue(TimeoutOption)), DefaultTimeout)(time => Timeout(time.seconds))))
+    ParameterManager.asMandatory(ParameterManager.asSingleOptionValue(ParameterManager.mappedWithFallback(
+      ParameterManager.asIntOptionValue(ParameterManager.optionValue(TimeoutOption)),
+      DefaultTimeout)(time => Timeout(time.seconds))))
 }
