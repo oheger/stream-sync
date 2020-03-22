@@ -191,6 +191,137 @@ object ParameterManager {
   }
 
   /**
+    * A class providing additional operations on a ''CliProcessor'' of type
+    * ''OptionValue''.
+    *
+    * With the help of this class and an implicit conversion function the
+    * construction of more complex ''CliProcessor'' objects is simplified.
+    * Specific functionality can be added to a processor by invoking one of the
+    * functions offered by this class rather than using the functions of
+    * [[ParameterManager]].
+    *
+    * @param proc the ''CliProcessor'' decorated by this class
+    * @tparam A the result type of the ''CliProcessor''
+    */
+  class CliProcessorOptionsOps[A](proc: CliProcessor[OptionValue[A]]) {
+    /**
+      * Adds a fallback or default value to the managed ''CliProcessor''. If
+      * the original processor does not yield a value, the fallback processor
+      * is evaluated.
+      *
+      * @param fallbackProc the fallback ''CliProcessor''
+      * @return the ''CliProcessor'' supporting a fallback
+      */
+    def fallback(fallbackProc: CliProcessor[OptionValue[A]]): CliProcessor[OptionValue[A]] =
+      withFallback(proc, fallbackProc)
+
+    /**
+      * Adds a processor as fallback to the managed ''CliProcessor'' that
+      * produces the passed in constant values. Works the same way as
+      * ''fallback()'', but creates the fallback processor itself.
+      *
+      * @param firstValue the first fallback value
+      * @param moreValues additional fallback values
+      * @return the ''CliProcessor'' supporting these fallback values
+      */
+    def fallbackValues(firstValue: A, moreValues: A*): CliProcessor[OptionValue[A]] =
+      fallback(constantOptionValue(firstValue, moreValues: _*))
+
+    /**
+      * Returns a ''CliProcessor'' based on the managed processor that yields a
+      * single optional value. So the option extracted by this processor may
+      * have at most one value.
+      *
+      * @return the ''CliProcessor'' yielding a single optional value
+      */
+    def single: CliProcessor[SingleOptionValue[A]] =
+      asSingleOptionValue(proc)
+
+    /**
+      * Returns a ''CliProcessor'' that yields a boolean result indicating
+      * whether the option extracted by the managed processor has a value. This
+      * is useful for instance when constructing conditional processors; so
+      * conditions can be defined based on the presence of certain options.
+      *
+      * @return the ''CliProcessor'' checking whether an option has a value
+      */
+    def isDefined: CliProcessor[Try[Boolean]] = isOptionDefined(proc)
+
+    /**
+      * Returns a ''CliProcessor'' that yields the value of the managed
+      * processor with the given mapping function applied to it. In contrast to
+      * the plain ''map()'' function, this function is more convenient for
+      * values of type ''OptionValue'' because the mapping function operates
+      * directly on the values and does not have to deal with ''Try'' or
+      * ''Iterable'' objects.
+      *
+      * @param f the mapping function on the option values
+      * @tparam B the result type of the mapping function
+      * @return the ''CliProcessor'' applying the mapping function
+      */
+    def mapTo[B](f: A => B): CliProcessor[OptionValue[B]] =
+      mapped(proc)(f)
+  }
+
+  /**
+    * A helper class providing additional functionality to ''CliProcessor''
+    * objects related to data type conversions.
+    *
+    * This class offers some functions to convert string option values to
+    * other data types. If a conversion fails (because the input string has an
+    * unexpected format), the resulting ''CliProcessor'' yields a ''Failure''
+    * result.
+    *
+    * @param proc the ''CliProcessor'' decorated by this class
+    */
+  class CliProcessorConvertOps(proc: CliProcessor[OptionValue[String]]) {
+    /**
+      * Returns a ''CliProcessor'' that converts the option values of the
+      * managed processor to ''Int'' values.
+      *
+      * @return the ''CliProcessor'' extracting ''Int'' values
+      */
+    def toInt: CliProcessor[OptionValue[Int]] = asIntOptionValue(proc)
+
+    /**
+      * Returns a ''CliProcessor'' that converts the option values of the
+      * managed processor to ''Boolean'' values. The strings must have the
+      * values *true* or *false* to be recognized.
+      *
+      * @return the ''CliProcessor'' extracting ''Boolean'' values
+      */
+    def toBoolean: CliProcessor[OptionValue[Boolean]] = asBooleanOptionValue(proc)
+
+    /**
+      * Returns a ''CliProcessor'' that converts the option values of the
+      * managed processor to ''Path'' values.
+      *
+      * @return the ''CliProcessor'' extracting ''Path'' values
+      */
+    def toPath: CliProcessor[OptionValue[Path]] = asPathOptionValue(proc)
+  }
+
+  /**
+    * A helper class providing additional functionality to ''CliProcessor''
+    * objects that yield only a single value.
+    *
+    * @param proc the ''CliProcessor'' decorated by this class
+    * @tparam A the result type of the ''CliProcessor''
+    */
+  class CliProcessorSingleOps[A](proc: CliProcessor[SingleOptionValue[A]]) {
+    /**
+      * Returns a ''CliProcessor'' based on the managed processor that yields
+      * a single value. Per default, ''CliProcessor'' objects of type
+      * ''SingleOptionValue'' return an ''Option''. This function checks
+      * whether the ''Option'' is defined. If so, its value is returned
+      * directly; otherwise, the processor yields a ''Failure'' result.
+      *
+      * @return the ''CliProcessor'' extracting a mandatory single value
+      */
+    def mandatory: CliProcessor[Try[A]] = asMandatory(proc)
+  }
+
+  /**
     * An implicit conversion to create a ''Parameters'' object from a map of
     * parsed command line options.
     *
@@ -199,6 +330,38 @@ object ParameterManager {
     */
   implicit def mapToParameters(map: ParametersMap): Parameters =
     Parameters(map, Set.empty)
+
+  /**
+    * An implicit conversion function to decorate a ''CliProcessor'' with a
+    * ''CliProcessorOptionsOps'' object.
+    *
+    * @param proc the processor to be decorated
+    * @tparam A the result type of the processor
+    * @return the ''CliProcessorOptionsOps'' object decorating this processor
+    */
+  implicit def toOptionsOps[A](proc: CliProcessor[OptionValue[A]]): CliProcessorOptionsOps[A] =
+    new CliProcessorOptionsOps(proc)
+
+  /**
+    * An implicit conversion function to decorate a ''CliProcessor'' with a
+    * ''CliProcessorConvertOps'' object.
+    *
+    * @param proc the processor to be decorated
+    * @return the ''CliProcessorConvertOps'' object decorating this processor
+    */
+  implicit def toConvertOps(proc: CliProcessor[OptionValue[String]]): CliProcessorConvertOps =
+    new CliProcessorConvertOps(proc)
+
+  /**
+    * An implicit conversion function to decorate a ''CliProcessor'' with a
+    * ''CliProcessorSingleOps'' object.
+    *
+    * @param proc the processor to be decorated
+    * @tparam A the result type of the processor
+    * @return the ''CliProcessorSingleOps'' object decorating this processor
+    */
+  implicit def toSingleOps[A](proc: CliProcessor[SingleOptionValue[A]]): CliProcessorSingleOps[A] =
+    new CliProcessorSingleOps(proc)
 
   /**
     * Type definition for an internal map type used during processing of
@@ -375,6 +538,21 @@ object ParameterManager {
     }
 
   /**
+    * Returns a processor that yields a flag whether the ''CliProcessor''
+    * passed in extracts a defined value. The resulting processor yields
+    * '''true''' if the referenced processor is successful and has at least one
+    * option value.
+    *
+    * @param proc the processor to be checked
+    * @tparam A the type of the option values
+    * @return the processor checking whether there is a defined value
+    */
+  def isOptionDefined[A](proc: CliProcessor[OptionValue[A]]): CliProcessor[Try[Boolean]] =
+    proc map { optionValue =>
+      optionValue map (_.nonEmpty)
+    }
+
+  /**
     * Returns a processor that yields a flag whether the command line option
     * with the given key is defined. This is useful for instance to define
     * a condition for the ''conditionalValue'' processor.
@@ -383,9 +561,7 @@ object ParameterManager {
     * @return a processor checking whether this option is defined
     */
   def isDefinedProcessor(key: String): CliProcessor[Try[Boolean]] =
-    optionValue(key) map { optionValue =>
-      optionValue map (_.nonEmpty)
-    }
+    isOptionDefined(optionValue(key))
 
   /**
     * Returns a processor that extracts a single option value from the result
