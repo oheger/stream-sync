@@ -223,7 +223,7 @@ object OAuthParameterManager {
     */
   private def createCommandConfig(triedCommand: Try[String], triedStorageConfig: Try[OAuthStorageConfig]):
   Try[CommandConfig] =
-    createRepresentation(triedCommand, triedStorageConfig) {
+    createRepresentationN(triedCommand, triedStorageConfig) {
       CommandConfig(triedCommand.get, triedStorageConfig.get)
     }
 
@@ -278,7 +278,7 @@ object OAuthParameterManager {
     */
   private def createStorageConfig(triedName: Try[String], triedPath: Try[Path], triedPwd: Try[Option[String]],
                                   triedCrypt: Try[Option[Boolean]]): Try[OAuthStorageConfig] =
-    createRepresentation(triedName, triedPath, triedPwd, triedCrypt) {
+    createRepresentationN(triedName, triedPath, triedPwd, triedCrypt) {
       OAuthStorageConfig(baseName = triedName.get, rootDir = triedPath.get,
         optPassword = triedPwd.get.map(Secret(_)))
     }
@@ -296,7 +296,7 @@ object OAuthParameterManager {
     */
   private def createIdpConfig(triedAuthUrl: Try[String], triedTokenUrl: Try[String], triedScope: Try[String],
                               triedRedirect: Try[String], triedID: Try[String], triedSecret: Try[Secret]):
-  Try[IdpConfig] = createRepresentation(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect,
+  Try[IdpConfig] = createRepresentationN(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect,
     triedID, triedSecret) {
     val oauthConfig = OAuthConfig(authorizationEndpoint = triedAuthUrl.get, tokenEndpoint = triedTokenUrl.get,
       scope = triedScope.get, redirectUri = triedRedirect.get, clientID = triedID.get)

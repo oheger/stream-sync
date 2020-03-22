@@ -290,7 +290,7 @@ object SyncParameterManager {
                                triedDstPassword: Try[Option[String]],
                                triedDstCryptMode: Try[CryptMode.Value],
                                triedCryptCacheSize: Try[Int]): Try[SyncConfig] =
-    ParameterManager.createRepresentation(triedUris, triedApplyMode, triedTimeout, triedLogFile,
+    ParameterManager.createRepresentationN(triedUris, triedApplyMode, triedTimeout, triedLogFile,
       triedSyncLog, triedTimeDelta, triedOpsPerSec, triedSrcPassword, triedSrcCryptMode, triedDstPassword,
       triedDstCryptMode, triedCryptCacheSize) {
       SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,

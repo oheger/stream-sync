@@ -326,7 +326,7 @@ object SyncComponentsFactory {
   private def createLocalFsConfig(uri: String, structureType: StructureType, triedZone: Try[Option[ZoneId]]):
   Try[LocalFsConfig] = {
     val triedPath = ParameterManager.paramTry(structureType.configPropertyName(PropLocalFsPath))(Paths get uri)
-    ParameterManager.createRepresentation(triedPath, triedZone) {
+    ParameterManager.createRepresentationN(triedPath, triedZone) {
       LocalFsConfig(triedPath.get, triedZone.get)
     }
   }
@@ -489,7 +489,7 @@ object SyncComponentsFactory {
                               triedBasicAuthConfig: Try[Option[BasicAuthConfig]],
                               triedOAuthConfig: Try[Option[OAuthStorageConfig]]): Try[DavConfig] = {
     val triedUri = ParameterManager.paramTry(structureType.configPropertyName(PropDavUri))(Uri(uri))
-    ParameterManager.createRepresentation(triedOptModifiedProp, triedOptModifiedNamespace,
+    ParameterManager.createRepresentationN(triedOptModifiedProp, triedOptModifiedNamespace,
       triedDelBeforeOverride, triedUri, triedBasicAuthConfig, triedOAuthConfig) {
       DavConfig(triedUri.get, triedOptModifiedProp.get,
         triedOptModifiedNamespace.get, triedDelBeforeOverride.get, timeout,
@@ -515,7 +515,7 @@ object SyncComponentsFactory {
                                    triedServerUri: Try[Option[String]],
                                    triedBasicAuthConfig: Try[Option[BasicAuthConfig]],
                                    triedOAuthConfig: Try[Option[OAuthStorageConfig]]): Try[OneDriveConfig] =
-    ParameterManager.createRepresentation(triedPath, triedChunkSize, triedServerUri,
+    ParameterManager.createRepresentationN(triedPath, triedChunkSize, triedServerUri,
       triedBasicAuthConfig, triedOAuthConfig) {
       OneDriveConfig(driveID, triedPath.get, triedChunkSize.get, timeout, triedOAuthConfig.get,
         triedServerUri.get, triedBasicAuthConfig.get)
@@ -531,7 +531,7 @@ object SyncComponentsFactory {
     */
   private def createBasicAuthConfig(triedUser: Try[String], triedPassword: Try[String]):
   OptionValue[BasicAuthConfig] =
-    ParameterManager.createRepresentation(triedUser, triedPassword) {
+    ParameterManager.createRepresentationN(triedUser, triedPassword) {
       List(BasicAuthConfig(triedUser.get, Secret(triedPassword.get)))
     }
 

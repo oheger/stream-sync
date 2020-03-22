@@ -793,11 +793,313 @@ object ParameterManager {
     * @tparam T the type of the representation
     * @return a ''Try'' with the representation or the error messages
     */
-  def createRepresentation[T](components: Try[_]*)(creator: => T): Try[T] = {
+  def createRepresentationN[T](components: Try[_]*)(creator: => T): Try[T] = {
     val messages = collectErrorMessages(components: _*)
     if (messages.isEmpty) Success(creator)
     else Failure(new IllegalArgumentException(messages.mkString(", ")))
   }
+
+  /**
+    * Creates an object representation from 2 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, T](c1: Try[A], c2: Try[B])(fCreate: (A, B) => T): Try[T] =
+    createRepresentationN(c1, c2)(fCreate(c1.get, c2.get))
+
+  /**
+    * Creates an object representation from 3 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, T](c1: Try[A], c2: Try[B], c3: Try[C])(fCreate: (A, B, C) => T): Try[T] =
+    createRepresentationN(c1, c2, c3)(fCreate(c1.get, c2.get, c3.get))
+
+  /**
+    * Creates an object representation from 4 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D])
+                                         (fCreate: (A, B, C, D) => T): Try[T] =
+    createRepresentationN(c1, c2, c3, c4)(fCreate(c1.get, c2.get, c3.get, c4.get))
+
+  /**
+    * Creates an object representation from 5 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D], c5: Try[E])
+                                            (fCreate: (A, B, C, D, E) => T): Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5)(fCreate(c1.get, c2.get, c3.get, c4.get, c5.get))
+
+  /**
+    * Creates an object representation from 6 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D], c5: Try[E],
+                                                c6: Try[F])
+                                               (fCreate: (A, B, C, D, E, F) => T): Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6)(fCreate(c1.get, c2.get, c3.get, c4.get, c5.get, c6.get))
+
+  /**
+    * Creates an object representation from 7 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param c7      component 7
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam G type of component 7
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, G, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D], c5: Try[E],
+                                                   c6: Try[F], c7: Try[G])
+                                                  (fCreate: (A, B, C, D, E, F, G) => T): Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7)(fCreate(c1.get, c2.get, c3.get, c4.get, c5.get, c6.get,
+      c7.get))
+
+  /**
+    * Creates an object representation from 8 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param c7      component 7
+    * @param c8      component 8
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam G type of component 7
+    * @tparam H type of component 8
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, G, H, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D], c5: Try[E],
+                                                      c6: Try[F], c7: Try[G], c8: Try[H])
+                                                     (fCreate: (A, B, C, D, E, F, G, H) => T): Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8)(fCreate(c1.get, c2.get, c3.get, c4.get, c5.get, c6.get,
+      c7.get, c8.get))
+
+  /**
+    * Creates an object representation from 9 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param c7      component 7
+    * @param c8      component 8
+    * @param c9      component 9
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam G type of component 7
+    * @tparam H type of component 8
+    * @tparam I type of component 9
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, G, H, I, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D], c5: Try[E],
+                                                         c6: Try[F], c7: Try[G], c8: Try[H], c9: Try[I])
+                                                        (fCreate: (A, B, C, D, E, F, G, H, I) => T): Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9)(fCreate(c1.get, c2.get, c3.get, c4.get, c5.get, c6.get,
+      c7.get, c8.get, c9.get))
+
+  /**
+    * Creates an object representation from 10 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param c7      component 7
+    * @param c8      component 8
+    * @param c9      component 9
+    * @param c10     component 10
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam G type of component 7
+    * @tparam H type of component 8
+    * @tparam I type of component 9
+    * @tparam J type of component 10
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, G, H, I, J, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D],
+                                                            c5: Try[E], c6: Try[F], c7: Try[G], c8: Try[H],
+                                                            c9: Try[I], c10: Try[J])
+                                                           (fCreate: (A, B, C, D, E, F, G, H, I, J) => T): Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)(fCreate(c1.get, c2.get, c3.get, c4.get, c5.get,
+      c6.get, c7.get, c8.get, c9.get, c10.get))
+
+  /**
+    * Creates an object representation from 11 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param c7      component 7
+    * @param c8      component 8
+    * @param c9      component 9
+    * @param c10     component 10
+    * @param c11     component 11
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam G type of component 7
+    * @tparam H type of component 8
+    * @tparam I type of component 9
+    * @tparam J type of component 10
+    * @tparam K type of component 11
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, G, H, I, J, K, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D],
+                                                               c5: Try[E], c6: Try[F], c7: Try[G], c8: Try[H],
+                                                               c9: Try[I], c10: Try[J], c11: Try[K])
+                                                              (fCreate: (A, B, C, D, E, F, G, H, I, J, K) => T):
+  Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11)(fCreate(c1.get, c2.get, c3.get, c4.get, c5.get,
+      c6.get, c7.get, c8.get, c9.get, c10.get, c11.get))
+
+  /**
+    * Creates an object representation from 12 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param c7      component 7
+    * @param c8      component 8
+    * @param c9      component 9
+    * @param c10     component 10
+    * @param c11     component 11
+    * @param c12     component 12
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam G type of component 7
+    * @tparam H type of component 8
+    * @tparam I type of component 9
+    * @tparam J type of component 10
+    * @tparam K type of component 11
+    * @tparam L type of component 12
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, G, H, I, J, K, L, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D],
+                                                                  c5: Try[E], c6: Try[F], c7: Try[G], c8: Try[H],
+                                                                  c9: Try[I], c10: Try[J], c11: Try[K], c12: Try[L])
+                                                                 (fCreate: (A, B, C, D, E, F, G, H, I, J, K, L) => T):
+  Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12)(fCreate(c1.get, c2.get, c3.get, c4.get,
+      c5.get, c6.get, c7.get, c8.get, c9.get, c10.get, c11.get, c12.get))
 
   /**
     * Executes the given ''CliProcessor'' on the parameters specified and
