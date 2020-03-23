@@ -290,13 +290,9 @@ object SyncParameterManager {
                                triedDstPassword: Try[Option[String]],
                                triedDstCryptMode: Try[CryptMode.Value],
                                triedCryptCacheSize: Try[Int]): Try[SyncConfig] =
-    ParameterManager.createRepresentationN(triedUris, triedApplyMode, triedTimeout, triedLogFile,
-      triedSyncLog, triedTimeDelta, triedOpsPerSec, triedSrcPassword, triedSrcCryptMode, triedDstPassword,
-      triedDstCryptMode, triedCryptCacheSize) {
-      SyncConfig(triedUris.get, triedApplyMode.get, triedTimeout.get,
-        triedLogFile.get, triedSyncLog.get, triedTimeDelta.get, triedSrcPassword.get, triedSrcCryptMode.get,
-        triedDstPassword.get, triedDstCryptMode.get, triedCryptCacheSize.get, triedOpsPerSec.get)
-    }
+    ParameterManager.createRepresentation(triedUris, triedApplyMode, triedTimeout, triedLogFile,
+      triedSyncLog, triedTimeDelta, triedSrcPassword, triedSrcCryptMode, triedDstPassword,
+      triedDstCryptMode, triedCryptCacheSize, triedOpsPerSec)(SyncConfig.apply)
 
   /**
     * Returns a processor that extracts the value of the option with the URIs
@@ -330,9 +326,8 @@ object SyncParameterManager {
     * @return the processor to extract the apply mode
     */
   private def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
-    ParameterManager.asMandatory(ParameterManager.asSingleOptionValue(ParameterManager
-      .mappedWithFallback[String, ApplyMode](
-        ParameterManager.optionValue(ApplyModeOption), ApplyModeTarget(destUri)) {
+    ParameterManager.optionValue(ApplyModeOption)
+      .mapTo[ApplyMode] {
         case RegApplyTargetUri(uri) =>
           ApplyModeTarget(uri)
         case RegApplyTargetDefault(_*) =>
@@ -341,7 +336,9 @@ object SyncParameterManager {
           ApplyModeNone
         case s =>
           throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
-      }))
+      }.fallbackValues(ApplyModeTarget(destUri))
+      .single
+      .mandatory
 
   /**
     * Returns a processor that extracts a crypt mode value from a command line
@@ -351,11 +348,13 @@ object SyncParameterManager {
     * @return the processor to extract the crypt mode
     */
   private def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
-    ParameterManager.asMandatory(ParameterManager.asSingleOptionValue(ParameterManager.mappedWithFallback(
-      ParameterManager.optionValue(key), CryptMode.None.asInstanceOf[CryptMode.Value]) { name =>
-      val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
-      mode.fold[CryptMode.Value](throw new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!"))(m => m)
-    }))
+    ParameterManager.optionValue(key)
+      .mapTo { name =>
+        val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
+        mode.fold[CryptMode.Value](throw new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!"))(m => m)
+      }.fallbackValues(CryptMode.None.asInstanceOf[CryptMode.Value])
+      .single
+      .mandatory
 
   /**
     * Returns a processor that extracts the value of the option for ignoring
@@ -384,14 +383,15 @@ object SyncParameterManager {
     * @return the processor for the crypt cache size
     */
   private def cryptCacheSizeProcessor(): CliProcessor[Try[Int]] =
-    ParameterManager.asMandatory(ParameterManager.asSingleOptionValue(ParameterManager.withFallback(
-      ParameterManager.mapped(ParameterManager.asIntOptionValue(
-        ParameterManager.optionValue(CryptCacheSizeOption)))({ size =>
+    ParameterManager.optionValue(CryptCacheSizeOption)
+      .toInt
+      .mapTo { size =>
         if (size < MinCryptCacheSize)
           throw new IllegalArgumentException(s"Crypt cache size must be greater or equal $MinCryptCacheSize.")
         else size
-      }),
-      ParameterManager.constantOptionValue(DefaultCryptCacheSize))))
+      }.fallbackValues(DefaultCryptCacheSize)
+      .single
+      .mandatory
 
   /**
     * Returns a processor that obtains the encryption password for one of the
@@ -406,9 +406,9 @@ object SyncParameterManager {
   private def cryptPasswordProcessor(keyCryptMode: String, keyPwd: String):
   CliProcessor[SingleOptionValue[String]] = {
     val condProc = cryptModeProcessor(keyCryptMode).map(_.map(mode => mode.requiresPassword))
-    val pwdProc = ParameterManager.withFallback(ParameterManager.optionValue(keyPwd),
-      ParameterManager.consoleReaderValue(keyPwd, password = true))
-    ParameterManager.asSingleOptionValue(ParameterManager.conditionalValue(condProc, pwdProc))
+    val pwdProc = ParameterManager.optionValue(keyPwd)
+      .fallback(ParameterManager.consoleReaderValue(keyPwd, password = true))
+    ParameterManager.conditionalValue(condProc, pwdProc).single
   }
 
   /**
@@ -419,7 +419,10 @@ object SyncParameterManager {
     * @return the processor to extract the timeout value
     */
   private def timeoutProcessor(): CliProcessor[Try[Timeout]] =
-    ParameterManager.asMandatory(ParameterManager.asSingleOptionValue(ParameterManager.mappedWithFallback(
-      ParameterManager.asIntOptionValue(ParameterManager.optionValue(TimeoutOption)),
-      DefaultTimeout)(time => Timeout(time.seconds))))
+    ParameterManager.optionValue(TimeoutOption)
+      .toInt
+      .mapTo(time => Timeout(time.seconds))
+      .fallbackValues(DefaultTimeout)
+      .single
+      .mandatory
 }

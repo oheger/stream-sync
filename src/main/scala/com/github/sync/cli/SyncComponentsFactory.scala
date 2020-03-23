@@ -308,11 +308,11 @@ object SyncComponentsFactory {
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the file system configuration
     */
-  private def localFsConfigProcessor(uri: String, structureType: StructureType): CliProcessor[Try[LocalFsConfig]] = {
-    val propZoneId = structureType.configPropertyName(PropLocalFsTimeZone)
-    asSingleOptionValue(mapped(optionValue(propZoneId))(ZoneId.of))
+  private def localFsConfigProcessor(uri: String, structureType: StructureType): CliProcessor[Try[LocalFsConfig]] =
+    optionValue(structureType.configPropertyName(PropLocalFsTimeZone))
+      .mapTo(ZoneId.of)
+      .single
       .map(triedZone => createLocalFsConfig(uri, structureType, triedZone))
-  }
 
   /**
     * Creates a ''LocalFsConfig'' object from the given components. Errors are
@@ -326,9 +326,7 @@ object SyncComponentsFactory {
   private def createLocalFsConfig(uri: String, structureType: StructureType, triedZone: Try[Option[ZoneId]]):
   Try[LocalFsConfig] = {
     val triedPath = ParameterManager.paramTry(structureType.configPropertyName(PropLocalFsPath))(Paths get uri)
-    ParameterManager.createRepresentationN(triedPath, triedZone) {
-      LocalFsConfig(triedPath.get, triedZone.get)
-    }
+    ParameterManager.createRepresentation(triedPath, triedZone)(LocalFsConfig.apply)
   }
 
   /**
@@ -405,7 +403,7 @@ object SyncComponentsFactory {
     val keyChunkSize = structureType.configPropertyName(PropOneDriveUploadChunkSize)
     for {
       triedChunkSize <- asMandatory(intOptionValue(keyChunkSize,
-              Some(OneDriveConfig.DefaultUploadChunkSizeMB)))
+        Some(OneDriveConfig.DefaultUploadChunkSizeMB)))
       triedPath <- asMandatory(stringOptionValue(keyPath))
       triedServer <- stringOptionValue(structureType.configPropertyName(PropOneDriveServer))
       triedBasicAuth <- basicAuthProcessor(structureType)
@@ -424,8 +422,10 @@ object SyncComponentsFactory {
     */
   private def davPasswordOption(structureType: StructureType): CliProcessor[Try[String]] = {
     val prop = structureType.configPropertyName(PropDavPassword)
-    asMandatory(asSingleOptionValue(withFallback(optionValue(prop),
-              consoleReaderValue(prop, password = true))))
+    optionValue(prop)
+      .fallback(consoleReaderValue(prop, password = true))
+      .single
+      .mandatory
   }
 
   /**
@@ -444,7 +444,7 @@ object SyncComponentsFactory {
       triedPassword <- davPasswordOption(structureType)
     } yield createBasicAuthConfig(triedUser, triedPassword)
     asSingleOptionValue(conditionalValue[BasicAuthConfig](isDefinedProcessor(structureType.configPropertyName(
-            OAuthParameterManager.NameOptionName)), ifProc = emptyProcessor, elseProc = proc))
+      OAuthParameterManager.NameOptionName)), ifProc = emptyProcessor, elseProc = proc))
   }
 
   /**
@@ -464,7 +464,7 @@ object SyncComponentsFactory {
         triedConfig map (config => Iterable(config))
       }
     asSingleOptionValue(conditionalValue[OAuthStorageConfig](isDefinedProcessor(structureType.configPropertyName(
-            OAuthParameterManager.NameOptionName)), ifProc = proc))
+      OAuthParameterManager.NameOptionName)), ifProc = proc))
   }
 
   /**
@@ -489,12 +489,8 @@ object SyncComponentsFactory {
                               triedBasicAuthConfig: Try[Option[BasicAuthConfig]],
                               triedOAuthConfig: Try[Option[OAuthStorageConfig]]): Try[DavConfig] = {
     val triedUri = ParameterManager.paramTry(structureType.configPropertyName(PropDavUri))(Uri(uri))
-    ParameterManager.createRepresentationN(triedOptModifiedProp, triedOptModifiedNamespace,
-      triedDelBeforeOverride, triedUri, triedBasicAuthConfig, triedOAuthConfig) {
-      DavConfig(triedUri.get, triedOptModifiedProp.get,
-        triedOptModifiedNamespace.get, triedDelBeforeOverride.get, timeout,
-        triedBasicAuthConfig.get, triedOAuthConfig.get)
-    }
+    ParameterManager.createRepresentation(triedUri, triedOptModifiedProp, triedOptModifiedNamespace,
+      triedDelBeforeOverride, triedBasicAuthConfig, triedOAuthConfig)(DavConfig(_, _, _, _, timeout, _, _))
   }
 
   /**
@@ -515,11 +511,8 @@ object SyncComponentsFactory {
                                    triedServerUri: Try[Option[String]],
                                    triedBasicAuthConfig: Try[Option[BasicAuthConfig]],
                                    triedOAuthConfig: Try[Option[OAuthStorageConfig]]): Try[OneDriveConfig] =
-    ParameterManager.createRepresentationN(triedPath, triedChunkSize, triedServerUri,
-      triedBasicAuthConfig, triedOAuthConfig) {
-      OneDriveConfig(driveID, triedPath.get, triedChunkSize.get, timeout, triedOAuthConfig.get,
-        triedServerUri.get, triedBasicAuthConfig.get)
-    }
+    ParameterManager.createRepresentation(triedPath, triedChunkSize, triedOAuthConfig, triedServerUri,
+      triedBasicAuthConfig)(OneDriveConfig(driveID, _, _, timeout, _, _, _))
 
   /**
     * Creates an ''OptionValue'' with a ''BasicAuthConfig'' based on the given
@@ -531,8 +524,8 @@ object SyncComponentsFactory {
     */
   private def createBasicAuthConfig(triedUser: Try[String], triedPassword: Try[String]):
   OptionValue[BasicAuthConfig] =
-    ParameterManager.createRepresentationN(triedUser, triedPassword) {
-      List(BasicAuthConfig(triedUser.get, Secret(triedPassword.get)))
+    ParameterManager.createRepresentation(triedUser, triedPassword) { (usr, pwd) =>
+      List(BasicAuthConfig(usr, Secret(pwd)))
     }
 
   /**

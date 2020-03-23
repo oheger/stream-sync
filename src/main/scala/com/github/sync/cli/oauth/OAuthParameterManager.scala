@@ -223,9 +223,7 @@ object OAuthParameterManager {
     */
   private def createCommandConfig(triedCommand: Try[String], triedStorageConfig: Try[OAuthStorageConfig]):
   Try[CommandConfig] =
-    createRepresentationN(triedCommand, triedStorageConfig) {
-      CommandConfig(triedCommand.get, triedStorageConfig.get)
-    }
+    createRepresentation(triedCommand, triedStorageConfig)(CommandConfig.apply)
 
   /**
     * Returns a ''CliProcessor'' for extracting the password of the storage
@@ -240,9 +238,14 @@ object OAuthParameterManager {
     */
   private def storagePasswordProcessor(needPassword: Boolean, encOption: String, pwdOption: String):
   CliProcessor[SingleOptionValue[String]] = {
-    val condProc = asMandatory(booleanOptionValue(encOption, Some(needPassword)))
-    asSingleOptionValue(withFallback(optionValue(pwdOption),
-            conditionalValue(condProc, consoleReaderValue(pwdOption, password = true))))
+    val condProc = optionValue(encOption)
+      .toBoolean
+      .fallbackValues(needPassword)
+      .single
+      .mandatory
+    optionValue(pwdOption)
+      .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true)))
+      .single
   }
 
   /**
@@ -252,7 +255,10 @@ object OAuthParameterManager {
     * @return the ''CliProcessor'' for scope
     */
   private def scopeProcessor: CliProcessor[Try[String]] =
-    asMandatory(asSingleOptionValue(mapped(optionValue(ScopeOption))(_.replace(',', ' '))))
+    optionValue(ScopeOption)
+      .mapTo(_.replace(',', ' '))
+      .single
+      .mandatory
 
   /**
     * Returns a ''CliProcessor'' for extracting the client secret of an IDP.
@@ -262,9 +268,11 @@ object OAuthParameterManager {
     * @return the ''CliProcessor'' for the client secret
     */
   private def clientSecretProcessor: CliProcessor[Try[Secret]] =
-    asMandatory(asSingleOptionValue(mapped(withFallback(
-                          optionValue(ClientSecretOption),
-                          consoleReaderValue(ClientSecretOption, password = true)))(pwd => Secret(pwd))))
+    optionValue(ClientSecretOption)
+      .fallback(consoleReaderValue(ClientSecretOption, password = true))
+      .mapTo(pwd => Secret(pwd))
+      .single
+      .mandatory
 
   /**
     * Creates an ''OAuthStorageConfig'' from the given components. Failures are
@@ -278,9 +286,8 @@ object OAuthParameterManager {
     */
   private def createStorageConfig(triedName: Try[String], triedPath: Try[Path], triedPwd: Try[Option[String]],
                                   triedCrypt: Try[Option[Boolean]]): Try[OAuthStorageConfig] =
-    createRepresentationN(triedName, triedPath, triedPwd, triedCrypt) {
-      OAuthStorageConfig(baseName = triedName.get, rootDir = triedPath.get,
-        optPassword = triedPwd.get.map(Secret(_)))
+    createRepresentation(triedName, triedPath, triedPwd, triedCrypt) { (name, path, pwd, _) =>
+      OAuthStorageConfig(baseName = name, rootDir = path, optPassword = pwd.map(Secret(_)))
     }
 
   /**
@@ -296,11 +303,11 @@ object OAuthParameterManager {
     */
   private def createIdpConfig(triedAuthUrl: Try[String], triedTokenUrl: Try[String], triedScope: Try[String],
                               triedRedirect: Try[String], triedID: Try[String], triedSecret: Try[Secret]):
-  Try[IdpConfig] = createRepresentationN(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect,
-    triedID, triedSecret) {
-    val oauthConfig = OAuthConfig(authorizationEndpoint = triedAuthUrl.get, tokenEndpoint = triedTokenUrl.get,
-      scope = triedScope.get, redirectUri = triedRedirect.get, clientID = triedID.get)
-    IdpConfig(oauthConfig, triedSecret.get)
+  Try[IdpConfig] = createRepresentation(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect,
+    triedID, triedSecret) { (authUrl, tokenUrl, scope, redirect, id, secret) =>
+    val oauthConfig = OAuthConfig(authorizationEndpoint = authUrl, tokenEndpoint = tokenUrl,
+      scope = scope, redirectUri = redirect, clientID = id)
+    IdpConfig(oauthConfig, secret)
   }
 
   /**
