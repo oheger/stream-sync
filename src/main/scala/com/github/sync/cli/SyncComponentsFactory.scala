@@ -279,7 +279,8 @@ object SyncComponentsFactory {
     * @return a ''Future'' with the updated parameters and the configuration
     */
   private def extractConfig[C](processor: CliProcessor[Try[C]], parameters: Parameters)
-                              (implicit ec: ExecutionContext, consoleReader: ConsoleReader): Future[(C, Parameters)] =
+                              (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
+  Future[(C, ParameterContext)] =
     Future.fromTry(ParameterManager.tryProcessor(processor, parameters))
 
   /**
@@ -291,11 +292,12 @@ object SyncComponentsFactory {
     * @param structureType the structure type
     * @param ec            the execution context
     * @param consoleReader the object for reading from the console
-    * @return a ''Future'' with the extracted file system configuration
+    * @return a ''Future'' with the extracted file system configuration and the
+    *         updated ''ParameterContext''
     */
   private def extractLocalFsConfig(uri: String, parameters: Parameters, structureType: StructureType)
                                   (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(LocalFsConfig, Parameters)] = {
+  Future[(LocalFsConfig, ParameterContext)] = {
     val processor = localFsConfigProcessor(uri, structureType)
     extractConfig(processor, parameters)
   }
@@ -340,11 +342,11 @@ object SyncComponentsFactory {
     * @param ec            the execution context
     * @param consoleReader the object for reading from the console
     * @return a ''Future'' with the extracted configuration and updated
-    *         parameters
+    *         ''ParameterContext''
     */
   private def extractDavConfig(uri: String, timeout: Timeout, parameters: Parameters, structureType: StructureType)
                               (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(DavConfig, Parameters)] =
+  Future[(DavConfig, ParameterContext)] =
     extractConfig(davConfigProcessor(uri, timeout, structureType), parameters)
 
   /**
@@ -380,12 +382,12 @@ object SyncComponentsFactory {
     * @param ec            the execution context
     * @param consoleReader the object for reading from the console
     * @return a ''Future'' with the extracted configuration and updated
-    *         parameters
+    *         ''ParameterContext''
     */
   private def extractOneDriveConfig(driveID: String, timeout: Timeout, parameters: Parameters,
                                     structureType: StructureType)
                                    (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(OneDriveConfig, Parameters)] =
+  Future[(OneDriveConfig, ParameterContext)] =
     extractConfig(oneDriveConfigProcessor(driveID, timeout, structureType), parameters)
 
   /**
@@ -602,17 +604,17 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
                                     consoleReader: ConsoleReader):
   Future[(Parameters, SourceComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
-      for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, SourceStructureType)
+      for {(config, nextParamCtx) <- extractDavConfig(davUri, timeout, parameters, SourceStructureType)
            httpFactory <- createHttpActorFactory(HttpRequestActor(davUri), config, oauthStorageService)
-           } yield (nextParams, new DavComponentsSourceFactory(config, httpFactory))
+           } yield (nextParamCtx.parameters, new DavComponentsSourceFactory(config, httpFactory))
     case RegOneDriveID(driveID) =>
-      for {(config, nextParams) <- extractOneDriveConfig(driveID, timeout, parameters, SourceStructureType)
+      for {(config, nextParamCtx) <- extractOneDriveConfig(driveID, timeout, parameters, SourceStructureType)
            httpFactory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
              config, oauthStorageService)
-           } yield (nextParams, new OneDriveComponentsSourceFactory(config, httpFactory))
+           } yield (nextParamCtx.parameters, new OneDriveComponentsSourceFactory(config, httpFactory))
     case _ =>
       extractLocalFsConfig(uri, parameters, SourceStructureType)
-        .map(t => (t._2, new LocalFsSourceComponentsFactory(t._1)))
+        .map(t => (t._2.parameters, new LocalFsSourceComponentsFactory(t._1)))
   }
 
   /**
@@ -634,16 +636,16 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
                                          consoleReader: ConsoleReader):
   Future[(Parameters, DestinationComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
-      for {(config, nextParams) <- extractDavConfig(davUri, timeout, parameters, DestinationStructureType)
+      for {(config, nextParamCtx) <- extractDavConfig(davUri, timeout, parameters, DestinationStructureType)
            httpFactory <- createHttpActorFactory(HttpRequestActor(davUri), config, oauthStorageService)
-           } yield (nextParams, new DavComponentsDestinationFactory(config, httpFactory))
+           } yield (nextParamCtx.parameters, new DavComponentsDestinationFactory(config, httpFactory))
     case RegOneDriveID(driveID) =>
-      for {(config, nextParams) <- extractOneDriveConfig(driveID, timeout, parameters, DestinationStructureType)
+      for {(config, nextParamCtx) <- extractOneDriveConfig(driveID, timeout, parameters, DestinationStructureType)
            httpFactory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
              config, oauthStorageService)
-           } yield (nextParams, new OneDriveComponentsDestinationFactory(config, httpFactory))
+           } yield (nextParamCtx.parameters, new OneDriveComponentsDestinationFactory(config, httpFactory))
     case _ =>
       extractLocalFsConfig(uri, parameters, DestinationStructureType)
-        .map(t => (t._2, new LocalFsDestinationComponentsFactory(t._1, timeout)))
+        .map(t => (t._2.parameters, new LocalFsDestinationComponentsFactory(t._1, timeout)))
   }
 }

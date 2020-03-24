@@ -168,6 +168,7 @@ object OAuthParameterManager {
                           (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(CommandConfig, Parameters)] =
     Future.fromTry(tryProcessor(commandConfigProcessor(needPwdFunc), parameters))
+      .map(t => (t._1, t._2.parameters))
 
   /**
     * Returns a ''CliProcessor'' for extracting an ''OAuthStorageConfig''

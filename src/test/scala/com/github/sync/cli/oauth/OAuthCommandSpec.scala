@@ -79,7 +79,7 @@ class OAuthCommandSpec extends AnyFlatSpec with Matchers with AsyncTestHelper wi
     CliProcessor(context => {
       context.parameters should be(TestParameters)
       context.reader should be(expReader)
-      (value, context.update(nextParameters))
+      (value, context.update(nextParameters, context.helpContext))
     })
 
   "OAuthCommand" should "fail execution if the CliProcessor fails" in {

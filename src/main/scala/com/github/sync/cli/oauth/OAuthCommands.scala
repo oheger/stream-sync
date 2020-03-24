@@ -80,8 +80,8 @@ trait OAuthCommand[C] {
           parameters: Parameters)
          (implicit ec: ExecutionContext, system: ActorSystem, consoleReader: ConsoleReader): Future[String] = {
     val cliResult = ParameterManager.tryProcessor(cliProcessor, parameters)
-    for {(config, updParams) <- Future.fromTry(cliResult)
-         _ <- ParameterManager.checkParametersConsumed(updParams)
+    for {(config, updParamCtx) <- Future.fromTry(cliResult)
+         _ <- ParameterManager.checkParametersConsumed(updParamCtx.parameters)
          result <- runCommand(storageConfig, storageService, config)
          } yield result
   }

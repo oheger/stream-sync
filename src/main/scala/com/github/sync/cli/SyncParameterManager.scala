@@ -256,7 +256,8 @@ object SyncParameterManager {
     */
   def extractSyncConfig(argsMap: Parameters)(implicit ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(Parameters, SyncConfig)] =
-    Future.fromTry(ParameterManager.tryProcessor(syncConfigProcessor(), argsMap).map(_.swap))
+    Future.fromTry(ParameterManager.tryProcessor(syncConfigProcessor(), argsMap)
+      .map(t => (t._2.parameters, t._1)))
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all

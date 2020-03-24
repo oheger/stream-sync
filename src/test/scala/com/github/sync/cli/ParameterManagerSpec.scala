@@ -117,7 +117,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
                               (implicit expReader: ConsoleReader): CliProcessor[A] = CliProcessor(context => {
     context.parameters should be(expParameters)
     context.reader should be(expReader)
-    (value, context.update(nextParameters))
+    (value, context.update(nextParameters, context.helpContext))
   }, Some(Key))
 
   "ParametersManager" should "support running a CliProcessor" in {
@@ -126,7 +126,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val (res, next) = ParameterManager.runProcessor(proc, TestParameters)
     res should be(ProcessorResult)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
   }
 
   it should "run a processor yielding a Try if execution is successful" in {
@@ -136,7 +136,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     ParameterManager.tryProcessor(proc, TestParameters) match {
       case Success((res, next)) =>
         res should be(ProcessorResult)
-        next should be(NextParameters)
+        next.parameters should be(NextParameters)
       case f => fail("Unexpected result: " + f)
     }
   }
@@ -178,7 +178,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     res should be(ProcessorResult)
-    next should be(TestParameters)
+    next.parameters should be(TestParameters)
   }
 
   it should "provide a processor returning a constant option value with only a single value" in {
@@ -186,7 +186,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.constantOptionValue(ProcessorResult.toString)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(TestParameters)
+    next.parameters should be(TestParameters)
     res.get should contain only ProcessorResult.toString
   }
 
@@ -196,7 +196,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.constantOptionValue(items.head, items.tail: _*)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(TestParameters)
+    next.parameters should be(TestParameters)
     res.get should be(items)
   }
 
@@ -207,7 +207,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.withFallback(proc1, proc2)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res.get should be(ResultValues)
   }
 
@@ -219,7 +219,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.withFallback(proc1, proc2)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(nextNextParameters)
+    next.parameters should be(nextNextParameters)
     res.get should be(ResultValues)
   }
 
@@ -232,7 +232,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.withFallback(proc1, proc2)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(optionValue)
   }
 
@@ -242,7 +242,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.asSingleOptionValue(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(Success(Some(ProcessorResult.toString)))
   }
 
@@ -253,7 +253,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.asSingleOptionValue(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(Success(None))
   }
 
@@ -264,7 +264,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.asSingleOptionValue(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res match {
       case Failure(exception) =>
         exception.getMessage should include(Key)
@@ -282,7 +282,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.mapped(proc)(_.toInt)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(FailedValue)
   }
 
@@ -293,7 +293,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.mapped(proc)(_ => throw new IllegalArgumentException("Nope"))
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(EmptyResult)
   }
 
@@ -304,7 +304,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.mapped(proc)(_.toInt)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(Success(List(ProcessorResult)))
   }
 
@@ -315,7 +315,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.mapped(proc)(_.toInt)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res match {
       case Failure(exception) =>
         exception shouldBe a[IllegalArgumentException]
@@ -332,7 +332,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.mappedWithFallback(proc, 1, 2, 3)(_.toInt)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(Success(List(ProcessorResult)))
   }
 
@@ -342,7 +342,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       1, 2, 3)(_.toInt)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(TestParameters)
+    next.parameters should be(TestParameters)
     res should be(Success(List(1, 2, 3)))
   }
 
@@ -353,7 +353,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.asIntOptionValue(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(Success(List(ProcessorResult)))
   }
 
@@ -364,7 +364,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.asIntOptionValue(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res match {
       case Failure(exception) =>
         exception shouldBe a[IllegalArgumentException]
@@ -387,7 +387,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.asBooleanOptionValue(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(Success(List(expResult)))
   }
 
@@ -411,7 +411,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.asBooleanOptionValue(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res match {
       case Failure(exception) =>
         exception shouldBe a[IllegalArgumentException]
@@ -428,7 +428,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.asMandatory(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res should be(Success(ProcessorResult))
   }
 
@@ -439,7 +439,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.asMandatory(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(NextParameters)
+    next.parameters should be(NextParameters)
     res match {
       case Failure(exception) =>
         exception shouldBe a[IllegalArgumentException]
@@ -454,7 +454,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.stringOptionValue(Key)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.accessedParameters should contain only Key
+    next.parameters.accessedParameters should contain only Key
     res should be(Success(Some(ProcessorResult.toString)))
   }
 
@@ -464,7 +464,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.stringOptionValue(UndefinedKey)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.accessedParameters should contain only UndefinedKey
+    next.parameters.accessedParameters should contain only UndefinedKey
     res should be(Success(None))
   }
 
@@ -475,7 +475,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.stringOptionValue(UndefinedKey, Some(Result))
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.accessedParameters should contain only UndefinedKey
+    next.parameters.accessedParameters should contain only UndefinedKey
     res should be(Success(Some(Result)))
   }
 
@@ -484,7 +484,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.stringOptionValue(Key, Some("a fallback value"))
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.accessedParameters should contain only Key
+    next.parameters.accessedParameters should contain only Key
     res should be(Success(Some(ProcessorResult.toString)))
   }
 
@@ -493,7 +493,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.intOptionValue(Key)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.accessedParameters should contain only Key
+    next.parameters.accessedParameters should contain only Key
     res should be(Success(Some(ProcessorResult)))
   }
 
@@ -504,7 +504,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.intOptionValue(UndefinedKey, Some(Result))
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.accessedParameters should contain only UndefinedKey
+    next.parameters.accessedParameters should contain only UndefinedKey
     res should be(Success(Some(Result)))
   }
 
@@ -514,7 +514,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.booleanOptionValue(Key)
 
     val (res, next) = ParameterManager.runProcessor(processor, args)
-    next.accessedParameters should contain only Key
+    next.parameters.accessedParameters should contain only Key
     res should be(Success(Some(true)))
   }
 
@@ -524,7 +524,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.booleanOptionValue(UndefinedKey, Some(false))
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.accessedParameters should contain only UndefinedKey
+    next.parameters.accessedParameters should contain only UndefinedKey
     res should be(Success(Some(false)))
   }
 
@@ -535,7 +535,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.pathOptionValue(Key)
 
     val (res, next) = ParameterManager.runProcessor(processor, args)
-    next.accessedParameters should contain only Key
+    next.parameters.accessedParameters should contain only Key
     res.get.get.toString should be(StrPath)
   }
 
@@ -546,7 +546,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.consoleReaderValue(Key, password = true)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(TestParameters)
+    next.parameters should be(TestParameters)
     res.get should contain only Result
   }
 
@@ -557,7 +557,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.consoleReaderValue(Key, password = false)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(TestParameters)
+    next.parameters should be(TestParameters)
     res.get should contain only Result
   }
 
@@ -565,7 +565,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
 
     val (res, next) = ParameterManager.runProcessor(ParameterManager.emptyProcessor[Int], TestParameters)
-    next should be(TestParameters)
+    next.parameters should be(TestParameters)
     res should be(ParameterManager.emptyOptionValue)
     res.get should have size 0
   }
@@ -578,7 +578,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.conditionalValue(condProc, ifProc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(nextNextParameters)
+    next.parameters should be(nextNextParameters)
     res should be(ResultOptionValue)
   }
 
@@ -591,7 +591,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.conditionalValue(condProc, ParameterManager.emptyProcessor, elseProc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(nextNextParameters)
+    next.parameters should be(nextNextParameters)
     res should be(ResultOptionValue)
   }
 
@@ -605,7 +605,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       elseProc = ParameterManager.emptyProcessor[String], failProc = failProc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next should be(nextNextParameters)
+    next.parameters should be(nextNextParameters)
     res should be(ResultOptionValue)
   }
 
@@ -614,7 +614,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.isDefinedProcessor(Key)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.accessedParameters should contain only Key
+    next.parameters.accessedParameters should contain only Key
     res should be(Success(true))
   }
 
@@ -624,7 +624,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.isDefinedProcessor(OtherKey)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.accessedParameters should contain only OtherKey
+    next.parameters.accessedParameters should contain only OtherKey
     res should be(Success(false))
   }
 }

@@ -142,22 +142,29 @@ object ParameterManager {
     * A data class storing all the information required for the processing of
     * command line arguments.
     *
-    * An instance of this class stores the actual [[Parameters]] plus some
-    * helper objects that may be needed to extract meaningful data.
+    * An instance of this class is passed to a ''CliProcessor'' when it is
+    * executed. It stores the actual [[Parameters]] plus some helper objects
+    * that may be needed to extract meaningful data or provide information
+    * about the processor..
     *
-    * @param parameters the parameters to be processed
-    * @param reader     an object to read data from the console
+    * @param parameters  the parameters to be processed
+    * @param helpContext the context to generate help information
+    * @param reader      an object to read data from the console
     */
-  case class ParameterContext(parameters: Parameters, reader: ConsoleReader) {
+  case class ParameterContext(parameters: Parameters,
+                              helpContext: CliHelpContext,
+                              reader: ConsoleReader) {
     /**
       * Returns a new ''ParameterContext'' object that was updated with the
-      * given ''Parameters''. All other properties remain constant.
+      * given ''Parameters'' and help context. All other properties remain
+      * constant.
       *
-      * @param nextParameters the ''Parameters'' to replace the current ones
+      * @param nextParameters  the ''Parameters'' to replace the current ones
+      * @param nextHelpContext the updated help context
       * @return the updated ''ParameterContext''
       */
-    def update(nextParameters: Parameters): ParameterContext =
-      copy(parameters = nextParameters)
+    def update(nextParameters: Parameters, nextHelpContext: CliHelpContext): ParameterContext =
+      copy(parameters = nextParameters, helpContext = nextHelpContext)
   }
 
   /**
@@ -467,13 +474,16 @@ object ParameterManager {
     * Returns a processor that extracts all values of the specified option key
     * in their basic string representation.
     *
-    * @param key the key of the option
+    * @param key  the key of the option
+    * @param help an optional help text for this option
     * @return the processor to extract the option values
     */
-  def optionValue(key: String): CliProcessor[OptionValue[String]] = CliProcessor(context => {
-    val values = context.parameters.parametersMap.getOrElse(key, Nil)
-    (Success(values), context.update(context.parameters keyAccessed key))
-  }, Some(key))
+  def optionValue(key: String, help: Option[String] = None): CliProcessor[OptionValue[String]] =
+    CliProcessor(context => {
+      val values = context.parameters.parametersMap.getOrElse(key, Nil)
+      val nextHelpCtx = context.helpContext.addOption(key, help)
+      (Success(values), context.update(context.parameters keyAccessed key, nextHelpCtx))
+    }, Some(key))
 
   /**
     * Returns a processor that can apply a fallback (or default) value to
@@ -1109,13 +1119,13 @@ object ParameterManager {
     * @param parameters    the current ''Parameters''
     * @param consoleReader the object to read from the console
     * @tparam T the result type of the ''CliProcessor''
-    * @return a tuple with the result and the updated parameters
+    * @return a tuple with the result and the resulting ''ParameterContext''
     */
   def runProcessor[T](processor: CliProcessor[T], parameters: Parameters)
-                     (implicit consoleReader: ConsoleReader): (T, Parameters) = {
-    val context = ParameterContext(parameters, consoleReader)
+                     (implicit consoleReader: ConsoleReader): (T, ParameterContext) = {
+    val context = ParameterContext(parameters, new CliHelpContext(Map.empty), consoleReader)
     val (result, nextContext) = processor.run(context)
-    (result, nextContext.parameters)
+    (result, nextContext)
   }
 
   /**
@@ -1128,10 +1138,11 @@ object ParameterManager {
     * @param parameters    the current ''Parameters'' object
     * @param consoleReader the object to read from the console
     * @tparam T the result type of the ''CliProcessor''
-    * @return a ''Try'' of a tuple with the result and the updated parameters
+    * @return a ''Try'' of a tuple with the result and the updated
+    *         ''ParameterContext''
     */
   def tryProcessor[T](processor: CliProcessor[Try[T]], parameters: Parameters)
-                     (implicit consoleReader: ConsoleReader): Try[(T, Parameters)] = {
+                     (implicit consoleReader: ConsoleReader): Try[(T, ParameterContext)] = {
     val (triedRes, next) = runProcessor(processor, parameters)
     triedRes map ((_, next))
   }

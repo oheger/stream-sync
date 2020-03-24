@@ -248,7 +248,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       OAuthParameterManager.ClientSecretOption -> ClientSecret)
 
     val (config, next) = ParameterManager.runProcessor(OAuthParameterManager.idpConfigProcessor, args)
-    next.accessedParameters should contain only(OAuthParameterManager.AuthEndpointOption,
+    next.parameters.accessedParameters should contain only(OAuthParameterManager.AuthEndpointOption,
       OAuthParameterManager.TokenEndpointOption, OAuthParameterManager.RedirectUrlOption,
       OAuthParameterManager.ScopeOption, OAuthParameterManager.ClientIDOption,
       OAuthParameterManager.ClientSecretOption)
@@ -274,7 +274,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       OAuthParameterManager.ClientIDOption -> ClientID)
 
     val (config, next) = ParameterManager.runProcessor(OAuthParameterManager.idpConfigProcessor, args)(reader)
-    next.accessedParameters should contain(OAuthParameterManager.ClientSecretOption)
+    next.parameters.accessedParameters should contain(OAuthParameterManager.ClientSecretOption)
     equalsTestConfig(config.get) shouldBe true
   }
 
