@@ -165,6 +165,30 @@ object ParameterManager {
       */
     def update(nextParameters: Parameters, nextHelpContext: CliHelpContext): ParameterContext =
       copy(parameters = nextParameters, helpContext = nextHelpContext)
+
+    /**
+      * Returns a new ''ParameterContext'' object with an updated
+      * ''CliHelpContext'', to which the given attribute has been added.
+      *
+      * @param attr  the attribute key
+      * @param value the attribute value
+      * @return the updated ''ParameterContext''
+      */
+    def updateHelpContext(attr: String, value: String): ParameterContext =
+      copy(helpContext = helpContext.addAttribute(attr, value))
+
+    /**
+      * Returns a ''ParameterContext'' for a conditional update of the
+      * ''CliHelpContext''. If the passed in attribute value is defined, the
+      * help context is replaced; otherwise, the same ''ParameterContext'' is
+      * returned.
+      *
+      * @param attr     the attribute key
+      * @param optValue an ''Option'' with the attribute value
+      * @return the updated (or same) ''ParameterContext''
+      */
+    def updateHelpContextConditionally(attr: String, optValue: Option[String]): ParameterContext =
+      optValue map (value => updateHelpContext(attr, value)) getOrElse this
   }
 
   /**
@@ -225,7 +249,9 @@ object ParameterManager {
     /**
       * Adds a processor as fallback to the managed ''CliProcessor'' that
       * produces the passed in constant values. Works the same way as
-      * ''fallback()'', but creates the fallback processor itself.
+      * ''fallback()'', but creates the fallback processor itself. A
+      * description for the value is generated based on the passed in
+      * parameters.
       *
       * @param firstValue the first fallback value
       * @param moreValues additional fallback values
@@ -233,6 +259,21 @@ object ParameterManager {
       */
     def fallbackValues(firstValue: A, moreValues: A*): CliProcessor[OptionValue[A]] =
       fallback(constantOptionValue(firstValue, moreValues: _*))
+
+    /**
+      * Adds a processor as fallback to the managed ''CliProcessor'' that
+      * produces the passed in constant values and sets the value description
+      * specified. Works the same way as ''fallbackValues()'', but allows more
+      * control over the value description.
+      *
+      * @param optValueDesc the optional description of the value
+      * @param firstValue   the first fallback value
+      * @param moreValues   additional fallback values
+      * @return the ''CliProcessor'' supporting these fallback values
+      */
+    def fallbackValuesWithDesc(optValueDesc: Option[String], firstValue: A, moreValues: A*):
+    CliProcessor[OptionValue[A]] =
+      fallback(constantOptionValueWithDesc(optValueDesc, firstValue, moreValues: _*))
 
     /**
       * Returns a ''CliProcessor'' based on the managed processor that yields a
@@ -451,24 +492,51 @@ object ParameterManager {
     * mainly useful for building up complex processors, e.g. together with
     * conditions or default values for optional parameters.
     *
-    * @param a the constant value to be returned
+    * @param a            the constant value to be returned
+    * @param optValueDesc an optional description of the default value
     * @tparam A the type of the value
     * @return the ''CliProcessor'' returning this constant value
     */
-  def constantProcessor[A](a: A): CliProcessor[A] = CliProcessor(context => (a, context))
+  def constantProcessor[A](a: A, optValueDesc: Option[String] = None): CliProcessor[A] =
+    CliProcessor(context => {
+      val nextContext = context.updateHelpContextConditionally(CliHelpContext.AttrFallbackValue, optValueDesc)
+      (a, nextContext)
+    })
 
   /**
     * Returns a ''CliProcessor'' that returns a constant collection of option
     * values of the given type. This is a special case of a constant processor
-    * that operates on the base type of command line arguments.
+    * that operates on the base type of command line arguments. This function
+    * automatically generates a description of the default value (based on the
+    * values passed in). Use the ''constantOptionValueWithDesc()'' function to
+    * define a description manually.
     *
     * @param first the first value
     * @param items a sequence of additional values
     * @return the ''CliProcessor'' returning this constant ''OptionValue''
     * @tparam A the type of the resulting option value
     */
-  def constantOptionValue[A](first: A, items: A*): CliProcessor[OptionValue[A]] =
-    constantProcessor(Success(first :: items.toList))
+  def constantOptionValue[A](first: A, items: A*): CliProcessor[OptionValue[A]] = {
+    val values = first :: items.toList
+    val valueDesc = generateValueDescription(values)
+    constantProcessor(Success(values), Some(valueDesc))
+  }
+
+  /**
+    * Returns a ''CliProcessor'' that returns a constant collection of option
+    * values of the given type and sets the given value description. This
+    * function works like ''constantOptionValue()'', but offers more
+    * flexibility regarding the description of the value.
+    *
+    * @param optValueDesc an ''Option'' with the value description; ''None'' to
+    *                     set no description
+    * @param first        the first value
+    * @param items        a sequence of additional values
+    * @tparam A the type of the resulting option value
+    * @return the ''CliProcessor'' returning this constant ''OptionValue''
+    */
+  def constantOptionValueWithDesc[A](optValueDesc: Option[String], first: A, items: A*): CliProcessor[OptionValue[A]] =
+    constantProcessor(Success(first :: items.toList), optValueDesc)
 
   /**
     * Returns a processor that extracts all values of the specified option key
@@ -1123,7 +1191,7 @@ object ParameterManager {
     */
   def runProcessor[T](processor: CliProcessor[T], parameters: Parameters)
                      (implicit consoleReader: ConsoleReader): (T, ParameterContext) = {
-    val context = ParameterContext(parameters, new CliHelpContext(Map.empty), consoleReader)
+    val context = ParameterContext(parameters, new CliHelpContext(Map.empty, None), consoleReader)
     val (result, nextContext) = processor.run(context)
     (result, nextContext)
   }
@@ -1257,4 +1325,18 @@ object ParameterManager {
     else cause.getClass.getName + " - "
     s"$exceptionName$message"
   }
+
+  /**
+    * Generates a description of a constant option value based on the concrete
+    * value(s).
+    *
+    * @param values the constant values of this option
+    * @tparam A the type of the values
+    * @return the resulting value description
+    */
+  private def generateValueDescription[A](values: List[A]): String =
+    values match {
+      case h :: Nil => h.toString
+      case l => l.mkString("<", ", ", ">")
+    }
 }

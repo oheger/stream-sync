@@ -20,7 +20,10 @@ import com.github.sync.cli.CliHelpContext.OptionAttributes
 
 object CliHelpContext {
   /** The attribute representing the help text of an option. */
-  val AttrHelpText = "helpText"
+  final val AttrHelpText = "helpText"
+
+  /** The attribute with a description for the fallback value. */
+  final val AttrFallbackValue = "fallbackValue"
 
   /**
     * A data class storing information about a single command line option.
@@ -45,9 +48,11 @@ object CliHelpContext {
   * information, so that meta data about the options supported by the
   * application is collected.
   *
-  * @param options a map storing the data available for the single options
+  * @param options       a map storing the data available for the single options
+  * @param optCurrentKey a key to the option that is currently defined
   */
-class CliHelpContext(val options: Map[String, OptionAttributes]) {
+class CliHelpContext(val options: Map[String, OptionAttributes],
+                     optCurrentKey: Option[String]) {
 
   import CliHelpContext._
 
@@ -65,6 +70,25 @@ class CliHelpContext(val options: Map[String, OptionAttributes]) {
   def addOption(key: String, text: Option[String]): CliHelpContext = {
     val attrs = text.map(t => Map(AttrHelpText -> t)) getOrElse Map.empty
     val help = OptionAttributes(attrs)
-    new CliHelpContext(options + (key -> help))
+    new CliHelpContext(options + (key -> help), optCurrentKey = Some(key))
   }
+
+  /**
+    * Adds an attribute for the current option. This function is called by
+    * ''CliProcessor'' objects to add more detailed information about a
+    * command line option. It refers to the last option that has been added.
+    *
+    * @param attrKey the key of the attribute
+    * @param value   the value of the attribute
+    * @return the updated ''CliHelpContext''
+    */
+  def addAttribute(attrKey: String, value: String): CliHelpContext =
+    optCurrentKey match {
+      case Some(key) =>
+        val attrs = options(key)
+        val newAttrs = OptionAttributes(attrs.attributes + (attrKey -> value))
+        new CliHelpContext(options + (key -> newAttrs), optCurrentKey)
+      case None =>
+        this
+    }
 }

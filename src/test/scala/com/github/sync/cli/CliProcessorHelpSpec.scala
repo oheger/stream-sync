@@ -16,9 +16,11 @@
 
 package com.github.sync.cli
 
-import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters}
+import com.github.sync.cli.ParameterManager._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import scala.util.Success
 
 object CliProcessorHelpSpec {
   /** Key for a test option. */
@@ -50,11 +52,84 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
   import CliProcessorHelpSpec._
 
   "The CLI library" should "store a help text for an option" in {
-    val proc = ParameterManager.optionValue(Key, help = Some(HelpText))
+    val proc = optionValue(Key, help = Some(HelpText))
 
     val helpContext = generateHelpContext(proc)
     helpContext.options.keys should contain only Key
     val helpData = helpContext.options(Key)
     helpData.attributes should be(Map(CliHelpContext.AttrHelpText -> HelpText))
+  }
+
+  it should "support a description for a constant value processor" in {
+    val FallbackDesc = "This is the fallback value."
+    val constProcValue: OptionValue[String] = Success(List("foo"))
+    val fallbackProc = constantProcessor(constProcValue, Some(FallbackDesc))
+    val proc = optionValue(Key)
+      .fallback(fallbackProc)
+
+    val helpContext = generateHelpContext(proc)
+    val optionAttrs = helpContext.options(Key)
+    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> FallbackDesc))
+  }
+
+  it should "support a description for constant values" in {
+    val ValueDesc = "This is a meaningful default value."
+    val valueProc = constantOptionValueWithDesc(Some(ValueDesc), "foo", "bar")
+    val proc = optionValue(Key)
+      .fallback(valueProc)
+
+    val helpContext = generateHelpContext(proc)
+    val optionAttrs = helpContext.options(Key)
+    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> ValueDesc))
+  }
+
+  it should "support skipping a description for a constant value" in {
+    val valueProc = constantOptionValueWithDesc(None, "foo", "bar")
+    val proc = optionValue(Key)
+      .fallback(valueProc)
+
+    val helpContext = generateHelpContext(proc)
+    val optionAttrs = helpContext.options(Key)
+    optionAttrs.attributes should have size 0
+  }
+
+  it should "support a description for constant values via the DSL" in {
+    val ValueDesc = "Description of this value."
+    val proc = optionValue(Key)
+      .fallbackValuesWithDesc(Some(ValueDesc), "foo", "bar", "baz")
+
+    val helpContext = generateHelpContext(proc)
+    val optionAttrs = helpContext.options(Key)
+    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> ValueDesc))
+  }
+
+  it should "generate a description for constant values" in {
+    val Values = List("val1", "val2", "val3")
+    val ValueDesc = s"<${Values.head}, ${Values(1)}, ${Values(2)}>"
+    val proc = optionValue(Key)
+      .fallbackValues(Values.head, Values.tail: _*)
+
+    val helpContext = generateHelpContext(proc)
+    val optionAttrs = helpContext.options(Key)
+    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> ValueDesc))
+  }
+
+  it should "generate a description for a single constant value" in {
+    val Value = "test"
+    val proc = optionValue(Key)
+      .fallbackValues(Value)
+
+    val helpContext = generateHelpContext(proc)
+    val optionAttrs = helpContext.options(Key)
+    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> Value))
+  }
+
+  it should "handle an uninitialized help context gracefully" in {
+    val proc = CliProcessor(context => {
+      (42, context.updateHelpContext("test", "success"))
+    })
+
+    val helpContext = generateHelpContext(proc)
+    helpContext.options should have size 0
   }
 }
