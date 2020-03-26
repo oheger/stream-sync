@@ -554,6 +554,65 @@ object ParameterManager {
     }, Some(key))
 
   /**
+    * Returns a processor that extracts a value from the input parameters. An
+    * input parameter is a parameter that is not the value of an option. The
+    * position of the parameter in the command line needs to be specified. The
+    * position starts with index 0. It can be negative to count from the end of
+    * the command line; for instance, index -1 represents the last input
+    * parameter, index -2 the one before the last, etc. If no parameter with
+    * this index exists (because the user has entered too few parameters), the
+    * processor generates a failure. It is possible to assign a key and a help
+    * text to the input parameter. The key can be used in the overview of the
+    * command line; the help text is a more detailed description of this
+    * parameter.
+    *
+    * @param index   the index of the input parameter to be extracted
+    * @param optKey  an optional key to be assigned to this parameter
+    * @param optHelp an optional help text
+    * @return the processor to extract this input value
+    */
+  def inputValue(index: Int, optKey: Option[String] = None, optHelp: Option[String] = None):
+  CliProcessor[OptionValue[String]] =
+    inputValues(index, index, optKey, optHelp)
+
+  /**
+    * Returns a processor that extracts a sequence of values from the input
+    * parameters. This function is similar to ''inputValue()'', but the result
+    * can have multiple values; it is specified by the first and the last index
+    * in the sequence of input parameters. Like for ''inputValue()'', indices
+    * are 0-based and can be negative. For instance, by setting ''fromIdx''
+    * to 1 and ''toIdx'' to -1, all values except for the first one are
+    * extracted.
+    *
+    * @param fromIdx the start index of the input parameter
+    * @param toIdx   the last index of the input parameter
+    * @param optKey  an optional key to be assigned to this parameter
+    * @param optHelp an optional help text
+    * @return the processor to extract these input values
+    */
+  def inputValues(fromIdx: Int, toIdx: Int, optKey: Option[String] = None, optHelp: Option[String] = None):
+  CliProcessor[OptionValue[String]] =
+    CliProcessor(context => {
+      val inputs = context.parameters.parametersMap.getOrElse(InputOption, Nil)
+
+      // handles special negative index values and checks the index range
+      def adjustAndCheckIndex(index: Int): Try[Int] = {
+        val adjustedIndex = if (index < 0) inputs.size + index
+        else index
+        if (adjustedIndex >= 0 && adjustedIndex < inputs.size) Success(adjustedIndex)
+        else Failure(paramException(InputOption,
+          s"Too few input arguments; undefined argument for index $adjustedIndex."))
+      }
+
+      val result = for {
+        firstIndex <- adjustAndCheckIndex(fromIdx)
+        lastIndex <- adjustAndCheckIndex(toIdx)
+      } yield inputs.slice(firstIndex, lastIndex + 1)
+      //TODO update help context
+      (result, context.update(context.parameters keyAccessed InputOption, context.helpContext))
+    })
+
+  /**
     * Returns a processor that can apply a fallback (or default) value to
     * another processor. The resulting processor invokes the first processor.
     * If this yields a defined result, this result is returned. Otherwise, the

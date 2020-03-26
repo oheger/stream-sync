@@ -36,11 +36,18 @@ object ParameterManagerSpec {
   /** The test value list assigned to the test key.  */
   private val ResultValues = List(ProcessorResult.toString)
 
+  /** Test data for input values passed on the command line. */
+  private val InputValues = List("1", "2", "3")
+
   /** A test option value containing the test result. */
   private val ResultOptionValue: OptionValue[String] = Success(ResultValues)
 
   /** A test Parameters object for testing CLI processors. */
   private val TestParameters: Parameters = Map(Key -> ResultValues)
+
+  /** A test parameters object that contains input parameters. */
+  private val TestParametersWithInputs: Parameters = TestParameters.parametersMap +
+    (ParameterManager.InputOption -> InputValues)
 
   /** Another test Parameters object representing updated parameters. */
   private val NextParameters = Parameters(Map("bar" -> List("v2", "v3")), Set("x", "y"))
@@ -626,5 +633,67 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters.accessedParameters should contain only OtherKey
     res should be(Success(false))
+  }
+
+  it should "provide a processor that extracts a single input value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.inputValue(0)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    next.parameters.accessedParameters should contain only ParameterManager.InputOption
+    res.get should contain only InputValues.head
+  }
+
+  it should "provide a processor that extracts multiple input values" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.inputValues(0, 1)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    next.parameters.accessedParameters should contain only ParameterManager.InputOption
+    res.get.toList should contain theSameElementsInOrderAs InputValues.take(2)
+  }
+
+  it should "interpret a negative value for the to index of an input value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.inputValues(1, -1)
+
+    val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    res.get.toList should contain theSameElementsInOrderAs InputValues.drop(1)
+  }
+
+  it should "interpret a negative value for the from index of an input value" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.inputValue(-2)
+
+    val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    res.get should contain only InputValues(1)
+  }
+
+  it should "yield a failure if the index of an input value is too small" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.inputValue(-InputValues.size - 1)
+
+    val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    res match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(ParameterManager.InputOption)
+        exception.getMessage should include("-1")
+      case r => fail("Unexpected result: " + r)
+    }
+  }
+
+  it should "yield a failure if the index of an input value is too big" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.inputValues(1, InputValues.size)
+
+    val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    res match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(ParameterManager.InputOption)
+        exception.getMessage should include(s"${InputValues.size}")
+      case r => fail("Unexpected result: " + r)
+    }
   }
 }

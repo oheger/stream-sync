@@ -363,4 +363,15 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
 
     triedValues.get should contain theSameElementsInOrderAs createComponents(12)
   }
+
+  it should "support the access to input parameters" in {
+    val parameters: Parameters = Map(InputOption -> List("1", "2", "3"))
+    val processor = inputValue(-2)
+      .toInt
+      .single
+      .mandatory
+
+    val result = runProcessor(processor, parameters)
+    result.get should be(2)
+  }
 }
