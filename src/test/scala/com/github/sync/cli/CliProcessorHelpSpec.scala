@@ -16,6 +16,7 @@
 
 package com.github.sync.cli
 
+import com.github.sync.cli.CliHelpContext.InputParameterRef
 import com.github.sync.cli.ParameterManager._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -131,5 +132,68 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
 
     val helpContext = generateHelpContext(proc)
     helpContext.options should have size 0
+  }
+
+  it should "support descriptions and keys for input parameters" in {
+    val Key2 = "target"
+    val Key3 = "sourceFiles"
+    val Help2 = "The target directory"
+    val Help3 = "List of the files to be copied"
+    val ExpInputs = List(InputParameterRef(0, Key2), InputParameterRef(1, Key), InputParameterRef(2, Key3))
+    val procInp1 = inputValue(1, optKey = Some(Key), optHelp = Some(HelpText))
+    val procInp2 = inputValue(0, optKey = Some(Key2), optHelp  = Some(Help2))
+    val procInp3 = inputValues(2, -1, optKey = Some(Key3), optHelp  = Some(Help3))
+    val proc = for {
+      i1 <- procInp1
+      i2 <- procInp2
+      i3 <- procInp3
+    } yield List(i1, i2, i3)
+
+    val helpContext = generateHelpContext(proc)
+    helpContext.options.keySet should contain theSameElementsAs List(Key, Key2, Key3)
+    helpContext.options(Key).attributes(CliHelpContext.AttrHelpText) should be(HelpText)
+    helpContext.options(Key2).attributes(CliHelpContext.AttrHelpText) should be(Help2)
+    helpContext.options(Key3).attributes(CliHelpContext.AttrHelpText) should be(Help3)
+    helpContext.inputs should contain theSameElementsInOrderAs ExpInputs
+  }
+
+  it should "support attributes for input parameters" in {
+    val proc = inputValue(1, Some(Key))
+    val helpContext1 = generateHelpContext(proc)
+
+    val helpContext2 = helpContext1.addAttribute("foo", "bar")
+    helpContext2.inputs should contain only InputParameterRef(1, Key)
+    val attrs = helpContext2.options(Key)
+    attrs.attributes("foo") should be("bar")
+  }
+
+  it should "support input parameters with negative indices" in {
+    val Key1 = "k1"
+    val Key2 = "k2"
+    val Key3 = "k3"
+    val Key4 = "k4"
+    val ExpInputs = List(InputParameterRef(0, Key1), InputParameterRef(1, Key2),
+      InputParameterRef(-2, Key3), InputParameterRef(-1, Key4))
+    val procInp1 = inputValue(0, optKey = Some(Key1), optHelp = Some(HelpText))
+    val procInp2 = inputValue(1, optKey = Some(Key2))
+    val procInp3 = inputValue(-2, optKey = Some(Key3))
+    val procInp4 = inputValue(-1, optKey = Some(Key4))
+    val proc = for {
+      i1 <- procInp1
+      i4 <- procInp4
+      i3 <- procInp3
+      i2 <- procInp2
+    } yield List(i1, i2, i3, i4)
+
+    val helpContext = generateHelpContext(proc)
+    helpContext.inputs should contain theSameElementsInOrderAs ExpInputs
+  }
+
+  it should "generate a key for an input parameter if necessary" in {
+    val Index = 17
+    val proc = inputValue(Index)
+
+    val helpContext = generateHelpContext(proc)
+    helpContext.inputs should contain only InputParameterRef(Index, CliHelpContext.KeyInput + Index)
   }
 }

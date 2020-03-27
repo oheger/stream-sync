@@ -16,7 +16,9 @@
 
 package com.github.sync.cli
 
-import com.github.sync.cli.CliHelpContext.OptionAttributes
+import com.github.sync.cli.CliHelpContext.{InputParameterRef, OptionAttributes}
+
+import scala.collection.SortedSet
 
 object CliHelpContext {
   /** The attribute representing the help text of an option. */
@@ -24,6 +26,13 @@ object CliHelpContext {
 
   /** The attribute with a description for the fallback value. */
   final val AttrFallbackValue = "fallbackValue"
+
+  /**
+    * A prefix for keys for input parameters that are generated. This is used
+    * if for an input parameter no key has been provided explicitly. The index
+    * of the input parameter is appended.
+    */
+  final val KeyInput = "input"
 
   /**
     * A data class storing information about a single command line option.
@@ -37,6 +46,44 @@ object CliHelpContext {
     */
   case class OptionAttributes(attributes: Map[String, String])
 
+  /**
+    * A data class holding information about input parameters.
+    *
+    * Input parameters are values passed to an application directly and not as
+    * options. They can be assigned a key (a short name) and a detailed help
+    * text with a description. The attributes of input parameters are stored in
+    * the same way as for command line options. This class is used to hold an
+    * ordered set of references to input parameters (as the order of these
+    * parameters is typically relevant) from their indices to their keys. From
+    * the keys, the other information available can be retrieved.
+    *
+    * @param index the index of the input parameter
+    * @param key   the key of the input parameter
+    */
+  case class InputParameterRef(index: Int, key: String) extends Ordered[InputParameterRef] {
+    /**
+      * @inheritdoc This implementation orders input parameter references by
+      *             their index, treating negative indices in a special way, so
+      *             that they appear after the positive ones. (Negative indices
+      *             reference the last input parameters.)
+      */
+    override def compare(that: InputParameterRef): Int = {
+      val sigThis = sig(index)
+      val sigThat = sig(that.index)
+      if (sigThis != sigThat) sigThat
+      else index - that.index
+    }
+  }
+
+  /**
+    * A function to determine the signum of an index which can be either
+    * positive or negative.
+    *
+    * @param i the input number
+    * @return the signum of this number
+    */
+  private def sig(i: Int): Int =
+    if (i < 0) -1 else 1
 }
 
 /**
@@ -49,9 +96,11 @@ object CliHelpContext {
   * application is collected.
   *
   * @param options       a map storing the data available for the single options
+  * @param inputs        a set with data about input parameters
   * @param optCurrentKey a key to the option that is currently defined
   */
 class CliHelpContext(val options: Map[String, OptionAttributes],
+                     val inputs: SortedSet[InputParameterRef],
                      optCurrentKey: Option[String]) {
 
   import CliHelpContext._
@@ -67,10 +116,23 @@ class CliHelpContext(val options: Map[String, OptionAttributes],
     * @param text an optional help text
     * @return the updated ''CliHelpContext''
     */
-  def addOption(key: String, text: Option[String]): CliHelpContext = {
-    val attrs = text.map(t => Map(AttrHelpText -> t)) getOrElse Map.empty
-    val help = OptionAttributes(attrs)
-    new CliHelpContext(options + (key -> help), optCurrentKey = Some(key))
+  def addOption(key: String, text: Option[String]): CliHelpContext =
+    contextWithOption(key, text, inputs)
+
+  /**
+    * Adds data about an input parameter to this object. This function works
+    * similar to ''addOption()'', but creates additional information to keep
+    * track on the order of these parameters.
+    *
+    * @param index  the index of the input parameter
+    * @param optKey the optional key; if it is undefined, a key is generated
+    * @param text   an optional help text
+    * @return the updated ''CliHelpContext''
+    */
+  def addInputParameter(index: Int, optKey: Option[String], text: Option[String]): CliHelpContext = {
+    val key = optKey.getOrElse(KeyInput + index)
+    val inputRef = InputParameterRef(index, key)
+    contextWithOption(key, text, inputs + inputRef)
   }
 
   /**
@@ -87,8 +149,24 @@ class CliHelpContext(val options: Map[String, OptionAttributes],
       case Some(key) =>
         val attrs = options(key)
         val newAttrs = OptionAttributes(attrs.attributes + (attrKey -> value))
-        new CliHelpContext(options + (key -> newAttrs), optCurrentKey)
+        new CliHelpContext(options + (key -> newAttrs), inputs, optCurrentKey)
       case None =>
         this
     }
+
+  /**
+    * Creates a new ''CliHelpContext'' with an additional option as defined by
+    * the parameters.
+    *
+    * @param key       the option key
+    * @param text      the help text for the option
+    * @param inputRefs the input data for the new context
+    * @return the updated ''CliHelpContext''
+    */
+  private def contextWithOption(key: String, text: Option[String], inputRefs: SortedSet[InputParameterRef]):
+  CliHelpContext = {
+    val attrs = text.map(t => Map(AttrHelpText -> t)) getOrElse Map.empty
+    val help = OptionAttributes(attrs)
+    new CliHelpContext(options + (key -> help), inputRefs, optCurrentKey = Some(key))
+  }
 }

@@ -22,8 +22,10 @@ import java.util.Locale
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{FileIO, Framing, Sink}
 import akka.util.ByteString
+import com.github.sync.cli.CliHelpContext.InputParameterRef
 
 import scala.annotation.tailrec
+import scala.collection.SortedSet
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
 import scala.util.{Failure, Success, Try}
@@ -608,8 +610,8 @@ object ParameterManager {
         firstIndex <- adjustAndCheckIndex(fromIdx)
         lastIndex <- adjustAndCheckIndex(toIdx)
       } yield inputs.slice(firstIndex, lastIndex + 1)
-      //TODO update help context
-      (result, context.update(context.parameters keyAccessed InputOption, context.helpContext))
+      val helpContext = context.helpContext.addInputParameter(fromIdx, optKey, optHelp)
+      (result, context.update(context.parameters keyAccessed InputOption, helpContext))
     })
 
   /**
@@ -1250,7 +1252,8 @@ object ParameterManager {
     */
   def runProcessor[T](processor: CliProcessor[T], parameters: Parameters)
                      (implicit consoleReader: ConsoleReader): (T, ParameterContext) = {
-    val context = ParameterContext(parameters, new CliHelpContext(Map.empty, None), consoleReader)
+    val context = ParameterContext(parameters,
+      new CliHelpContext(Map.empty, SortedSet.empty[InputParameterRef], None), consoleReader)
     val (result, nextContext) = processor.run(context)
     (result, nextContext)
   }
