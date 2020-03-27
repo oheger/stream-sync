@@ -22,7 +22,7 @@ import java.util.Locale
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{FileIO, Framing, Sink}
 import akka.util.ByteString
-import com.github.sync.cli.CliHelpContext.InputParameterRef
+import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, HelpContextUpdater, InputParameterRef}
 
 import scala.annotation.tailrec
 import scala.collection.SortedSet
@@ -221,6 +221,24 @@ object ParameterManager {
 
     def map[B](f: A => B): CliProcessor[B] =
       flatMap(a => CliProcessor(ctx => (f(a), ctx), optKey))
+
+    /**
+      * Returns a ''CliProcessor'' based on the current one that applies a
+      * mapping function to the original result and also modifies the help
+      * context.
+      *
+      * @param f    the mapping function
+      * @param fCtx the function to update the help context
+      * @tparam B the result type of the new processor
+      * @return the new ''CliProcessor''
+      */
+    def mapWithHelpContext[B](f: A => B)(fCtx: HelpContextUpdater): CliProcessor[B] = {
+      val fProc: A => CliProcessor[B] = a => {
+        val procMap = CliProcessor(ctx => (f(a), ctx))
+        updatingHelpCtxProcessor(procMap)(fCtx)
+      }
+      flatMap(fProc)
+    }
   }
 
   /**
@@ -501,7 +519,7 @@ object ParameterManager {
     */
   def constantProcessor[A](a: A, optValueDesc: Option[String] = None): CliProcessor[A] =
     CliProcessor(context => {
-      val nextContext = context.updateHelpContextConditionally(CliHelpContext.AttrFallbackValue, optValueDesc)
+      val nextContext = context.updateHelpContextConditionally(CliHelpGenerator.AttrFallbackValue, optValueDesc)
       (a, nextContext)
     })
 
@@ -711,13 +729,12 @@ object ParameterManager {
     * @return the processor extracting the single option value
     */
   def asSingleOptionValue[A](proc: CliProcessor[OptionValue[A]]): CliProcessor[SingleOptionValue[A]] =
-    proc map { optionValue =>
+    proc.mapWithHelpContext(optionValue =>
       optionValue flatMap { values =>
         if (values.size > 1)
           Failure(paramException(proc.key, s"should have a single value, but has multiple values - $optionValue"))
         else Success(values.headOption)
-      }
-    }
+      })(CliHelpGenerator.setAttributeUpdater(CliHelpGenerator.AttrSingleValue))
 
   /**
     * Returns a processor that enforces an option to have a defined value. If
@@ -729,10 +746,10 @@ object ParameterManager {
     * @return the processor returning a mandatory value
     */
   def asMandatory[A](proc: CliProcessor[SingleOptionValue[A]]): CliProcessor[Try[A]] =
-    proc.map(_.flatMap {
+    proc.mapWithHelpContext(_.flatMap {
       case Some(v) => Success(v)
       case None => Failure(paramException(proc.key, "mandatory option has no value"))
-    })
+    })(CliHelpGenerator.setAttributeUpdater(CliHelpGenerator.AttrMandatory))
 
   /**
     * Returns a processor that modifies the result of another processor by
@@ -1401,4 +1418,20 @@ object ParameterManager {
       case h :: Nil => h.toString
       case l => l.mkString("<", ", ", ">")
     }
+
+  /**
+    * Returns a ''CliProcessor'' that invokes another processor and updates the
+    * ''CliHelpContext'' using a ''HelpContextUpdater''.
+    *
+    * @param proc    the ''CliProcessor'' to be invoked
+    * @param fUpdate the update function for the help context
+    * @tparam A the result type of the ''CliProcessor''
+    * @return the decorated ''CliProcessor'' that updates the help context
+    */
+  private def updatingHelpCtxProcessor[A](proc: CliProcessor[A])(fUpdate: HelpContextUpdater): CliProcessor[A] =
+    CliProcessor(context => {
+      val nextHelpCtx = fUpdate(context.helpContext)
+      val nextCtx = context.copy(helpContext = nextHelpCtx)
+      proc.run(nextCtx)
+    }, proc.optKey)
 }

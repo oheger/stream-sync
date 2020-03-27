@@ -16,11 +16,12 @@
 
 package com.github.sync.cli
 
-import com.github.sync.cli.CliHelpContext.InputParameterRef
+import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, InputParameterRef, OptionAttributes}
 import com.github.sync.cli.ParameterManager._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import scala.collection.SortedSet
 import scala.util.Success
 
 object CliProcessorHelpSpec {
@@ -58,7 +59,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
     val helpContext = generateHelpContext(proc)
     helpContext.options.keys should contain only Key
     val helpData = helpContext.options(Key)
-    helpData.attributes should be(Map(CliHelpContext.AttrHelpText -> HelpText))
+    helpData.attributes should be(Map(CliHelpGenerator.AttrHelpText -> HelpText))
   }
 
   it should "support a description for a constant value processor" in {
@@ -70,7 +71,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
 
     val helpContext = generateHelpContext(proc)
     val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> FallbackDesc))
+    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> FallbackDesc))
   }
 
   it should "support a description for constant values" in {
@@ -81,7 +82,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
 
     val helpContext = generateHelpContext(proc)
     val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> ValueDesc))
+    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> ValueDesc))
   }
 
   it should "support skipping a description for a constant value" in {
@@ -101,7 +102,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
 
     val helpContext = generateHelpContext(proc)
     val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> ValueDesc))
+    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> ValueDesc))
   }
 
   it should "generate a description for constant values" in {
@@ -112,7 +113,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
 
     val helpContext = generateHelpContext(proc)
     val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> ValueDesc))
+    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> ValueDesc))
   }
 
   it should "generate a description for a single constant value" in {
@@ -122,7 +123,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
 
     val helpContext = generateHelpContext(proc)
     val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpContext.AttrFallbackValue -> Value))
+    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> Value))
   }
 
   it should "handle an uninitialized help context gracefully" in {
@@ -141,8 +142,8 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
     val Help3 = "List of the files to be copied"
     val ExpInputs = List(InputParameterRef(0, Key2), InputParameterRef(1, Key), InputParameterRef(2, Key3))
     val procInp1 = inputValue(1, optKey = Some(Key), optHelp = Some(HelpText))
-    val procInp2 = inputValue(0, optKey = Some(Key2), optHelp  = Some(Help2))
-    val procInp3 = inputValues(2, -1, optKey = Some(Key3), optHelp  = Some(Help3))
+    val procInp2 = inputValue(0, optKey = Some(Key2), optHelp = Some(Help2))
+    val procInp3 = inputValues(2, -1, optKey = Some(Key3), optHelp = Some(Help3))
     val proc = for {
       i1 <- procInp1
       i2 <- procInp2
@@ -151,9 +152,9 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
 
     val helpContext = generateHelpContext(proc)
     helpContext.options.keySet should contain theSameElementsAs List(Key, Key2, Key3)
-    helpContext.options(Key).attributes(CliHelpContext.AttrHelpText) should be(HelpText)
-    helpContext.options(Key2).attributes(CliHelpContext.AttrHelpText) should be(Help2)
-    helpContext.options(Key3).attributes(CliHelpContext.AttrHelpText) should be(Help3)
+    helpContext.options(Key).attributes(CliHelpGenerator.AttrHelpText) should be(HelpText)
+    helpContext.options(Key2).attributes(CliHelpGenerator.AttrHelpText) should be(Help2)
+    helpContext.options(Key3).attributes(CliHelpGenerator.AttrHelpText) should be(Help3)
     helpContext.inputs should contain theSameElementsInOrderAs ExpInputs
   }
 
@@ -194,6 +195,50 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
     val proc = inputValue(Index)
 
     val helpContext = generateHelpContext(proc)
-    helpContext.inputs should contain only InputParameterRef(Index, CliHelpContext.KeyInput + Index)
+    helpContext.inputs should contain only InputParameterRef(Index, CliHelpGenerator.KeyInput + Index)
+  }
+
+  it should "merge the attributes of command line options that are added multiple times" in {
+    val Attrs1 = OptionAttributes(Map("attr1" -> "value1", "attr2" -> "value2",
+      CliHelpGenerator.AttrHelpText -> "old help"))
+    val ExpAttrs = OptionAttributes(Attrs1.attributes + (CliHelpGenerator.AttrHelpText -> HelpText))
+    val helpContext = new CliHelpContext(Map(Key -> Attrs1), SortedSet.empty, None)
+
+    val nextContext = helpContext.addOption(Key, Some(HelpText))
+    nextContext.options(Key) should be(ExpAttrs)
+  }
+
+  it should "set a single-valued attribute for options with a single value" in {
+    val Key2 = Key + "_other"
+    val proc1 = optionValue(Key).single
+    val proc2 = optionValue(Key2)
+    val proc = for {
+      v1 <- proc1
+      v2 <- proc2
+    } yield List(v1, v2)
+
+    val helpContext = generateHelpContext(proc)
+    helpContext.hasAttribute(Key, CliHelpGenerator.AttrSingleValue) shouldBe true
+    helpContext.hasAttribute(Key2, CliHelpGenerator.AttrSingleValue) shouldBe false
+  }
+
+  it should "support querying a boolean attribute for a non-existing option" in {
+    val helpContext = new CliHelpContext(Map.empty, SortedSet.empty, None)
+
+    helpContext.hasAttribute(Key, "foo") shouldBe false
+  }
+
+  it should "set a mandatory attribute for mandatory options" in {
+    val Key2 = Key + "_optional"
+    val proc1 = optionValue(Key).single.mandatory
+    val proc2 = optionValue(Key2).single
+    val proc = for {
+      v1 <- proc1
+      v2 <- proc2
+    } yield List(v1, v2)
+
+    val helpContext = generateHelpContext(proc)
+    helpContext.hasAttribute(Key, CliHelpGenerator.AttrMandatory) shouldBe true
+    helpContext.hasAttribute(Key2, CliHelpGenerator.AttrMandatory) shouldBe false
   }
 }
