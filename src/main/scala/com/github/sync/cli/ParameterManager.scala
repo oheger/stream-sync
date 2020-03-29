@@ -678,21 +678,49 @@ object ParameterManager {
     * the concrete mode, a number of other parameters become enabled or
     * disabled.
     *
-    * @param condProc the processor that defines the condition
-    * @param ifProc   the processor to run if the condition is fulfilled
-    * @param elseProc the processor to run if the condition is not fulfilled
-    * @param failProc the processor to run in case of a failure
+    * Each processor can be assigned a group name; the options extracted by the
+    * processors are also associated with this group. When generating help
+    * information for the CLI it is then possible to show only help texts for
+    * options belonging to specific groups or to indicate that some options are
+    * valid only under specific conditions.
+    *
+    * @param condProc  the processor that defines the condition
+    * @param ifProc    the processor to run if the condition is fulfilled
+    * @param elseProc  the processor to run if the condition is not fulfilled
+    * @param failProc  the processor to run in case of a failure
+    * @param ifGroup   name of the group for the if processor
+    * @param elseGroup name of the group for the else processor
+    * @param failGroup name of the group for the fail processor
     * @return the conditional processor
     * @tparam A the type of the option values
     */
   def conditionalValue[A](condProc: CliProcessor[Try[Boolean]], ifProc: CliProcessor[OptionValue[A]],
                           elseProc: CliProcessor[OptionValue[A]] = emptyProcessor[A],
-                          failProc: CliProcessor[OptionValue[A]] = emptyProcessor[A]): CliProcessor[OptionValue[A]] =
-    condProc flatMap {
-      case Success(value) =>
-        if (value) ifProc else elseProc
-      case Failure(_) => failProc
-    }
+                          failProc: CliProcessor[OptionValue[A]] = emptyProcessor[A],
+                          ifGroup: Option[String] = None, elseGroup: Option[String] = None,
+                          failGroup: Option[String] = None): CliProcessor[OptionValue[A]] =
+    CliProcessor(context => {
+      val (condResult, context2) = condProc.run(context)
+      val (activeProc, activeGroup) = condResult match {
+        case Success(value) =>
+          if (value) (ifProc, ifGroup) else (elseProc, elseGroup)
+        case Failure(_) => (failProc, failGroup)
+      }
+
+      // generate a help context with the meta data of non-active processors
+      val helpContext = List((ifProc, ifGroup), (elseProc, elseGroup), (failProc, failGroup))
+        .filter(_._1 != activeProc)
+        .foldLeft(context2.helpContext) { (helpCtx, p) =>
+          val helpCtxWithGroup = helpCtx startGroupConditionally p._2
+          val paramCtx = contextForMetaDataRun(helpCtxWithGroup)
+          val (_, nextContext) = p._1.run(paramCtx)
+          nextContext.helpContext.endGroupConditionally(p._2)
+        }
+
+      val (result, context3) =
+        activeProc.run(context2.copy(helpContext = helpContext startGroupConditionally activeGroup))
+      (result, context3.copy(helpContext = context3.helpContext.endGroupConditionally(activeGroup)))
+    })
 
   /**
     * Returns a processor that yields a flag whether the ''CliProcessor''
@@ -1270,7 +1298,7 @@ object ParameterManager {
   def runProcessor[T](processor: CliProcessor[T], parameters: Parameters)
                      (implicit consoleReader: ConsoleReader): (T, ParameterContext) = {
     val context = ParameterContext(parameters,
-      new CliHelpContext(Map.empty, SortedSet.empty[InputParameterRef], None), consoleReader)
+      new CliHelpContext(Map.empty, SortedSet.empty[InputParameterRef], None, Nil), consoleReader)
     val (result, nextContext) = processor.run(context)
     (result, nextContext)
   }
@@ -1434,4 +1462,16 @@ object ParameterManager {
       val nextCtx = context.copy(helpContext = nextHelpCtx)
       proc.run(nextCtx)
     }, proc.optKey)
+
+  /**
+    * Returns a ''ParameterContext'' to be used for the invocation of a
+    * ''CliProcessor'' if only meta data of the processor is of interest. This
+    * context has no parameter values and dummy helper objects. Only the help
+    * context is set and will be updated during the run.
+    *
+    * @param helpContext the ''CliHelpContext''
+    * @return the ''ParameterContext'' for the meta data run
+    */
+  private def contextForMetaDataRun(helpContext: CliHelpContext): ParameterContext =
+    ParameterContext(Parameters(Map.empty, Set.empty), helpContext, DummyConsoleReader)
 }

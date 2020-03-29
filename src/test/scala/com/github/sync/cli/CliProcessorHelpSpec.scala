@@ -18,8 +18,10 @@ package com.github.sync.cli
 
 import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, InputParameterRef, OptionAttributes}
 import com.github.sync.cli.ParameterManager._
+import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.mockito.MockitoSugar
 
 import scala.collection.SortedSet
 import scala.util.Success
@@ -34,12 +36,13 @@ object CliProcessorHelpSpec {
   /**
     * Runs the given ''CliProcessor'' and returns the resulting help context.
     *
-    * @param proc the processor to be executed
+    * @param proc      the processor to be executed
+    * @param optReader optional console reader for the context
     * @return the resulting help context
     */
-  private def generateHelpContext(proc: CliProcessor[_]): CliHelpContext = {
+  private def generateHelpContext(proc: CliProcessor[_], optReader: Option[ConsoleReader] = None): CliHelpContext = {
     val params = Parameters(Map.empty, Set.empty)
-    implicit val reader: ConsoleReader = DefaultConsoleReader
+    implicit val reader: ConsoleReader = optReader getOrElse DefaultConsoleReader
     val (_, ctx) = ParameterManager.runProcessor(proc, params)
     ctx.helpContext
   }
@@ -49,7 +52,7 @@ object CliProcessorHelpSpec {
   * Test class for testing whether help and usage texts can be generated
   * correctly from ''CliProcessor'' objects.
   */
-class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
+class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
   import CliProcessorHelpSpec._
 
@@ -202,7 +205,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
     val Attrs1 = OptionAttributes(Map("attr1" -> "value1", "attr2" -> "value2",
       CliHelpGenerator.AttrHelpText -> "old help"))
     val ExpAttrs = OptionAttributes(Attrs1.attributes + (CliHelpGenerator.AttrHelpText -> HelpText))
-    val helpContext = new CliHelpContext(Map(Key -> Attrs1), SortedSet.empty, None)
+    val helpContext = new CliHelpContext(Map(Key -> Attrs1), SortedSet.empty, None, Nil)
 
     val nextContext = helpContext.addOption(Key, Some(HelpText))
     nextContext.options(Key) should be(ExpAttrs)
@@ -223,7 +226,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "support querying a boolean attribute for a non-existing option" in {
-    val helpContext = new CliHelpContext(Map.empty, SortedSet.empty, None)
+    val helpContext = new CliHelpContext(Map.empty, SortedSet.empty, None, Nil)
 
     helpContext.hasAttribute(Key, "foo") shouldBe false
   }
@@ -240,5 +243,101 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers {
     val helpContext = generateHelpContext(proc)
     helpContext.hasAttribute(Key, CliHelpGenerator.AttrMandatory) shouldBe true
     helpContext.hasAttribute(Key2, CliHelpGenerator.AttrMandatory) shouldBe false
+  }
+
+  it should "support groups for conditional options" in {
+    val procCond = optionValue("condition").isDefined
+    val procIf = optionValue("if", Some("help-if"))
+    val procElse = optionValue("else", Some("help-else"))
+    val procFail = optionValue("fail", Some("help-fail"))
+    val procOther = optionValue(Key, Some(HelpText))
+    val procCase = conditionalValue(procCond, procIf, procElse, procFail, Some("grp-if"),
+      Some("grp-else"), Some("grp-fail"))
+    val proc = for {
+      v1 <- procCase
+      v2 = procOther
+    } yield List(v1, v2)
+
+    val helpContext = generateHelpContext(proc)
+    helpContext.hasAttribute(Key, CliHelpGenerator.AttrGroup) shouldBe false
+    val attrIf = helpContext.options("if")
+    CliHelpGenerator.isInGroup(attrIf, "grp-if") shouldBe true
+    attrIf.attributes(CliHelpGenerator.AttrHelpText) should be("help-if")
+    val attrElse = helpContext.options("else")
+    CliHelpGenerator.isInGroup(attrElse, "grp-else") shouldBe true
+    attrElse.attributes(CliHelpGenerator.AttrHelpText) should be("help-else")
+    val attrFail = helpContext.options("fail")
+    CliHelpGenerator.isInGroup(attrFail, "grp-fail") shouldBe true
+    attrFail.attributes(CliHelpGenerator.AttrHelpText) should be("help-fail")
+  }
+
+  it should "support nested conditional groups" in {
+    val procCond1 = optionValue("condition1").isDefined
+    val procCond2 = optionValue("condition2").isDefined
+    val procIfNested = optionValue("if-nested", Some("help-if-nested"))
+    val procElseNested = optionValue("else-nested", Some("help-else-nested"))
+    val procElse = optionValue("else", Some("help-else"))
+    val procCaseNested = conditionalValue(procCond2, procIfNested, procElseNested,
+      ifGroup = Some("grp-if-nested"), elseGroup = Some("grp-else-nested"))
+    val procCase = conditionalValue(procCond1, procCaseNested, procElse,
+      ifGroup = Some("grp-if"), elseGroup = Some("grp-else"))
+
+    val helpContext = generateHelpContext(procCase)
+    val attrIfNested = helpContext.options("if-nested")
+    CliHelpGenerator.isInGroup(attrIfNested, "grp-if-nested") shouldBe true
+    CliHelpGenerator.isInGroup(attrIfNested, "grp-if") shouldBe true
+    CliHelpGenerator.groups(attrIfNested) should contain only("grp-if-nested", "grp-if")
+    attrIfNested.attributes(CliHelpGenerator.AttrHelpText) should be("help-if-nested")
+    val attrElseNested = helpContext.options("else-nested")
+    CliHelpGenerator.groups(attrElseNested) should contain only("grp-else-nested", "grp-if")
+    CliHelpGenerator.isInGroup(attrElseNested, "grp-if-nested") shouldBe false
+    val attrElse = helpContext.options("else")
+    CliHelpGenerator.groups(attrElse) should contain only "grp-else"
+  }
+
+  it should "merge the values of group attributes" in {
+    val procCond = optionValue("condition").isDefined
+    val procIf = optionValue(Key)
+    val procElse = optionValue(Key)
+    val procCase = conditionalValue(procCond, ifProc = procIf, ifGroup = Some("g1"),
+      elseProc = procElse, elseGroup = Some("g2"))
+
+    val helpContext = generateHelpContext(procCase)
+    val attr = helpContext.options(Key)
+    CliHelpGenerator.groups(attr) should contain only("g1", "g2")
+  }
+
+  it should "handle groups whose name is a prefix of another group" in {
+    val mapAttr = Map(CliHelpGenerator.AttrGroup -> "groupSub")
+    val attr = OptionAttributes(mapAttr)
+
+    CliHelpGenerator.isInGroup(attr, "group") shouldBe false
+  }
+
+  it should "correctly execute a group check if no groups are available" in {
+    val attr = OptionAttributes(Map.empty)
+
+    CliHelpGenerator.isInGroup(attr, "someGroup") shouldBe false
+  }
+
+  it should "returns the groups of an option if no groups are available" in {
+    val attr = OptionAttributes(Map.empty)
+
+    CliHelpGenerator.groups(attr) should have size 0
+  }
+
+  it should "use a dummy console reader when running processors to get meta data" in {
+    val Key2 = "readerOption"
+    val procCond = optionValue("condition").isDefined
+    val procIf = optionValue(Key).fallback(consoleReaderValue(Key2, password = true))
+    val procElse = optionValue(Key2)
+    val procCase = conditionalValue(procCond, ifProc = procIf, ifGroup = Some("g1"),
+      elseProc = procElse, elseGroup = Some("g2"))
+    val reader = mock[ConsoleReader]
+
+    val helpContext = generateHelpContext(procCase, optReader = Some(reader))
+    val attr = helpContext.options(Key2)
+    CliHelpGenerator.isInGroup(attr, "g2") shouldBe true
+    verifyZeroInteractions(reader)
   }
 }

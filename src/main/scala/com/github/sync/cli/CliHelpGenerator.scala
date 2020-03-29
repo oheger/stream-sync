@@ -41,6 +41,16 @@ object CliHelpGenerator {
   final val AttrMandatory = "mandatory"
 
   /**
+    * The attribute assigning a group to an option. Groups are used to handle
+    * options that are valid only in certain constellations, e.g. when
+    * conditional processors are involved, or if a CLI supports multiple
+    * commands, each of which has its own set of options. In the help text it
+    * can then be indicated that the options belonging to a group are allowed
+    * only if specific conditions are fulfilled.
+    */
+  final val AttrGroup = "group"
+
+  /**
     * A prefix for keys for input parameters that are generated. This is used
     * if for an input parameter no key has been provided explicitly. The index
     * of the input parameter is appended.
@@ -49,6 +59,9 @@ object CliHelpGenerator {
 
   /** A value used for boolean attributes. */
   private final val ValueBoolean = "true"
+
+  /** The separator string between group names. */
+  private final val GroupSeparator = ","
 
   /**
     * A data class storing information about a single command line option.
@@ -103,10 +116,12 @@ object CliHelpGenerator {
     * @param options       a map storing the data available for the single options
     * @param inputs        a set with data about input parameters
     * @param optCurrentKey a key to the option that is currently defined
+    * @param groups        a list with the currently active group names
     */
   class CliHelpContext(val options: Map[String, OptionAttributes],
                        val inputs: SortedSet[InputParameterRef],
-                       optCurrentKey: Option[String]) {
+                       optCurrentKey: Option[String],
+                       groups: List[String]) {
 
     /**
       * Adds data about another command line option to this object. This
@@ -152,7 +167,7 @@ object CliHelpGenerator {
         case Some(key) =>
           val attrs = options(key)
           val newAttrs = OptionAttributes(attrs.attributes + (attrKey -> value))
-          new CliHelpContext(options + (key -> newAttrs), inputs, optCurrentKey)
+          new CliHelpContext(options + (key -> newAttrs), inputs, optCurrentKey, groups)
         case None =>
           this
       }
@@ -182,6 +197,48 @@ object CliHelpGenerator {
       options.get(key) exists (_.attributes contains attrKey)
 
     /**
+      * Notifies this context about the start of a new group. New options that
+      * are added later are assigned to this group.
+      *
+      * @param groupName the name of the group
+      * @return the updated ''CliHelpContext''
+      */
+    def startGroup(groupName: String): CliHelpContext =
+      new CliHelpContext(options, inputs, optCurrentKey, groupName :: groups)
+
+    /**
+      * Notifies this context about a potential start of a new group. If the
+      * group name is defined, a new group is started; otherwise, the same
+      * context is returned.
+      *
+      * @param optGroupName the optional group name
+      * @return the updated ''CliHelpContext'' or the same one
+      */
+    def startGroupConditionally(optGroupName: Option[String]): CliHelpContext =
+      optGroupName.fold(this)(startGroup)
+
+    /**
+      * Notifies this context that a group has been processed. The name of the
+      * current group is removed.
+      *
+      * @return the updated ''CliHelpContext''
+      */
+    def endGroup(): CliHelpContext =
+      new CliHelpContext(options, inputs, optCurrentKey, groups.tail)
+
+    /**
+      * Notifies this context that a group has potentially been processed. If
+      * the given ''Option'' with the group name is defined, the name of the
+      * current group is removed; otherwise, this context is returned
+      * unchanged.
+      *
+      * @param optGroupName the ''Option'' with the group name
+      * @return the updated ''CliHelpContext'' or the same one
+      */
+    def endGroupConditionally(optGroupName: Option[String]): CliHelpContext =
+      optGroupName.fold(this)(_ => endGroup())
+
+    /**
       * Creates a new ''CliHelpContext'' with an additional option as defined by
       * the parameters.
       *
@@ -192,11 +249,35 @@ object CliHelpGenerator {
       */
     private def contextWithOption(key: String, text: Option[String], inputRefs: SortedSet[InputParameterRef]):
     CliHelpContext = {
-      val attrs = text.map(t => Map(AttrHelpText -> t)) getOrElse Map.empty
       val existingAttrs = options.get(key).map(_.attributes) getOrElse Map.empty
+      val existingGroups = existingAttrs.getOrElse(AttrGroup, "")
+      val attrs = addOptionalAttribute(
+        addOptionalAttribute(Map.empty, AttrHelpText, text),
+        AttrGroup, groupAttribute.map(existingGroups + _))
       val help = OptionAttributes(existingAttrs ++ attrs)
-      new CliHelpContext(options + (key -> help), inputRefs, optCurrentKey = Some(key))
+      new CliHelpContext(options + (key -> help), inputRefs, optCurrentKey = Some(key), groups)
     }
+
+    /**
+      * Returns a string with the concatenated names of all groups that are
+      * currently active.
+      *
+      * @return a string with the names of the active groups
+      */
+    private def activeGroupNames: String = groups.mkString(GroupSeparator) + GroupSeparator
+
+    /**
+      * Returns an ''Option'' with the current value of the group attribute. If
+      * there are active groups, the ''Option'' contains their names;
+      * otherwise, it is empty.
+      *
+      * @return an ''Option'' with the names of the currently active groups
+      */
+    private def groupAttribute: Option[String] =
+      activeGroupNames match {
+        case GroupSeparator => None
+        case s => Some(s)
+      }
   }
 
   /**
@@ -217,6 +298,27 @@ object CliHelpGenerator {
     context => context setAttribute attrKey
 
   /**
+    * Checks whether the option whose attributes are provided belongs to the
+    * given group.
+    *
+    * @param attrs the ''OptionAttributes''
+    * @param group the name of the group
+    * @return a flag whether this option belongs to this group
+    */
+  def isInGroup(attrs: OptionAttributes, group: String): Boolean =
+    attrs.attributes.get(AttrGroup) exists (_ contains group + GroupSeparator)
+
+  /**
+    * Returns a set with the names of all groups the option whose attributes
+    * are provided belongs to.
+    *
+    * @param attrs the ''OptionAttributes''
+    * @return a set with the names of all groups
+    */
+  def groups(attrs: OptionAttributes): Set[String] =
+    attrs.attributes.get(AttrGroup).map(_.split(GroupSeparator).toSet) getOrElse Set.empty
+
+  /**
     * A function to determine the signum of an index which can be either
     * positive or negative.
     *
@@ -226,4 +328,16 @@ object CliHelpGenerator {
   private def sig(i: Int): Int =
     if (i < 0) -1 else 1
 
+  /**
+    * Adds an attribute and its value to the given map of attributes only if
+    * the value is defined.
+    *
+    * @param attributes the map with attributes
+    * @param key        the attribute key
+    * @param optValue   the optional value of the attribute
+    * @return the modified map with attributes if a change was necessary
+    */
+  private def addOptionalAttribute(attributes: Map[String, String], key: String, optValue: Option[String]):
+  Map[String, String] =
+    optValue map (value => attributes + (key -> value)) getOrElse attributes
 }

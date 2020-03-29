@@ -57,3 +57,13 @@ object DefaultConsoleReader extends ConsoleReader {
     else console.readLine(prompt)
   }
 }
+
+/**
+  * A dummy implementation of the ''ConsoleReader'' trait that does not
+  * actually access the console, but always returns an empty string. This is
+  * used to process command line options if only the meta data of processors is
+  * of interest.
+  */
+object DummyConsoleReader extends ConsoleReader {
+  override def readOption(key: String, password: Boolean): String = ""
+}
