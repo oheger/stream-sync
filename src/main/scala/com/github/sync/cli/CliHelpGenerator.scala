@@ -34,11 +34,8 @@ object CliHelpGenerator {
   /** The attribute with a description for the fallback value. */
   final val AttrFallbackValue = "fallbackValue"
 
-  /** The attribute indicating that an option has only a single value. */
-  final val AttrSingleValue = "singleValued"
-
-  /** The attribute indicating that an option is mandatory. */
-  final val AttrMandatory = "mandatory"
+  /** The attribute defining the multiplicity of an option. */
+  final val AttrMultiplicity = "multiplicity"
 
   /**
     * The attribute assigning a group to an option. Groups are used to handle
@@ -57,11 +54,17 @@ object CliHelpGenerator {
     */
   final val KeyInput = "input"
 
-  /** A value used for boolean attributes. */
-  private final val ValueBoolean = "true"
+  /**
+    * The character to be used for the multiplicity if the maximum is not
+    * restricted.
+    */
+  final val MultiplicityUnrestricted = "*"
 
   /** The separator string between group names. */
   private final val GroupSeparator = ","
+
+  /** The multiplicity of an option if no meta data about it is available. */
+  private final val DefaultMultiplicity = "0..*"
 
   /**
     * A data class storing information about a single command line option.
@@ -173,20 +176,9 @@ object CliHelpGenerator {
       }
 
     /**
-      * Sets a boolean attribute for the current option. For such attributes, the
-      * concrete value is irrelevant; it only matters whether the attribute is
-      * present or not.
-      *
-      * @param attrKey the key of the attribute
-      * @return the updated ''CliHelpContext''
-      */
-    def setAttribute(attrKey: String): CliHelpContext =
-      addAttribute(attrKey, ValueBoolean)
-
-    /**
       * Checks whether the command line option with the given key has a specific
       * attribute set. Only the presence of the attribute is checked, not the
-      * concrete value. This is appropriate for boolean attributes.
+      * concrete value.
       *
       * @param key     the key of the option
       * @param attrKey the key of the attribute
@@ -288,14 +280,15 @@ object CliHelpGenerator {
   type HelpContextUpdater = CliHelpContext => CliHelpContext
 
   /**
-    * Returns a ''HelpContextUpdater'' that sets a boolean attribute in the
-    * [[CliHelpContext]].
+    * Returns a ''HelpContextUpdater'' that adds an attribute with its key and
+    * value to the [[CliHelpContext]].
     *
-    * @param attrKey the key of the attribute to be set
+    * @param attrKey   the key of the attribute to be added
+    * @param attrValue the value of the attribute
     * @return the updater that sets exactly this attribute
     */
-  def setAttributeUpdater(attrKey: String): HelpContextUpdater =
-    context => context setAttribute attrKey
+  def addAttributeUpdater(attrKey: String, attrValue: String): HelpContextUpdater =
+    context => context.addAttribute(attrKey, attrValue)
 
   /**
     * Checks whether the option whose attributes are provided belongs to the
@@ -317,6 +310,17 @@ object CliHelpGenerator {
     */
   def groups(attrs: OptionAttributes): Set[String] =
     attrs.attributes.get(AttrGroup).map(_.split(GroupSeparator).toSet) getOrElse Set.empty
+
+  /**
+    * Generates a help text for the multiplicity of an option. This is a string
+    * like 1..*, 0..1, 0..* depending on the meta data of the option, e.g.
+    * whether it is optional or can have only a single value.
+    *
+    * @param attrs the ''OptionAttributes'' of the option in question
+    * @return a string with the multiplicity
+    */
+  def multiplicity(attrs: OptionAttributes): String =
+    attrs.attributes.getOrElse(AttrMultiplicity, DefaultMultiplicity)
 
   /**
     * A function to determine the signum of an index which can be either

@@ -211,7 +211,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     nextContext.options(Key) should be(ExpAttrs)
   }
 
-  it should "set a single-valued attribute for options with a single value" in {
+  it should "set a multiplicity attribute for options with a single value" in {
     val Key2 = Key + "_other"
     val proc1 = optionValue(Key).single
     val proc2 = optionValue(Key2)
@@ -221,8 +221,8 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     } yield List(v1, v2)
 
     val helpContext = generateHelpContext(proc)
-    helpContext.hasAttribute(Key, CliHelpGenerator.AttrSingleValue) shouldBe true
-    helpContext.hasAttribute(Key2, CliHelpGenerator.AttrSingleValue) shouldBe false
+    helpContext.options(Key).attributes(CliHelpGenerator.AttrMultiplicity) shouldBe "0..1"
+    helpContext.hasAttribute(Key2, CliHelpGenerator.AttrMultiplicity) shouldBe false
   }
 
   it should "support querying a boolean attribute for a non-existing option" in {
@@ -231,7 +231,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     helpContext.hasAttribute(Key, "foo") shouldBe false
   }
 
-  it should "set a mandatory attribute for mandatory options" in {
+  it should "set a multiplicity attribute for mandatory options" in {
     val Key2 = Key + "_optional"
     val proc1 = optionValue(Key).single.mandatory
     val proc2 = optionValue(Key2).single
@@ -241,8 +241,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     } yield List(v1, v2)
 
     val helpContext = generateHelpContext(proc)
-    helpContext.hasAttribute(Key, CliHelpGenerator.AttrMandatory) shouldBe true
-    helpContext.hasAttribute(Key2, CliHelpGenerator.AttrMandatory) shouldBe false
+    helpContext.options(Key).attributes(CliHelpGenerator.AttrMultiplicity) shouldBe "1..1"
   }
 
   it should "support groups for conditional options" in {
@@ -320,7 +319,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     CliHelpGenerator.isInGroup(attr, "someGroup") shouldBe false
   }
 
-  it should "returns the groups of an option if no groups are available" in {
+  it should "return the groups of an option if no groups are available" in {
     val attr = OptionAttributes(Map.empty)
 
     CliHelpGenerator.groups(attr) should have size 0
@@ -339,5 +338,37 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val attr = helpContext.options(Key2)
     CliHelpGenerator.isInGroup(attr, "g2") shouldBe true
     verifyZeroInteractions(reader)
+  }
+
+  it should "set the multiplicity attribute if it is defined" in {
+    val proc = optionValue(Key).multiplicity(1, 4)
+
+    val helpContext = generateHelpContext(proc)
+    val attr = helpContext.options(Key)
+    attr.attributes(CliHelpGenerator.AttrMultiplicity) should be("1..4")
+  }
+
+  it should "handle an unrestricted multiplicity" in {
+    val proc = optionValue(Key).multiplicity()
+
+    val helpContext = generateHelpContext(proc)
+    val attr = helpContext.options(Key)
+    attr.attributes(CliHelpGenerator.AttrMultiplicity) should be("0..*")
+  }
+
+  it should "generate a multiplicity if no attribute is defined" in {
+    val proc = optionValue(Key)
+    val helpContext = generateHelpContext(proc)
+    val attr = helpContext.options(Key)
+
+    CliHelpGenerator.multiplicity(attr) should be("0..*")
+  }
+
+  it should "generate a multiplicity from the attribute value" in {
+    val proc = optionValue(Key).multiplicity(1, 2)
+    val helpContext = generateHelpContext(proc)
+    val attr = helpContext.options(Key)
+
+    CliHelpGenerator.multiplicity(attr) should be("1..2")
   }
 }

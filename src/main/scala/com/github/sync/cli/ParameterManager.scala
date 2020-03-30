@@ -306,6 +306,20 @@ object ParameterManager {
       asSingleOptionValue(proc)
 
     /**
+      * Returns a ''CliProcessor'' that checks whether the number of values
+      * passed to the current option corresponds to the multiplicity specified
+      * by this function. If too few or too many values are provided, the
+      * processor fails with a corresponding exception.
+      *
+      * @param atLeast the minimum number of values
+      * @param atMost  the maximum number of values (a value less than 0 means
+      *                that there is no restriction)
+      * @return the ''CliProcessor'' enforcing the multiplicity
+      */
+    def multiplicity(atLeast: Int = 0, atMost: Int = -1): CliProcessor[OptionValue[A]] =
+      withMultiplicity(proc, atLeast, atMost)
+
+    /**
       * Returns a ''CliProcessor'' that yields a boolean result indicating
       * whether the option extracted by the managed processor has a value. This
       * is useful for instance when constructing conditional processors; so
@@ -762,7 +776,7 @@ object ParameterManager {
         if (values.size > 1)
           Failure(paramException(proc.key, s"should have a single value, but has multiple values - $optionValue"))
         else Success(values.headOption)
-      })(CliHelpGenerator.setAttributeUpdater(CliHelpGenerator.AttrSingleValue))
+      })(CliHelpGenerator.addAttributeUpdater(CliHelpGenerator.AttrMultiplicity, "0..1"))
 
   /**
     * Returns a processor that enforces an option to have a defined value. If
@@ -777,7 +791,30 @@ object ParameterManager {
     proc.mapWithHelpContext(_.flatMap {
       case Some(v) => Success(v)
       case None => Failure(paramException(proc.key, "mandatory option has no value"))
-    })(CliHelpGenerator.setAttributeUpdater(CliHelpGenerator.AttrMandatory))
+    })(CliHelpGenerator.addAttributeUpdater(CliHelpGenerator.AttrMultiplicity, "1..1"))
+
+  /**
+    * Returns a processor that enforces the given multiplicity for the values
+    * assigned to the current option. A failure is generated if too few or too
+    * many values have been provided. Otherwise, no changes on the values are
+    * made.
+    *
+    * @param proc    the processor providing the original value
+    * @param atLeast the minimum number of values
+    * @param atMost  the maximum number of values (less than 0 for unlimited)
+    * @tparam A the result type
+    * @return the processor checking the multiplicity
+    */
+  def withMultiplicity[A](proc: CliProcessor[OptionValue[A]], atLeast: Int, atMost: Int):
+  CliProcessor[OptionValue[A]] =
+    proc.mapWithHelpContext(_.flatMap { values =>
+      if (values.size < atLeast)
+        Failure(paramException(proc.key, s"option must have at least $atLeast values"))
+      else if (values.size > atMost)
+        Failure(paramException(proc.key, s"option must have at most $atMost values"))
+      else Success(values)
+    })(CliHelpGenerator.addAttributeUpdater(CliHelpGenerator.AttrMultiplicity,
+      s"$atLeast..${upperMultiplicity(atMost)}"))
 
   /**
     * Returns a processor that modifies the result of another processor by
@@ -1474,4 +1511,15 @@ object ParameterManager {
     */
   private def contextForMetaDataRun(helpContext: CliHelpContext): ParameterContext =
     ParameterContext(Parameters(Map.empty, Set.empty), helpContext, DummyConsoleReader)
+
+  /**
+    * Returns the string to indicate the upper bound of the multiplicity.
+    * Negative values are handled in a special way as they indicate no
+    * restriction.
+    *
+    * @param atMost the upper bound of the multiplicity
+    * @return the string to be used for this value
+    */
+  private def upperMultiplicity(atMost: Int): String =
+    if (atMost > 0) atMost.toString else CliHelpGenerator.MultiplicityUnrestricted
 }

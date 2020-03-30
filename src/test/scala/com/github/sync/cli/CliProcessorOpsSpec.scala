@@ -216,6 +216,39 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
     }
   }
 
+  it should "support checking for the multiplicity of a processor" in {
+    val proc = optionValue(KeyNumbers).toInt.multiplicity(atMost = NumberValues.size)
+
+    val result = runProcessor(proc)
+    result should be(Success(NumberValues))
+  }
+
+  it should "report a failure if not enough values are present" in {
+    val proc = optionValue(KeyAnswer).multiplicity(atLeast = 2)
+
+    val result = runProcessor(proc)
+    result match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(KeyAnswer)
+        exception.getMessage should include("at least 2")
+      case r => fail("Unexpected result: " + r)
+    }
+  }
+
+  it should "report a failure if too many values are present" in {
+    val proc = optionValue(KeyNumbers).multiplicity(atMost = NumberValues.size - 1)
+
+    val result = runProcessor(proc)
+    result match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(KeyNumbers)
+        exception.getMessage should include("at most " + (NumberValues.size - 1))
+      case r => fail("Unexpected result: " + r)
+    }
+  }
+
   it should "support setting a fallback value for an option" in {
     val proc = optionValue(UndefinedKey).fallback(constantOptionValue(NumberValue.toString))
       .toInt.single.mandatory
