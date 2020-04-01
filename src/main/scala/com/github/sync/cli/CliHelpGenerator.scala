@@ -16,6 +16,8 @@
 
 package com.github.sync.cli
 
+import java.util.Locale
+
 import scala.collection.SortedSet
 
 /**
@@ -48,6 +50,19 @@ object CliHelpGenerator {
   final val AttrGroup = "group"
 
   /**
+    * The attribute defining the type of an option. This attribute contains the
+    * information whether an option is a regular option, a switch, or an input
+    * parameter.
+    */
+  final val AttrOptionType = "optionType"
+
+  /** Option type indicating a plain option. */
+  final val OptionTypeOption = "option"
+
+  /** Option type indicating an input parameter. */
+  final val OptionTypeInput = "input"
+
+  /**
     * A prefix for keys for input parameters that are generated. This is used
     * if for an input parameter no key has been provided explicitly. The index
     * of the input parameter is appended.
@@ -60,11 +75,29 @@ object CliHelpGenerator {
     */
   final val MultiplicityUnrestricted = "*"
 
+  /**
+    * A standard sort function for options that implements an alphabetic
+    * ordering (which is case-insensitive).
+    */
+  final val AlphabeticOptionSortFunc: OptionSortFunc = _.sortWith((d1, d2) => toUpper(d1.key) < toUpper(d2.key))
+
+  /** A standard filter function which accepts all options. */
+  final val AllFilterFunc: OptionFilter = _ => true
+
+  /** The default padding string to separate columns of the help text. */
+  final val DefaultPadding: String = "  "
+
   /** The separator string between group names. */
   private final val GroupSeparator = ","
 
   /** The multiplicity of an option if no meta data about it is available. */
   private final val DefaultMultiplicity = "0..*"
+
+  /**
+    * The platform-specific line separator. This is used as line feed character
+    * between two lines of the help text.
+    */
+  private val CR = System.lineSeparator()
 
   /**
     * A data class storing information about a single command line option.
@@ -108,6 +141,14 @@ object CliHelpGenerator {
   }
 
   /**
+    * A data class containing all the information available for a CLI option.
+    *
+    * @param key        the key of the option
+    * @param attributes a data object with the attributes of this option
+    */
+  case class OptionMetaData(key: String, attributes: OptionAttributes)
+
+  /**
     * A class for storing and updating meta information about command line
     * options that can be used to generate help or usage texts.
     *
@@ -138,7 +179,7 @@ object CliHelpGenerator {
       * @return the updated ''CliHelpContext''
       */
     def addOption(key: String, text: Option[String]): CliHelpContext =
-      contextWithOption(key, text, inputs)
+      contextWithOption(key, text, OptionTypeOption, inputs)
 
     /**
       * Adds data about an input parameter to this object. This function works
@@ -153,7 +194,7 @@ object CliHelpGenerator {
     def addInputParameter(index: Int, optKey: Option[String], text: Option[String]): CliHelpContext = {
       val key = optKey.getOrElse(KeyInput + index)
       val inputRef = InputParameterRef(index, key)
-      contextWithOption(key, text, inputs + inputRef)
+      contextWithOption(key, text, CliHelpGenerator.OptionTypeInput, inputs + inputRef)
     }
 
     /**
@@ -234,18 +275,19 @@ object CliHelpGenerator {
       * Creates a new ''CliHelpContext'' with an additional option as defined by
       * the parameters.
       *
-      * @param key       the option key
-      * @param text      the help text for the option
-      * @param inputRefs the input data for the new context
+      * @param key        the option key
+      * @param text       the help text for the option
+      * @param optionType the type of the option
+      * @param inputRefs  the input data for the new context
       * @return the updated ''CliHelpContext''
       */
-    private def contextWithOption(key: String, text: Option[String], inputRefs: SortedSet[InputParameterRef]):
-    CliHelpContext = {
+    private def contextWithOption(key: String, text: Option[String], optionType: String,
+                                  inputRefs: SortedSet[InputParameterRef]): CliHelpContext = {
       val existingAttrs = options.get(key).map(_.attributes) getOrElse Map.empty
       val existingGroups = existingAttrs.getOrElse(AttrGroup, "")
       val attrs = addOptionalAttribute(
         addOptionalAttribute(Map.empty, AttrHelpText, text),
-        AttrGroup, groupAttribute.map(existingGroups + _))
+        AttrGroup, groupAttribute.map(existingGroups + _)) + (AttrOptionType -> optionType)
       val help = OptionAttributes(existingAttrs ++ attrs)
       new CliHelpContext(options + (key -> help), inputRefs, optCurrentKey = Some(key), groups)
     }
@@ -312,6 +354,27 @@ object CliHelpGenerator {
     attrs.attributes.get(AttrGroup).map(_.split(GroupSeparator).toSet) getOrElse Set.empty
 
   /**
+    * Type definition of a function that sorts the list of options in the
+    * generated help text.
+    */
+  type OptionSortFunc = Seq[OptionMetaData] => Seq[OptionMetaData]
+
+  /**
+    * Type definition for a predicate to filter options from a
+    * [[CliHelpContext]].
+    */
+  type OptionFilter = OptionMetaData => Boolean
+
+  /**
+    * Type definition of a function that generates a column of a help text of
+    * an option. The column can consist of multiple lines of text hence, the
+    * result is a list of strings). For each option, multiple columns can be
+    * generated that are defined by specifying the corresponding generator
+    * functions.
+    */
+  type ColumnGenerator = OptionMetaData => List[String]
+
+  /**
     * Generates a help text for the multiplicity of an option. This is a string
     * like 1..*, 0..1, 0..* depending on the meta data of the option, e.g.
     * whether it is optional or can have only a single value.
@@ -323,6 +386,61 @@ object CliHelpGenerator {
     attrs.attributes.getOrElse(AttrMultiplicity, DefaultMultiplicity)
 
   /**
+    * Generates a tabular help text for the command line options of an
+    * application. For each option, a number of columns is displayed that are
+    * defined by a sequence of ''ColumnGenerator'' functions. The table is
+    * converted to a string that can be directly printed to the console. By
+    * passing in additional parameters, the output can be customized.
+    *
+    * @param context    the ''CliHelpContext'' with all meta data about options
+    * @param sortFunc   a function to sort the list of options; per default,
+    *                   options are sorted alphabetically ignoring case
+    * @param filterFunc a function to filter the options to be displayed; per
+    *                   default, all options are shown
+    * @param padding    a padding string inserted between columns
+    * @param columns    the functions to generate the single columns
+    * @return a string with the help for command line options
+    */
+  def generateOptionsHelp(context: CliHelpContext,
+                          sortFunc: OptionSortFunc = AlphabeticOptionSortFunc,
+                          filterFunc: OptionFilter = AllFilterFunc,
+                          padding: String = DefaultPadding)
+                         (columns: ColumnGenerator*): String = {
+
+    // generates the columns of an option by applying the column generators
+    def generateColumns(data: OptionMetaData): Seq[List[String]] =
+      columns.map(_.apply(data))
+
+    val metaData = context.options.map(e => OptionMetaData(e._1, e._2))
+      .filter(filterFunc)
+      .toSeq
+    val rows = sortFunc(metaData)
+      .map(generateColumns)
+    val widths = rows map columnWidths
+    val maxWidths = widths.transpose.map(_.max)
+    val spaces = paddingString(maxWidths)
+
+    // generates the row for an option that can consist of multiple lines;
+    // the lines have to be correctly aligned and padded
+    def generateRow(columns: Seq[List[String]]): Seq[String] = {
+      val maxLineCount = columns.map(_.size).max
+      val emptyList = List.fill(maxLineCount)("")
+      val filledColumns = columns.map(list => growList(list, maxLineCount, emptyList))
+
+      filledColumns.transpose.map(_.zip(maxWidths))
+        .map { line =>
+          line.map { t =>
+            val cell = t._1
+            cell + spaces.substring(0, t._2 - cell.length)
+          }.mkString(padding)
+        }
+    }
+
+    rows.flatMap(generateRow)
+      .mkString(CR)
+  }
+
+  /**
     * A function to determine the signum of an index which can be either
     * positive or negative.
     *
@@ -331,6 +449,52 @@ object CliHelpGenerator {
     */
   private def sig(i: Int): Int =
     if (i < 0) -1 else 1
+
+  /**
+    * Calculates the width of all the columns of a single row in a table of
+    * option data.
+    *
+    * @param row the row (consisting of multiple columns)
+    * @return a sequence with the widths of the columns
+    */
+  private def columnWidths(row: Seq[List[String]]): Seq[Int] =
+    row map cellWidth
+
+  /**
+    * Calculates the maximum width of a cell in a table of option data. The
+    * cell can consist of multiple lines. The maximum line length is returned.
+    *
+    * @param data the data in the cell
+    * @return the length of this cell
+    */
+  private def cellWidth(data: List[String]): Int =
+    data.map(_.length).max
+
+  /**
+    * Makes sure that a list has the given size by appending elements of a list
+    * with empty elements.
+    *
+    * @param list      the list to be manipulated
+    * @param toSize    the desired target size
+    * @param emptyList a list containing empty elements
+    * @return the list with the target size
+    */
+  private def growList(list: List[String], toSize: Int, emptyList: List[String]): List[String] =
+    if (list.size >= toSize) list
+    else list ++ emptyList.slice(0, toSize - list.size)
+
+  /**
+    * Generates a string with a number of spaces that is used to pad the cells
+    * of a table to a certain length. The length of the string is determined
+    * from the maximum column width.
+    *
+    * @param colWidths the column widths
+    * @return the padding string
+    */
+  private def paddingString(colWidths: Seq[Int]): String = {
+    val maxSpaces = colWidths.max
+    " " * maxSpaces
+  }
 
   /**
     * Adds an attribute and its value to the given map of attributes only if
@@ -344,4 +508,12 @@ object CliHelpGenerator {
   private def addOptionalAttribute(attributes: Map[String, String], key: String, optValue: Option[String]):
   Map[String, String] =
     optValue map (value => attributes + (key -> value)) getOrElse attributes
+
+  /**
+    * Helper function to convert a string to uppercase for comparison.
+    *
+    * @param s the string
+    * @return the string as uppercase
+    */
+  private def toUpper(s: String): String = s.toUpperCase(Locale.ROOT)
 }

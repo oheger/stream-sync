@@ -16,7 +16,9 @@
 
 package com.github.sync.cli
 
-import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, InputParameterRef, OptionAttributes}
+import java.util.Locale
+
+import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, ColumnGenerator, InputParameterRef, OptionAttributes, OptionFilter, OptionMetaData, OptionSortFunc}
 import com.github.sync.cli.ParameterManager._
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,6 +35,23 @@ object CliProcessorHelpSpec {
   /** A test help text. */
   private val HelpText = "Test help text for the test help option."
 
+  /** The platform-specific line separator. */
+  private val CR = System.lineSeparator()
+
+  /** A test column generator function. */
+  private val TestColumnGenerator: ColumnGenerator =
+    data => List(data.toString)
+
+  /** A test column generator function that returns the option key. */
+  private val KeyColumnGenerator: ColumnGenerator =
+    data => List(data.key)
+
+  /**
+    * A test column generator function that returns the multi-line help text.
+    */
+  private val HelpColumnGenerator: ColumnGenerator =
+    data => data.attributes.attributes(CliHelpGenerator.AttrHelpText).split(CR).toList
+
   /**
     * Runs the given ''CliProcessor'' and returns the resulting help context.
     *
@@ -45,6 +64,71 @@ object CliProcessorHelpSpec {
     implicit val reader: ConsoleReader = optReader getOrElse DefaultConsoleReader
     val (_, ctx) = ParameterManager.runProcessor(proc, params)
     ctx.helpContext
+  }
+
+  /**
+    * Helper function to obtain the value of an attribute of an option. Throws
+    * an exception if the option or the attribute is not present.
+    *
+    * @param helpContext the helper context
+    * @param optionKey   the option key
+    * @param attrKey     the attribute key
+    * @return the value of this attribute
+    */
+  private def fetchAttribute(helpContext: CliHelpContext, optionKey: String, attrKey: String): String =
+    helpContext.options(optionKey).attributes(attrKey)
+
+  /**
+    * Generates the key of the test option with the given index.
+    *
+    * @param idx the index of the test option
+    * @return the key for this option
+    */
+  private def testKey(idx: Int): String = s"$Key$idx"
+
+  /**
+    * Generates test meta data for an option.
+    *
+    * @param idx the index of the test option
+    * @return the test meta data
+    */
+  private def testOptionMetaData(idx: Int): OptionMetaData = {
+    val key = testKey(idx)
+    testOptionMetaData(key, HelpText + key)
+  }
+
+  /**
+    * Generates test meta data based on the given parameters.
+    *
+    * @param key  the option key
+    * @param help the help text
+    * @return the resulting meta data
+    */
+  private def testOptionMetaData(key: String, help: String): OptionMetaData = {
+    val attrs = Map(CliHelpGenerator.AttrHelpText -> help,
+      CliHelpGenerator.AttrOptionType -> CliHelpGenerator.OptionTypeOption)
+    OptionMetaData(key, OptionAttributes(attrs))
+  }
+
+  /**
+    * Creates a new help context with standard settings and the given options.
+    *
+    * @param options the options
+    * @return the help context
+    */
+  private def createHelpContext(options: Map[String, OptionAttributes] = Map.empty): CliHelpContext =
+    new CliHelpContext(options, SortedSet.empty, None, List.empty)
+
+  /**
+    * Generates a help context object that contains a number of test options.
+    *
+    * @param count the number of options to generate
+    * @return the test help context
+    */
+  private def helpContextWithOptions(count: Int): CliHelpContext = {
+    val options = (1 to count).map(testOptionMetaData)
+      .map(data => (data.key, data.attributes)).toMap
+    createHelpContext(options)
   }
 }
 
@@ -61,8 +145,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val helpContext = generateHelpContext(proc)
     helpContext.options.keys should contain only Key
-    val helpData = helpContext.options(Key)
-    helpData.attributes should be(Map(CliHelpGenerator.AttrHelpText -> HelpText))
+    fetchAttribute(helpContext, Key, CliHelpGenerator.AttrHelpText) should be(HelpText)
   }
 
   it should "support a description for a constant value processor" in {
@@ -73,8 +156,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       .fallback(fallbackProc)
 
     val helpContext = generateHelpContext(proc)
-    val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> FallbackDesc))
+    fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(FallbackDesc)
   }
 
   it should "support a description for constant values" in {
@@ -84,8 +166,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       .fallback(valueProc)
 
     val helpContext = generateHelpContext(proc)
-    val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> ValueDesc))
+    fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(ValueDesc)
   }
 
   it should "support skipping a description for a constant value" in {
@@ -94,8 +175,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       .fallback(valueProc)
 
     val helpContext = generateHelpContext(proc)
-    val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should have size 0
+    helpContext.hasAttribute(Key, CliHelpGenerator.AttrFallbackValue) shouldBe false
   }
 
   it should "support a description for constant values via the DSL" in {
@@ -104,8 +184,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       .fallbackValuesWithDesc(Some(ValueDesc), "foo", "bar", "baz")
 
     val helpContext = generateHelpContext(proc)
-    val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> ValueDesc))
+    fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(ValueDesc)
   }
 
   it should "generate a description for constant values" in {
@@ -115,8 +194,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       .fallbackValues(Values.head, Values.tail: _*)
 
     val helpContext = generateHelpContext(proc)
-    val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> ValueDesc))
+    fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(ValueDesc)
   }
 
   it should "generate a description for a single constant value" in {
@@ -125,8 +203,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       .fallbackValues(Value)
 
     val helpContext = generateHelpContext(proc)
-    val optionAttrs = helpContext.options(Key)
-    optionAttrs.attributes should be(Map(CliHelpGenerator.AttrFallbackValue -> Value))
+    fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(Value)
   }
 
   it should "handle an uninitialized help context gracefully" in {
@@ -204,11 +281,11 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   it should "merge the attributes of command line options that are added multiple times" in {
     val Attrs1 = OptionAttributes(Map("attr1" -> "value1", "attr2" -> "value2",
       CliHelpGenerator.AttrHelpText -> "old help"))
-    val ExpAttrs = OptionAttributes(Attrs1.attributes + (CliHelpGenerator.AttrHelpText -> HelpText))
+    val ExpAttrs = Attrs1.attributes + (CliHelpGenerator.AttrHelpText -> HelpText)
     val helpContext = new CliHelpContext(Map(Key -> Attrs1), SortedSet.empty, None, Nil)
 
     val nextContext = helpContext.addOption(Key, Some(HelpText))
-    nextContext.options(Key) should be(ExpAttrs)
+    nextContext.options(Key).attributes should contain allElementsOf ExpAttrs
   }
 
   it should "set a multiplicity attribute for options with a single value" in {
@@ -370,5 +447,109 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val attr = helpContext.options(Key)
 
     CliHelpGenerator.multiplicity(attr) should be("1..2")
+  }
+
+  it should "set the option type attribute for a plain option" in {
+    val proc = optionValue(Key)
+
+    val helpContext = generateHelpContext(proc)
+    fetchAttribute(helpContext, Key, CliHelpGenerator.AttrOptionType) should be(CliHelpGenerator.OptionTypeOption)
+  }
+
+  it should "set the option type attribute for an input parameter" in {
+    val proc = inputValue(1, optKey = Some(Key))
+
+    val helpContext = generateHelpContext(proc)
+    fetchAttribute(helpContext, Key, CliHelpGenerator.AttrOptionType) should be(CliHelpGenerator.OptionTypeInput)
+  }
+
+  it should "generate option help texts with default settings" in {
+    val Count = 8
+    val ExpText = (1 to Count).map(testOptionMetaData).mkString(CR)
+    val helpContext = helpContextWithOptions(Count)
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext)(TestColumnGenerator)
+    text should be(ExpText)
+  }
+
+  it should "sort options in a case-insensitive manner" in {
+    val Count = 4
+    val KeyMin = testKey(0).toLowerCase(Locale.ROOT)
+    val KeyMax = testKey(Count + 1).toUpperCase(Locale.ROOT)
+    val ExpText = testOptionMetaData(KeyMin, HelpText + KeyMin) + CR +
+      (1 to Count).map(testOptionMetaData).mkString(CR) + CR +
+      testOptionMetaData(KeyMax, HelpText + KeyMax)
+    val helpContext = helpContextWithOptions(Count)
+      .addOption(KeyMin, Some(HelpText + KeyMin))
+      .addOption(KeyMax, Some(HelpText + KeyMax))
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext)(TestColumnGenerator)
+    text should be(ExpText)
+  }
+
+  it should "support a custom sort function for options" in {
+    val Count = 8
+    val sortFunc: OptionSortFunc = _.sortWith(_.key > _.key) // reverse sort
+    val ExpText = (1 to Count).map(testOptionMetaData).reverse.mkString(CR)
+    val helpContext = helpContextWithOptions(Count)
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext, sortFunc = sortFunc)(TestColumnGenerator)
+    text should be(ExpText)
+  }
+
+  it should "support filtering the options to generate help information for" in {
+    val CountAll = 8
+    val CountFiltered = 4
+    val ExpText = (1 to CountFiltered).map(testOptionMetaData).mkString(CR)
+    val helpContext = helpContextWithOptions(CountAll)
+    val filterFunc: OptionFilter = _.key <= testKey(CountFiltered)
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext, filterFunc = filterFunc)(TestColumnGenerator)
+    text should be(ExpText)
+  }
+
+  it should "support multiple columns for the option help" in {
+    val helpContext = createHelpContext()
+      .addOption(Key, Some(HelpText))
+    val ExpText = Key + CliHelpGenerator.DefaultPadding + HelpText
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext)(KeyColumnGenerator, HelpColumnGenerator)
+    text should be(ExpText)
+  }
+
+  it should "align the columns for the option help based on their maximum length" in {
+    val ShortHelpText = "short help"
+    val helpContext = createHelpContext()
+      .addOption(testKey(1), Some(ShortHelpText))
+      .addOption(testKey(2), Some(HelpText))
+    val ExpText = ShortHelpText + (" " * (HelpText.length - ShortHelpText.length)) +
+      CliHelpGenerator.DefaultPadding + testKey(1) + CR +
+      HelpText + CliHelpGenerator.DefaultPadding + testKey(2)
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext)(HelpColumnGenerator, KeyColumnGenerator)
+    text should be(ExpText)
+  }
+
+  it should "support multiple lines in columns for option help" in {
+    val spaceKey = " " * Key.length
+    val helpContext = createHelpContext()
+      .addOption(Key, Some("Line1" + CR + "Line2" + CR + "Line3"))
+    val ExpText = Key + CliHelpGenerator.DefaultPadding + "Line1" + CR +
+      spaceKey + CliHelpGenerator.DefaultPadding + "Line2" + CR +
+      spaceKey + CliHelpGenerator.DefaultPadding + "Line3"
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext)(KeyColumnGenerator, HelpColumnGenerator)
+    text should be(ExpText)
+  }
+
+  it should "support changing the padding string for the option help table" in {
+    val OtherPadding = " | "
+    val helpContext = createHelpContext()
+      .addOption(Key, Some(HelpText))
+    val ExpText = Key + OtherPadding + HelpText
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext, padding = OtherPadding)(KeyColumnGenerator,
+      HelpColumnGenerator)
+    text should be(ExpText)
   }
 }
