@@ -375,17 +375,6 @@ object CliHelpGenerator {
   type ColumnGenerator = OptionMetaData => List[String]
 
   /**
-    * Generates a help text for the multiplicity of an option. This is a string
-    * like 1..*, 0..1, 0..* depending on the meta data of the option, e.g.
-    * whether it is optional or can have only a single value.
-    *
-    * @param attrs the ''OptionAttributes'' of the option in question
-    * @return a string with the multiplicity
-    */
-  def multiplicity(attrs: OptionAttributes): String =
-    attrs.attributes.getOrElse(AttrMultiplicity, DefaultMultiplicity)
-
-  /**
     * Generates a tabular help text for the command line options of an
     * application. For each option, a number of columns is displayed that are
     * defined by a sequence of ''ColumnGenerator'' functions. The table is
@@ -439,6 +428,17 @@ object CliHelpGenerator {
     rows.flatMap(generateRow)
       .mkString(CR)
   }
+
+  /**
+    * Returns a ''ColumnGenerator'' function that produces a single text line
+    * from the value of the attribute specified. If the attribute is not
+    * present, result is an empty list.
+    *
+    * @param attrKey the key of the attribute to be read
+    * @return the ''ColumnGenerator'' reading this attribute
+    */
+  def attributeColumnGenerator(attrKey: String): ColumnGenerator = data =>
+    data.attributes.attributes.get(attrKey) map (List(_)) getOrElse List.empty
 
   /**
     * A function to determine the signum of an index which can be either

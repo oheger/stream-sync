@@ -433,22 +433,6 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     attr.attributes(CliHelpGenerator.AttrMultiplicity) should be("0..*")
   }
 
-  it should "generate a multiplicity if no attribute is defined" in {
-    val proc = optionValue(Key)
-    val helpContext = generateHelpContext(proc)
-    val attr = helpContext.options(Key)
-
-    CliHelpGenerator.multiplicity(attr) should be("0..*")
-  }
-
-  it should "generate a multiplicity from the attribute value" in {
-    val proc = optionValue(Key).multiplicity(1, 2)
-    val helpContext = generateHelpContext(proc)
-    val attr = helpContext.options(Key)
-
-    CliHelpGenerator.multiplicity(attr) should be("1..2")
-  }
-
   it should "set the option type attribute for a plain option" in {
     val proc = optionValue(Key)
 
@@ -551,5 +535,19 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val text = CliHelpGenerator.generateOptionsHelp(helpContext, padding = OtherPadding)(KeyColumnGenerator,
       HelpColumnGenerator)
     text should be(ExpText)
+  }
+
+  it should "provide an attribute ColumnGenerator that handles undefined attributes" in {
+    val data = testOptionMetaData(1)
+    val generator = CliHelpGenerator.attributeColumnGenerator(testKey(2))
+
+    generator(data) should have size 0
+  }
+
+  it should "provide a ColumnGenerator that reads the value of an attribute" in {
+    val data = testOptionMetaData(Key, HelpText)
+    val generator = CliHelpGenerator.attributeColumnGenerator(CliHelpGenerator.AttrHelpText)
+
+    generator(data) should be(List(HelpText))
   }
 }
