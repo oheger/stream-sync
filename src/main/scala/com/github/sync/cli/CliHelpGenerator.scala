@@ -441,6 +441,25 @@ object CliHelpGenerator {
     data.attributes.attributes.get(attrKey) map (List(_)) getOrElse List.empty
 
   /**
+    * Returns a ''ColumnGenerator'' function that applies a default value to
+    * another generator function. The passed in function is invoked first. If
+    * it does not yield any values, the default values are returned.
+    *
+    * @param generator     the generator function to decorate
+    * @param defaultValues the default values
+    * @return the ''ColumnGenerator'' applying default values
+    */
+  def defaultValueColumnGenerator(generator: ColumnGenerator, defaultValues: String*): ColumnGenerator = {
+    val defaultList = defaultValues.toList
+    data =>
+      generator(data) match {
+        case l@_ :: _ => l
+        case _ => defaultList
+      }
+    }
+  }
+
+  /**
     * A function to determine the signum of an index which can be either
     * positive or negative.
     *

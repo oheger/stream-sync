@@ -550,4 +550,21 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     generator(data) should be(List(HelpText))
   }
+
+  it should "provide a default values ColumnGenerator that returns the original value" in {
+    val data = testOptionMetaData(Key, HelpText)
+    val generator = CliHelpGenerator.defaultValueColumnGenerator(
+      CliHelpGenerator.attributeColumnGenerator(CliHelpGenerator.AttrHelpText), "foo", "bar")
+
+    generator(data) should be(List(HelpText))
+  }
+
+  it should "provide a default values ColumnGenerator that returns the defaults if necessary" in {
+    val data = testOptionMetaData(1)
+    val defaults = List("These", "are", "the", "default", "values")
+    val generator = CliHelpGenerator.defaultValueColumnGenerator(
+      CliHelpGenerator.attributeColumnGenerator(Key), defaults: _*)
+
+    generator(data) should be(defaults)
+  }
 }
