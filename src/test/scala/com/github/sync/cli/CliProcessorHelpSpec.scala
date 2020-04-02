@@ -567,4 +567,33 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     generator(data) should be(defaults)
   }
+
+  it should "provide a prefix generator that adds prefix data to another one" in {
+    val PrefixLines = List("A prefix line", "Another prefix line")
+    val PrefixText = ">>"
+    val ExpResult = PrefixLines ++ List(">>Line1", ">>Line2")
+    val orgGenerator: ColumnGenerator = _ => List("Line1", "Line2")
+
+    val generator = CliHelpGenerator.prefixColumnGenerator(orgGenerator, PrefixLines, Some(PrefixText))
+    generator(testOptionMetaData(1)) should be(ExpResult)
+  }
+
+  it should "provide a prefix generator that only adds prefix lines" in {
+    val data = testOptionMetaData(Key, HelpText)
+    val PrefixLines = List("", "p")
+    val ExpResult = PrefixLines ++ List(HelpText)
+    val orgGenerator = CliHelpGenerator.attributeColumnGenerator(CliHelpGenerator.AttrHelpText)
+
+    val generator = CliHelpGenerator.prefixColumnGenerator(orgGenerator, PrefixLines)
+    generator(data) should be(ExpResult)
+  }
+
+  it should "provide a prefix generator that returns no data if the wrapped generator yields no results" in {
+    val data = testOptionMetaData(42)
+    val orgGenerator = CliHelpGenerator.attributeColumnGenerator("nonExistingKey")
+
+    val generator = CliHelpGenerator.prefixColumnGenerator(orgGenerator,
+      prefixText = Some("prefix"), prefixLines = List("a", "b", "c"))
+    generator(data) should have size 0
+  }
 }

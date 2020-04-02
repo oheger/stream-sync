@@ -456,8 +456,29 @@ object CliHelpGenerator {
         case l@_ :: _ => l
         case _ => defaultList
       }
-    }
   }
+
+  /**
+    * Returns a ''ColumnGenerator'' function that allows adding prefix lines to
+    * or a prefix text to all lines of another generator function. This is
+    * useful for instance to add a caption to an attribute value. The prefix is
+    * added only if the decorated generator function yields a value; otherwise,
+    * this generator returns an empty list, too.
+    *
+    * @param generator   the generator function to decorate
+    * @param prefixLines a list with lines to add as prefix to the generator
+    * @param prefixText  a text to add as prefix to each original line
+    * @return the ''CliHelpGenerator'' generating a prefix
+    */
+  def prefixColumnGenerator(generator: ColumnGenerator, prefixLines: List[String] = Nil,
+                            prefixText: Option[String] = None): ColumnGenerator =
+    data =>
+      generator(data) match {
+        case l@_ :: _ =>
+          val lines = prefixText.fold(generator(data))(pref => l.map(pref + _))
+          prefixLines ++ lines
+        case l => l
+      }
 
   /**
     * A function to determine the signum of an index which can be either
