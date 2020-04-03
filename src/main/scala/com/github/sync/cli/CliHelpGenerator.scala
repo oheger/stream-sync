@@ -18,7 +18,9 @@ package com.github.sync.cli
 
 import java.util.Locale
 
+import scala.annotation.tailrec
 import scala.collection.SortedSet
+import scala.collection.mutable.ListBuffer
 
 /**
   * A module providing functionality related to the generation of help
@@ -481,6 +483,22 @@ object CliHelpGenerator {
       }
 
   /**
+    * Returns a ''ColumnGenerator'' function that wraps the text lines returned
+    * by another generator. The text lines returned by the decorated generator
+    * are split at newline characters. The resulting lines are wrapped at the
+    * given line length.
+    *
+    * @param generator  the generator function to decorate
+    * @param lineLength the line length for wrapping
+    * @return the ''ColumnGenerator'' doing wrapping
+    */
+  def wrapColumnGenerator(generator: ColumnGenerator, lineLength: Int): ColumnGenerator =
+    data =>
+      generator(data)
+        .flatMap(splitLines)
+        .flatMap(wrapLine(_, lineLength))
+
+  /**
     * Returns a ''ColumnGenerator'' function that composes the results of all
     * the passed in generators. Using this function, the cells of the tabular
     * option help can contain the data of multiple generators.
@@ -545,6 +563,56 @@ object CliHelpGenerator {
   private def paddingString(colWidths: Seq[Int]): String = {
     val maxSpaces = colWidths.max
     " " * maxSpaces
+  }
+
+  /**
+    * Splits a string at newline characters and returns a list with the single
+    * lines.
+    *
+    * @param s the string to be split
+    * @return a list with the lines in the string
+    */
+  private def splitLines(s: String): List[String] =
+    s.split("\n").toList
+
+  /**
+    * Determines the position where to wrap a string to adhere to the given
+    * line length and the start position of the next line. This function tries
+    * to find a space character at or before the line length. The space itself
+    * is skipped. If no space character can be found in the line, the wrap
+    * position is set to the maximum length. This function expects that the
+    * input string is longer than the line length.
+    *
+    * @param s      the string
+    * @param length the maximum line length
+    * @return the positions where to break the string and to start the next
+    *         line
+    */
+  private def wrapPositions(s: String, length: Int): (Int, Int) = {
+    val posSpace = s.lastIndexOf(" ", length)
+    if (posSpace <= 0) (length, length) else (posSpace, posSpace + 1)
+  }
+
+  /**
+    * Wraps the given string, so that lines are no longer than the line length
+    * specified. The lines are broken at space characters if possible.
+    *
+    * @param s      the string to be wrapped
+    * @param length the maximum line length
+    * @return the single wrapped lines of the string
+    */
+  private def wrapLine(s: String, length: Int): List[String] = {
+    @tailrec def doWrap(line: String, builder: ListBuffer[String]): List[String] =
+      if (line.length < length) {
+        builder += line
+        builder.toList
+      } else {
+        val (wrapPos, nextStart) = wrapPositions(line, length)
+        builder += line.substring(0, wrapPos)
+        doWrap(line.substring(nextStart), builder)
+      }
+
+    doWrap(s, ListBuffer.empty)
   }
 
   /**

@@ -608,4 +608,35 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val result = generator(data)
     result should be(List("v1", "v2", "v3"))
   }
+
+  it should "provide a ColumnGenerator that does line wrapping" in {
+    val text =
+      """|Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy
+         |eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam
+         |sea takimata sanctus est Lore ipsum dolor sit amet.""".stripMargin
+    val ExpResult = List("Lorem ipsum dolor sit amet,",
+      "consetetur sadipscing elitr,",
+      "sed diam nonumy",
+      "eirmod tempor invidunt ut",
+      "labore et dolore magna",
+      "aliquyam erat, sed diam",
+      "sea takimata sanctus est Lore",
+      "ipsum dolor sit amet."
+    )
+    val data = testOptionMetaData(Key, text)
+    val orgGenerator = CliHelpGenerator.attributeColumnGenerator(CliHelpGenerator.AttrHelpText)
+
+    val generator = CliHelpGenerator.wrapColumnGenerator(orgGenerator, 30)
+    generator(data) should be(ExpResult)
+  }
+
+  it should "provide a line wrapping ColumnGenerator that handles unbreakable strings" in {
+    val text = "supercalifragilisticexpialidocious"
+    val ExpResult = List("supercalifragilisticexpialidoc", "ious")
+    val data = testOptionMetaData(Key, text)
+    val orgGenerator = CliHelpGenerator.attributeColumnGenerator(CliHelpGenerator.AttrHelpText)
+
+    val generator = CliHelpGenerator.wrapColumnGenerator(orgGenerator, 30)
+    generator(data) should be(ExpResult)
+  }
 }
