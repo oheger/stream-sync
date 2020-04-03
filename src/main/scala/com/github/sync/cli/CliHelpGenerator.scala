@@ -481,6 +481,17 @@ object CliHelpGenerator {
       }
 
   /**
+    * Returns a ''ColumnGenerator'' function that composes the results of all
+    * the passed in generators. Using this function, the cells of the tabular
+    * option help can contain the data of multiple generators.
+    *
+    * @param generators the sequence of generator functions to combine
+    * @return the ''ColumnGenerator'' that composes these generators
+    */
+  def composeColumnGenerator(generators: ColumnGenerator*): ColumnGenerator =
+    data => generators.flatMap(g => g(data)).toList
+
+  /**
     * A function to determine the signum of an index which can be either
     * positive or negative.
     *

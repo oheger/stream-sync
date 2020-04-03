@@ -596,4 +596,16 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       prefixText = Some("prefix"), prefixLines = List("a", "b", "c"))
     generator(data) should have size 0
   }
+
+  it should "provide a ColumnGenerator that composes the results of other generators" in {
+    val attributes = Map("a1" -> "v1", "a2" -> "v2", "a3" -> "v3")
+    val data = OptionMetaData(Key, OptionAttributes(attributes))
+    val g1 = CliHelpGenerator.attributeColumnGenerator("a1")
+    val g2 = CliHelpGenerator.attributeColumnGenerator("a2")
+    val g3 = CliHelpGenerator.attributeColumnGenerator("a3")
+
+    val generator = CliHelpGenerator.composeColumnGenerator(g1, g2, g3)
+    val result = generator(data)
+    result should be(List("v1", "v2", "v3"))
+  }
 }
