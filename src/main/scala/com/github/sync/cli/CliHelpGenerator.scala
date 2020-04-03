@@ -77,6 +77,9 @@ object CliHelpGenerator {
     */
   final val MultiplicityUnrestricted = "*"
 
+  /** The prefix indicating a command line option. */
+  final val DefaultOptionPrefix = "--"
+
   /**
     * A standard sort function for options that implements an alphabetic
     * ordering (which is case-insensitive).
@@ -89,11 +92,11 @@ object CliHelpGenerator {
   /** The default padding string to separate columns of the help text. */
   final val DefaultPadding: String = "  "
 
+  /** The multiplicity of an option if no meta data about it is available. */
+  final val DefaultMultiplicity = "0..*"
+
   /** The separator string between group names. */
   private final val GroupSeparator = ","
-
-  /** The multiplicity of an option if no meta data about it is available. */
-  private final val DefaultMultiplicity = "0..*"
 
   /**
     * The platform-specific line separator. This is used as line feed character
@@ -441,6 +444,27 @@ object CliHelpGenerator {
     */
   def attributeColumnGenerator(attrKey: String): ColumnGenerator = data =>
     data.attributes.attributes.get(attrKey) map (List(_)) getOrElse List.empty
+
+  /**
+    * Returns a ''ColumnGenerator'' function that generates the name of the
+    * current command line option. This can be used for instance in the first
+    * column to display the option the following information is about.
+    *
+    * @param optionPrefix a prefix added to the option name
+    * @return the ''ColumnGenerator'' generating the option name
+    */
+  def optionNameColumnGenerator(optionPrefix: String = DefaultOptionPrefix): ColumnGenerator =
+    data => List(optionPrefix + data.key)
+
+  /**
+    * Returns a ''ColumnGenerator'' that renders the multiplicity attribute.
+    * This is a convenience function that correctly shows the default
+    * multiplicity if none is provided.
+    *
+    * @return the ''ColumnGenerator'' producing the options' multiplicity
+    */
+  def multiplicityColumnGenerator: ColumnGenerator =
+    defaultValueColumnGenerator(attributeColumnGenerator(AttrMultiplicity), DefaultMultiplicity)
 
   /**
     * Returns a ''ColumnGenerator'' function that applies a default value to

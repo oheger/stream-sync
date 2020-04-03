@@ -639,4 +639,35 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val generator = CliHelpGenerator.wrapColumnGenerator(orgGenerator, 30)
     generator(data) should be(ExpResult)
   }
+
+  it should "provide a ColumnGenerator for the option name" in {
+    val data = testOptionMetaData(Key, HelpText)
+
+    val generator = CliHelpGenerator.optionNameColumnGenerator()
+    generator(data) should contain only (CliHelpGenerator.DefaultOptionPrefix + Key)
+  }
+
+  it should "support customizing the prefixes for the option name column generator" in {
+    val Prefix = "/"
+    val data = testOptionMetaData(Key, HelpText)
+
+    val generator = CliHelpGenerator.optionNameColumnGenerator(Prefix)
+    generator(data) should contain only (Prefix + Key)
+  }
+
+  it should "provide a ColumnGenerator for the multiplicity of command line options" in {
+    val Multiplicity = "many"
+    val attributes = Map(CliHelpGenerator.AttrMultiplicity -> Multiplicity)
+    val data = OptionMetaData(Key, OptionAttributes(attributes))
+
+    val generator = CliHelpGenerator.multiplicityColumnGenerator
+    generator(data) should contain only Multiplicity
+  }
+
+  it should "provide a multiplicity ColumnGenerator that uses the correct default multiplicity" in {
+    val data = testOptionMetaData(1)
+
+    val generator = CliHelpGenerator.multiplicityColumnGenerator
+    generator(data) should contain only CliHelpGenerator.DefaultMultiplicity
+  }
 }
