@@ -670,4 +670,125 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val generator = CliHelpGenerator.multiplicityColumnGenerator
     generator(data) should contain only CliHelpGenerator.DefaultMultiplicity
   }
+
+  it should "provide a special sort function for input parameters" in {
+    val helpContext = createHelpContext()
+      .addInputParameter(1, Some("source"), None)
+      .addInputParameter(2, Some("destination"), None)
+      .addInputParameter(3, Some("flags"), None)
+    val ExpResult = List(OptionMetaData("source", helpContext.options("source")),
+      OptionMetaData("destination", helpContext.options("destination")),
+      OptionMetaData("flags", helpContext.options("flags")))
+
+    val result = CliHelpGenerator.inputParamSortFunc(helpContext)(helpContext.optionMetaData.toSeq)
+    result should be(ExpResult)
+  }
+
+  it should "handle non-input parameters in the special sort function" in {
+    val helpContext = createHelpContext()
+      .addInputParameter(1, Some("source"), None)
+      .addInputParameter(2, Some("destination"), None)
+      .addOption(Key, Some(HelpText))
+    val ExpResult = List(OptionMetaData("source", helpContext.options("source")),
+      OptionMetaData("destination", helpContext.options("destination")),
+      OptionMetaData(Key, helpContext.options(Key)))
+
+    val result = CliHelpGenerator.inputParamSortFunc(helpContext)(helpContext.optionMetaData.toSeq)
+    result should be(ExpResult)
+  }
+
+  it should "provide a filter function that filters for options" in {
+    val Key2 = "otherOptionKey"
+    val helpContext = createHelpContext()
+      .addOption(Key, Some(HelpText))
+      .addInputParameter(1, Some("ignored"), None)
+      .addOption(Key2, Some("other help"))
+    val ExpResult = List(OptionMetaData(Key2, helpContext.options(Key2)),
+      OptionMetaData(Key, helpContext.options(Key)))
+
+    val result = helpContext.optionMetaData.filter(CliHelpGenerator.OptionsFilterFunc)
+    result should contain theSameElementsAs ExpResult
+  }
+
+  it should "provide a filter function that filters for input parameters" in {
+    val Key2 = "testInput"
+    val helpContext = createHelpContext()
+      .addInputParameter(1, Some(Key), None)
+      .addOption("ignored", None)
+      .addInputParameter(2, Some(Key2), Some("text"))
+    val ExpResult = List(OptionMetaData(Key2, helpContext.options(Key2)),
+      OptionMetaData(Key, helpContext.options(Key)))
+
+    val result = helpContext.optionMetaData.filter(CliHelpGenerator.InputParamsFilterFunc)
+    result should contain theSameElementsAs ExpResult
+  }
+
+  it should "provide a filter function that accepts elements from a given group" in {
+    val Group = "TheGroup"
+    val helpContext = createHelpContext()
+      .addOption("ignored", Some("test"))
+      .startGroup(Group)
+      .addOption(Key, Some(HelpText))
+      .endGroup()
+      .startGroup("otherGroup")
+      .addOption("ignored2", None)
+    val ExpResult = OptionMetaData(Key, helpContext.options(Key))
+
+    val result = helpContext.optionMetaData.filter(CliHelpGenerator.groupFilterFunc(Group))
+    result should contain only ExpResult
+  }
+
+  it should "provide a filter function that accepts elements not assigned to any group" in {
+    val helpContext = createHelpContext()
+      .addOption(Key, Some(HelpText))
+      .startGroup("anyGroup")
+      .addOption("ignored", Some("test"))
+    val ExpResult = OptionMetaData(Key, helpContext.options(Key))
+
+    val result = helpContext.optionMetaData.filter(CliHelpGenerator.UnassignedGroupFilterFunc)
+    result should contain only ExpResult
+  }
+
+  it should "allow combining filters with AND semantics" in {
+    val helpContext = createHelpContext()
+      .addOption(Key, Some(HelpText))
+      .addInputParameter(1, None, None)
+      .startGroup("anyGroup")
+      .addOption("ignored", Some("foo"))
+    val ExpResult = OptionMetaData(Key, helpContext.options(Key))
+
+    val filter = CliHelpGenerator.andFilter(CliHelpGenerator.OptionsFilterFunc,
+      CliHelpGenerator.UnassignedGroupFilterFunc)
+    val result = helpContext.optionMetaData.filter(filter)
+    result should contain only ExpResult
+  }
+
+  it should "allow combining filters with OR semantics" in {
+    val KeyInput = "myInput"
+    val Group = "ImportantGroup"
+    val helpContext = createHelpContext()
+      .addOption("ignored", Some("foo"))
+      .addInputParameter(1, Some(KeyInput), None)
+      .startGroup(Group)
+      .addOption(Key, Some(HelpText))
+    val ExpResult = List(OptionMetaData(KeyInput, helpContext.options(KeyInput)),
+      OptionMetaData(Key, helpContext.options(Key)))
+
+    val filter = CliHelpGenerator.orFilter(CliHelpGenerator.InputParamsFilterFunc,
+      CliHelpGenerator.groupFilterFunc(Group))
+    val result = helpContext.optionMetaData.filter(filter)
+    result should contain theSameElementsAs ExpResult
+  }
+
+  it should "support negating a filter" in {
+    val helpContext = createHelpContext()
+      .addOption("ignored", Some("test"))
+      .startGroup("anyGroup")
+      .addOption(Key, Some(HelpText))
+    val ExpResult = OptionMetaData(Key, helpContext.options(Key))
+    val filter = CliHelpGenerator.negate(CliHelpGenerator.UnassignedGroupFilterFunc)
+
+    val result = helpContext.optionMetaData.filter(filter)
+    result should contain only ExpResult
+  }
 }

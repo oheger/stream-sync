@@ -89,6 +89,27 @@ object CliHelpGenerator {
   /** A standard filter function which accepts all options. */
   final val AllFilterFunc: OptionFilter = _ => true
 
+  /**
+    * A standard filter function that accepts only elements with the option
+    * type ''option''.
+    */
+  final val OptionsFilterFunc: OptionFilter = optionTypeFilter(OptionTypeOption)
+
+  /**
+    * A standard filter function that accepts only elements with the option
+    * type ''input''. This function can be used to deal only with input
+    * parameters.
+    */
+  final val InputParamsFilterFunc: OptionFilter = optionTypeFilter(OptionTypeInput)
+
+  /**
+    * A standard filter function that accepts only elements that are not
+    * assigned to any group. These are usually top-level options that do not
+    * depend on a context, but are always valid.
+    */
+  final val UnassignedGroupFilterFunc: OptionFilter =
+    data => !data.attributes.attributes.contains(AttrGroup)
+
   /** The default padding string to separate columns of the help text. */
   final val DefaultPadding: String = "  "
 
@@ -277,6 +298,14 @@ object CliHelpGenerator {
       optGroupName.fold(this)(_ => endGroup())
 
     /**
+      * Returns an ''Iterable'' with ''OptionMetaData'' objects for the options
+      * stored in this context.
+      *
+      * @return an iterable with meta data about all options in this context
+      */
+    def optionMetaData: Iterable[OptionMetaData] = options.map(e => OptionMetaData(e._1, e._2))
+
+    /**
       * Creates a new ''CliHelpContext'' with an additional option as defined by
       * the parameters.
       *
@@ -405,7 +434,7 @@ object CliHelpGenerator {
     def generateColumns(data: OptionMetaData): Seq[List[String]] =
       columns.map(_.apply(data))
 
-    val metaData = context.options.map(e => OptionMetaData(e._1, e._2))
+    val metaData = context.optionMetaData
       .filter(filterFunc)
       .toSeq
     val rows = sortFunc(metaData)
@@ -433,6 +462,65 @@ object CliHelpGenerator {
     rows.flatMap(generateRow)
       .mkString(CR)
   }
+
+  /**
+    * A special ''OptionSortFunc'' that handles input parameters. The
+    * parameters are sorted based on their expected order in the command line.
+    * The function expects the list of options to be ordered has been filtered
+    * to contain input parameters only.
+    *
+    * @param helpContext the ''CliHelpContext''
+    * @return the function to sort input parameter options
+    */
+  def inputParamSortFunc(helpContext: CliHelpContext): OptionSortFunc = {
+    def paramIndex(key: String): Int =
+      helpContext.inputs.find(_.key == key).map(_.index) getOrElse helpContext.inputs.size
+
+    options =>
+      options.map(data => (data, paramIndex(data.key)))
+        .sortWith(_._2 < _._2)
+        .map(_._1)
+  }
+
+  /**
+    * Returns a filter function that accepts only options belonging to the
+    * given group.
+    *
+    * @param group the name of the group
+    * @return the function that filters for this group
+    */
+  def groupFilterFunc(group: String): OptionFilter =
+    data => isInGroup(data.attributes, group)
+
+  /**
+    * Returns a filter function implementing AND logic. The resulting filter
+    * accepts an element if and only if all of the filters provided accept it.
+    *
+    * @param filters the filters to be combined
+    * @return a combined filter function with AND semantics
+    */
+  def andFilter(filters: OptionFilter*): OptionFilter =
+    data => filters.forall(f => f(data))
+
+  /**
+    * Returns a filter function implementing OR logic. The resulting filter
+    * accepts an element as soon as one of the filters provided accepts it.
+    *
+    * @param filters the filters to be combined
+    * @return a combined filter function with OR semantics
+    */
+  def orFilter(filters: OptionFilter*): OptionFilter =
+    data => filters.exists(f => f(data))
+
+  /**
+    * Returns a filter that yields the opposite result of the filter provided.
+    * This filter can be used for instance when exclusion logic is needed.
+    *
+    * @param filter the original filter
+    * @return the negated filter
+    */
+  def negate(filter: OptionFilter): OptionFilter =
+    data => !filter(data)
 
   /**
     * Returns a ''ColumnGenerator'' function that produces a single text line
@@ -638,6 +726,15 @@ object CliHelpGenerator {
 
     doWrap(s, ListBuffer.empty)
   }
+
+  /**
+    * Returns a filter function that filters for options of the given type.
+    *
+    * @param wantedType the option type to filter for
+    * @return the filter function for this type
+    */
+  private def optionTypeFilter(wantedType: String): OptionFilter =
+    data => data.attributes.attributes.get(AttrOptionType) contains wantedType
 
   /**
     * Adds an attribute and its value to the given map of attributes only if
