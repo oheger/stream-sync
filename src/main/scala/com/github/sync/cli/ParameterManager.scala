@@ -814,7 +814,7 @@ object ParameterManager {
         Failure(paramException(proc.key, s"option must have at most $atMost values"))
       else Success(values)
     })(CliHelpGenerator.addAttributeUpdater(CliHelpGenerator.AttrMultiplicity,
-      s"$atLeast..${upperMultiplicity(atMost)}"))
+      Multiplicity(atLeast, atMost).toString))
 
   /**
     * Returns a processor that modifies the result of another processor by
@@ -1511,15 +1511,4 @@ object ParameterManager {
     */
   private def contextForMetaDataRun(helpContext: CliHelpContext): ParameterContext =
     ParameterContext(Parameters(Map.empty, Set.empty), helpContext, DummyConsoleReader)
-
-  /**
-    * Returns the string to indicate the upper bound of the multiplicity.
-    * Negative values are handled in a special way as they indicate no
-    * restriction.
-    *
-    * @param atMost the upper bound of the multiplicity
-    * @return the string to be used for this value
-    */
-  private def upperMultiplicity(atMost: Int): String =
-    if (atMost > 0) atMost.toString else CliHelpGenerator.MultiplicityUnrestricted
 }

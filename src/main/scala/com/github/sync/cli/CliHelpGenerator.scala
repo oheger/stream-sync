@@ -71,12 +71,6 @@ object CliHelpGenerator {
     */
   final val KeyInput = "input"
 
-  /**
-    * The character to be used for the multiplicity if the maximum is not
-    * restricted.
-    */
-  final val MultiplicityUnrestricted = "*"
-
   /** The prefix indicating a command line option. */
   final val DefaultOptionPrefix = "--"
 
@@ -112,9 +106,6 @@ object CliHelpGenerator {
 
   /** The default padding string to separate columns of the help text. */
   final val DefaultPadding: String = "  "
-
-  /** The multiplicity of an option if no meta data about it is available. */
-  final val DefaultMultiplicity = "0..*"
 
   /** The separator string between group names. */
   private final val GroupSeparator = ","
@@ -552,7 +543,7 @@ object CliHelpGenerator {
     * @return the ''ColumnGenerator'' producing the options' multiplicity
     */
   def multiplicityColumnGenerator: ColumnGenerator =
-    defaultValueColumnGenerator(attributeColumnGenerator(AttrMultiplicity), DefaultMultiplicity)
+    defaultValueColumnGenerator(attributeColumnGenerator(AttrMultiplicity), Multiplicity.UnspecifiedMultiplicityString)
 
   /**
     * Returns a ''ColumnGenerator'' function that applies a default value to

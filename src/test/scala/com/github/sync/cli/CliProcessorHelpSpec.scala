@@ -668,7 +668,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val data = testOptionMetaData(1)
 
     val generator = CliHelpGenerator.multiplicityColumnGenerator
-    generator(data) should contain only CliHelpGenerator.DefaultMultiplicity
+    generator(data) should contain only Multiplicity.UnspecifiedMultiplicityString
   }
 
   it should "provide a special sort function for input parameters" in {
