@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import java.util.Locale
 
-import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, ColumnGenerator, InputParameterRef, OptionAttributes, OptionFilter, OptionMetaData, OptionSortFunc}
+import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, ColumnGenerator, InputParamOverviewSymbols, InputParameterRef, OptionAttributes, OptionFilter, OptionMetaData, OptionSortFunc}
 import com.github.sync.cli.ParameterManager._
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -130,6 +130,11 @@ object CliProcessorHelpSpec {
       .map(data => (data.key, data.attributes)).toMap
     createHelpContext(options)
   }
+
+  private def addInputParameter(helpContext: CliHelpContext, multiplicity: String, key: String = Key,
+                                index: Int = 1): CliHelpContext =
+    helpContext.addInputParameter(index, Some(key), None)
+      .addAttribute(CliHelpGenerator.AttrMultiplicity, multiplicity)
 }
 
 /**
@@ -789,6 +794,91 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val filter = CliHelpGenerator.negate(CliHelpGenerator.UnassignedGroupFilterFunc)
 
     val result = helpContext.optionMetaData.filter(filter)
+    result should contain only ExpResult
+  }
+
+  it should "generate the overview of an input parameter with multiplicity 1..1" in {
+    val helpContext = addInputParameter(createHelpContext(), "1..1")
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext)
+    result should contain only "<" + Key + ">"
+  }
+
+  it should "generate the overview of an input parameter if the upper bound is > than the lower bound" in {
+    val helpContext = addInputParameter(createHelpContext(), "1..3")
+    val ExpResult = s"<${Key}1> [...<${Key}3>]"
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext)
+    result should contain only ExpResult
+  }
+
+  it should "generate the overview of an input parameter if the upper bound is the lower bound + 1" in {
+    val helpContext = addInputParameter(createHelpContext(), "1..2")
+    val ExpResult = s"<${Key}1> [<${Key}2>]"
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext)
+    result should contain only ExpResult
+  }
+
+  it should "generate the overview of an input parameter if the upper bound is unrestricted" in {
+    val helpContext = addInputParameter(createHelpContext(), "1..*")
+    val ExpResult = s"<$Key> [...]"
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext)
+    result should contain only ExpResult
+  }
+
+  it should "generate the overview of an input parameter if the lower bound is > 2" in {
+    val helpContext = addInputParameter(createHelpContext(), "3..*")
+    val ExpResult = s"<${Key}1>...<${Key}3> [...]"
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext)
+    result should contain only ExpResult
+  }
+
+  it should "generate the overview of an input parameter if the lower bound is 2" in {
+    val helpContext = addInputParameter(createHelpContext(), "2..3")
+    val ExpResult = s"<${Key}1> <${Key}2> [<${Key}3>]"
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext)
+    result should contain only ExpResult
+  }
+
+  it should "generate the overview of an optional input parameter" in {
+    val helpContext = addInputParameter(createHelpContext(), "0..*")
+    val ExpResult = s"[<$Key> ...]"
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext)
+    result should contain only ExpResult
+  }
+
+  it should "generate the overview for multiple input parameters" in {
+    val Key2 = "source"
+    val helpContext = addInputParameter(
+      addInputParameter(createHelpContext(), "1..1", key = Key2),
+      "1..*", index = 2)
+    val ExpResult = List(s"<$Key2>", s"<$Key> [...]")
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext)
+    result should contain theSameElementsInOrderAs ExpResult
+  }
+
+  it should "generate the overview of an input parameter if no multiplicity is available" in {
+    val helpContext = createHelpContext()
+      .addInputParameter(1, Some(Key), None)
+    val ExpResult = s"[<$Key> ...]"
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext)
+    result should contain only ExpResult
+  }
+
+  it should "support customizing the symbols for the overview of input parameters" in {
+    val symbols = InputParamOverviewSymbols(optionalPrefix = "{", optionalSuffix = "}",
+      keyPrefix = "(", keySuffix = ")", ellipsis = "_")
+    val helpContext = addInputParameter(createHelpContext(), "3..*")
+    val ExpResult = s"(${Key}1)_(${Key}3) {_}"
+
+    val result = CliHelpGenerator.generateInputParamsOverview(helpContext, symbols)
     result should contain only ExpResult
   }
 }

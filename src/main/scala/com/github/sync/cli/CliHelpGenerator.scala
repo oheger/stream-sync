@@ -107,14 +107,21 @@ object CliHelpGenerator {
   /** The default padding string to separate columns of the help text. */
   final val DefaultPadding: String = "  "
 
-  /** The separator string between group names. */
-  private final val GroupSeparator = ","
-
   /**
     * The platform-specific line separator. This is used as line feed character
     * between two lines of the help text.
     */
-  private val CR = System.lineSeparator()
+  final val CR = System.lineSeparator()
+
+  /**
+    * Default formatting symbols used to generate the overview of input
+    * parameters.
+    */
+  final val DefaultInputParamSymbols = InputParamOverviewSymbols(keyPrefix = "<", keySuffix = ">",
+    optionalPrefix = "[", optionalSuffix = "]", ellipsis = "...")
+
+  /** The separator string between group names. */
+  private final val GroupSeparator = ","
 
   /**
     * A data class storing information about a single command line option.
@@ -164,6 +171,44 @@ object CliHelpGenerator {
     * @param attributes a data object with the attributes of this option
     */
   case class OptionMetaData(key: String, attributes: OptionAttributes)
+
+  /**
+    * A case class defining symbols to be used when generating the overview of
+    * input parameters.
+    *
+    * The strings defined by this class are used to decorate the keys of input
+    * parameters to indicate specific properties.
+    *
+    * @param keyPrefix      the prefix added before parameter keys
+    * @param keySuffix      the suffix added after parameter keys
+    * @param optionalPrefix prefix to mark an element as optional
+    * @param optionalSuffix suffix to mark an element as optional
+    * @param ellipsis       string to represent a gap between parameter indices
+    */
+  case class InputParamOverviewSymbols(keyPrefix: String,
+                                       keySuffix: String,
+                                       optionalPrefix: String,
+                                       optionalSuffix: String,
+                                       ellipsis: String) {
+    /**
+      * Decorates a key with the correct symbols.
+      *
+      * @param key the key
+      * @return the decorated key
+      */
+    def decorateKey(key: String): String = s"$keyPrefix$key$keySuffix"
+
+    /**
+      * Conditionally adds markers to the given string to indicate that it
+      * represents an optional value.
+      *
+      * @param str      the string
+      * @param optional the flag whether the value is optional
+      * @return the resulting string
+      */
+    def markAsOptional(str: String, optional: Boolean): String =
+      if (optional) optionalPrefix + str + optionalSuffix else str
+  }
 
   /**
     * A class for storing and updating meta information about command line
@@ -613,6 +658,25 @@ object CliHelpGenerator {
     data => generators.flatMap(g => g(data)).toList
 
   /**
+    * Generates an overview over the input parameters of an application. The
+    * function generates a list where each element represents an input
+    * parameter. The information about a single parameter is a visual
+    * representation of the key and its multiplicity. Having this information
+    * available as a list of strings allows the caller to integrate it into
+    * other output; e.g. by doing a ''mkstring(" ")'', it can be displayed on a
+    * single line.
+    *
+    * @param helpContext the help context
+    * @param symbols     defines the symbols to indicate certain parameter
+    *                    properties
+    * @return a list with the information about all input parameters
+    */
+  def generateInputParamsOverview(helpContext: CliHelpContext,
+                                  symbols: InputParamOverviewSymbols = DefaultInputParamSymbols): List[String] =
+    helpContext.inputs.toList
+      .map(inputParameterOverview(helpContext, _, symbols))
+
+  /**
     * A function to determine the signum of an index which can be either
     * positive or negative.
     *
@@ -739,6 +803,72 @@ object CliHelpGenerator {
   private def addOptionalAttribute(attributes: Map[String, String], key: String, optValue: Option[String]):
   Map[String, String] =
     optValue map (value => attributes + (key -> value)) getOrElse attributes
+
+  /**
+    * Generates the part of the overview of an input parameter that is
+    * determined by the lower bound of the multiplicity. These values are all
+    * mandatory. Depending on the lower bound either a single key or multiple
+    * keys need to be displayed.
+    *
+    * @param key          the key of the input parameter
+    * @param multiplicity the multiplicity
+    * @param symbols      the formatting symbols
+    * @return the lower part of the overview
+    */
+  private def inputParameterOverviewLowerPart(key: String, multiplicity: Multiplicity,
+                                              symbols: InputParamOverviewSymbols): String = {
+    if (multiplicity.lower == 2) s"${symbols.decorateKey(key + "1")} ${symbols.decorateKey(key + "2")}"
+    else if (multiplicity.lower > 1) s"${symbols.decorateKey(key + "1")}${symbols.ellipsis}" +
+      symbols.decorateKey(key + multiplicity.lower)
+    else {
+      val index = if (!multiplicity.unbounded && multiplicity.upper > multiplicity.lower) "1" else ""
+      symbols.decorateKey(key + index)
+    }
+  }
+
+  /**
+    * Generates the part of the overview of an input parameter that is
+    * determined by the upper bound of the multiplicity. The upper part is
+    * defined only if the upper bound is greater than the lower bound; these
+    * values are optional.
+    *
+    * @param key          the key of the input parameter
+    * @param multiplicity the multiplicity
+    * @param symbols      the formatting symbols
+    * @return the upper part of the overview
+    */
+  private def inputParameterOverviewUpperPart(key: String, multiplicity: Multiplicity,
+                                              symbols: InputParamOverviewSymbols): String =
+    if (!multiplicity.unbounded && multiplicity.upper <= multiplicity.lower) ""
+    else {
+      val result = if (multiplicity.unbounded) symbols.ellipsis
+      else {
+        val upperKey = s"${symbols.decorateKey(key + multiplicity.upper)}"
+        if (multiplicity.upper > multiplicity.lower + 1) symbols.ellipsis + upperKey
+        else upperKey
+      }
+      symbols.markAsOptional(result, multiplicity.mandatory)
+    }
+
+  /**
+    * Generates the overview of an input parameter based on its key and
+    * multiplicity.
+    *
+    * @param helpContext  the help context
+    * @param parameterRef the reference to the parameter in question
+    * @param symbols      the formatting symbols
+    * @return a string with information about this input parameter
+    */
+  private def inputParameterOverview(helpContext: CliHelpContext, parameterRef: InputParameterRef,
+                                     symbols: InputParamOverviewSymbols): String = {
+    val key = parameterRef.key
+    val multiplicity = helpContext.options(key).attributes.get(AttrMultiplicity)
+      .map(Multiplicity.parse) getOrElse Multiplicity.Unbounded
+    val lowerPart = inputParameterOverviewLowerPart(key, multiplicity, symbols)
+    val upperPart = inputParameterOverviewUpperPart(key, multiplicity, symbols)
+    val result = if (upperPart.nonEmpty) lowerPart + " " + upperPart else lowerPart
+    symbols.markAsOptional(result, multiplicity.optional)
+  }
 
   /**
     * Helper function to convert a string to uppercase for comparison.
