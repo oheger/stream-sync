@@ -653,6 +653,15 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     res.get.toList should contain theSameElementsInOrderAs InputValues.take(2)
   }
 
+  it should "provide a processor that extracts multiple input values and handles the last check" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.inputValues(0, InputValues.size - 1, last = true)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    next.parameters.accessedParameters should contain only ParameterManager.InputOption
+    res.get.toList should contain theSameElementsInOrderAs InputValues
+  }
+
   it should "interpret a negative value for the to index of an input value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val processor = ParameterManager.inputValues(1, -1)
@@ -685,14 +694,28 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
   it should "yield a failure if the index of an input value is too big" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.inputValues(1, InputValues.size)
+    val processor = ParameterManager.inputValues(1, InputValues.size, optKey = Some(Key))
 
     val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
     res match {
       case Failure(exception) =>
         exception shouldBe a[IllegalArgumentException]
         exception.getMessage should include(ParameterManager.InputOption)
-        exception.getMessage should include(s"${InputValues.size}")
+        exception.getMessage should include(s"$Key")
+      case r => fail("Unexpected result: " + r)
+    }
+  }
+
+  it should "yield a failure if too many input parameters have been specified" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val processor = ParameterManager.inputValue(1, Some("destination"), last = true)
+
+    val res = ParameterManager.tryProcessor(processor, TestParametersWithInputs)
+    res match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(ParameterManager.InputOption)
+        exception.getMessage should include("at most 2")
       case r => fail("Unexpected result: " + r)
     }
   }

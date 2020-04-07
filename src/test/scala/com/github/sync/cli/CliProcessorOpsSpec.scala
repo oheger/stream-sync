@@ -397,6 +397,38 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
     triedValues.get should contain theSameElementsInOrderAs createComponents(12)
   }
 
+  it should "create a representation from thirteen components" in {
+    val triedValues = createRepresentation(triedComponent(1), triedComponent(2),
+      triedComponent(3), triedComponent(4), triedComponent(5),
+      triedComponent(6), triedComponent(7), triedComponent(8),
+      triedComponent(9), triedComponent(10), triedComponent(11),
+      triedComponent(12), triedComponent(13))(List(_, _, _, _, _, _, _, _, _, _, _, _, _))
+
+    triedValues.get should contain theSameElementsInOrderAs createComponents(13)
+  }
+
+  it should "create a representation from fourteen components" in {
+    val triedValues = createRepresentation(triedComponent(1), triedComponent(2),
+      triedComponent(3), triedComponent(4), triedComponent(5),
+      triedComponent(6), triedComponent(7), triedComponent(8),
+      triedComponent(9), triedComponent(10), triedComponent(11),
+      triedComponent(12), triedComponent(13),
+      triedComponent(14))(List(_, _, _, _, _, _, _, _, _, _, _, _, _, _))
+
+    triedValues.get should contain theSameElementsInOrderAs createComponents(14)
+  }
+
+  it should "create a representation from fifteen components" in {
+    val triedValues = createRepresentation(triedComponent(1), triedComponent(2),
+      triedComponent(3), triedComponent(4), triedComponent(5),
+      triedComponent(6), triedComponent(7), triedComponent(8),
+      triedComponent(9), triedComponent(10), triedComponent(11),
+      triedComponent(12), triedComponent(13), triedComponent(14),
+      triedComponent(15))(List(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _))
+
+    triedValues.get should contain theSameElementsInOrderAs createComponents(15)
+  }
+
   it should "support the access to input parameters" in {
     val parameters: Parameters = Map(InputOption -> List("1", "2", "3"))
     val processor = inputValue(-2)

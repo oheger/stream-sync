@@ -464,7 +464,7 @@ object ParameterManager {
     def appendOptionValue(argMap: InternalParamMap, opt: String, value: String):
     InternalParamMap = {
       val optValues = argMap.getOrElse(opt, List.empty)
-      argMap + (opt -> (value :: optValues))
+      argMap + (opt -> (optValues :+ value))
     }
 
     @tailrec def doParseParameters(argsList: Seq[String], argsMap: InternalParamMap):
@@ -595,19 +595,26 @@ object ParameterManager {
     * the command line; for instance, index -1 represents the last input
     * parameter, index -2 the one before the last, etc. If no parameter with
     * this index exists (because the user has entered too few parameters), the
-    * processor generates a failure. It is possible to assign a key and a help
-    * text to the input parameter. The key can be used in the overview of the
-    * command line; the help text is a more detailed description of this
+    * processor generates a failure. It is also possible to check whether too
+    * many parameters have been provided. This is done by setting the ''last''
+    * flag to '''true''' for the input parameter with the maximum index. (This
+    * works only if positive index values are used.) The processor then
+    * generates a failure if more input values are defined.
+    *
+    * To support the generation of usage texts, a key and a help text can be
+    * assigned to the input parameter. The key can be used in the overview of
+    * the command line; the help text is a more detailed description of this
     * parameter.
     *
     * @param index   the index of the input parameter to be extracted
     * @param optKey  an optional key to be assigned to this parameter
     * @param optHelp an optional help text
+    * @param last    flag whether this is the last input parameter
     * @return the processor to extract this input value
     */
-  def inputValue(index: Int, optKey: Option[String] = None, optHelp: Option[String] = None):
+  def inputValue(index: Int, optKey: Option[String] = None, optHelp: Option[String] = None, last: Boolean = false):
   CliProcessor[OptionValue[String]] =
-    inputValues(index, index, optKey, optHelp)
+    inputValues(index, index, optKey, optHelp, last)
 
   /**
     * Returns a processor that extracts a sequence of values from the input
@@ -622,10 +629,11 @@ object ParameterManager {
     * @param toIdx   the last index of the input parameter
     * @param optKey  an optional key to be assigned to this parameter
     * @param optHelp an optional help text
+    * @param last    flag whether this is the last input parameter
     * @return the processor to extract these input values
     */
-  def inputValues(fromIdx: Int, toIdx: Int, optKey: Option[String] = None, optHelp: Option[String] = None):
-  CliProcessor[OptionValue[String]] =
+  def inputValues(fromIdx: Int, toIdx: Int, optKey: Option[String] = None, optHelp: Option[String] = None,
+                  last: Boolean = false): CliProcessor[OptionValue[String]] =
     CliProcessor(context => {
       val inputs = context.parameters.parametersMap.getOrElse(InputOption, Nil)
 
@@ -634,14 +642,21 @@ object ParameterManager {
         val adjustedIndex = if (index < 0) inputs.size + index
         else index
         if (adjustedIndex >= 0 && adjustedIndex < inputs.size) Success(adjustedIndex)
-        else Failure(paramException(InputOption,
-          s"Too few input arguments; undefined argument for index $adjustedIndex."))
+        else Failure(paramException(InputOption, tooFewErrorText(adjustedIndex)))
       }
 
-      val result = for {
-        firstIndex <- adjustAndCheckIndex(fromIdx)
-        lastIndex <- adjustAndCheckIndex(toIdx)
-      } yield inputs.slice(firstIndex, lastIndex + 1)
+      def tooFewErrorText(index: Int): String = {
+        val details = optKey map (k => s"'$k''") getOrElse s"for index $index"
+        s"Too few input arguments; undefined argument $details."
+      }
+
+      val result = if (last && inputs.size > toIdx + 1)
+        Failure(paramException(InputOption, s"Too many input arguments; expected at most ${toIdx + 1}"))
+      else
+        for {
+          firstIndex <- adjustAndCheckIndex(fromIdx)
+          lastIndex <- adjustAndCheckIndex(toIdx)
+        } yield inputs.slice(firstIndex, lastIndex + 1)
       val helpContext = context.helpContext.addInputParameter(fromIdx, optKey, optHelp)
       (result, context.update(context.parameters keyAccessed InputOption, helpContext))
     })
@@ -1321,6 +1336,142 @@ object ParameterManager {
   Try[T] =
     createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12)(fCreate(c1.get, c2.get, c3.get, c4.get,
       c5.get, c6.get, c7.get, c8.get, c9.get, c10.get, c11.get, c12.get))
+
+  /**
+    * Creates an object representation from 13 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param c7      component 7
+    * @param c8      component 8
+    * @param c9      component 9
+    * @param c10     component 10
+    * @param c11     component 11
+    * @param c12     component 12
+    * @param c13     component 13
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam G type of component 7
+    * @tparam H type of component 8
+    * @tparam I type of component 9
+    * @tparam J type of component 10
+    * @tparam K type of component 11
+    * @tparam L type of component 12
+    * @tparam M type of component 13
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, G, H, I, J, K, L, M, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D],
+                                                                     c5: Try[E], c6: Try[F], c7: Try[G], c8: Try[H],
+                                                                     c9: Try[I], c10: Try[J], c11: Try[K], c12: Try[L],
+                                                                     c13: Try[M])
+                                                                    (fCreate: (A, B, C, D, E, F, G, H, I, J, K, L,
+                                                                      M) => T):
+  Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)(fCreate(c1.get, c2.get, c3.get,
+      c4.get, c5.get, c6.get, c7.get, c8.get, c9.get, c10.get, c11.get, c12.get, c13.get))
+
+  /**
+    * Creates an object representation from 14 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param c7      component 7
+    * @param c8      component 8
+    * @param c9      component 9
+    * @param c10     component 10
+    * @param c11     component 11
+    * @param c12     component 12
+    * @param c13     component 13
+    * @param c14     component 14
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam G type of component 7
+    * @tparam H type of component 8
+    * @tparam I type of component 9
+    * @tparam J type of component 10
+    * @tparam K type of component 11
+    * @tparam L type of component 12
+    * @tparam M type of component 13
+    * @tparam N type of component 14
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, G, H, I, J, K, L, M, N, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D],
+                                                                        c5: Try[E], c6: Try[F], c7: Try[G], c8: Try[H],
+                                                                        c9: Try[I], c10: Try[J], c11: Try[K],
+                                                                        c12: Try[L], c13: Try[M], c14: Try[N])
+                                                                       (fCreate: (A, B, C, D, E, F, G, H, I, J, K, L,
+                                                                         M, N) => T):
+  Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)(fCreate(c1.get, c2.get, c3.get,
+      c4.get, c5.get, c6.get, c7.get, c8.get, c9.get, c10.get, c11.get, c12.get, c13.get, c14.get))
+
+  /**
+    * Creates an object representation from 15 extracted components using a
+    * creator function.
+    *
+    * @param c1      component 1
+    * @param c2      component 2
+    * @param c3      component 3
+    * @param c4      component 4
+    * @param c5      component 5
+    * @param c6      component 6
+    * @param c7      component 7
+    * @param c8      component 8
+    * @param c9      component 9
+    * @param c10     component 10
+    * @param c11     component 11
+    * @param c12     component 12
+    * @param c13     component 13
+    * @param c14     component 14
+    * @param c15     component 15
+    * @param fCreate the creator function
+    * @tparam A type of component 1
+    * @tparam B type of component 2
+    * @tparam C type of component 3
+    * @tparam D type of component 4
+    * @tparam E type of component 5
+    * @tparam F type of component 6
+    * @tparam G type of component 7
+    * @tparam H type of component 8
+    * @tparam I type of component 9
+    * @tparam J type of component 10
+    * @tparam K type of component 11
+    * @tparam L type of component 12
+    * @tparam M type of component 13
+    * @tparam N type of component 14
+    * @tparam O type of component 15
+    * @tparam T the type of the object representation
+    * @return a ''Try'' with the resulting object
+    */
+  def createRepresentation[A, B, C, D, E, F, G, H,
+    I, J, K, L, M, N, O, T](c1: Try[A], c2: Try[B], c3: Try[C], c4: Try[D], c5: Try[E], c6: Try[F], c7: Try[G],
+                            c8: Try[H], c9: Try[I], c10: Try[J], c11: Try[K], c12: Try[L], c13: Try[M], c14: Try[N],
+                            c15: Try[O])(fCreate: (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O) => T):
+  Try[T] =
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)(fCreate(c1.get, c2.get, c3.get,
+      c4.get, c5.get, c6.get, c7.get, c8.get, c9.get, c10.get, c11.get, c12.get, c13.get, c14.get, c15.get))
 
   /**
     * Executes the given ''CliProcessor'' on the parameters specified and
