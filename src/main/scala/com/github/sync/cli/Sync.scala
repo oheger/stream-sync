@@ -79,9 +79,9 @@ object Sync {
          (argsMap1, config) <- SyncParameterManager.extractSyncConfig(argsMap)
          (argsMap2, filterData) <- FilterManager.parseFilters(argsMap1)
          (argsMap3, srcFactory) <- factory.createSourceComponentsFactory(
-           config.syncUris._1, config.timeout, argsMap2)
+           config.srcUri, config.timeout, argsMap2)
          (argsMap4, dstFactory) <- factory.createDestinationComponentsFactory(
-           config.syncUris._2, config.timeout, argsMap3)
+           config.dstUri, config.timeout, argsMap3)
          _ <- ParameterManager.checkParametersConsumed(argsMap4)
          result <- runSync(config, filterData, srcFactory, dstFactory)
          } yield result

@@ -167,7 +167,8 @@ object SyncParameterManager {
     * An instance of this class is created from the command line options passed
     * to the program.
     *
-    * @param syncUris        the URIs to be synced (source and destination)
+    * @param srcUri          the source URI of the sync process
+    * @param dstUri          the destination URI of the sync process
     * @param applyMode       the apply mode
     * @param timeout         a timeout for sync operations
     * @param logFilePath     an option with the path to the log file if defined
@@ -185,7 +186,8 @@ object SyncParameterManager {
     * @param opsPerSecond    optional restriction for the number of sync
     *                        operations per second
     */
-  case class SyncConfig(syncUris: (String, String),
+  case class SyncConfig(srcUri: String,
+                        dstUri: String,
                         applyMode: ApplyMode,
                         timeout: Timeout,
                         logFilePath: Option[Path],
@@ -226,8 +228,9 @@ object SyncParameterManager {
     * @return the processor to extract the ''SyncConfig''
     */
   def syncConfigProcessor(): CliProcessor[Try[SyncConfig]] = for {
-    uris <- syncUrisProcessor()
-    mode <- applyModeProcessor(uris.getOrElse(("", ""))._2)
+    srcUri <- srcUriProcessor()
+    dstUri <- dstUriProcessor()
+    mode <- applyModeProcessor(dstUri.getOrElse(""))
     timeout <- timeoutProcessor()
     logFile <- ParameterManager.pathOptionValue(LogFileOption)
     syncLog <- ParameterManager.pathOptionValue(SyncLogOption)
@@ -238,7 +241,7 @@ object SyncParameterManager {
     srcCrypt <- cryptModeProcessor(SourceCryptModeOption)
     dstCrypt <- cryptModeProcessor(DestCryptModeOption)
     cacheSize <- cryptCacheSizeProcessor()
-  } yield createSyncConfig(uris, mode, timeout, logFile, syncLog, timeDelta, opsPerSec,
+  } yield createSyncConfig(srcUri, dstUri, mode, timeout, logFile, syncLog, timeDelta, opsPerSec,
     srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
 
   /**
@@ -265,7 +268,8 @@ object SyncParameterManager {
     * created. Otherwise, all error messages are collected and returned in a
     * failed ''Try''.
     *
-    * @param triedUris           the sync URIs component
+    * @param triedSrcUri         the source URI component
+    * @param triedDstUri         the dest URI component
     * @param triedApplyMode      the apply mode component
     * @param triedTimeout        the timeout component
     * @param triedLogFile        the log file component
@@ -279,7 +283,8 @@ object SyncParameterManager {
     * @param triedCryptCacheSize the crypt cache size component
     * @return a ''Try'' with the config
     */
-  private def createSyncConfig(triedUris: Try[(String, String)],
+  private def createSyncConfig(triedSrcUri: Try[String],
+                               triedDstUri: Try[String],
                                triedApplyMode: Try[ApplyMode],
                                triedTimeout: Try[Timeout],
                                triedLogFile: Try[Option[Path]],
@@ -291,33 +296,33 @@ object SyncParameterManager {
                                triedDstPassword: Try[Option[String]],
                                triedDstCryptMode: Try[CryptMode.Value],
                                triedCryptCacheSize: Try[Int]): Try[SyncConfig] =
-    ParameterManager.createRepresentation(triedUris, triedApplyMode, triedTimeout, triedLogFile,
-      triedSyncLog, triedTimeDelta, triedSrcPassword, triedSrcCryptMode, triedDstPassword,
+    ParameterManager.createRepresentation(triedSrcUri, triedDstUri, triedApplyMode, triedTimeout,
+      triedLogFile, triedSyncLog, triedTimeDelta, triedSrcPassword, triedSrcCryptMode, triedDstPassword,
       triedDstCryptMode, triedCryptCacheSize, triedOpsPerSec)(SyncConfig.apply)
 
   /**
-    * Returns a processor that extracts the value of the option with the URIs
-    * of the structures to be synced.
+    * Returns a processor that extracts the source URI from the first input
+    * parameter.
     *
-    * @return the processor to extract the sync URIs
+    * @return the processor for the source URI
     */
-  private def syncUrisProcessor(): CliProcessor[Try[(String, String)]] =
-    ParameterManager.optionValue(ParameterManager.InputOption) map { triedValues =>
-      triedValues flatMap { values =>
-        Try {
-          values match {
-            case uriDst :: uriSrc :: Nil =>
-              (uriSrc, uriDst)
-            case _ :: _ :: _ =>
-              throw new IllegalArgumentException("Too many sync URIs specified!")
-            case _ :: _ =>
-              throw new IllegalArgumentException("Missing destination URI!")
-            case _ =>
-              throw new IllegalArgumentException("Missing URIs for source and destination!")
-          }
-        }
-      }
-    }
+  private def srcUriProcessor(): CliProcessor[Try[String]] =
+    ParameterManager.inputValue(0, Some("sourceURI"), None)
+      .multiplicity(atLeast = 1, atMost = 1)
+      .single
+      .mandatory
+
+  /**
+    * Returns a processor that extracts the destination URI from the 2nd input
+    * parameter.
+    *
+    * @return the processor for the destination URI
+    */
+  private def dstUriProcessor(): CliProcessor[Try[String]] =
+    ParameterManager.inputValue(1, Some("destinationURI"), None, last = true)
+      .multiplicity(atLeast = 1, atMost = 1)
+      .single
+      .mandatory
 
   /**
     * Returns a processor that extracts the value of the option for the

@@ -45,7 +45,7 @@ object SyncParameterManagerSpec {
   private val TimeoutValue = 44
 
   /** A map with test parameter values. */
-  private val ArgsMap = Map(ParameterManager.InputOption -> List(DestinationUri, SourceUri),
+  private val ArgsMap = Map(ParameterManager.InputOption -> List(SourceUri, DestinationUri),
     SyncParameterManager.TimeoutOption -> List(TimeoutValue.toString))
 }
 
@@ -142,7 +142,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "correctly parse non-option parameters" in {
     val syncUris = List("uri1", "uri2")
-    val expArgMap = Map(ParameterManager.InputOption -> syncUris.reverse)
+    val expArgMap = Map(ParameterManager.InputOption -> syncUris)
 
     val params = parseParameters(syncUris)
     params.parametersMap should be(expArgMap)
@@ -151,7 +151,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "correctly parse arguments with options" in {
     val args = Array("--opt1", "opt1Val1", "--opt2", "opt2Val1", "--opt1", "opt1Val2")
-    val expArgMap = Map("--opt1" -> List("opt1Val2", "opt1Val1"),
+    val expArgMap = Map("--opt1" -> List("opt1Val1", "opt1Val2"),
       "--opt2" -> List("opt2Val1"))
 
     val params = parseParameters(args)
@@ -212,7 +212,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     argsMap.keys should not contain ParameterManager.FileOption
 
     val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
-    Set(config.syncUris._1, config.syncUris._2) should contain only(uri1, uri2)
+    Set(config.srcUri, config.dstUri) should contain only(uri1, uri2)
   }
 
   it should "parse parameter files defined in another parameter file" in {
@@ -257,36 +257,36 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "extract URI parameters if they are present" in {
     val (params, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
-    config.syncUris._1 should be(SourceUri)
-    config.syncUris._2 should be(DestinationUri)
+    config.srcUri should be(SourceUri)
+    config.dstUri should be(DestinationUri)
     params.accessedParameters should contain allElementsOf ArgsMap.keySet
   }
 
   it should "reject URI parameters if there are more than 2" in {
     val argsMap = ArgsMap + (ParameterManager.InputOption -> List("u1", "u2", "u3"))
 
-    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap), "Too many sync URIs")
+    expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap), "Too many input arguments")
   }
 
   it should "reject URI parameters if no destination URI is provided" in {
     val argsMap = ArgsMap + (ParameterManager.InputOption -> List("u1"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      "Missing destination URI")
+      "Too few input arguments", "destinationURI")
   }
 
   it should "reject URI parameters if no URIs are provided" in {
     val argsMap = ArgsMap + (ParameterManager.InputOption -> List.empty[String])
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      "Missing URIs for source and destination")
+      "Too few input arguments", "'sourceURI'", "'destinationURI'")
   }
 
   it should "reject URI parameters if no non-option parameters are provided" in {
     val argsMap = ArgsMap - ParameterManager.InputOption
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      "Missing URIs for source and destination")
+      "Too few input arguments", "'sourceURI'", "'destinationURI'")
   }
 
   it should "not return a single option value if there are multiple" in {
@@ -527,7 +527,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       SyncParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
-      "destination URI", "apply mode", SyncParameterManager.TimeoutOption,
+      "undefined argument 'destinationURI'", "apply mode", SyncParameterManager.TimeoutOption,
       SyncParameterManager.CryptCacheSizeOption)
   }
 }
