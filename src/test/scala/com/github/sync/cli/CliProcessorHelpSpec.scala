@@ -531,6 +531,16 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     text should be(ExpText)
   }
 
+  it should "handle empty cells when generating option help" in {
+    val EmptyColumnGenerator: ColumnGenerator = _ => List.empty
+    val helpContext = createHelpContext()
+      .addOption(Key, None)
+    val ExpText = Key + CliHelpGenerator.DefaultPadding
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext)(KeyColumnGenerator, EmptyColumnGenerator)
+    text should be(ExpText)
+  }
+
   it should "support changing the padding string for the option help table" in {
     val OtherPadding = " | "
     val helpContext = createHelpContext()

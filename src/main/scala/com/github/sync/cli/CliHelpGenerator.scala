@@ -704,7 +704,8 @@ object CliHelpGenerator {
     * @return the length of this cell
     */
   private def cellWidth(data: List[String]): Int =
-    data.map(_.length).max
+    if (data.nonEmpty) data.map(_.length).max
+    else 0
 
   /**
     * Makes sure that a list has the given size by appending elements of a list
