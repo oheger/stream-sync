@@ -25,6 +25,7 @@ import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGr
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes._
 import com.github.sync.cli.FilterManager.SyncFilterData
+import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
 import com.github.sync.crypt.CryptService.IterateSourceFunc
@@ -451,6 +452,58 @@ object Sync {
   Future[String] =
     syncProcess(factory, args)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
+      .recover {
+        case e: IllegalArgumentException =>
+          generateCliErrorMessage(e)
+      }
+
+  /**
+    * Generates a string with an error message if invalid parameters have been
+    * provided. The text contains a detailed error message and usage
+    * instructions.
+    *
+    * @param exception the original CLI exception
+    * @return the error and usage text
+    */
+  private def generateCliErrorMessage(exception: IllegalArgumentException): String =
+    exception.getMessage + CliHelpGenerator.CR + CliHelpGenerator.CR +
+      generateCliHelp()
+
+  /**
+    * Generates a help text with instructions how this application is used.
+    *
+    * @return the help text
+    */
+  private def generateCliHelp(): String = {
+    val params = Parameters(Map.empty, Set.empty)
+    val (_, context) = ParameterManager.runProcessor(SyncParameterManager.syncConfigProcessor(),
+      params)(DummyConsoleReader)
+    val helpContext = context.helpContext
+
+    import CliHelpGenerator._
+    val helpGenerator = composeColumnGenerator(
+      wrapColumnGenerator(attributeColumnGenerator(AttrHelpText), 70),
+      prefixColumnGenerator(attributeColumnGenerator(AttrFallbackValue), prefixText = Some("Default value: "))
+    )
+
+    val generators = Seq(
+      optionNameColumnGenerator(),
+      helpGenerator
+    )
+    val buf = new java.lang.StringBuilder
+    buf.append("Usage: streamsync [options] ")
+      .append(generateInputParamsOverview(helpContext).mkString(" "))
+      .append(CR)
+      .append(CR)
+      .append(generateOptionsHelp(helpContext, sortFunc = inputParamSortFunc(helpContext),
+        filterFunc = InputParamsFilterFunc)(generators: _*))
+      .append(CR)
+      .append(CR)
+      .append("Supported options:")
+      .append(CR)
+      .append(generateOptionsHelp(helpContext, filterFunc = OptionsFilterFunc)(generators: _*))
+      .toString
+  }
 }
 
 /**
@@ -467,7 +520,7 @@ class Sync extends ActorSystemLifeCycle {
     * @inheritdoc This implementation starts the sync process using the actor
     *             system in implicit scope.
     */
-  override protected def runApp(args: Array[String]): Future[String] = {
+  override protected[cli] def runApp(args: Array[String]): Future[String] = {
     val factory = new SyncComponentsFactory
     Sync.syncWithResultMessage(factory, args)
   }

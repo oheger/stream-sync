@@ -41,17 +41,60 @@ import scala.util.Try
   * option key.
   */
 object SyncParameterManager {
+  /** Help text for the source URI input parameter. */
+  final val SourceUriHelp =
+    """The URI defining the source structure of the sync process.
+      |The URI can start with a prefix that determines the type of the structure. If no prefix \
+      |is provided, it is interpreted a path to a file system (a local directory or a network \
+      |share). The prefix "dav:" indicates a WebDav server. "onedrive:" points to a OneDrive server.
+      |""".stripMargin
+
+  /** Help text for the destination URI input parameter. */
+  final val DestinationUriHelp =
+    """The URI defining the destination structure of the sync process. This is analogous to the \
+      |source URI, but determines where to apply the changes.
+      |""".stripMargin
+
   /** Name of the option for the apply mode. */
-  val ApplyModeOption: String = ParameterManager.OptionPrefix + "apply"
+  final val ApplyModeOption: String = ParameterManager.OptionPrefix + "apply"
+
+  /** Help text for the apply mode option. */
+  final val ApplyModeHelp =
+    """Determines how and where changes are applied. The value can be one of the following:
+      |TARGET - Changes are applied to the target structure (the default)
+      |TARGET:<uri> - Changes are applied to the structure defined by the given URI (which can be \
+      |different from the destination URI); this only works for file system URIs
+      |NONE - No changes are applied; this can be used as a dry run to check which changes would \
+      |be applied
+      |""".stripMargin
 
   /** Name of the option that defines a timeout for sync operations. */
-  val TimeoutOption: String = ParameterManager.OptionPrefix + "timeout"
+  final val TimeoutOption: String = ParameterManager.OptionPrefix + "timeout"
+
+  /** Help text for the timeout option. */
+  final val TimeoutHelp =
+    """Sets a timeout for sync operations (in seconds). Operations taking longer than this time are \
+      |aborted and considered as failures.
+      |""".stripMargin
 
   /** Name of the option that defines the path to the log file. */
-  val LogFileOption: String = ParameterManager.OptionPrefix + "log"
+  final val LogFileOption: String = ParameterManager.OptionPrefix + "log"
+
+  /** Help text for the log file option. */
+  final val LogFileHelp =
+    """Defines the path to a log file for the sync operations that are executed. If this option is \
+      |not provided, no log file is written.
+      |""".stripMargin
 
   /** Name of the option that defines the path to the sync log file. */
-  val SyncLogOption: String = ParameterManager.OptionPrefix + "sync-log"
+  final val SyncLogOption: String = ParameterManager.OptionPrefix + "sync-log"
+
+  /** Help text for the sync log option. */
+  final val SyncLogHelp =
+    """Defines the path from where to read the sync log. If specified, the sync process does not \
+      |address the differences between the source and the destination structure, but executes the \
+      |operations defined in the sync log.
+      |""".stripMargin
 
   /**
     * Name of the option that defines the threshold for time deltas to be
@@ -59,41 +102,71 @@ object SyncParameterManager {
     * considered different only if the difference of their timestamps is
     * greater than this value (in seconds).
     */
-  val IgnoreTimeDeltaOption: String = ParameterManager.OptionPrefix + "ignore-time-delta"
+  final val IgnoreTimeDeltaOption: String = ParameterManager.OptionPrefix + "ignore-time-delta"
+
+  /** Help text for the ignore time delta option. */
+  final val IgnoreTimeDeltaHelp =
+    """Sets a threshold in seconds to be applied when comparing the timestamps of files. Only if the \
+      |delta of the timestamps is greater than this threshold, the files are considred different. \
+      |This can be used to deal with file systems with different granularities in their last modified \
+      |timestamps.
+      |""".stripMargin
 
   /**
     * Name of the option that restricts the number of sync operations that can
     * be executed within a second. This is useful for instance when syncing to
     * a server that accepts only a limit number of requests per time unit.
     */
-  val OpsPerSecondOption: String = ParameterManager.OptionPrefix + "ops-per-second"
+  final val OpsPerSecondOption: String = ParameterManager.OptionPrefix + "ops-per-second"
+
+  final val OpsPerSecondHelp =
+    """Allows limiting the number of sync operations executed per second. The option value is the \
+      |number of operations that are allowed. This can be used to protected servers for too much \
+      |load. Per default, there is no restriction for the operations that are executed.
+      |""".stripMargin
 
   /**
     * Name of the option defining the encryption password for the source
     * structure. If defined, files from the source are decrypted using this
     * password when downloaded.
     */
-  val SourcePasswordOption: String = ParameterManager.OptionPrefix + "src-encrypt-password"
+  final val SourcePasswordOption: String = ParameterManager.OptionPrefix + "src-encrypt-password"
 
   /**
     * Name of the option defining the encryption password for the destination
     * structure. If defined, files are encrypted using this password when they
     * are copied to the destination.
     */
-  val DestPasswordOption: String = ParameterManager.OptionPrefix + "dst-encrypt-password"
+  final val DestPasswordOption: String = ParameterManager.OptionPrefix + "dst-encrypt-password"
+
+  /** Help text for the crypt password option. */
+  final val CryptPasswordHelp =
+    """Sets the encryption password for this structure. A password is needed if some sort of \
+      |encryption is enabled. It can be provided either via this option or it is read from the \
+      |console.
+      |""".stripMargin
 
   /**
     * Name of the option that determines te encryption mode for the source
     * structure. This also determines whether a password must be present.
     */
-  val SourceCryptModeOption: String = ParameterManager.OptionPrefix + "src-crypt-mode"
+  final val SourceCryptModeOption: String = ParameterManager.OptionPrefix + "src-crypt-mode"
 
   /**
     * Name of the option that determines the encryption mode for the
     * destination structure. This also determines whether a password must be
     * present.
     */
-  val DestCryptModeOption: String = ParameterManager.OptionPrefix + "dst-crypt-mode"
+  final val DestCryptModeOption: String = ParameterManager.OptionPrefix + "dst-crypt-mode"
+
+  /** Help text for the crypt mode option. */
+  final val CryptModeHelp =
+    """Determines how encryption is handled for this structure. Possible values are 'NONE' \
+      |(encryption is disabled), 'FILES' (the content of files is encrypted), or \
+      |'FILESANDNAMES' (both the content of files and the file names are encrypted). If \
+      |some sort of encryption is enabled, a password must be provided, either as an \
+      |additional command line option, or it is read from the console.
+      |""".stripMargin
 
   /**
     * Name of the option that defines the size of the cache for encrypted
@@ -101,7 +174,14 @@ object SyncParameterManager {
     * case, already encrypted or decrypted file names are stored in a cache, so
     * that they can be reused rather than having to compute them again.
     */
-  val CryptCacheSizeOption: String = ParameterManager.OptionPrefix + "crypt-cache-size"
+  final val CryptCacheSizeOption: String = ParameterManager.OptionPrefix + "crypt-cache-size"
+
+  /** Help text for the crypt cache size option. */
+  final val CryptCacheSizeHelp =
+    """Defines the size of the cache for encrypted file names. If encryption of file names is \
+      |enabled, this option allows setting the size of a cache for names that have been \
+      |encrypted; this can reduce the number of encrypt operations.
+      |""".stripMargin
 
   /** The default timeout for sync operations. */
   val DefaultTimeout: Timeout = Timeout(1.minute)
@@ -232,8 +312,8 @@ object SyncParameterManager {
     dstUri <- dstUriProcessor()
     mode <- applyModeProcessor(dstUri.getOrElse(""))
     timeout <- timeoutProcessor()
-    logFile <- ParameterManager.pathOptionValue(LogFileOption)
-    syncLog <- ParameterManager.pathOptionValue(SyncLogOption)
+    logFile <- ParameterManager.optionValue(LogFileOption, Some(LogFileHelp)).toPath.single
+    syncLog <- ParameterManager.optionValue(SyncLogOption, Some(SyncLogHelp)).toPath.single
     timeDelta <- ignoreTimeDeltaProcessor()
     opsPerSec <- opsPerSecondProcessor()
     srcPwd <- cryptPasswordProcessor(SourceCryptModeOption, SourcePasswordOption)
@@ -307,7 +387,7 @@ object SyncParameterManager {
     * @return the processor for the source URI
     */
   private def srcUriProcessor(): CliProcessor[Try[String]] =
-    ParameterManager.inputValue(0, Some("sourceURI"), None)
+    ParameterManager.inputValue(0, Some("sourceURI"), Some(SourceUriHelp))
       .multiplicity(atLeast = 1, atMost = 1)
       .single
       .mandatory
@@ -319,7 +399,7 @@ object SyncParameterManager {
     * @return the processor for the destination URI
     */
   private def dstUriProcessor(): CliProcessor[Try[String]] =
-    ParameterManager.inputValue(1, Some("destinationURI"), None, last = true)
+    ParameterManager.inputValue(1, Some("destinationURI"), Some(DestinationUriHelp), last = true)
       .multiplicity(atLeast = 1, atMost = 1)
       .single
       .mandatory
@@ -332,7 +412,7 @@ object SyncParameterManager {
     * @return the processor to extract the apply mode
     */
   private def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
-    ParameterManager.optionValue(ApplyModeOption)
+    ParameterManager.optionValue(ApplyModeOption, Some(ApplyModeHelp))
       .mapTo[ApplyMode] {
         case RegApplyTargetUri(uri) =>
           ApplyModeTarget(uri)
@@ -354,7 +434,7 @@ object SyncParameterManager {
     * @return the processor to extract the crypt mode
     */
   private def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
-    ParameterManager.optionValue(key)
+    ParameterManager.optionValue(key, Some(CryptModeHelp))
       .mapTo { name =>
         val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
         mode.fold[CryptMode.Value](throw new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!"))(m => m)
@@ -370,7 +450,9 @@ object SyncParameterManager {
     * @return the processor for the ignore time delta option
     */
   private def ignoreTimeDeltaProcessor(): CliProcessor[Try[Option[Int]]] =
-    ParameterManager.intOptionValue(IgnoreTimeDeltaOption)
+    ParameterManager.optionValue(IgnoreTimeDeltaOption, Some(IgnoreTimeDeltaHelp))
+      .toInt
+      .single
 
   /**
     * Returns a processor that extracts he value of the option for the number
@@ -379,7 +461,9 @@ object SyncParameterManager {
     * @return the processor for the ops per second option
     */
   private def opsPerSecondProcessor(): CliProcessor[Try[Option[Int]]] =
-    ParameterManager.intOptionValue(OpsPerSecondOption)
+    ParameterManager.optionValue(OpsPerSecondOption, Some(OpsPerSecondHelp))
+      .toInt
+      .single
 
   /**
     * Returns a processor that extracts the value of the option for the crypt
@@ -389,7 +473,7 @@ object SyncParameterManager {
     * @return the processor for the crypt cache size
     */
   private def cryptCacheSizeProcessor(): CliProcessor[Try[Int]] =
-    ParameterManager.optionValue(CryptCacheSizeOption)
+    ParameterManager.optionValue(CryptCacheSizeOption, Some(CryptCacheSizeHelp))
       .toInt
       .mapTo { size =>
         if (size < MinCryptCacheSize)
@@ -412,7 +496,7 @@ object SyncParameterManager {
   private def cryptPasswordProcessor(keyCryptMode: String, keyPwd: String):
   CliProcessor[SingleOptionValue[String]] = {
     val condProc = cryptModeProcessor(keyCryptMode).map(_.map(mode => mode.requiresPassword))
-    val pwdProc = ParameterManager.optionValue(keyPwd)
+    val pwdProc = ParameterManager.optionValue(keyPwd, Some(CryptPasswordHelp))
       .fallback(ParameterManager.consoleReaderValue(keyPwd, password = true))
     ParameterManager.conditionalValue(condProc, pwdProc).single
   }
@@ -425,7 +509,7 @@ object SyncParameterManager {
     * @return the processor to extract the timeout value
     */
   private def timeoutProcessor(): CliProcessor[Try[Timeout]] =
-    ParameterManager.optionValue(TimeoutOption)
+    ParameterManager.optionValue(TimeoutOption, Some(TimeoutHelp))
       .toInt
       .mapTo(time => Timeout(time.seconds))
       .fallbackValues(DefaultTimeout)

@@ -191,10 +191,15 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * Creates a new ''Sync'' instance that is configured to use the actor
     * system of this test class.
     *
+    * @param overrideDispatcher flag whether the dispatcher should be replaced
     * @return the special ''Sync'' instance
     */
-  protected def createSync(): Sync =
+  protected def createSync(overrideDispatcher: Boolean = false): Sync =
     new Sync {
       override implicit def actorSystem: ActorSystem = system
+
+      override implicit def ec: ExecutionContext =
+        if (overrideDispatcher) system.dispatcher
+        else super.ec
     }
 }

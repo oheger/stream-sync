@@ -74,6 +74,18 @@ class LocalSyncSpec extends BaseSyncSpec {
     checkFileNotPresent(dstFolder, "ignored.tmp")
   }
 
+  it should "generate a usage message if invalid parameters are passed in" in {
+    val ExpFragments = List("<sourceURI>", "<destinationURI>", SyncParameterManager.ApplyModeOption,
+      SyncParameterManager.TimeoutOption, SyncParameterManager.LogFileOption)
+    val options = Array("src/directory", "--filter", "exclude:*.tmp", "--foo", "bar")
+    val sync = createSync(overrideDispatcher = true)
+
+    val output = futureResult(sync.runApp(options))
+    ExpFragments foreach { fragment =>
+      output should include(fragment)
+    }
+  }
+
   it should "apply operations to an alternative target" in {
     val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
