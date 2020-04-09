@@ -633,7 +633,8 @@ object CliHelpGenerator {
   /**
     * Returns a ''ColumnGenerator'' function that wraps the text lines returned
     * by another generator. The text lines returned by the decorated generator
-    * are split at newline characters. The resulting lines are wrapped at the
+    * are split at newline characters (unless there is no continuation
+    * character '\' before the newline). The resulting lines are wrapped at the
     * given line length.
     *
     * @param generator  the generator function to decorate
@@ -643,6 +644,7 @@ object CliHelpGenerator {
   def wrapColumnGenerator(generator: ColumnGenerator, lineLength: Int): ColumnGenerator =
     data =>
       generator(data)
+        .map(handleLineContinuations)
         .flatMap(splitLines)
         .flatMap(wrapLine(_, lineLength))
 
@@ -732,6 +734,18 @@ object CliHelpGenerator {
     val maxSpaces = colWidths.max
     " " * maxSpaces
   }
+
+  /**
+    * Removes newline characters that follow a line continuation character.
+    * This makes it easier to define longer help texts in source code using
+    * multi-line strings. Each line break in such a string adds a newline
+    * character, which might not be desired.
+    *
+    * @param s the string to be processed
+    * @return the string with superfluous newlines removed
+    */
+  private def handleLineContinuations(s: String): String =
+    s.replace("\\\n", "")
 
   /**
     * Splits a string at newline characters and returns a list with the single

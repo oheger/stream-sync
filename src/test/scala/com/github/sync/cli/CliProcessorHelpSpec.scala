@@ -655,6 +655,24 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     generator(data) should be(ExpResult)
   }
 
+  it should "provide a line wrapping ColumnGenerator that handles line continuation characters" in {
+    val text =
+      """|Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy \
+         |eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam \
+         |sea takimata sanctus est Lorem ipsum dolor sit amet.""".stripMargin
+    val ExpResult = List(
+      "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed",
+      "diam nonumy eirmod tempor invidunt ut labore et dolore magna",
+      "aliquyam erat, sed diam sea takimata sanctus est Lorem ipsum",
+      "dolor sit amet."
+    )
+    val data = testOptionMetaData(Key, text)
+    val orgGenerator = CliHelpGenerator.attributeColumnGenerator(CliHelpGenerator.AttrHelpText)
+
+    val generator = CliHelpGenerator.wrapColumnGenerator(orgGenerator, 60)
+    generator(data) should be(ExpResult)
+  }
+
   it should "provide a ColumnGenerator for the option name" in {
     val data = testOptionMetaData(Key, HelpText)
 
