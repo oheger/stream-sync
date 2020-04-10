@@ -17,6 +17,7 @@
 package com.github.sync.cli
 
 import java.nio.file.Path
+import java.util.Locale
 
 import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters, SingleOptionValue}
@@ -239,6 +240,13 @@ object SyncParameterManager {
       * folders and files are encrypted.
       */
     val FilesAndNames: Val = Val()
+
+    /**
+      * A map which allows retrieving an enum value from a string constant.
+      * Strings are stored in upper case.
+      */
+    final val Literals: Map[String, CryptMode.Value] =
+      values.map(v => (v.toString.toUpperCase(Locale.ROOT), v)).toMap
   }
 
   /**
@@ -435,10 +443,9 @@ object SyncParameterManager {
     */
   private def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
     ParameterManager.optionValue(key, Some(CryptModeHelp))
-      .mapTo { name =>
-        val mode = CryptMode.values.find(v => v.toString.equalsIgnoreCase(name))
-        mode.fold[CryptMode.Value](throw new IllegalArgumentException(s"$key: Invalid crypt mode: '$name'!"))(m => m)
-      }.fallbackValues(CryptMode.None.asInstanceOf[CryptMode.Value])
+      .toUpper
+      .toEnum(CryptMode.Literals.get)
+      .fallbackValues(CryptMode.None.asInstanceOf[CryptMode.Value])
       .single
       .mandatory
 
