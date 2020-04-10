@@ -208,6 +208,17 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
     result should be(Success(expectedValues))
   }
 
+  it should "convert a value to an enum" in {
+    val EnumValues = List("larry", "curly", "moe")
+    val mapping = NumberValues.zip(EnumValues).toMap
+    val proc = optionValue(KeyNumbers)
+      .toInt
+      .toEnum(mapping.get)
+
+    val result = runProcessor(proc)
+    result should be(Success(EnumValues))
+  }
+
   it should "support checking whether an option is defined" in {
     val proc = optionValue(KeyAnswer).isDefined
 

@@ -450,6 +450,39 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     res should be(Success(List("THIS IS A TEST STRING")))
   }
 
+  it should "provide a processor that does a mapping of enum values" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val mapping = Map("foo" -> 1, "bar" -> 2, "baz" -> 3)
+    val values = mapping.keys.toList
+    val results = values map (mapping(_))
+    val ValueOption: OptionValue[String] = Success(values)
+    val proc = testProcessor(ValueOption)
+    val processor = ParameterManager.asEnum(proc)(mapping.get)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.parameters should be(NextParameters)
+    res.get.toList should contain theSameElementsInOrderAs results
+  }
+
+  it should "provide an enum processor that handles invalid literals" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val mappingFunc: String => Option[Int] = _ => None
+    val Value = "foo"
+    val ValueOption: OptionValue[String] = Try(Some(Value))
+    val proc = testProcessor(ValueOption)
+    val processor = ParameterManager.asEnum(proc)(mappingFunc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.parameters should be(NextParameters)
+    res match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(Key)
+        exception.getMessage should include(Value)
+      case s => fail("Unexpected result: " + s)
+    }
+  }
+
   it should "provide a processor that returns a mandatory value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val ValueOption: SingleOptionValue[Int] = Success(Some(ProcessorResult))

@@ -63,6 +63,9 @@ object ParameterManager {
     */
   val FileOption: String = OptionPrefix + "file"
 
+  /** A mapping storing the boolean literals for conversion. */
+  private final val BooleanMapping = Map("true" -> true, "false" -> false)
+
   /**
     * Type definition for the base type of a command line option. The option
     * can have an arbitrary type and multiple values. As each type conversion
@@ -343,6 +346,19 @@ object ParameterManager {
       */
     def mapTo[B](f: A => B): CliProcessor[OptionValue[B]] =
       mapped(proc)(f)
+
+    /**
+      * Returns a ''CliProcessor'' that interprets the values of this processor
+      * as enum literals by applying the given mapping function. If the mapping
+      * function yields a result for a current value, the result becomes the
+      * new value; otherwise, the processor fails with an error message.
+      *
+      * @param fMap the enum mapping function
+      * @tparam B the result type of the mapping function
+      * @return the ''CliProcessor'' returning enum values
+      */
+    def toEnum[B](fMap: A => Option[B]): CliProcessor[OptionValue[B]] =
+      asEnum(proc)(fMap)
   }
 
   /**
@@ -904,13 +920,7 @@ object ParameterManager {
     * @return the processor converting the values to booleans
     */
   def asBooleanOptionValue(proc: CliProcessor[OptionValue[String]]):
-  CliProcessor[OptionValue[Boolean]] = mapped(proc)({ s =>
-    toLower(s) match {
-      case "true" => true
-      case "false" => false
-      case s => throw new IllegalArgumentException(s"'$s' cannot be converted to a boolean")
-    }
-  })
+  CliProcessor[OptionValue[Boolean]] = asEnum(asLowerCase(proc))(BooleanMapping.get)
 
   /**
     * Returns a processor that converts a command line argument to file paths.
@@ -944,6 +954,26 @@ object ParameterManager {
     */
   def asUpperCase(proc: CliProcessor[OptionValue[String]]): CliProcessor[OptionValue[String]] =
     mapped(proc)(_.toUpperCase(Locale.ROOT))
+
+  /**
+    * Returns a processor that accepts a number of literals and maps them to
+    * enum constants. The resulting processor passes the results of the passed
+    * in processor to a mapping function. If the function yields a result, it
+    * is used as resulting value; otherwise, the processor returns a failure.
+    *
+    * @param proc the processor providing the original option value
+    * @param fMap the function that maps enum values
+    * @tparam A the value type of the original processor
+    * @tparam B the value type of the resulting processor
+    * @return the processor doing the enum mapping
+    */
+  def asEnum[A, B](proc: CliProcessor[OptionValue[A]])(fMap: A => Option[B]): CliProcessor[OptionValue[B]] =
+    mapped(proc) { res =>
+      fMap(res) match {
+        case Some(value) => value
+        case None => throw paramException(proc.key, s"Invalid enum value: $res")
+      }
+    }
 
   /**
     * A generic function to extract a single value from a command line option
