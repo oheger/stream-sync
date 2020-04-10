@@ -428,6 +428,28 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     }
   }
 
+  it should "provide a processor that converts string values to lower case" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val ValueOption: OptionValue[String] = Try(Some("This Is a TEST String"))
+    val proc = testProcessor(ValueOption)
+    val processor = ParameterManager.asLowerCase(proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.parameters should be(NextParameters)
+    res should be(Success(List("this is a test string")))
+  }
+
+  it should "provide a processor that converts string values to upper case" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val ValueOption: OptionValue[String] = Try(Some("This Is a TEST String"))
+    val proc = testProcessor(ValueOption)
+    val processor = ParameterManager.asUpperCase(proc)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.parameters should be(NextParameters)
+    res should be(Success(List("THIS IS A TEST STRING")))
+  }
+
   it should "provide a processor that returns a mandatory value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val ValueOption: SingleOptionValue[Int] = Success(Some(ProcessorResult))

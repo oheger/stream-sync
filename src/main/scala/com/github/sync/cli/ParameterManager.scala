@@ -381,6 +381,22 @@ object ParameterManager {
       * @return the ''CliProcessor'' extracting ''Path'' values
       */
     def toPath: CliProcessor[OptionValue[Path]] = asPathOptionValue(proc)
+
+    /**
+      * Returns a string-based ''CliProcessor'' that returns values converted
+      * to lower case.
+      *
+      * @return the ''CliProcessor'' returning lower case strings
+      */
+    def toLower: CliProcessor[OptionValue[String]] = asLowerCase(proc)
+
+    /**
+      * Returns a string-based ''CliProcessor'' that returns values converted
+      * to upper case.
+      *
+      * @return the ''CliProcessor'' returning upper case strings
+      */
+    def toUpper: CliProcessor[OptionValue[String]] = asUpperCase(proc)
   }
 
   /**
@@ -906,6 +922,28 @@ object ParameterManager {
     */
   def asPathOptionValue(proc: CliProcessor[OptionValue[String]]):
   CliProcessor[OptionValue[Path]] = mapped(proc)({ s => Paths.get(s) })
+
+  /**
+    * Returns a processor that converts the results of another processor to
+    * lower case strings. This can be useful for instance if case insensitive
+    * comparisons are needed.
+    *
+    * @param proc the processor providing the original option value
+    * @return the processor converting string values to lower case
+    */
+  def asLowerCase(proc: CliProcessor[OptionValue[String]]): CliProcessor[OptionValue[String]] =
+    mapped(proc)(toLower)
+
+  /**
+    * Returns a processor that converts the results of another processor to
+    * upper case strings. This can be useful for instance if case insensitive
+    * comparisons are needed.
+    *
+    * @param proc the processor providing the original option value
+    * @return the processor converting string values to upper case
+    */
+  def asUpperCase(proc: CliProcessor[OptionValue[String]]): CliProcessor[OptionValue[String]] =
+    mapped(proc)(_.toUpperCase(Locale.ROOT))
 
   /**
     * A generic function to extract a single value from a command line option

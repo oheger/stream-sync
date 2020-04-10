@@ -180,6 +180,24 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
     result should be(Success(PathValue))
   }
 
+  it should "convert a string value to lower case" in {
+    val Key = "stringOption"
+    val parameters = TestParameters.copy(parametersMap = TestParameters.parametersMap + (Key -> List("TesT")))
+    val proc = optionValue(Key).toLower.single.mandatory
+
+    val result = runProcessor(proc, parameters)
+    result should be(Success("test"))
+  }
+
+  it should "convert a string value to upper case" in {
+    val Key = "stringOption"
+    val parameters = TestParameters.copy(parametersMap = TestParameters.parametersMap + (Key -> List("TesT")))
+    val proc = optionValue(Key).toUpper.single.mandatory
+
+    val result = runProcessor(proc, parameters)
+    result should be(Success("TEST"))
+  }
+
   it should "support mapping the values extracted by a processor" in {
     val mapFunc: Int => Int = _ + 1
     val intProc = optionValue(KeyNumbers).toInt
