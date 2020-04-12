@@ -671,6 +671,51 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     res should be(ResultOptionValue)
   }
 
+  it should "provide a conditional group processor that executes the correct group" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
+    val groupProc: CliProcessor[Try[String]] = testProcessor(Success("foo"))
+    val activeProc = testProcessor(ResultOptionValue, expParameters = NextParameters,
+      nextParameters = nextNextParameters)
+    val otherProc = constantOptionValue("anotherResult")
+    val groupMap = Map("foo" -> activeProc, "bar" -> otherProc)
+    val processor = conditionalGroupValue(groupProc, groupMap)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.parameters should be(nextNextParameters)
+    res should be(ResultOptionValue)
+  }
+
+  it should "provide a conditional group processor that handles a failure of the group selector" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val failedResult = Failure(new Exception("failure group"))
+    val groupProc: CliProcessor[Try[String]] = testProcessor(failedResult)
+    val groupMap = Map("foo" -> constantOptionValue("ignored"))
+    val processor = conditionalGroupValue(groupProc, groupMap)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.parameters should be(NextParameters)
+    res should be(failedResult)
+  }
+
+  it should "provide a conditional group processor that fails if the group cannot be resolved" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val GroupName = "foo"
+    val groupProc: CliProcessor[Try[String]] = testProcessor(Success(GroupName))
+    val groupMap = Map("bar" -> constantOptionValue("ignored"))
+    val processor = conditionalGroupValue(groupProc, groupMap)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.parameters should be(NextParameters)
+    res match {
+      case Failure(exception) =>
+        exception shouldBe a[IllegalArgumentException]
+        exception.getMessage should include(Key)
+        exception.getMessage should include(s"'$GroupName''")
+      case r => fail("Unexpected result: " + r)
+    }
+  }
+
   it should "provide a processor that checks whether an option is defined if the option has a value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val processor = ParameterManager.isDefinedProcessor(Key)

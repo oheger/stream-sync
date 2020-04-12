@@ -768,19 +768,56 @@ object ParameterManager {
         case Failure(_) => (failProc, failGroup)
       }
 
-      // generate a help context with the meta data of non-active processors
-      val helpContext = List((ifProc, ifGroup), (elseProc, elseGroup), (failProc, failGroup))
+      val processorsAndGroups = List((ifProc, ifGroup), (elseProc, elseGroup), (failProc, failGroup))
         .filter(_._1 != activeProc)
-        .foldLeft(context2.helpContext) { (helpCtx, p) =>
-          val helpCtxWithGroup = helpCtx startGroupConditionally p._2
-          val paramCtx = contextForMetaDataRun(helpCtxWithGroup)
-          val (_, nextContext) = p._1.run(paramCtx)
-          nextContext.helpContext.endGroupConditionally(p._2)
-        }
-
+      val helpContext = updateHelpContext(context2.helpContext, processorsAndGroups)
       val (result, context3) =
         activeProc.run(context2.copy(helpContext = helpContext startGroupConditionally activeGroup))
       (result, context3.copy(helpContext = context3.helpContext.endGroupConditionally(activeGroup)))
+    })
+
+  /**
+    * Returns a processor that dispatches from the result of one processor to a
+    * group of other processors. The original processor yields a string value
+    * which is looked up in a map to find the processor to be executed.
+    *
+    * This processor is useful for applications that support a mode or command
+    * argument. Based on this argument, different command line options are
+    * enabled or disabled. The map to be passed to this function in such a
+    * scenario has the supported command names as strings and the processors
+    * querying the command-specific options as values. If the value returned
+    * by the selector processor is not found in the map, the resulting
+    * processor fails with an error message. It also fails if the selector
+    * processor fails (with the same exception).
+    *
+    * The keys in the map are also used as group names when invoking the
+    * group-specific processors. So the group-specific command line options can
+    * be categorized and displayed in group-specific sections in the
+    * application's help text.
+    *
+    * @param groupProc the ''CliProcessor'' that selects the active group
+    * @param groupMap  a map with processor for the supported groups
+    * @tparam A the result type of the resulting processor
+    * @return the processor returning the group value
+    */
+  def conditionalGroupValue[A](groupProc: CliProcessor[Try[String]],
+                               groupMap: Map[String, CliProcessor[Try[A]]]): CliProcessor[Try[A]] =
+    CliProcessor(context => {
+      val (triedGroup, context2) = groupProc.run(context)
+      triedGroup match {
+        case Success(group) =>
+          groupMap.get(group).
+            fold((Try[A](throw paramException(groupProc.key, s"Cannot resolve group '$group''")),
+              context2)) { proc =>
+              val processorsAndGroups = groupMap.toList.filter(entry => entry._2 != proc)
+                .map(entry => (entry._2, Some(entry._1)))
+              val helpContext = updateHelpContext(context2.helpContext, processorsAndGroups)
+              val (result, context3) = proc.run(context2.copy(helpContext = helpContext startGroup group))
+              (result, context3.copy(helpContext = context3.helpContext.endGroup()))
+            }
+        case Failure(exception) =>
+          (Failure(exception), context2)
+      }
     })
 
   /**
@@ -1665,6 +1702,31 @@ object ParameterManager {
                                    (implicit ec: ExecutionContext, system: ActorSystem):
   Future[List[String]] =
     Future.sequence(files.map(readParameterFile)).map(_.flatten)
+
+  /**
+    * Updates a help context by running some processors against it. This
+    * function is typically used by conditional processors that select some
+    * processors to be executed from a larger set of processors. The other
+    * processors that are not selected still need to be reflected by the help
+    * context. This function expects a list of processors and the optional
+    * groups they belong to. It runs them against a dummy parameter context, so
+    * that the help context is updated, but the original parameter context is
+    * not modified.
+    *
+    * @param helpContext         the current ''CliHelpContext''
+    * @param processorsAndGroups a list with processors and their groups
+    * @tparam A the result type of the processors
+    * @return the updated help context
+    */
+  private def updateHelpContext[A](helpContext: CliHelpContext,
+                                   processorsAndGroups: List[(CliProcessor[A], Option[String])]): CliHelpContext =
+    processorsAndGroups
+      .foldLeft(helpContext) { (helpCtx, p) =>
+        val helpCtxWithGroup = helpCtx startGroupConditionally p._2
+        val paramCtx = contextForMetaDataRun(helpCtxWithGroup)
+        val (_, nextContext) = p._1.run(paramCtx)
+        nextContext.helpContext.endGroupConditionally(p._2)
+      }
 
   /**
     * Converts a string to lower case.

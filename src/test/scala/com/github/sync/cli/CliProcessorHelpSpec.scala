@@ -422,6 +422,20 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     verifyZeroInteractions(reader)
   }
 
+  it should "correctly handle the groups of a conditional group processor" in {
+    val Key2 = "OtherKey"
+    val procG1 = optionValue(Key)
+    val procG2 = optionValue(Key2)
+    val procGroupSel = constantOptionValue("g1").single.mandatory
+    val groupMap = Map("g1" -> procG1, "g2" -> procG2)
+    val procCondGroup = conditionalGroupValue(procGroupSel, groupMap)
+
+    val helpContext = generateHelpContext(procCondGroup)
+    CliHelpGenerator.isInGroup(helpContext.options(Key), "g1") shouldBe true
+    CliHelpGenerator.isInGroup(helpContext.options(Key2), "g2") shouldBe true
+    CliHelpGenerator.isInGroup(helpContext.options(Key2), "g1") shouldBe false
+  }
+
   it should "set the multiplicity attribute if it is defined" in {
     val proc = optionValue(Key).multiplicity(1, 4)
 
