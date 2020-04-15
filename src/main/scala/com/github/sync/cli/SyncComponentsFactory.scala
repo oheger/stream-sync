@@ -29,8 +29,8 @@ import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation
 import com.github.sync.cli.ParameterManager._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
-import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
 import com.github.sync.http._
+import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.webdav.DavConfig
@@ -126,6 +126,15 @@ object SyncComponentsFactory {
     * server.
     */
   val OneDriveHostCacheSize = 8
+
+  /** Group name for the options for basic auth. */
+  final val GroupBasicAuth = "authBasic"
+
+  /** Group name of the options for OAuth. */
+  final val GroupOAuth = "authOAuth"
+
+  /** Group name to be used if no authentication is desired. */
+  final val GroupNoAuth = "authNone"
 
   /** Regular expression for parsing a WebDav URI. */
   private val RegDavUri = (PrefixWebDav + "(.+)").r
@@ -365,10 +374,8 @@ object SyncComponentsFactory {
       triedModProp <- stringOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
       triedModNs <- stringOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
       triedDel <- asMandatory(booleanOptionValue(keyDelBeforeOverride, Some(false)))
-      triedBasicAuth <- basicAuthProcessor(structureType)
-      triedOAuth <- oauthConfigProcessor(structureType)
-    } yield createDavConfig(uri, timeout, structureType, triedModProp, triedModNs, triedDel,
-      triedBasicAuth, triedOAuth)
+      triedAuth <- authConfigProcessor(structureType)
+    } yield createDavConfig(uri, timeout, structureType, triedModProp, triedModNs, triedDel, triedAuth)
   }
 
   /**
@@ -408,10 +415,8 @@ object SyncComponentsFactory {
         Some(OneDriveConfig.DefaultUploadChunkSizeMB)))
       triedPath <- asMandatory(stringOptionValue(keyPath))
       triedServer <- stringOptionValue(structureType.configPropertyName(PropOneDriveServer))
-      triedBasicAuth <- basicAuthProcessor(structureType)
-      triedOAuth <- oauthConfigProcessor(structureType)
-    } yield createOneDriveConfig(driveID, timeout, triedPath, triedChunkSize, triedServer,
-      triedBasicAuth, triedOAuth)
+      triedAuth <- authConfigProcessor(structureType)
+    } yield createOneDriveConfig(driveID, timeout, triedPath, triedChunkSize, triedServer, triedAuth)
   }
 
   /**
@@ -431,42 +436,58 @@ object SyncComponentsFactory {
   }
 
   /**
+    * Returns a ''CliProcessor'' for obtaining the authentication
+    * configuration. The processor creates a concrete implementation of the
+    * [[AuthConfig]] trait depending on the properties that are specified.
+    *
+    * @param structureType the structure type
+    * @return the ''CliProcessor'' for the auth config
+    */
+  private def authConfigProcessor(structureType: StructureType): CliProcessor[Try[AuthConfig]] = {
+    val procBasicDefined = isDefinedProcessor(structureType.configPropertyName(PropDavUser))
+    val procOAuthDefined = isDefinedProcessor(structureType.configPropertyName(
+      OAuthParameterManager.NameOptionName))
+    val condNoAuth = conditionalValue(procOAuthDefined, ifProc = constantOptionValue(GroupOAuth),
+      elseProc = constantOptionValue(GroupNoAuth))
+    val groupSelector: CliProcessor[Try[String]] =
+      conditionalValue(procBasicDefined, ifProc = constantOptionValue(GroupBasicAuth), elseProc = condNoAuth)
+        .single.mandatory
+    val groupMap = Map[String, CliProcessor[OptionValue[AuthConfig]]](
+      GroupBasicAuth -> basicAuthProcessor(structureType),
+      GroupOAuth -> oauthConfigProcessor(structureType),
+      GroupNoAuth -> constantOptionValue(NoAuth))
+    conditionalGroupValue(groupSelector, groupMap).single.mandatory
+  }
+
+  /**
     * Returns a ''CliProcessor'' for obtaining the basic auth configuration.
-    * The processor checks whether the name of an IDP has been specified. If
-    * this is the case, an undefined option is returned; otherwise, the config
-    * is parsed and returned.
     *
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the basic auth config
     */
-  private def basicAuthProcessor(structureType: StructureType): CliProcessor[Try[Option[BasicAuthConfig]]] = {
+  private def basicAuthProcessor(structureType: StructureType): CliProcessor[OptionValue[AuthConfig]] = {
     val keyUser = structureType.configPropertyName(PropDavUser)
-    val proc = for {
-      triedUser <- asMandatory(stringOptionValue(keyUser))
+    val procUser = optionValue(keyUser)
+      .single
+      .mandatory
+    for {
+      triedUser <- procUser
       triedPassword <- davPasswordOption(structureType)
     } yield createBasicAuthConfig(triedUser, triedPassword)
-    asSingleOptionValue(conditionalValue[BasicAuthConfig](isDefinedProcessor(structureType.configPropertyName(
-      OAuthParameterManager.NameOptionName)), ifProc = emptyProcessor, elseProc = proc))
   }
 
   /**
-    * Returns a ''CliProcessor'' for obtaining the OAuth configuration. This
-    * processor checks whether the name of an IDP has been specified. If so,
-    * the configuration is extracted; otherwise, an undefined option is
-    * returned. This processor and the processor for the basic auth config are
-    * mutually exclusive.
+    * Returns a ''CliProcessor'' for obtaining the OAuth configuration.
     *
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the OAuth configuration
     */
-  private def oauthConfigProcessor(structureType: StructureType): CliProcessor[Try[Option[OAuthStorageConfig]]] = {
-    val proc = OAuthParameterManager.storageConfigProcessor(needPassword = true,
+  private def oauthConfigProcessor(structureType: StructureType): CliProcessor[OptionValue[AuthConfig]] = {
+    OAuthParameterManager.storageConfigProcessor(needPassword = true,
       prefix = OptionPrefix + structureType.name)
       .map { triedConfig =>
-        triedConfig map (config => Iterable(config))
+        triedConfig map (config => Iterable(config.asInstanceOf[AuthConfig]))
       }
-    asSingleOptionValue(conditionalValue[OAuthStorageConfig](isDefinedProcessor(structureType.configPropertyName(
-      OAuthParameterManager.NameOptionName)), ifProc = proc))
   }
 
   /**
@@ -480,41 +501,37 @@ object SyncComponentsFactory {
     * @param triedOptModifiedNamespace the component for the modified namespace
     * @param triedDelBeforeOverride    the component for the delete before
     *                                  override flag
-    * @param triedBasicAuthConfig      the component for the basic auth config
-    * @param triedOAuthConfig          the component for the OAuth config
+    * @param triedAuthConfig           the component for the auth config
     * @return a ''Try'' with the configuration for a Dav server
     */
   private def createDavConfig(uri: String, timeout: Timeout, structureType: StructureType,
                               triedOptModifiedProp: Try[Option[String]],
                               triedOptModifiedNamespace: Try[Option[String]],
                               triedDelBeforeOverride: Try[Boolean],
-                              triedBasicAuthConfig: Try[Option[BasicAuthConfig]],
-                              triedOAuthConfig: Try[Option[OAuthStorageConfig]]): Try[DavConfig] = {
+                              triedAuthConfig: Try[AuthConfig]): Try[DavConfig] = {
     val triedUri = ParameterManager.paramTry(structureType.configPropertyName(PropDavUri))(Uri(uri))
     ParameterManager.createRepresentation(triedUri, triedOptModifiedProp, triedOptModifiedNamespace,
-      triedDelBeforeOverride, triedBasicAuthConfig, triedOAuthConfig)(DavConfig(_, _, _, _, timeout, _, _))
+      triedDelBeforeOverride, triedAuthConfig)(DavConfig(_, _, _, _, timeout, _))
   }
 
   /**
     * Creates a ''OneDriveConfig'' object from the given components. Errors are
     * aggregated in the resulting ''Try''.
     *
-    * @param driveID              the OneDrive drive ID
-    * @param timeout              the timeout for requests
-    * @param triedPath            the sync path component
-    * @param triedChunkSize       the upload chunk size component
-    * @param triedServerUri       the server URI component
-    * @param triedBasicAuthConfig the component for basic auth config
-    * @param triedOAuthConfig     the component for OAuth config
+    * @param driveID         the OneDrive drive ID
+    * @param timeout         the timeout for requests
+    * @param triedPath       the sync path component
+    * @param triedChunkSize  the upload chunk size component
+    * @param triedServerUri  the server URI component
+    * @param triedAuthConfig the component for auth config
     * @return a ''Try'' with the OneDrive configuration
     */
   private def createOneDriveConfig(driveID: String, timeout: Timeout,
                                    triedPath: Try[String], triedChunkSize: Try[Int],
                                    triedServerUri: Try[Option[String]],
-                                   triedBasicAuthConfig: Try[Option[BasicAuthConfig]],
-                                   triedOAuthConfig: Try[Option[OAuthStorageConfig]]): Try[OneDriveConfig] =
-    ParameterManager.createRepresentation(triedPath, triedChunkSize, triedOAuthConfig, triedServerUri,
-      triedBasicAuthConfig)(OneDriveConfig(driveID, _, _, timeout, _, _, _))
+                                   triedAuthConfig: Try[AuthConfig]): Try[OneDriveConfig] =
+    ParameterManager.createRepresentation(triedPath, triedChunkSize, triedAuthConfig,
+      triedServerUri)(OneDriveConfig(driveID, _, _, timeout, _, _))
 
   /**
     * Creates an ''OptionValue'' with a ''BasicAuthConfig'' based on the given
@@ -547,13 +564,13 @@ object SyncComponentsFactory {
                                        Secret, OAuthTokenData])
                                     (implicit ec: ExecutionContext, system: ActorSystem):
   Future[HttpActorFactory] =
-    httpConfig.optOAuthConfig match {
-      case Some(storageConfig) =>
+    httpConfig.authConfig match {
+      case storageConfig: OAuthStorageConfig =>
         for {oauthConfig <- storageService.loadConfig(storageConfig)
              secret <- storageService.loadClientSecret(storageConfig)
              tokens <- storageService.loadTokens(storageConfig)
              } yield new OAuthHttpActorFactory(requestActorProps, storageConfig, oauthConfig, secret, tokens)
-      case None =>
+      case _ =>
         Future.successful(new BasicAuthHttpActorFactory(requestActorProps))
     }
 }

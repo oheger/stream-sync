@@ -18,7 +18,7 @@ package com.github.sync.webdav
 
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
-import com.github.sync.http.{BasicAuthConfig, HttpConfig, OAuthStorageConfig}
+import com.github.sync.http.{AuthConfig, HttpConfig}
 import com.github.sync.util.UriEncodingHelper
 
 object DavConfig {
@@ -44,17 +44,15 @@ object DavConfig {
     * @param deleteBeforeOverride flag whether a delete operation should be
     *                             issued before a file override
     * @param timeout              a timeout for requests to the DAV server
-    * @param optBasicAuthConfig   optional config with basic auth settings
-    * @param optOAuthConfig       optional config with OAuth settings
+    * @param authConfig           the config for the auth mechanism
     * @return the ''DavConfig'' object
     */
   def apply(rootUri: Uri, optModifiedProperty: Option[String],
             optModifiedNamespace: Option[String], deleteBeforeOverride: Boolean,
-            timeout: Timeout, optBasicAuthConfig: Option[BasicAuthConfig] = None,
-            optOAuthConfig: Option[OAuthStorageConfig] = None): DavConfig =
+            timeout: Timeout, authConfig: AuthConfig): DavConfig =
     new DavConfig(UriEncodingHelper.removeTrailingSeparator(rootUri.toString()),
       optModifiedProperty getOrElse DefaultModifiedProperty, optModifiedNamespace, deleteBeforeOverride,
-      createModifiedProperties(optModifiedProperty), timeout, optBasicAuthConfig, optOAuthConfig)
+      createModifiedProperties(optModifiedProperty), timeout, authConfig)
 
   /**
     * Generates the list of modified properties. If a custom modified property
@@ -94,8 +92,7 @@ object DavConfig {
   * @param modifiedProperties    a list with properties to be checked to fetch
   *                              the last-modified timestamp
   * @param timeout               a timeout for requests to the DAV server
-  * @param optBasicAuthConfig    optional config with basic auth settings
-  * @param optOAuthConfig        optional config with OAuth settings
+  * @param authConfig            the config for the auth mechanism
   */
 case class DavConfig(override val rootUri: Uri,
                      lastModifiedProperty: String,
@@ -103,5 +100,4 @@ case class DavConfig(override val rootUri: Uri,
                      deleteBeforeOverride: Boolean,
                      modifiedProperties: List[String],
                      timeout: Timeout,
-                     override val optBasicAuthConfig: Option[BasicAuthConfig],
-                     override val optOAuthConfig: Option[OAuthStorageConfig]) extends HttpConfig
+                     override val authConfig: AuthConfig) extends HttpConfig

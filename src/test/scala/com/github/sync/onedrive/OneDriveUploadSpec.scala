@@ -26,6 +26,7 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.stage.AsyncCallback
 import akka.testkit.{TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
+import com.github.sync.http.NoAuth
 import com.github.sync.onedrive.OneDriveUpload.UploadRequestSource
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest.BeforeAndAfterAll
@@ -60,8 +61,7 @@ object OneDriveUploadSpec {
     */
   private def createConfig(chunkSize: Int, timeout: Timeout = 3.seconds): OneDriveConfig =
     new OneDriveConfig(rootUri = "http://localhost", uploadChunkSize = chunkSize,
-      timeout = timeout, optBasicAuthConfig = None, optOAuthConfig = None,
-      driveRootUri = "http://driveRoot.org", syncPath = "/foo")
+      timeout = timeout, authConfig = NoAuth, driveRootUri = "http://driveRoot.org", syncPath = "/foo")
 
   /**
     * A test implementation of the upload flow that allow access to the

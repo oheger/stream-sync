@@ -19,6 +19,7 @@ package com.github.sync.webdav
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
 import com.github.sync._
+import com.github.sync.http.NoAuth
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -48,26 +49,26 @@ class DavConfigSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
   "DavConfig" should "fill the list of modified properties correctly" in {
     val expModifiedProperties = List(ModifiedProp, DavConfig.DefaultModifiedProperty)
     val config = DavConfig(DavUri, Some(ModifiedProp), Some(ModifiedNamespace),
-      deleteBeforeOverride = true, DavTimeout)
+      deleteBeforeOverride = true, DavTimeout, NoAuth)
 
     config.modifiedProperties should contain theSameElementsInOrderAs expModifiedProperties
   }
 
   it should "eliminate duplicates in the list of modified properties" in {
     val config = DavConfig(DavUri, Some(DavConfig.DefaultModifiedProperty), Some(ModifiedNamespace),
-      deleteBeforeOverride = true, DavTimeout)
+      deleteBeforeOverride = true, DavTimeout, NoAuth)
 
     config.modifiedProperties should contain only DavConfig.DefaultModifiedProperty
   }
 
   it should "set the default last modified property if undefined" in {
-    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout)
+    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout, NoAuth)
 
     config.lastModifiedProperty should be(DavConfig.DefaultModifiedProperty)
   }
 
   it should "remove a trailing slash from the root URI" in {
-    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout)
+    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout, NoAuth)
 
     config.rootPath should be("")
   }
@@ -76,7 +77,7 @@ class DavConfigSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val rootUri = Uri("https://github.com/oheger/stream-sync")
     val elemUri = "/test/some stuff/action.txt"
     val expectedUri = Uri("/oheger/stream-sync/test/some%20stuff/action.txt")
-    val config = DavConfig(rootUri, None, None, deleteBeforeOverride = false, DavTimeout)
+    val config = DavConfig(rootUri, None, None, deleteBeforeOverride = false, DavTimeout, NoAuth)
 
     config resolveRelativeUri elemUri should be(expectedUri)
   }
@@ -84,7 +85,7 @@ class DavConfigSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
   it should "handle a root URI with a trailing slash" in {
     val elemUri = "/stream-sync"
     val expectedUri = Uri("/stream-sync")
-    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout)
+    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout, NoAuth)
 
     config resolveRelativeUri elemUri should be(expectedUri)
   }
@@ -93,7 +94,7 @@ class DavConfigSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val rootUri = Uri("https://github.com/oheger/stream-sync")
     val elemUri = "/test/some stuff/sub"
     val expectedUri = Uri("/oheger/stream-sync/test/some%20stuff/sub/")
-    val config = DavConfig(rootUri, None, None, deleteBeforeOverride = false, DavTimeout)
+    val config = DavConfig(rootUri, None, None, deleteBeforeOverride = false, DavTimeout, NoAuth)
 
     config.resolveRelativeUri(elemUri, withTrailingSlash = true) should be(expectedUri)
   }
@@ -102,7 +103,7 @@ class DavConfigSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val prefix = "/a%20path"
     val elemUri = "/foo/elem.txt"
     val expectedUri = Uri(prefix + elemUri)
-    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout)
+    val config = DavConfig(DavUri, None, None, deleteBeforeOverride = false, DavTimeout, NoAuth)
 
     config.resolveRelativeUri(elemUri, prefix = prefix) should be(expectedUri)
   }

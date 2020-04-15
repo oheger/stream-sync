@@ -24,13 +24,21 @@ import com.github.sync.crypt.Secret
 import com.github.sync.util.UriEncodingHelper
 
 /**
+  * A trait representing a configuration for an authentication mechanism.
+  *
+  * This is just a marker interface. An object implementing this trait is part
+  * of an HTTP configuration.
+  */
+sealed trait AuthConfig
+
+/**
   * A data class that collects user credentials for accessing a WebDav server
   * via basic auth.
   *
   * @param user     the user name
   * @param password the password
   */
-case class BasicAuthConfig(user: String, password: Secret)
+case class BasicAuthConfig(user: String, password: Secret) extends AuthConfig
 
 /**
   * A data class with information required to access the persistent information
@@ -51,7 +59,7 @@ case class BasicAuthConfig(user: String, password: Secret)
   */
 case class OAuthStorageConfig(rootDir: Path,
                               baseName: String,
-                              optPassword: Option[Secret]) {
+                              optPassword: Option[Secret]) extends AuthConfig {
   /**
     * Returns a path in the root directory that is derived from the base name
     * with the given suffix. This is useful to locate concrete files related to
@@ -63,6 +71,14 @@ case class OAuthStorageConfig(rootDir: Path,
   def resolveFileName(suffix: String): Path =
     rootDir.resolve(baseName + suffix)
 }
+
+/**
+  * An object representing no authentication mechanism.
+  *
+  * This is used for the rare case that communication with a server should be
+  * done without any authentication mechanism.
+  */
+case object NoAuth extends AuthConfig
 
 /**
   * A trait defining configuration options that are common to all HTTP-based
@@ -90,22 +106,12 @@ trait HttpConfig {
   def timeout: Timeout
 
   /**
-    * Returns an optional configuration for the Basic Auth scheme. If this
-    * authentication mechanism is to be used, here a valid configuration has to
-    * be returned.
+    * Returns the configuration for the authentication mechanism. Here one of
+    * the supported implementations is returned.
     *
-    * @return an optional ''BasicAuthConfig''
+    * @return the configuration for the authentication mechanism
     */
-  def optBasicAuthConfig: Option[BasicAuthConfig]
-
-  /**
-    * Returns an optional configuration for the OAuth scheme. If this
-    * authentication mechanism is to be used, here a valid configuration has to
-    * be returned.
-    *
-    * @return an optional ''OAuthStorageConfig''
-    */
-  def optOAuthConfig: Option[OAuthStorageConfig]
+  def authConfig: AuthConfig
 
   /**
     * Returns the root path of the HTTP server. This path is derived from the

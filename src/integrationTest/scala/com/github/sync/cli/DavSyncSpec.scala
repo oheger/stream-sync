@@ -227,7 +227,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val WebDavPath = "/destination"
     val davConfig = DavConfig(serverUri(WebDavPath),
       Some(DavConfig.DefaultModifiedProperty), None, deleteBeforeOverride = false,
-      Timeout(10.seconds), optBasicAuthConfig = Some(BasicAuthConfig(UserId, Secret(Password))))
+      Timeout(10.seconds), authConfig = BasicAuthConfig(UserId, Secret(Password)))
     val shutdownCount = new AtomicInteger
     val provider = new DavSourceFileProvider(davConfig, TestProbe().ref) {
       override def shutdown(): Unit = {

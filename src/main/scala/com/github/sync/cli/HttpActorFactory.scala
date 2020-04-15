@@ -20,7 +20,7 @@ import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.{KillSwitches, SharedKillSwitch}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.oauth._
-import com.github.sync.http.{HttpBasicAuthActor, HttpConfig, HttpRequestActor, OAuthStorageConfig}
+import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpConfig, HttpRequestActor, OAuthStorageConfig}
 
 object HttpActorFactory {
   /** The name of the HTTP request actor for the source structure. */
@@ -105,7 +105,7 @@ sealed trait HttpActorFactory {
 class BasicAuthHttpActorFactory(override val httpRequestActorProps: Props) extends HttpActorFactory {
   override protected def authActorProps(config: HttpConfig, system: ActorSystem, clientCount: Int, name: String,
                                         withKillSwitch: Boolean, httpActor: ActorRef): Props =
-    HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get, clientCount)
+    HttpBasicAuthActor(httpActor, config.authConfig.asInstanceOf[BasicAuthConfig], clientCount)
 }
 
 /**

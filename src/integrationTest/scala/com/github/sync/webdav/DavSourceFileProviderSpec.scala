@@ -66,8 +66,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
   private def createConfig(): DavConfig =
     DavConfig(serverUri(RootPath), DavConfig.DefaultModifiedProperty, None,
       deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty),
-      Timeout(10.seconds), optBasicAuthConfig = Some(BasicAuthConfig(UserId, Secret(Password))),
-      optOAuthConfig = None)
+      Timeout(10.seconds), authConfig = BasicAuthConfig(UserId, Secret(Password)))
 
   /**
     * Creates an actor for sending HTTP requests.
@@ -77,7 +76,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     */
   private def createRequestActor(config: DavConfig): ActorRef = {
     val httpActor = system.actorOf(HttpRequestActor(serverUri(""), 2))
-    system.actorOf(HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get))
+    system.actorOf(HttpBasicAuthActor(httpActor, config.authConfig.asInstanceOf[BasicAuthConfig]))
   }
 
   "A DavSourceFileProvider" should "provide a source for a requested existing file" in {

@@ -73,7 +73,7 @@ class DavFsElementSourceSpec() extends BaseHttpFsElementSourceSpec(ActorSystem("
     */
   private def createRequestActor(config: DavConfig): ActorRef = {
     val httpActor = system.actorOf(HttpRequestActor(serverUri(""), 2))
-    system.actorOf(HttpBasicAuthActor(httpActor, config.optBasicAuthConfig.get))
+    system.actorOf(HttpBasicAuthActor(httpActor, config.authConfig.asInstanceOf[BasicAuthConfig]))
   }
 
   /**
@@ -86,8 +86,7 @@ class DavFsElementSourceSpec() extends BaseHttpFsElementSourceSpec(ActorSystem("
     DavConfig(serverUri(RootPath), modifiedProperty, None,
       deleteBeforeOverride = false,
       modifiedProperties = List(modifiedProperty, DavConfig.DefaultModifiedProperty),
-      Timeout(10.seconds), optBasicAuthConfig = Some(BasicAuthConfig(UserId, Secret(Password))),
-      optOAuthConfig = None)
+      Timeout(10.seconds), authConfig = BasicAuthConfig(UserId, Secret(Password)))
 
   /**
     * Adds stubbing declarations for all test folders. Each folder is mapped to

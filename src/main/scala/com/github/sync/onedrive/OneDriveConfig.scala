@@ -18,7 +18,7 @@ package com.github.sync.onedrive
 
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
-import com.github.sync.http.{BasicAuthConfig, HttpConfig, OAuthStorageConfig}
+import com.github.sync.http.{AuthConfig, HttpConfig}
 import com.github.sync.util.UriEncodingHelper
 
 object OneDriveConfig {
@@ -54,22 +54,20 @@ object OneDriveConfig {
     * override these values, e.g. to access a different server using the
     * OneDrive protocol or for testing purposes.
     *
-    * @param driveID            the ID defining the drive to be accessed
-    * @param syncPath           the relative path in the drive to be synced
-    * @param uploadChunkSizeMB  the chunk size for uploads of large files (MB)
-    * @param timeout            a timeout for server requests
-    * @param optOAuthConfig     optional OAuth config settings
-    * @param optServerUri       optional (alternative) server URI
-    * @param optBasicAuthConfig optional basic auth settings
+    * @param driveID           the ID defining the drive to be accessed
+    * @param syncPath          the relative path in the drive to be synced
+    * @param uploadChunkSizeMB the chunk size for uploads of large files (MB)
+    * @param timeout           a timeout for server requests
+    * @param authConfig        the config of the auth mechanism
+    * @param optServerUri      optional (alternative) server URI
     * @return the newly created ''OneDriveConfig'' object
     */
   def apply(driveID: String, syncPath: String, uploadChunkSizeMB: Int, timeout: Timeout,
-            optOAuthConfig: Option[OAuthStorageConfig], optServerUri: Option[String] = None,
-            optBasicAuthConfig: Option[BasicAuthConfig] = None): OneDriveConfig = {
+            authConfig: AuthConfig, optServerUri: Option[String] = None): OneDriveConfig = {
     val driveRoot = UriEncodingHelper.withTrailingSeparator(optServerUri.getOrElse(OneDriveServerUri)) + driveID
     val normalizedSyncPath = UriEncodingHelper withLeadingSeparator syncPath
     val rootUri = driveRoot + PrefixRoot + normalizedSyncPath
-    new OneDriveConfig(rootUri, timeout, optBasicAuthConfig, optOAuthConfig, driveRoot, normalizedSyncPath,
+    new OneDriveConfig(rootUri, timeout, authConfig, driveRoot, normalizedSyncPath,
       uploadChunkSizeMB * FactorMB)
   }
 }
@@ -83,18 +81,16 @@ object OneDriveConfig {
   * constant; however, to better support testing and make the class more
   * flexible, it can be freely configured.
   *
-  * @param rootUri            the root URI to be synced
-  * @param timeout            a timeout for requests to the server
-  * @param optBasicAuthConfig optional config with basic auth settings
-  * @param optOAuthConfig     optional config with OAuth config settings
-  * @param driveRootUri       the root URI of the drive to be synced
-  * @param syncPath           the relative path of the folder to be synced
-  * @param uploadChunkSize    the chunk size for file upload operations (Bytes)
+  * @param rootUri         the root URI to be synced
+  * @param timeout         a timeout for requests to the server
+  * @param authConfig      the config for the auth mechanism
+  * @param driveRootUri    the root URI of the drive to be synced
+  * @param syncPath        the relative path of the folder to be synced
+  * @param uploadChunkSize the chunk size for file upload operations (Bytes)
   */
 case class OneDriveConfig(override val rootUri: Uri,
                           override val timeout: Timeout,
-                          override val optBasicAuthConfig: Option[BasicAuthConfig],
-                          override val optOAuthConfig: Option[OAuthStorageConfig],
+                          override val authConfig: AuthConfig,
                           driveRootUri: Uri,
                           syncPath: String,
                           uploadChunkSize: Int) extends HttpConfig {
