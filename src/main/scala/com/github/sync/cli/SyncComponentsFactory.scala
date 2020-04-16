@@ -27,6 +27,7 @@ import akka.util.Timeout
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
 import com.github.sync.cli.ParameterManager._
+import com.github.sync.cli.SyncStructureConfig.{DestinationRoleType, SourceRoleType, RoleType}
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
 import com.github.sync.http._
@@ -143,53 +144,6 @@ object SyncComponentsFactory {
   private val RegOneDriveID = (PrefixOneDrive + "(.+)").r
 
   /**
-    * A trait defining the type of a structure to be synced.
-    *
-    * The type determines whether a structure acts as source or destination of a
-    * sync process. It is passed to some functions that create certain elements
-    * to handle sync actions like sources or processing stages.
-    *
-    * From the parameters passed to a sync process it must be possible to find
-    * out which ones apply to the source and to the destination structure. This
-    * is done by defining a unique ''name'' property for the structure type.
-    * Parameters can then be prefixed by this name to make clear to which
-    * structure they apply.
-    */
-  sealed trait StructureType {
-    /**
-      * Returns a name of this structure type.
-      *
-      * @return the name property
-      */
-    def name: String
-
-    /**
-      * Determines the name of a configuration property with the given name for
-      * this ''StructureType''. The full property name is determined by prefixing
-      * it with the name of this type. In addition, the parameter prefix is
-      * prepended.
-      *
-      * @param property the property name
-      * @return the full property name for this source type
-      */
-    def configPropertyName(property: String): String = s"${ParameterManager.OptionPrefix}$name$property"
-  }
-
-  /**
-    * A concrete ''StructureType'' representing the source structure.
-    */
-  case object SourceStructureType extends StructureType {
-    override val name: String = "src-"
-  }
-
-  /**
-    * A concrete ''StructureType'' representing the destination structure.
-    */
-  case object DestinationStructureType extends StructureType {
-    override val name: String = "dst-"
-  }
-
-  /**
     * Type definition for a function that does cleanup for a components
     * factory. Resources created by the factory, such as actors, can be freed
     * by invoking this function.
@@ -304,7 +258,7 @@ object SyncComponentsFactory {
     * @return a ''Future'' with the extracted file system configuration and the
     *         updated ''ParameterContext''
     */
-  private def extractLocalFsConfig(uri: String, parameters: Parameters, structureType: StructureType)
+  private def extractLocalFsConfig(uri: String, parameters: Parameters, structureType: RoleType)
                                   (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(LocalFsConfig, ParameterContext)] = {
     val processor = localFsConfigProcessor(uri, structureType)
@@ -319,7 +273,7 @@ object SyncComponentsFactory {
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the file system configuration
     */
-  private def localFsConfigProcessor(uri: String, structureType: StructureType): CliProcessor[Try[LocalFsConfig]] =
+  private def localFsConfigProcessor(uri: String, structureType: RoleType): CliProcessor[Try[LocalFsConfig]] =
     optionValue(structureType.configPropertyName(PropLocalFsTimeZone))
       .mapTo(ZoneId.of)
       .single
@@ -334,7 +288,7 @@ object SyncComponentsFactory {
     * @param triedZone     the tried time zone component
     * @return a ''Try'' with the file system configuration
     */
-  private def createLocalFsConfig(uri: String, structureType: StructureType, triedZone: Try[Option[ZoneId]]):
+  private def createLocalFsConfig(uri: String, structureType: RoleType, triedZone: Try[Option[ZoneId]]):
   Try[LocalFsConfig] = {
     val triedPath = ParameterManager.paramTry(structureType.configPropertyName(PropLocalFsPath))(Paths get uri)
     ParameterManager.createRepresentation(triedPath, triedZone)(LocalFsConfig.apply)
@@ -353,7 +307,7 @@ object SyncComponentsFactory {
     * @return a ''Future'' with the extracted configuration and updated
     *         ''ParameterContext''
     */
-  private def extractDavConfig(uri: String, timeout: Timeout, parameters: Parameters, structureType: StructureType)
+  private def extractDavConfig(uri: String, timeout: Timeout, parameters: Parameters, structureType: RoleType)
                               (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(DavConfig, ParameterContext)] =
     extractConfig(davConfigProcessor(uri, timeout, structureType), parameters)
@@ -367,7 +321,7 @@ object SyncComponentsFactory {
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the WebDav configuration
     */
-  private def davConfigProcessor(uri: String, timeout: Timeout, structureType: StructureType):
+  private def davConfigProcessor(uri: String, timeout: Timeout, structureType: RoleType):
   CliProcessor[Try[DavConfig]] = {
     val keyDelBeforeOverride = structureType.configPropertyName(PropDavDeleteBeforeOverride)
     for {
@@ -392,7 +346,7 @@ object SyncComponentsFactory {
     *         ''ParameterContext''
     */
   private def extractOneDriveConfig(driveID: String, timeout: Timeout, parameters: Parameters,
-                                    structureType: StructureType)
+                                    structureType: RoleType)
                                    (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(OneDriveConfig, ParameterContext)] =
     extractConfig(oneDriveConfigProcessor(driveID, timeout, structureType), parameters)
@@ -406,7 +360,7 @@ object SyncComponentsFactory {
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the OneDrive configuration
     */
-  private def oneDriveConfigProcessor(driveID: String, timeout: Timeout, structureType: StructureType):
+  private def oneDriveConfigProcessor(driveID: String, timeout: Timeout, structureType: RoleType):
   CliProcessor[Try[OneDriveConfig]] = {
     val keyPath = structureType.configPropertyName(PropOneDrivePath)
     val keyChunkSize = structureType.configPropertyName(PropOneDriveUploadChunkSize)
@@ -427,7 +381,7 @@ object SyncComponentsFactory {
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the Dav password
     */
-  private def davPasswordOption(structureType: StructureType): CliProcessor[Try[String]] = {
+  private def davPasswordOption(structureType: RoleType): CliProcessor[Try[String]] = {
     val prop = structureType.configPropertyName(PropDavPassword)
     optionValue(prop)
       .fallback(consoleReaderValue(prop, password = true))
@@ -443,7 +397,7 @@ object SyncComponentsFactory {
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the auth config
     */
-  private def authConfigProcessor(structureType: StructureType): CliProcessor[Try[AuthConfig]] = {
+  private def authConfigProcessor(structureType: RoleType): CliProcessor[Try[AuthConfig]] = {
     val procBasicDefined = isDefinedProcessor(structureType.configPropertyName(PropDavUser))
     val procOAuthDefined = isDefinedProcessor(structureType.configPropertyName(
       OAuthParameterManager.NameOptionName))
@@ -465,7 +419,7 @@ object SyncComponentsFactory {
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the basic auth config
     */
-  private def basicAuthProcessor(structureType: StructureType): CliProcessor[OptionValue[AuthConfig]] = {
+  private def basicAuthProcessor(structureType: RoleType): CliProcessor[OptionValue[AuthConfig]] = {
     val keyUser = structureType.configPropertyName(PropDavUser)
     val procUser = optionValue(keyUser)
       .single
@@ -482,7 +436,7 @@ object SyncComponentsFactory {
     * @param structureType the structure type
     * @return the ''CliProcessor'' for the OAuth configuration
     */
-  private def oauthConfigProcessor(structureType: StructureType): CliProcessor[OptionValue[AuthConfig]] = {
+  private def oauthConfigProcessor(structureType: RoleType): CliProcessor[OptionValue[AuthConfig]] = {
     OAuthParameterManager.storageConfigProcessor(needPassword = true,
       prefix = OptionPrefix + structureType.name)
       .map { triedConfig =>
@@ -504,7 +458,7 @@ object SyncComponentsFactory {
     * @param triedAuthConfig           the component for the auth config
     * @return a ''Try'' with the configuration for a Dav server
     */
-  private def createDavConfig(uri: String, timeout: Timeout, structureType: StructureType,
+  private def createDavConfig(uri: String, timeout: Timeout, structureType: RoleType,
                               triedOptModifiedProp: Try[Option[String]],
                               triedOptModifiedNamespace: Try[Option[String]],
                               triedDelBeforeOverride: Try[Boolean],
@@ -623,16 +577,16 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
                                     consoleReader: ConsoleReader):
   Future[(Parameters, SourceComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
-      for {(config, nextParamCtx) <- extractDavConfig(davUri, timeout, parameters, SourceStructureType)
+      for {(config, nextParamCtx) <- extractDavConfig(davUri, timeout, parameters, SourceRoleType)
            httpFactory <- createHttpActorFactory(HttpRequestActor(davUri), config, oauthStorageService)
            } yield (nextParamCtx.parameters, new DavComponentsSourceFactory(config, httpFactory))
     case RegOneDriveID(driveID) =>
-      for {(config, nextParamCtx) <- extractOneDriveConfig(driveID, timeout, parameters, SourceStructureType)
+      for {(config, nextParamCtx) <- extractOneDriveConfig(driveID, timeout, parameters, SourceRoleType)
            httpFactory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
              config, oauthStorageService)
            } yield (nextParamCtx.parameters, new OneDriveComponentsSourceFactory(config, httpFactory))
     case _ =>
-      extractLocalFsConfig(uri, parameters, SourceStructureType)
+      extractLocalFsConfig(uri, parameters, SourceRoleType)
         .map(t => (t._2.parameters, new LocalFsSourceComponentsFactory(t._1)))
   }
 
@@ -655,16 +609,16 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
                                          consoleReader: ConsoleReader):
   Future[(Parameters, DestinationComponentsFactory)] = uri match {
     case RegDavUri(davUri) =>
-      for {(config, nextParamCtx) <- extractDavConfig(davUri, timeout, parameters, DestinationStructureType)
+      for {(config, nextParamCtx) <- extractDavConfig(davUri, timeout, parameters, DestinationRoleType)
            httpFactory <- createHttpActorFactory(HttpRequestActor(davUri), config, oauthStorageService)
            } yield (nextParamCtx.parameters, new DavComponentsDestinationFactory(config, httpFactory))
     case RegOneDriveID(driveID) =>
-      for {(config, nextParamCtx) <- extractOneDriveConfig(driveID, timeout, parameters, DestinationStructureType)
+      for {(config, nextParamCtx) <- extractOneDriveConfig(driveID, timeout, parameters, DestinationRoleType)
            httpFactory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
              config, oauthStorageService)
            } yield (nextParamCtx.parameters, new OneDriveComponentsDestinationFactory(config, httpFactory))
     case _ =>
-      extractLocalFsConfig(uri, parameters, DestinationStructureType)
+      extractLocalFsConfig(uri, parameters, DestinationRoleType)
         .map(t => (t._2.parameters, new LocalFsDestinationComponentsFactory(t._1, timeout)))
   }
 }

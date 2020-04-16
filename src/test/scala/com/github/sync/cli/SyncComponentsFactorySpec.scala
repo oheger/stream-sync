@@ -25,11 +25,12 @@ import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ParameterManager.Parameters
-import com.github.sync.cli.SyncComponentsFactory.{DestinationStructureType, SourceComponentsFactory, SourceStructureType}
+import com.github.sync.cli.SyncComponentsFactory.SourceComponentsFactory
+import com.github.sync.cli.SyncStructureConfig.{DestinationRoleType, SourceRoleType}
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
-import com.github.sync.http.{AuthConfig, BasicAuthConfig, HttpMultiHostRequestActor, HttpRequestActor, NoAuth, OAuthStorageConfig}
+import com.github.sync.http._
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.webdav.DavConfig
@@ -180,13 +181,13 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   "SyncComponentsFactory" should "create a correct file system config for the source structure" in {
     val TimeZoneId = "UTC+02:00"
     val uri = "/my/sync/dir"
-    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
+    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
       TimeZoneId)
     val syncFactory = new SyncComponentsFactory
 
     val (processedArgs, sourceFactory) =
       futureResult(syncFactory.createSourceComponentsFactory(uri, TestTimeout, args))
-    processedArgs.accessedParameters should contain only SourceStructureType.configPropertyName(
+    processedArgs.accessedParameters should contain only SourceRoleType.configPropertyName(
       SyncComponentsFactory.PropLocalFsTimeZone)
     extractLocalFsSourceConfig(sourceFactory) should be(LocalFsConfig(Paths.get(uri), Some(ZoneId.of(TimeZoneId))))
   }
@@ -197,13 +198,13 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
     val (processedArgs, sourceFactory) =
       futureResult(syncFactory.createSourceComponentsFactory(uri, TestTimeout, Map.empty[String, Iterable[String]]))
-    processedArgs.accessedParameters should contain only SourceStructureType.configPropertyName(
+    processedArgs.accessedParameters should contain only SourceRoleType.configPropertyName(
       SyncComponentsFactory.PropLocalFsTimeZone)
     extractLocalFsSourceConfig(sourceFactory) should be(LocalFsConfig(Paths.get(uri), None))
   }
 
   it should "generate failure messages for all invalid parameters of a local FS config" in {
-    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
+    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
       "invalid zone ID!")
     val syncFactory = new SyncComponentsFactory
 
@@ -211,21 +212,21 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
       expectFailedFuture[IllegalArgumentException] {
         syncFactory.createSourceComponentsFactory("\u0000", TestTimeout, args)
       }
-    exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropLocalFsPath))
-    exception.getMessage should include(SourceStructureType.configPropertyName(
+    exception.getMessage should include(SourceRoleType.configPropertyName(SyncComponentsFactory.PropLocalFsPath))
+    exception.getMessage should include(SourceRoleType.configPropertyName(
       SyncComponentsFactory.PropLocalFsTimeZone))
   }
 
   it should "create a correct file system config for the destination structure" in {
     val TimeZoneId = "UTC-02:00"
     val uri = "/my/sync/target"
-    val args = Map(DestinationStructureType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
+    val args = Map(DestinationRoleType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
       TimeZoneId)
     val syncFactory = new SyncComponentsFactory
 
     val (processedArgs, destFactory) =
       futureResult(syncFactory.createDestinationComponentsFactory(uri, TestTimeout, args))
-    processedArgs.accessedParameters should contain only DestinationStructureType.configPropertyName(
+    processedArgs.accessedParameters should contain only DestinationRoleType.configPropertyName(
       SyncComponentsFactory.PropLocalFsTimeZone)
     destFactory match {
       case localFactory: LocalFsDestinationComponentsFactory =>
@@ -236,11 +237,11 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   }
 
   it should "create a correct DavConfig for the source structure if all basic auth properties are defined" in {
-    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true")
+    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true")
     val expAccessedKeys = args.keySet
     val syncFactory = new SyncComponentsFactory
 
@@ -257,8 +258,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   }
 
   it should "create a correct DavConfig for the source structure with defaults" in {
-    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
+    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
     val syncFactory = new SyncComponentsFactory
 
     val (_, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
@@ -270,32 +271,32 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   }
 
   it should "generate failure messages for all invalid parameters of a DavConfig" in {
-    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "xx",
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
+    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "xx",
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
     val DavUri = SyncComponentsFactory.PrefixWebDav + "?not a Valid URI!"
     val syncFactory = new SyncComponentsFactory
 
     val exception = expectFailedFuture[IllegalArgumentException] {
       syncFactory.createSourceComponentsFactory(DavUri, TestTimeout, args)
     }
-    exception.getMessage should include(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUri))
-    exception.getMessage should include(SourceStructureType.configPropertyName(
+    exception.getMessage should include(SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUri))
+    exception.getMessage should include(SourceRoleType.configPropertyName(
       SyncComponentsFactory.PropDavDeleteBeforeOverride))
   }
 
   it should "create a correct DavConfig for the source structure if OAuth properties are defined" in {
     val args = Map(
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true",
-      SourceStructureType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
-      SourceStructureType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
-      SourceStructureType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true",
+      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
+      SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
+      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
     )
     val expAccessedKeys = args.keySet +
-      SourceStructureType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser)
+      SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser)
     val syncFactory = new SyncComponentsFactory(createMockOAuthStorageService())
 
     val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixDavRootUri,
@@ -310,14 +311,14 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "fail parsing parameters if properties for both basic auth and OAuth are set" in {
     val args = Map(
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true",
-      SourceStructureType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
-      SourceStructureType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
-      SourceStructureType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) -> LastModifiedProperty,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true",
+      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
+      SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
+      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password
     )
     val syncFactory = new SyncComponentsFactory(createMockOAuthStorageService())
 
@@ -327,19 +328,19 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
         params2 <- ParameterManager.checkParametersConsumed(params)
       } yield params2
     }
-    exception.getMessage should include(SourceStructureType.configPropertyName(OAuthParameterManager.NameOptionName))
-    exception.getMessage should include(SourceStructureType.configPropertyName(
+    exception.getMessage should include(SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName))
+    exception.getMessage should include(SourceRoleType.configPropertyName(
       OAuthParameterManager.PasswordOptionName))
   }
 
   it should "create a correct DavConfig for the destination structure" in {
-    val args = Map(DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
-      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
-      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) ->
+    val args = Map(DestinationRoleType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      DestinationRoleType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
+      DestinationRoleType.configPropertyName(SyncComponentsFactory.PropDavModifiedProperty) ->
         LastModifiedProperty,
-      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) ->
+      DestinationRoleType.configPropertyName(SyncComponentsFactory.PropDavModifiedNamespace) ->
         LastModifiedNamespace,
-      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true")
+      DestinationRoleType.configPropertyName(SyncComponentsFactory.PropDavDeleteBeforeOverride) -> "true")
     val expAccessedKeys = args.keySet
     val syncFactory = new SyncComponentsFactory
 
@@ -360,10 +361,10 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   }
 
   it should "read the Dav password from the console if it is not specified" in {
-    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User)
+    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User)
     val Password = "$ecretPwd"
     val reader = mock[ConsoleReader]
-    val propPwd = SyncComponentsFactory.SourceStructureType.configPropertyName(
+    val propPwd = SourceRoleType.configPropertyName(
       SyncComponentsFactory.PropDavPassword)
     when(reader.readOption(propPwd, password = true)).thenReturn(Password)
     val syncFactory = new SyncComponentsFactory
@@ -378,11 +379,11 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "create a correct OneDriveConfig for the source structure with basic auth properties" in {
     val ChunkSize = 42
-    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveServer) -> DavRootUri,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) -> StoragePath,
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) -> ChunkSize.toString)
+    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropOneDriveServer) -> DavRootUri,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) -> StoragePath,
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) -> ChunkSize.toString)
     val expAccessedKeys = args.keySet
     val syncFactory = new SyncComponentsFactory
 
@@ -397,7 +398,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   }
 
   it should "create a correct OneDriveConfig for the source structure with defaults" in {
-    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) -> StoragePath)
+    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) -> StoragePath)
     val syncFactory = new SyncComponentsFactory
 
     val (_, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixOneDriveID,
@@ -409,31 +410,31 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   }
 
   it should "generate failure messages for all invalid properties of a OneDrive configuration" in {
-    val args = Map(SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) -> "xx",
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
+    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) -> "xx",
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password)
     val syncFactory = new SyncComponentsFactory
 
     val exception = expectFailedFuture[IllegalArgumentException] {
       syncFactory.createSourceComponentsFactory(PrefixOneDriveID, TestTimeout, args)
     }
-    exception.getMessage should include(SourceStructureType.configPropertyName(
+    exception.getMessage should include(SourceRoleType.configPropertyName(
       SyncComponentsFactory.PropOneDriveUploadChunkSize))
-    exception.getMessage should include(SourceStructureType.configPropertyName(
+    exception.getMessage should include(SourceRoleType.configPropertyName(
       SyncComponentsFactory.PropOneDrivePath))
   }
 
   it should "create a correct OneDriveConfig for the source structure if OAuth properties are defined" in {
     val args = Map(
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) -> "/a-path",
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) -> "4",
-      SourceStructureType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
-      SourceStructureType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
-      SourceStructureType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) -> "/a-path",
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) -> "4",
+      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
+      SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
+      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
     )
     val expAccessedKeys = args.keySet +
-      SourceStructureType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveServer) +
-      SourceStructureType.configPropertyName(SyncComponentsFactory.PropDavUser)
+      SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropOneDriveServer) +
+      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser)
     val syncFactory = new SyncComponentsFactory(createMockOAuthStorageService())
 
     val (processedArgs, srcFactory) = futureResult(syncFactory.createSourceComponentsFactory(PrefixOneDriveID,
@@ -448,13 +449,13 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "create a correct OneDriveConfig for the destination structure" in {
     val ChunkSize = 11
-    val args = Map(DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
-      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
-      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveServer) ->
+    val args = Map(DestinationRoleType.configPropertyName(SyncComponentsFactory.PropDavUser) -> User,
+      DestinationRoleType.configPropertyName(SyncComponentsFactory.PropDavPassword) -> Password,
+      DestinationRoleType.configPropertyName(SyncComponentsFactory.PropOneDriveServer) ->
         DavRootUri,
-      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) ->
+      DestinationRoleType.configPropertyName(SyncComponentsFactory.PropOneDrivePath) ->
         StoragePath,
-      DestinationStructureType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) ->
+      DestinationRoleType.configPropertyName(SyncComponentsFactory.PropOneDriveUploadChunkSize) ->
         ChunkSize.toString)
     val expAccessedKeys = args.keySet
     val syncFactory = new SyncComponentsFactory
