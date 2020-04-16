@@ -147,3 +147,23 @@ trait HttpExtensionActor {
       additionalClientCount += 1
   }
 }
+
+/**
+  * A special implementation of an [[HttpExtensionActor]] which does not
+  * implement any special functionality.
+  *
+  * Instances of this actor class can be useful if an undecorated HTTP actor is
+  * used which needs to be shared between multiple components. The actor can
+  * then be wrapped inside an instance of this class which handles the sharing
+  * aspect.
+  *
+  * @param httpActor   the underlying ''HttpRequestActor''
+  * @param clientCount the number of clients
+  */
+class HttpNoOpExtensionActor(override val httpActor: ActorRef,
+                             override val clientCount: Int) extends Actor with HttpExtensionActor {
+  override protected def customReceive: Receive = {
+    case req: SendRequest =>
+      modifyAndForward(req)(identity)
+  }
+}

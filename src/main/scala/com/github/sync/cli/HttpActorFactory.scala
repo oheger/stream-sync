@@ -20,7 +20,7 @@ import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.{KillSwitches, SharedKillSwitch}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.oauth._
-import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpConfig, HttpRequestActor, OAuthStorageConfig}
+import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpConfig, HttpNoOpExtensionActor, HttpRequestActor, OAuthStorageConfig}
 
 object HttpActorFactory {
   /** The name of the HTTP request actor for the source structure. */
@@ -129,4 +129,18 @@ class OAuthHttpActorFactory(override val httpRequestActorProps: Props,
     OAuthTokenActor(httpActor, clientCount, idpActor, storageConfig, oauthConfig, clientSecret,
       initTokenData, OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, optKillSwitch)
   }
+}
+
+/**
+  * A factory for HTTP request actors that does not support any authentication.
+  *
+  * This implementation returns ''Props'' for a ''HttpNoOpExtensionActor'',
+  * just to wrap the passed in request actor.
+  *
+  * @param httpRequestActorProps ''Props'' to create the request actor
+  */
+class NoAuthHttpActorFactory(override val httpRequestActorProps: Props) extends HttpActorFactory {
+  override protected def authActorProps(config: HttpConfig, system: ActorSystem, clientCount: Int,
+                                        name: String, withKillSwitch: Boolean, httpActor: ActorRef): Props =
+    Props(classOf[HttpNoOpExtensionActor], httpActor, clientCount)
 }

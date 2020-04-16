@@ -570,8 +570,10 @@ object SyncComponentsFactory {
              secret <- storageService.loadClientSecret(storageConfig)
              tokens <- storageService.loadTokens(storageConfig)
              } yield new OAuthHttpActorFactory(requestActorProps, storageConfig, oauthConfig, secret, tokens)
-      case _ =>
+      case _: BasicAuthConfig =>
         Future.successful(new BasicAuthHttpActorFactory(requestActorProps))
+      case NoAuth =>
+        Future.successful(new NoAuthHttpActorFactory(requestActorProps))
     }
 }
 
