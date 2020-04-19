@@ -18,10 +18,12 @@ package com.github.sync.cli
 
 import java.time.ZoneId
 
-import com.github.sync.cli.ParameterManager.CliProcessor
-import com.github.sync.http.AuthConfig
+import com.github.sync.cli.ParameterManager._
+import com.github.sync.cli.oauth.OAuthParameterManager
+import com.github.sync.crypt.Secret
+import com.github.sync.http.{AuthConfig, BasicAuthConfig, NoAuth}
 
-import scala.util.Try
+import scala.util.{Success, Try}
 
 /**
   * A module defining configuration parameters for the structures taking part
@@ -38,6 +40,94 @@ import scala.util.Try
   * evaluates the URI defining the structure.
   */
 object SyncStructureConfig {
+  /** URI prefix indicating a WebDav structure. */
+  final val PrefixWebDav = "dav:"
+
+  /** URI prefix indicating a OneDrive structure. */
+  final val PrefixOneDrive = "onedrive:"
+
+  /**
+    * Property for the time zone to be applied to the last-modified timestamps
+    * of files encountered on the local FS. This property is optional. If it is
+    * not defined, timestamps are obtained directly from the file system
+    * without modifications. This is appropriate if the file system stores them
+    * in a defined way. If this is not the case (e.g. for a FAT32 file system
+    * which stores them in a local time zone), the time zone must be specified
+    * explicitly. Otherwise, the comparison of timestamps (which is one
+    * criterion to decide whether a file has been changed) is going to fail.
+    */
+  final val PropLocalFsTimeZone = "time-zone"
+
+  /** Property for the user name if Basic Auth is used. */
+  final val PropAuthUser = "user"
+
+  /** Property for the password if Basic Auth is used. */
+  final val PropAuthPassword = "password"
+
+  /**
+    * Property for the name of the WebDav property defining the last modified
+    * time of an element. This is optional; if unspecified, the default WebDav
+    * property for the last modified time is used.
+    */
+  final val PropDavModifiedProperty = "modified-property"
+
+  /**
+    * Property for the name of the WebDav property that defines a namespace for
+    * the property with the last modified time. If this property is defined, in
+    * patch requests to the WebDav server to update the modified time of a file
+    * this namespace will be used. Note that this property has an effect only
+    * if a custom modified property is set.
+    */
+  final val PropDavModifiedNamespace = "modified-namespace"
+
+  /**
+    * Property to determine whether a file to be overridden should be deleted
+    * before it is uploaded. This may be necessary for some servers to have a
+    * reliable behavior. The value of the property is a string that is
+    * interpreted as a boolean value (in terms of ''Boolean.parseBoolean()'').
+    */
+  final val PropDavDeleteBeforeOverride = "delete-before-override"
+
+  /**
+    * Property for the relative path to be synced on a OneDrive drive.
+    */
+  final val PropOneDrivePath = "path"
+
+  /**
+    * Property for the URI of the OneDrive server. This property is optional;
+    * the default server URI is used if not specified.
+    */
+  final val PropOneDriveServer = "server-uri"
+
+  /**
+    * Property for the chunk size (in MB) for file uploads to a OneDrive
+    * server. This is an optional property.
+    */
+  final val PropOneDriveUploadChunkSize = "upload-chunk-size"
+
+  /** Group name for the options for basic auth. */
+  final val GroupBasicAuth = "authBasic"
+
+  /** Group name of the options for OAuth. */
+  final val GroupOAuth = "authOAuth"
+
+  /** Group name to be used if no authentication is desired. */
+  final val GroupNoAuth = "authNone"
+
+  /** Group name for the parameters related to the local file system. */
+  final val GroupLocalFs = "localFS"
+
+  /** Group name for the parameters related to WebDav. */
+  final val GroupDav = "dav"
+
+  /** Group name for the parameters related to OneDrive. */
+  final val GroupOneDrive = "onedrive"
+
+  /** Regular expression for parsing a WebDav URI. */
+  final val RegDavUri = (PrefixWebDav + "(.+)").r
+
+  /** Regular expression for parsing a OneDrive drive ID. */
+  final val RegOneDriveID = (PrefixOneDrive + "(.+)").r
 
   /**
     * A trait defining the role a structure plays in a sync process.
@@ -50,7 +140,9 @@ object SyncStructureConfig {
     * out which ones apply to the source and to the destination structure. This
     * is done by defining a unique ''name'' property for the role type.
     * Parameters can then be prefixed with this name to make clear to which
-    * role they apply.
+    * role they apply. In addition, there is an index corresponding to the
+    * input parameter that needs to be evaluated to determine the role type -
+    * the source or the destination URI.
     */
   sealed trait RoleType {
     /**
@@ -59,6 +151,14 @@ object SyncStructureConfig {
       * @return the name property
       */
     def name: String
+
+    /**
+      * Returns the index of the input parameter with the URI that corresponds
+      * to this role type.
+      *
+      * @return the index of the associated input parameter
+      */
+    def parameterIndex: Int
 
     /**
       * Determines the name of a configuration property with the given name for
@@ -77,6 +177,8 @@ object SyncStructureConfig {
     */
   case object SourceRoleType extends RoleType {
     override val name: String = "src-"
+
+    override val parameterIndex: Int = 0
   }
 
   /**
@@ -84,6 +186,8 @@ object SyncStructureConfig {
     */
   case object DestinationRoleType extends RoleType {
     override val name: String = "dst-"
+
+    override val parameterIndex: Int = 1
   }
 
   /**
@@ -103,35 +207,36 @@ object SyncStructureConfig {
     * @param optTimeZone an optional timezone that determines how the timestamps
     *                    of files are to be interpreted
     */
-  case class FsStructureConfig(optTimeZone: ZoneId)
+  case class FsStructureConfig(optTimeZone: Option[ZoneId]) extends StructureConfig
 
   /**
     * Parameter configuration class for the structure type ''WebDav''.
     *
-    * @param lastModifiedProperty  the property with the last modified
-    *                              timestamp
-    * @param lastModifiedNamespace optional namespace for the last modified
-    *                              property
-    * @param deleteBeforeOverride  the delete before override flag
-    * @param authConfig            the authentication configuration
+    * @param optLastModifiedProperty  optional property with the last modified
+    *                                 timestamp
+    * @param optLastModifiedNamespace optional namespace for the last modified
+    *                                 property
+    * @param deleteBeforeOverride     the delete before override flag
+    * @param authConfig               the authentication configuration
     */
-  case class DavStructureConfig(lastModifiedProperty: String,
-                                lastModifiedNamespace: Option[String],
+  case class DavStructureConfig(optLastModifiedProperty: Option[String],
+                                optLastModifiedNamespace: Option[String],
                                 deleteBeforeOverride: Boolean,
-                                authConfig: AuthConfig)
+                                authConfig: AuthConfig) extends StructureConfig
 
   /**
     * Parameter configuration class for the structure type ''OneDrive''.
     *
-    * @param syncPath          the relative path in the drive to be synced
-    * @param uploadChunkSizeMB the chunk size for uploads of large files (MB)
-    * @param optServerUri      optional (alternative) server URI
-    * @param authConfig        the config of the auth mechanism
+    * @param syncPath             the relative path in the drive to be synced
+    * @param optUploadChunkSizeMB optional chunk size for uploads of large
+    *                             files (in MB)
+    * @param optServerUri         optional (alternative) server URI
+    * @param authConfig           the config of the auth mechanism
     */
   case class OneDriveStructureConfig(syncPath: String,
-                                     uploadChunkSizeMB: Int,
+                                     optUploadChunkSizeMB: Option[Int],
                                      optServerUri: Option[String],
-                                     authConfig: AuthConfig)
+                                     authConfig: AuthConfig) extends StructureConfig
 
   /**
     * Returns a ''CliProcessor'' to extract the configuration of the sync
@@ -142,5 +247,206 @@ object SyncStructureConfig {
     * @param roleType the role type
     * @return the ''CliProcessor'' to extract the config of this role
     */
-  def structureConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] = ???
+  def structureConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] = {
+    val procMap = Map(GroupLocalFs -> localFsConfigProcessor(roleType),
+      GroupDav -> davConfigProcessor(roleType),
+      GroupOneDrive -> oneDriveConfigProcessor(roleType))
+    conditionalGroupValue(structureTypeSelectorProcessor(roleType), procMap)
+  }
+
+  /**
+    * Returns a ''CliProcessor'' that maps the input parameter for the URI of
+    * the given role type to a group name, based on the concrete structure
+    * type. The group name is then used to parse the correct command line
+    * options to construct a corresponding structure config.
+    *
+    * @param roleType the role type
+    * @return the processor that determines the group of the structure type
+    */
+  private def structureTypeSelectorProcessor(roleType: RoleType): CliProcessor[Try[String]] =
+    inputValue(index = roleType.parameterIndex)
+      .mapTo {
+        case RegDavUri(_) => GroupDav
+        case RegOneDriveID(_) => GroupOneDrive
+        case _ => GroupLocalFs
+      }.single
+      .mandatory
+
+  /**
+    * Returns a ''CliProcessor'' that extracts the configuration for the local
+    * file system from the current command line arguments.
+    *
+    * @param roleType the role type
+    * @return the ''CliProcessor'' for the file system configuration
+    */
+  private def localFsConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] =
+    optionValue(roleType.configPropertyName(PropLocalFsTimeZone))
+      .mapTo(ZoneId.of)
+      .single
+      .map(_.map(optZone => FsStructureConfig(optZone)))
+
+  /**
+    * Returns a ''CliProcessor'' that extracts the configuration for a WebDav
+    * server from the current command line arguments.
+    *
+    * @param roleType the role type
+    * @return the ''CliProcessor'' for the WebDav configuration
+    */
+  private def davConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] = {
+    val procModProp = optionValue(roleType.configPropertyName(PropDavModifiedProperty)).single
+    val procModNs = optionValue(roleType.configPropertyName(PropDavModifiedNamespace)).single
+    val procDel = optionValue(roleType.configPropertyName(PropDavDeleteBeforeOverride))
+      .toBoolean
+      .fallbackValues(false)
+      .single
+      .mandatory
+    for {
+      triedModProp <- procModProp
+      triedModNs <- procModNs
+      triedDel <- procDel
+      triedAuth <- authConfigProcessor(roleType)
+    } yield createDavConfig(triedModProp, triedModNs, triedDel, triedAuth)
+  }
+
+  /**
+    * Returns a ''CliProcessor'' that extracts the configuration for a OneDrive
+    * server from the current command line arguments.
+    *
+    * @param roleType the structure type
+    * @return the ''CliProcessor'' for the OneDrive configuration
+    */
+  private def oneDriveConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] = {
+    val procPath = optionValue(roleType.configPropertyName(PropOneDrivePath))
+      .single
+      .mandatory
+    val procChunkSize = optionValue(roleType.configPropertyName(PropOneDriveUploadChunkSize))
+      .toInt
+      .single
+    val procServer = optionValue(roleType.configPropertyName(PropOneDriveServer)).single
+    for {
+      triedPath <- procPath
+      triedChunkSize <- procChunkSize
+      triedServer <- procServer
+      triedAuth <- authConfigProcessor(roleType)
+    } yield createOneDriveConfig(triedPath, triedChunkSize, triedServer, triedAuth)
+  }
+
+  /**
+    * Returns a ''CliProcessor'' for obtaining the authentication
+    * configuration. The processor creates a concrete implementation of the
+    * [[AuthConfig]] trait depending on the properties that are specified.
+    *
+    * @param roleType the role type
+    * @return the ''CliProcessor'' for the auth config
+    */
+  private def authConfigProcessor(roleType: RoleType): CliProcessor[Try[AuthConfig]] = {
+    val procBasicDefined = isDefinedProcessor(roleType.configPropertyName(PropAuthUser))
+    val procOAuthDefined = isDefinedProcessor(roleType.configPropertyName(
+      OAuthParameterManager.NameOptionName))
+    val condNoAuth = conditionalValue(procOAuthDefined, ifProc = constantOptionValue(GroupOAuth),
+      elseProc = constantOptionValue(GroupNoAuth))
+    val groupSelector: CliProcessor[Try[String]] =
+      conditionalValue(procBasicDefined, ifProc = constantOptionValue(GroupBasicAuth), elseProc = condNoAuth)
+        .single.mandatory
+    val groupMap = Map[String, CliProcessor[Try[AuthConfig]]](
+      GroupBasicAuth -> basicAuthProcessor(roleType),
+      GroupOAuth -> oauthConfigProcessor(roleType),
+      GroupNoAuth -> constantProcessor(Success(NoAuth)))
+    conditionalGroupValue(groupSelector, groupMap)
+  }
+
+  /**
+    * Returns a ''CliProcessor'' for obtaining the basic auth configuration.
+    *
+    * @param roleType the role type
+    * @return the ''CliProcessor'' for the basic auth config
+    */
+  private def basicAuthProcessor(roleType: RoleType): CliProcessor[Try[AuthConfig]] = {
+    val procUser = optionValue(roleType.configPropertyName(PropAuthUser))
+      .single
+      .mandatory
+    for {
+      triedUser <- procUser
+      triedPassword <- davPasswordOption(roleType)
+    } yield createBasicAuthConfig(triedUser, triedPassword)
+  }
+
+  /**
+    * Returns a ''CliProcessor'' for obtaining the password for Basic Auth.
+    * The password is mandatory; if it is not specified in the arguments, it is
+    * read from the console.
+    *
+    * @param roleType the role type
+    * @return the ''CliProcessor'' for the Basic Auth password
+    */
+  private def davPasswordOption(roleType: RoleType): CliProcessor[Try[String]] = {
+    val prop = roleType.configPropertyName(PropAuthPassword)
+    optionValue(prop)
+      .fallback(consoleReaderValue(prop, password = true))
+      .single
+      .mandatory
+  }
+
+  /**
+    * Returns a ''CliProcessor'' for obtaining the OAuth configuration.
+    *
+    * @param roleType the role type
+    * @return the ''CliProcessor'' for the OAuth configuration
+    */
+  private def oauthConfigProcessor(roleType: RoleType): CliProcessor[Try[AuthConfig]] = {
+    OAuthParameterManager.storageConfigProcessor(needPassword = true,
+      prefix = OptionPrefix + roleType.name)
+      .map { triedConfig =>
+        triedConfig map (config => config.asInstanceOf[AuthConfig])
+      }
+  }
+
+  /**
+    * Creates an ''OptionValue'' with a ''BasicAuthConfig'' based on the given
+    * components.
+    *
+    * @param triedUser     the user component
+    * @param triedPassword the password component
+    * @return the option value for the ''BasicAuthConfig''
+    */
+  private def createBasicAuthConfig(triedUser: Try[String], triedPassword: Try[String]):
+  Try[BasicAuthConfig] =
+    createRepresentation(triedUser, triedPassword) { (usr, pwd) =>
+      BasicAuthConfig(usr, Secret(pwd))
+    }
+
+  /**
+    * Creates a ''DavStructureConfig'' object from the given components. Errors
+    * are aggregated in the resulting ''Try''.
+    *
+    * @param triedOptModifiedProp      the component for the modified property
+    * @param triedOptModifiedNamespace the component for the modified namespace
+    * @param triedDelBeforeOverride    the component for the delete before
+    *                                  override flag
+    * @param triedAuthConfig           the component for the auth config
+    * @return a ''Try'' with the configuration for a Dav server
+    */
+  private def createDavConfig(triedOptModifiedProp: Try[Option[String]],
+                              triedOptModifiedNamespace: Try[Option[String]],
+                              triedDelBeforeOverride: Try[Boolean],
+                              triedAuthConfig: Try[AuthConfig]): Try[DavStructureConfig] = {
+    createRepresentation(triedOptModifiedProp, triedOptModifiedNamespace,
+      triedDelBeforeOverride, triedAuthConfig)(DavStructureConfig)
+  }
+
+  /**
+    * Creates a ''OneDriveStructureConfig'' object from the given components.
+    * Errors are aggregated in the resulting ''Try''.
+    *
+    * @param triedPath      the component for the sync path
+    * @param triedChunkSize the component for the upload chung size
+    * @param triedServer    the component for the optional server URI
+    * @param triedAuth      the component for the auth config
+    * @return a ''Try'' with the OneDrive configuration
+    */
+  private def createOneDriveConfig(triedPath: Try[String],
+                                   triedChunkSize: Try[Option[Int]],
+                                   triedServer: Try[Option[String]],
+                                   triedAuth: Try[AuthConfig]): Try[OneDriveStructureConfig] =
+    createRepresentation(triedPath, triedChunkSize, triedServer, triedAuth)(OneDriveStructureConfig)
 }
