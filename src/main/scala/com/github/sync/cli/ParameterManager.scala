@@ -732,7 +732,7 @@ object ParameterManager {
     * command line options and evaluate their values. If this processor yields
     * '''true''', the ''ifProc'' processor is executed. If the condition
     * processor yields '''false''', the ''elseProc'' is executed. In case of a
-    * failure, the ''failProc'' is executed.
+    * failure, this processor returns a failure with the same exception.
     *
     * Using this function, it is possible to implement quite complex scenarios.
     * For instance, a program can expect a ''mode'' parameter, and depending on
@@ -748,32 +748,31 @@ object ParameterManager {
     * @param condProc  the processor that defines the condition
     * @param ifProc    the processor to run if the condition is fulfilled
     * @param elseProc  the processor to run if the condition is not fulfilled
-    * @param failProc  the processor to run in case of a failure
     * @param ifGroup   name of the group for the if processor
     * @param elseGroup name of the group for the else processor
-    * @param failGroup name of the group for the fail processor
     * @return the conditional processor
     * @tparam A the type of the option values
     */
   def conditionalValue[A](condProc: CliProcessor[Try[Boolean]], ifProc: CliProcessor[OptionValue[A]],
                           elseProc: CliProcessor[OptionValue[A]] = emptyProcessor[A],
-                          failProc: CliProcessor[OptionValue[A]] = emptyProcessor[A],
-                          ifGroup: Option[String] = None, elseGroup: Option[String] = None,
-                          failGroup: Option[String] = None): CliProcessor[OptionValue[A]] =
+                          ifGroup: Option[String] = None,
+                          elseGroup: Option[String] = None): CliProcessor[OptionValue[A]] =
     CliProcessor(context => {
       val (condResult, context2) = condProc.run(context)
-      val (activeProc, activeGroup) = condResult match {
+      condResult match {
         case Success(value) =>
-          if (value) (ifProc, ifGroup) else (elseProc, elseGroup)
-        case Failure(_) => (failProc, failGroup)
-      }
+          val (activeProc, activeGroup) = if (value) (ifProc, ifGroup) else (elseProc, elseGroup)
 
-      val processorsAndGroups = List((ifProc, ifGroup), (elseProc, elseGroup), (failProc, failGroup))
-        .filter(_._1 != activeProc)
-      val helpContext = updateHelpContext(context2.helpContext, processorsAndGroups)
-      val (result, context3) =
-        activeProc.run(context2.copy(helpContext = helpContext startGroupConditionally activeGroup))
-      (result, context3.copy(helpContext = context3.helpContext.endGroupConditionally(activeGroup)))
+          val processorsAndGroups = List((ifProc, ifGroup), (elseProc, elseGroup))
+            .filter(_._1 != activeProc)
+          val helpContext = updateHelpContext(context2.helpContext, processorsAndGroups)
+          val (result, context3) =
+            activeProc.run(context2.copy(helpContext = helpContext startGroupConditionally activeGroup))
+          (result, context3.copy(helpContext = context3.helpContext.endGroupConditionally(activeGroup)))
+
+        case Failure(exception) =>
+          (Failure(exception), context2)
+      }
     })
 
   /**

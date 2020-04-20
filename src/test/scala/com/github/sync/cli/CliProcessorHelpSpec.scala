@@ -330,10 +330,8 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val procCond = optionValue("condition").isDefined
     val procIf = optionValue("if", Some("help-if"))
     val procElse = optionValue("else", Some("help-else"))
-    val procFail = optionValue("fail", Some("help-fail"))
     val procOther = optionValue(Key, Some(HelpText))
-    val procCase = conditionalValue(procCond, procIf, procElse, procFail, Some("grp-if"),
-      Some("grp-else"), Some("grp-fail"))
+    val procCase = conditionalValue(procCond, procIf, procElse, Some("grp-if"), Some("grp-else"))
     val proc = for {
       v1 <- procCase
       v2 = procOther
@@ -347,9 +345,6 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val attrElse = helpContext.options("else")
     CliHelpGenerator.isInGroup(attrElse, "grp-else") shouldBe true
     attrElse.attributes(CliHelpGenerator.AttrHelpText) should be("help-else")
-    val attrFail = helpContext.options("fail")
-    CliHelpGenerator.isInGroup(attrFail, "grp-fail") shouldBe true
-    attrFail.attributes(CliHelpGenerator.AttrHelpText) should be("help-fail")
   }
 
   it should "support nested conditional groups" in {

@@ -657,18 +657,16 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     res should be(ResultOptionValue)
   }
 
-  it should "provide a condition processor that executes the failure case" in {
+  it should "provide a condition processor that handles failures" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
-    val condProc: CliProcessor[Try[Boolean]] = testProcessor(Failure(new Exception("failed")))
-    val failProc = testProcessor(ResultOptionValue, expParameters = NextParameters,
-      nextParameters = nextNextParameters)
+    val exception = new Exception("failed")
+    val condProc: CliProcessor[Try[Boolean]] = testProcessor(Failure(exception))
     val processor = ParameterManager.conditionalValue(condProc, ifProc = ParameterManager.emptyProcessor[String],
-      elseProc = ParameterManager.emptyProcessor[String], failProc = failProc)
+      elseProc = ParameterManager.emptyProcessor[String])
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    next.parameters should be(nextNextParameters)
-    res should be(ResultOptionValue)
+    next.parameters should be(NextParameters)
+    res should be(Failure(exception))
   }
 
   it should "provide a conditional group processor that executes the correct group" in {
