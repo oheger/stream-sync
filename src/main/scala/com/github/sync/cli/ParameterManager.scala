@@ -1528,8 +1528,8 @@ object ParameterManager {
                                                                        (fCreate: (A, B, C, D, E, F, G, H, I, J, K, L,
                                                                          M, N) => T):
   Try[T] =
-    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)(fCreate(c1.get, c2.get, c3.get,
-      c4.get, c5.get, c6.get, c7.get, c8.get, c9.get, c10.get, c11.get, c12.get, c13.get, c14.get))
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14)(fCreate(c1.get, c2.get,
+      c3.get, c4.get, c5.get, c6.get, c7.get, c8.get, c9.get, c10.get, c11.get, c12.get, c13.get, c14.get))
 
   /**
     * Creates an object representation from 15 extracted components using a
@@ -1574,8 +1574,9 @@ object ParameterManager {
                             c8: Try[H], c9: Try[I], c10: Try[J], c11: Try[K], c12: Try[L], c13: Try[M], c14: Try[N],
                             c15: Try[O])(fCreate: (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O) => T):
   Try[T] =
-    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)(fCreate(c1.get, c2.get, c3.get,
-      c4.get, c5.get, c6.get, c7.get, c8.get, c9.get, c10.get, c11.get, c12.get, c13.get, c14.get, c15.get))
+    createRepresentationN(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15)(fCreate(c1.get,
+      c2.get, c3.get, c4.get, c5.get, c6.get, c7.get, c8.get, c9.get, c10.get, c11.get, c12.get, c13.get, c14.get,
+      c15.get))
 
   /**
     * Executes the given ''CliProcessor'' on the parameters specified and
