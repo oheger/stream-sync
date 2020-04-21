@@ -244,14 +244,15 @@ object SyncStructureConfig {
     * structure (based on the sync URI parameter), and then creates a
     * corresponding ''StructureConfig'' object.
     *
-    * @param roleType the role type
+    * @param roleType      the role type
+    * @param uriOptionName the name of the option for the structure URI
     * @return the ''CliProcessor'' to extract the config of this role
     */
-  def structureConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] = {
+  def structureConfigProcessor(roleType: RoleType, uriOptionName: String): CliProcessor[Try[StructureConfig]] = {
     val procMap = Map(GroupLocalFs -> localFsConfigProcessor(roleType),
       GroupDav -> davConfigProcessor(roleType),
       GroupOneDrive -> oneDriveConfigProcessor(roleType))
-    conditionalGroupValue(structureTypeSelectorProcessor(roleType), procMap)
+    conditionalGroupValue(structureTypeSelectorProcessor(roleType, uriOptionName), procMap)
   }
 
   /**
@@ -260,11 +261,12 @@ object SyncStructureConfig {
     * type. The group name is then used to parse the correct command line
     * options to construct a corresponding structure config.
     *
-    * @param roleType the role type
+    * @param roleType      the role type
+    * @param uriOptionName the name of the option for the structure URI
     * @return the processor that determines the group of the structure type
     */
-  private def structureTypeSelectorProcessor(roleType: RoleType): CliProcessor[Try[String]] =
-    inputValue(index = roleType.parameterIndex)
+  private def structureTypeSelectorProcessor(roleType: RoleType, uriOptionName: String): CliProcessor[Try[String]] =
+    inputValue(index = roleType.parameterIndex, optKey = Some(uriOptionName))
       .mapTo {
         case RegDavUri(_) => GroupDav
         case RegOneDriveID(_) => GroupOneDrive

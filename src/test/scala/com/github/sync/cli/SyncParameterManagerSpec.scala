@@ -17,12 +17,15 @@
 package com.github.sync.cli
 
 import java.nio.file.{Path, Paths}
+import java.time.ZoneId
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptMode}
+import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig}
+import com.github.sync.http.NoAuth
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
@@ -287,6 +290,31 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Too few input arguments", "'sourceURI'", "'destinationURI'")
+  }
+
+  it should "construct a correct source config for the local file system" in {
+    val zid = ZoneId.getAvailableZoneIds.iterator.next
+    val roleType = SyncStructureConfig.SourceRoleType
+    val argsMap = ArgsMap + (roleType.configPropertyName(SyncStructureConfig.PropLocalFsTimeZone) -> List(zid))
+
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    config.srcConfig should be(FsStructureConfig(Some(ZoneId.of(zid))))
+  }
+
+  it should "construct a correct destination config for a Dav server" in {
+    val ModifiedProp = "x_changed"
+    val ModifiedNs = "ns_foo"
+    val DavDestUri = SyncStructureConfig.PrefixWebDav + "https://dav.org/sync"
+    val role = SyncStructureConfig.DestinationRoleType
+    val argsMap = ArgsMap +
+      (role.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> List(ModifiedProp)) +
+      (role.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> List(ModifiedNs)) +
+      (ParameterManager.InputOption -> List(SourceUri, DavDestUri))
+    val ExpDavConfig = DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
+      authConfig = NoAuth, deleteBeforeOverride = false)
+
+    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    config.dstConfig should be(ExpDavConfig)
   }
 
   it should "not return a single option value if there are multiple" in {

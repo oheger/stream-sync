@@ -21,6 +21,7 @@ import java.util.Locale
 
 import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters, SingleOptionValue}
+import com.github.sync.cli.SyncStructureConfig.StructureConfig
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -42,6 +43,9 @@ import scala.util.Try
   * option key.
   */
 object SyncParameterManager {
+  /** Name of the input option for the URI of the source structure. */
+  final val SourceUriOption = "sourceURI"
+
   /** Help text for the source URI input parameter. */
   final val SourceUriHelp =
     """The URI defining the source structure of the sync process.
@@ -49,6 +53,9 @@ object SyncParameterManager {
       |is provided, it is interpreted a path to a file system (a local directory or a network \
       |share). The prefix "dav:" indicates a WebDav server. "onedrive:" points to a OneDrive server.
       |""".stripMargin
+
+  /** Name of the input option for the URI of the destination structure. */
+  final val DestinationUriOption = "destinationURI"
 
   /** Help text for the destination URI input parameter. */
   final val DestinationUriHelp =
@@ -257,6 +264,8 @@ object SyncParameterManager {
     *
     * @param srcUri          the source URI of the sync process
     * @param dstUri          the destination URI of the sync process
+    * @param srcConfig       the config for the source structure
+    * @param dstConfig       the config for the destination structure
     * @param applyMode       the apply mode
     * @param timeout         a timeout for sync operations
     * @param logFilePath     an option with the path to the log file if defined
@@ -276,6 +285,8 @@ object SyncParameterManager {
     */
   case class SyncConfig(srcUri: String,
                         dstUri: String,
+                        srcConfig: StructureConfig,
+                        dstConfig: StructureConfig,
                         applyMode: ApplyMode,
                         timeout: Timeout,
                         logFilePath: Option[Path],
@@ -318,6 +329,9 @@ object SyncParameterManager {
   def syncConfigProcessor(): CliProcessor[Try[SyncConfig]] = for {
     srcUri <- srcUriProcessor()
     dstUri <- dstUriProcessor()
+    srcConfig <- SyncStructureConfig.structureConfigProcessor(SyncStructureConfig.SourceRoleType, SourceUriOption)
+    dstConfig <- SyncStructureConfig.structureConfigProcessor(SyncStructureConfig.DestinationRoleType,
+      DestinationUriOption)
     mode <- applyModeProcessor(dstUri.getOrElse(""))
     timeout <- timeoutProcessor()
     logFile <- ParameterManager.optionValue(LogFileOption, Some(LogFileHelp)).toPath.single
@@ -329,8 +343,8 @@ object SyncParameterManager {
     srcCrypt <- cryptModeProcessor(SourceCryptModeOption)
     dstCrypt <- cryptModeProcessor(DestCryptModeOption)
     cacheSize <- cryptCacheSizeProcessor()
-  } yield createSyncConfig(srcUri, dstUri, mode, timeout, logFile, syncLog, timeDelta, opsPerSec,
-    srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
+  } yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, mode, timeout, logFile, syncLog, timeDelta,
+    opsPerSec, srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
 
   /**
     * Extracts an object with configuration options for the sync process from
@@ -358,6 +372,8 @@ object SyncParameterManager {
     *
     * @param triedSrcUri         the source URI component
     * @param triedDstUri         the dest URI component
+    * @param triedSrcConfig      the source structure config component
+    * @param triedDstConfig      the destination structure config component
     * @param triedApplyMode      the apply mode component
     * @param triedTimeout        the timeout component
     * @param triedLogFile        the log file component
@@ -373,6 +389,8 @@ object SyncParameterManager {
     */
   private def createSyncConfig(triedSrcUri: Try[String],
                                triedDstUri: Try[String],
+                               triedSrcConfig: Try[StructureConfig],
+                               triedDstConfig: Try[StructureConfig],
                                triedApplyMode: Try[ApplyMode],
                                triedTimeout: Try[Timeout],
                                triedLogFile: Try[Option[Path]],
@@ -384,9 +402,10 @@ object SyncParameterManager {
                                triedDstPassword: Try[Option[String]],
                                triedDstCryptMode: Try[CryptMode.Value],
                                triedCryptCacheSize: Try[Int]): Try[SyncConfig] =
-    ParameterManager.createRepresentation(triedSrcUri, triedDstUri, triedApplyMode, triedTimeout,
-      triedLogFile, triedSyncLog, triedTimeDelta, triedSrcPassword, triedSrcCryptMode, triedDstPassword,
-      triedDstCryptMode, triedCryptCacheSize, triedOpsPerSec)(SyncConfig.apply)
+    ParameterManager.createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
+      triedApplyMode, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedSrcPassword,
+      triedSrcCryptMode, triedDstPassword, triedDstCryptMode, triedCryptCacheSize,
+      triedOpsPerSec)(SyncConfig.apply)
 
   /**
     * Returns a processor that extracts the source URI from the first input
@@ -395,7 +414,7 @@ object SyncParameterManager {
     * @return the processor for the source URI
     */
   private def srcUriProcessor(): CliProcessor[Try[String]] =
-    ParameterManager.inputValue(0, Some("sourceURI"), Some(SourceUriHelp))
+    ParameterManager.inputValue(0, Some(SourceUriOption), Some(SourceUriHelp))
       .multiplicity(atLeast = 1, atMost = 1)
       .single
       .mandatory
@@ -407,7 +426,7 @@ object SyncParameterManager {
     * @return the processor for the destination URI
     */
   private def dstUriProcessor(): CliProcessor[Try[String]] =
-    ParameterManager.inputValue(1, Some("destinationURI"), Some(DestinationUriHelp), last = true)
+    ParameterManager.inputValue(1, Some(DestinationUriOption), Some(DestinationUriHelp), last = true)
       .multiplicity(atLeast = 1, atMost = 1)
       .single
       .mandatory

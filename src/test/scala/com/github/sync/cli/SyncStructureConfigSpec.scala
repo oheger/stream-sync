@@ -94,7 +94,8 @@ object SyncStructureConfigSpec {
                                  optReader: Option[ConsoleReader] = None): (Try[StructureConfig], ParameterContext) = {
     val paramCtx = toParameters(args, createUrlParameter(structureUrl, roleType))
     val reader = optReader getOrElse DummyConsoleReader
-    ParameterManager.runProcessor(SyncStructureConfig.structureConfigProcessor(roleType), paramCtx)(reader)
+    ParameterManager.runProcessor(SyncStructureConfig.structureConfigProcessor(roleType, "uri"),
+      paramCtx)(reader)
   }
 
   /**
