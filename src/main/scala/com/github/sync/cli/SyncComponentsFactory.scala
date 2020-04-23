@@ -17,18 +17,14 @@
 package com.github.sync.cli
 
 import java.nio.file.Paths
-import java.time.ZoneId
 
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
-import akka.http.scaladsl.model.Uri
 import akka.stream.scaladsl.{Flow, Source}
-import akka.util.Timeout
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
-import com.github.sync.cli.ParameterManager._
-import com.github.sync.cli.SyncStructureConfig.{DestinationRoleType, SourceRoleType, RoleType}
-import com.github.sync.cli.oauth.OAuthParameterManager
+import com.github.sync.cli.SyncParameterManager.SyncConfig
+import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
 import com.github.sync.crypt.Secret
 import com.github.sync.http._
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
@@ -37,7 +33,6 @@ import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.webdav.DavConfig
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
 
 object SyncComponentsFactory {
   /** URI prefix indicating a WebDav structure. */
@@ -137,12 +132,6 @@ object SyncComponentsFactory {
   /** Group name to be used if no authentication is desired. */
   final val GroupNoAuth = "authNone"
 
-  /** Regular expression for parsing a WebDav URI. */
-  private val RegDavUri = (PrefixWebDav + "(.+)").r
-
-  /** Regular expression for parsing a OneDrive drive ID. */
-  private val RegOneDriveID = (PrefixOneDrive + "(.+)").r
-
   /**
     * Type definition for a function that does cleanup for a components
     * factory. Resources created by the factory, such as actors, can be freed
@@ -230,278 +219,6 @@ object SyncComponentsFactory {
   }
 
   /**
-    * Extracts a configuration object of a specific type from command line
-    * arguments with the help of a ''CliProcessor''. The processor is run, and
-    * its result is mapped to a correct ''Future''.
-    *
-    * @param processor     the ''CliProcessor'' defining the configuration
-    * @param parameters    the object with command line arguments
-    * @param ec            the execution context
-    * @param consoleReader the object for reading from the console
-    * @tparam C the type of the configuration object
-    * @return a ''Future'' with the updated parameters and the configuration
-    */
-  private def extractConfig[C](processor: CliProcessor[Try[C]], parameters: Parameters)
-                              (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(C, ParameterContext)] =
-    Future.fromTry(ParameterManager.tryProcessor(processor, parameters))
-
-  /**
-    * Extracts the configuration for the local file system from the given
-    * parameters. Errors are handled, and the map with parameters is updated.
-    *
-    * @param uri           the URI acting as the root path for the file system
-    * @param parameters    the object with command line parameters
-    * @param structureType the structure type
-    * @param ec            the execution context
-    * @param consoleReader the object for reading from the console
-    * @return a ''Future'' with the extracted file system configuration and the
-    *         updated ''ParameterContext''
-    */
-  private def extractLocalFsConfig(uri: String, parameters: Parameters, structureType: RoleType)
-                                  (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(LocalFsConfig, ParameterContext)] = {
-    val processor = localFsConfigProcessor(uri, structureType)
-    extractConfig(processor, parameters)
-  }
-
-  /**
-    * Returns a ''CliProcessor'' that extracts the configuration for the local
-    * file system from the current command line arguments.
-    *
-    * @param uri           the URI acting as root path for the file system
-    * @param structureType the structure type
-    * @return the ''CliProcessor'' for the file system configuration
-    */
-  private def localFsConfigProcessor(uri: String, structureType: RoleType): CliProcessor[Try[LocalFsConfig]] =
-    optionValue(structureType.configPropertyName(PropLocalFsTimeZone))
-      .mapTo(ZoneId.of)
-      .single
-      .map(triedZone => createLocalFsConfig(uri, structureType, triedZone))
-
-  /**
-    * Creates a ''LocalFsConfig'' object from the given components. Errors are
-    * aggregated in the resulting ''Try''.
-    *
-    * @param uri           the URI acting as root path for the file system
-    * @param structureType the structure type
-    * @param triedZone     the tried time zone component
-    * @return a ''Try'' with the file system configuration
-    */
-  private def createLocalFsConfig(uri: String, structureType: RoleType, triedZone: Try[Option[ZoneId]]):
-  Try[LocalFsConfig] = {
-    val triedPath = ParameterManager.paramTry(structureType.configPropertyName(PropLocalFsPath))(Paths get uri)
-    ParameterManager.createRepresentation(triedPath, triedZone)(LocalFsConfig.apply)
-  }
-
-  /**
-    * Extracts the configuration for a WebDav server from the given parameters.
-    * Errors are handled, and the map with parameters is updated.
-    *
-    * @param uri           the URI of the WebDav server
-    * @param timeout       the timeout for requests
-    * @param parameters    the parameters object
-    * @param structureType the structure type
-    * @param ec            the execution context
-    * @param consoleReader the object for reading from the console
-    * @return a ''Future'' with the extracted configuration and updated
-    *         ''ParameterContext''
-    */
-  private def extractDavConfig(uri: String, timeout: Timeout, parameters: Parameters, structureType: RoleType)
-                              (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(DavConfig, ParameterContext)] =
-    extractConfig(davConfigProcessor(uri, timeout, structureType), parameters)
-
-  /**
-    * Returns a ''CliProcessor'' that extracts the configuration for a WebDav
-    * server from the current command line arguments.
-    *
-    * @param uri           the URI of the WebDav server
-    * @param timeout       the timeout for requests
-    * @param structureType the structure type
-    * @return the ''CliProcessor'' for the WebDav configuration
-    */
-  private def davConfigProcessor(uri: String, timeout: Timeout, structureType: RoleType):
-  CliProcessor[Try[DavConfig]] = {
-    val keyDelBeforeOverride = structureType.configPropertyName(PropDavDeleteBeforeOverride)
-    for {
-      triedModProp <- stringOptionValue(structureType.configPropertyName(PropDavModifiedProperty))
-      triedModNs <- stringOptionValue(structureType.configPropertyName(PropDavModifiedNamespace))
-      triedDel <- asMandatory(booleanOptionValue(keyDelBeforeOverride, Some(false)))
-      triedAuth <- authConfigProcessor(structureType)
-    } yield createDavConfig(uri, timeout, structureType, triedModProp, triedModNs, triedDel, triedAuth)
-  }
-
-  /**
-    * Extracts the configuration for a OneDrive server from the given
-    * parameters, handling errors and updating the map with parameters.
-    *
-    * @param driveID       the OneDrive drive ID
-    * @param timeout       the timeout for requests
-    * @param parameters    the parameters object
-    * @param structureType the structure type
-    * @param ec            the execution context
-    * @param consoleReader the object for reading from the console
-    * @return a ''Future'' with the extracted configuration and updated
-    *         ''ParameterContext''
-    */
-  private def extractOneDriveConfig(driveID: String, timeout: Timeout, parameters: Parameters,
-                                    structureType: RoleType)
-                                   (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(OneDriveConfig, ParameterContext)] =
-    extractConfig(oneDriveConfigProcessor(driveID, timeout, structureType), parameters)
-
-  /**
-    * Returns a ''CliProcessor'' that extracts the configuration for a OneDrive
-    * server from the current command line arguments.
-    *
-    * @param driveID       the OneDrive drive ID
-    * @param timeout       the timeout for requests
-    * @param structureType the structure type
-    * @return the ''CliProcessor'' for the OneDrive configuration
-    */
-  private def oneDriveConfigProcessor(driveID: String, timeout: Timeout, structureType: RoleType):
-  CliProcessor[Try[OneDriveConfig]] = {
-    val keyPath = structureType.configPropertyName(PropOneDrivePath)
-    val keyChunkSize = structureType.configPropertyName(PropOneDriveUploadChunkSize)
-    for {
-      triedChunkSize <- asMandatory(intOptionValue(keyChunkSize,
-        Some(OneDriveConfig.DefaultUploadChunkSizeMB)))
-      triedPath <- asMandatory(stringOptionValue(keyPath))
-      triedServer <- stringOptionValue(structureType.configPropertyName(PropOneDriveServer))
-      triedAuth <- authConfigProcessor(structureType)
-    } yield createOneDriveConfig(driveID, timeout, triedPath, triedChunkSize, triedServer, triedAuth)
-  }
-
-  /**
-    * Returns a ''CliProcessor'' for obtaining the password of the Dav server.
-    * The password is mandatory; if it is not specified in the arguments, it is
-    * read from the console.
-    *
-    * @param structureType the structure type
-    * @return the ''CliProcessor'' for the Dav password
-    */
-  private def davPasswordOption(structureType: RoleType): CliProcessor[Try[String]] = {
-    val prop = structureType.configPropertyName(PropDavPassword)
-    optionValue(prop)
-      .fallback(consoleReaderValue(prop, password = true))
-      .single
-      .mandatory
-  }
-
-  /**
-    * Returns a ''CliProcessor'' for obtaining the authentication
-    * configuration. The processor creates a concrete implementation of the
-    * [[AuthConfig]] trait depending on the properties that are specified.
-    *
-    * @param structureType the structure type
-    * @return the ''CliProcessor'' for the auth config
-    */
-  private def authConfigProcessor(structureType: RoleType): CliProcessor[Try[AuthConfig]] = {
-    val procBasicDefined = isDefinedProcessor(structureType.configPropertyName(PropDavUser))
-    val procOAuthDefined = isDefinedProcessor(structureType.configPropertyName(
-      OAuthParameterManager.NameOptionName))
-    val condNoAuth = conditionalValue(procOAuthDefined, ifProc = constantOptionValue(GroupOAuth),
-      elseProc = constantOptionValue(GroupNoAuth))
-    val groupSelector: CliProcessor[Try[String]] =
-      conditionalValue(procBasicDefined, ifProc = constantOptionValue(GroupBasicAuth), elseProc = condNoAuth)
-        .single.mandatory
-    val groupMap = Map[String, CliProcessor[OptionValue[AuthConfig]]](
-      GroupBasicAuth -> basicAuthProcessor(structureType),
-      GroupOAuth -> oauthConfigProcessor(structureType),
-      GroupNoAuth -> constantOptionValue(NoAuth))
-    conditionalGroupValue(groupSelector, groupMap).single.mandatory
-  }
-
-  /**
-    * Returns a ''CliProcessor'' for obtaining the basic auth configuration.
-    *
-    * @param structureType the structure type
-    * @return the ''CliProcessor'' for the basic auth config
-    */
-  private def basicAuthProcessor(structureType: RoleType): CliProcessor[OptionValue[AuthConfig]] = {
-    val keyUser = structureType.configPropertyName(PropDavUser)
-    val procUser = optionValue(keyUser)
-      .single
-      .mandatory
-    for {
-      triedUser <- procUser
-      triedPassword <- davPasswordOption(structureType)
-    } yield createBasicAuthConfig(triedUser, triedPassword)
-  }
-
-  /**
-    * Returns a ''CliProcessor'' for obtaining the OAuth configuration.
-    *
-    * @param structureType the structure type
-    * @return the ''CliProcessor'' for the OAuth configuration
-    */
-  private def oauthConfigProcessor(structureType: RoleType): CliProcessor[OptionValue[AuthConfig]] = {
-    OAuthParameterManager.storageConfigProcessor(needPassword = true,
-      prefix = OptionPrefix + structureType.name)
-      .map { triedConfig =>
-        triedConfig map (config => Iterable(config.asInstanceOf[AuthConfig]))
-      }
-  }
-
-  /**
-    * Creates a ''DavConfig'' object from the given components. Errors are
-    * aggregated in the resulting ''Try''.
-    *
-    * @param uri                       the URI of the Dav server
-    * @param timeout                   the timeout for requests
-    * @param structureType             the structure type
-    * @param triedOptModifiedProp      the component for the modified property
-    * @param triedOptModifiedNamespace the component for the modified namespace
-    * @param triedDelBeforeOverride    the component for the delete before
-    *                                  override flag
-    * @param triedAuthConfig           the component for the auth config
-    * @return a ''Try'' with the configuration for a Dav server
-    */
-  private def createDavConfig(uri: String, timeout: Timeout, structureType: RoleType,
-                              triedOptModifiedProp: Try[Option[String]],
-                              triedOptModifiedNamespace: Try[Option[String]],
-                              triedDelBeforeOverride: Try[Boolean],
-                              triedAuthConfig: Try[AuthConfig]): Try[DavConfig] = {
-    val triedUri = ParameterManager.paramTry(structureType.configPropertyName(PropDavUri))(Uri(uri))
-    ParameterManager.createRepresentation(triedUri, triedOptModifiedProp, triedOptModifiedNamespace,
-      triedDelBeforeOverride, triedAuthConfig)(DavConfig(_, _, _, _, timeout, _))
-  }
-
-  /**
-    * Creates a ''OneDriveConfig'' object from the given components. Errors are
-    * aggregated in the resulting ''Try''.
-    *
-    * @param driveID         the OneDrive drive ID
-    * @param timeout         the timeout for requests
-    * @param triedPath       the sync path component
-    * @param triedChunkSize  the upload chunk size component
-    * @param triedServerUri  the server URI component
-    * @param triedAuthConfig the component for auth config
-    * @return a ''Try'' with the OneDrive configuration
-    */
-  private def createOneDriveConfig(driveID: String, timeout: Timeout,
-                                   triedPath: Try[String], triedChunkSize: Try[Int],
-                                   triedServerUri: Try[Option[String]],
-                                   triedAuthConfig: Try[AuthConfig]): Try[OneDriveConfig] =
-    ParameterManager.createRepresentation(triedPath, triedChunkSize, triedAuthConfig,
-      triedServerUri)(OneDriveConfig(driveID, _, _, timeout, _, _))
-
-  /**
-    * Creates an ''OptionValue'' with a ''BasicAuthConfig'' based on the given
-    * components.
-    *
-    * @param triedUser     the user component
-    * @param triedPassword the password component
-    * @return the option value for the ''BasicAuthConfig''
-    */
-  private def createBasicAuthConfig(triedUser: Try[String], triedPassword: Try[String]):
-  OptionValue[BasicAuthConfig] =
-    ParameterManager.createRepresentation(triedUser, triedPassword) { (usr, pwd) =>
-      List(BasicAuthConfig(usr, Secret(pwd)))
-    }
-
-  /**
     * Creates the factory for creating HTTP actors for interacting with an HTTP
     * server based on the given configuration. Depending on the authentication
     * scheme configured, a different factory has to be used.
@@ -529,6 +246,38 @@ object SyncComponentsFactory {
       case NoAuth =>
         Future.successful(new NoAuthHttpActorFactory(requestActorProps))
     }
+
+  /**
+    * Creates a ''DavConfig'' from the sync config, the structure URI, and the
+    * ''DavStructureConfig''.
+    *
+    * @param config       the ''SyncConfig''
+    * @param davUri       the URI of the structure
+    * @param structConfig the ''DavStructureConfig''
+    * @return the resulting ''DavConfig''
+    */
+  private def davConfigFromStructureConfig(config: SyncConfig, davUri: String, structConfig: DavStructureConfig):
+  DavConfig = {
+    DavConfig(davUri, structConfig.optLastModifiedProperty,
+      structConfig.optLastModifiedNamespace, structConfig.deleteBeforeOverride,
+      config.timeout, structConfig.authConfig)
+  }
+
+  /**
+    * Creates a ''OneDriveConfig'' from the sync config, the drive ID, and
+    * the ''OneDriveStructureConfig''.
+    *
+    * @param config       the '' SyncConfig''
+    * @param driveID      the OneDrive ID
+    * @param structConfig the ''OneDriveStructureConfig''
+    * @return the resulting ''OneDriveConfig''
+    */
+  private def oneDriveConfigFromStructureConfig(config: SyncConfig, driveID: String,
+                                                structConfig: OneDriveStructureConfig): OneDriveConfig = {
+    OneDriveConfig(driveID, structConfig.syncPath,
+      structConfig.optUploadChunkSizeMB getOrElse OneDriveConfig.DefaultUploadChunkSizeMB,
+      config.timeout, structConfig.authConfig, structConfig.optServerUri)
+  }
 }
 
 /**
@@ -540,11 +289,8 @@ object SyncComponentsFactory {
   * concrete URIs for the source and destination structures.
   *
   * The usage scenario is that the command line arguments have already been
-  * pre-processed. The URIs representing the source and destination structures
-  * determine, which additional parameters are required to fully define these
-  * structures. These parameters are extracted and removed from the
-  * ''Parameters'' object. That way a verification of all input parameters is
-  * possible.
+  * parsed, and a corresponding configuration object has been created. Based on
+  * this configuration object, the correct components can be constructed.
   *
   * @param oauthStorageService the service for storing OAuth data
   */
@@ -560,65 +306,117 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
 
   /**
     * Creates a factory for creating the stream components related to the
-    * source structure of the sync process. The passed in parameters are
-    * processed in order to create the factory and updated by removing the
-    * parameters consumed.
+    * source structure of the sync process. All the necessary information is
+    * contained in the passed in configuration object.
     *
-    * @param uri           the URI defining the source structure
-    * @param timeout       a timeout when applying a sync operation
-    * @param parameters    the object with command line parameters
-    * @param system        the actor system
-    * @param ec            the execution context
-    * @param consoleReader the object for reading from the console
-    * @return updated parameters and the factory for creating source components
+    * @param config the configuration for the sync process
+    * @param system the actor system
+    * @param ec     the execution context
+    * @return a future with the factory for creating source components
     */
-  def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
-                                   (implicit system: ActorSystem, ec: ExecutionContext,
-                                    consoleReader: ConsoleReader):
-  Future[(Parameters, SourceComponentsFactory)] = uri match {
-    case RegDavUri(davUri) =>
-      for {(config, nextParamCtx) <- extractDavConfig(davUri, timeout, parameters, SourceRoleType)
-           httpFactory <- createHttpActorFactory(HttpRequestActor(davUri), config, oauthStorageService)
-           } yield (nextParamCtx.parameters, new DavComponentsSourceFactory(config, httpFactory))
-    case RegOneDriveID(driveID) =>
-      for {(config, nextParamCtx) <- extractOneDriveConfig(driveID, timeout, parameters, SourceRoleType)
-           httpFactory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
-             config, oauthStorageService)
-           } yield (nextParamCtx.parameters, new OneDriveComponentsSourceFactory(config, httpFactory))
-    case _ =>
-      extractLocalFsConfig(uri, parameters, SourceRoleType)
-        .map(t => (t._2.parameters, new LocalFsSourceComponentsFactory(t._1)))
+  def createSourceComponentsFactory(config: SyncConfig)(implicit system: ActorSystem, ec: ExecutionContext):
+  Future[SourceComponentsFactory] = config.srcConfig match {
+    case FsStructureConfig(optTimeZone) =>
+      val fsConfig = LocalFsConfig(Paths get config.srcUri, optTimeZone)
+      Future.successful(new LocalFsSourceComponentsFactory(fsConfig))
+
+    case davStructConfig: DavStructureConfig =>
+      createDavComponentsFactory(config, config.srcUri, davStructConfig) { (davConfig, actorFactory) =>
+        new DavComponentsSourceFactory(davConfig, actorFactory)
+      }
+
+    case oneStructConfig: OneDriveStructureConfig =>
+      createOneDriveComponentsFactory(config, config.srcUri, oneStructConfig) { (oneConfig, actorFactory) =>
+        new OneDriveComponentsSourceFactory(oneConfig, actorFactory)
+      }
   }
 
   /**
     * Creates a factory for creating the stream components related to the
-    * destination structure of the sync process. The passed in parameters are
-    * processed in order to create the factory and updated by removing the
-    * parameters consumed.
+    * destination structure of the sync process. All the necessary information
+    * is contained in the passed in configuration object.
     *
-    * @param uri           the URI defining the source structure
-    * @param timeout       a timeout when applying a sync operation
-    * @param parameters    the object with command line parameters
-    * @param system        the actor system
-    * @param ec            the execution context
-    * @param consoleReader the object for reading from the console
-    * @return updated parameters and the factory for creating dest components
+    * @param config the configuration for the sync process
+    * @param system the actor system
+    * @param ec     the execution context
+    * @return a future with the factory for creating destination components
     */
-  def createDestinationComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
-                                        (implicit system: ActorSystem, ec: ExecutionContext,
-                                         consoleReader: ConsoleReader):
-  Future[(Parameters, DestinationComponentsFactory)] = uri match {
-    case RegDavUri(davUri) =>
-      for {(config, nextParamCtx) <- extractDavConfig(davUri, timeout, parameters, DestinationRoleType)
-           httpFactory <- createHttpActorFactory(HttpRequestActor(davUri), config, oauthStorageService)
-           } yield (nextParamCtx.parameters, new DavComponentsDestinationFactory(config, httpFactory))
-    case RegOneDriveID(driveID) =>
-      for {(config, nextParamCtx) <- extractOneDriveConfig(driveID, timeout, parameters, DestinationRoleType)
-           httpFactory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
-             config, oauthStorageService)
-           } yield (nextParamCtx.parameters, new OneDriveComponentsDestinationFactory(config, httpFactory))
-    case _ =>
-      extractLocalFsConfig(uri, parameters, DestinationRoleType)
-        .map(t => (t._2.parameters, new LocalFsDestinationComponentsFactory(t._1, timeout)))
+  def createDestinationComponentsFactory(config: SyncConfig)(implicit system: ActorSystem, ec: ExecutionContext):
+  Future[DestinationComponentsFactory] = config.dstConfig match {
+    case FsStructureConfig(optTimeZone) =>
+      val fsConfig = LocalFsConfig(Paths get config.dstUri, optTimeZone)
+      Future.successful(new LocalFsDestinationComponentsFactory(fsConfig, config.timeout))
+
+    case davStructConfig: DavStructureConfig =>
+      createDavComponentsFactory(config, config.dstUri, davStructConfig) { (davConfig, actorFactory) =>
+        new DavComponentsDestinationFactory(davConfig, actorFactory)
+      }
+
+    case oneStructConfig: OneDriveStructureConfig =>
+      createOneDriveComponentsFactory(config, config.dstUri, oneStructConfig) { (oneConfig, actorFactory) =>
+        new OneDriveComponentsDestinationFactory(oneConfig, actorFactory)
+      }
+  }
+
+  /**
+    * Handles the creation of a components factory for a DAV structure from the
+    * parameters passed in.
+    *
+    * @param config       the sync configuration
+    * @param uri          the URI of the DAV structure
+    * @param structConfig the config for the DAV structure
+    * @param fCreate      a function to create the resulting factory
+    * @param system       the actor system
+    * @param ec           the execution context
+    * @tparam T the type of the resulting factory
+    * @return a future with the resulting factory
+    */
+  private def createDavComponentsFactory[T](config: SyncConfig, uri: String, structConfig: DavStructureConfig)
+                                           (fCreate: (DavConfig, HttpActorFactory) => T)
+                                           (implicit system: ActorSystem, ec: ExecutionContext): Future[T] = {
+    val futDavUri = uri match {
+      case SyncStructureConfig.RegDavUri(uri) => Future.successful(uri)
+      case _ =>
+        // Paranoia check; this cannot happen in practice
+        Future.failed(new IllegalArgumentException(s"No a valid WebDav URI: '$uri'"))
+    }
+    for {
+      davUri <- futDavUri
+      davConfig <- Future.successful(davConfigFromStructureConfig(config, davUri, structConfig)
+      )
+      factory <- createHttpActorFactory(HttpRequestActor(davUri), davConfig, oauthStorageService)
+        .map(factory => fCreate(davConfig, factory))
+    } yield factory
+  }
+
+  /**
+    * Handles the creation of a components factory for a OneDrive structure
+    * from the parameters passed in.
+    *
+    * @param config       the sync configuration
+    * @param uri          the URI of the OneDrive structure
+    * @param structConfig the config of the OneDrive structure
+    * @param fCreate      a function to create the resulting factory
+    * @param system       the actor system
+    * @param ec           the execution context
+    * @tparam T the type of the resulting factory
+    * @return a future with the resulting factory
+    */
+  private def createOneDriveComponentsFactory[T](config: SyncConfig, uri: String,
+                                                 structConfig: OneDriveStructureConfig)
+                                                (fCreate: (OneDriveConfig, HttpActorFactory) => T)
+                                                (implicit system: ActorSystem, ec: ExecutionContext): Future[T] = {
+    val futDriveID = uri match {
+      case SyncStructureConfig.RegOneDriveID(id) => Future.successful(id)
+      case _ =>
+        // Paranoia check; this cannot happen in practice
+        Future.failed(new IllegalArgumentException(s"Not a valid OneDrive URI: '$uri'"))
+    }
+    for {
+      driveID <- futDriveID
+      oneConfig <- Future.successful(oneDriveConfigFromStructureConfig(config, driveID, structConfig))
+      factory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
+        oneConfig, oauthStorageService) map (fCreate(oneConfig, _))
+    } yield factory
   }
 }

@@ -23,8 +23,8 @@ import java.time.Instant
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.{ImplicitSender, TestKit}
-import akka.util.{ByteString, Timeout}
-import com.github.sync.cli.ParameterManager.Parameters
+import akka.util.ByteString
+import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage}
 import com.github.sync.{AsyncTestHelper, DelegateSourceComponentsFactory, FileTestHelper, SourceFileProvider}
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -140,15 +140,13 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     */
   protected def factoryWithMockSourceProvider(provider: SourceFileProvider): SyncComponentsFactory =
     new SyncComponentsFactory {
-      override def createSourceComponentsFactory(uri: String, timeout: Timeout, parameters: Parameters)
-                                                (implicit system: ActorSystem,
-                                                 ec: ExecutionContext, consoleReader: ConsoleReader):
-      Future[(Parameters, SyncComponentsFactory.SourceComponentsFactory)] =
-        super.createSourceComponentsFactory(uri, timeout, parameters) map { t =>
-          val delegateFactory = new DelegateSourceComponentsFactory(t._2) {
+      override def createSourceComponentsFactory(config: SyncConfig)
+                                                (implicit system: ActorSystem, ec: ExecutionContext):
+      Future[SyncComponentsFactory.SourceComponentsFactory] =
+        super.createSourceComponentsFactory(config) map { t =>
+          new DelegateSourceComponentsFactory(t) {
             override def createSourceFileProvider(): SourceFileProvider = provider
           }
-          (t._1, delegateFactory)
         }
     }
 
