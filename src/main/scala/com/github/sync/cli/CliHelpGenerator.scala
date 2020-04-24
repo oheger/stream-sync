@@ -519,14 +519,15 @@ object CliHelpGenerator {
   }
 
   /**
-    * Returns a filter function that accepts only options belonging to the
-    * given group.
+    * Returns a filter function that accepts only options belonging to all of
+    * the given groups.
     *
-    * @param group the name of the group
-    * @return the function that filters for this group
+    * @param groups the name of the groups the options must belong to
+    * @return the function that filters for all of these groups
     */
-  def groupFilterFunc(group: String): OptionFilter =
-    data => isInGroup(data.attributes, group)
+  def groupFilterFunc(groups: String*): OptionFilter =
+    data =>
+      groups.forall(group => isInGroup(data.attributes, group))
 
   /**
     * Returns a filter function implementing AND logic. The resulting filter

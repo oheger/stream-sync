@@ -780,6 +780,21 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     result should contain only ExpResult
   }
 
+  it should "provide a filter function that accepts elements belonging to multiple groups" in {
+    val Group1 = "IncludeGroup1"
+    val Group2 = "IncludeGroup2"
+    val helpContext = createHelpContext()
+      .addOption("ignored1", Some("ignored help 1"))
+      .startGroup(Group2)
+      .addOption("ignored2", None)
+      .startGroup(Group1)
+      .addOption(Key, Some(HelpText))
+    val ExpResult = OptionMetaData(Key, helpContext.options(Key))
+
+    val result = helpContext.optionMetaData.filter(CliHelpGenerator.groupFilterFunc(Group1, Group2))
+    result should contain only ExpResult
+  }
+
   it should "provide a filter function that accepts elements not assigned to any group" in {
     val helpContext = createHelpContext()
       .addOption(Key, Some(HelpText))
