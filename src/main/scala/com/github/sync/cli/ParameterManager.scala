@@ -706,10 +706,13 @@ object ParameterManager {
     */
   def withFallback[A](proc: CliProcessor[OptionValue[A]], fallbackProc: CliProcessor[OptionValue[A]]):
   CliProcessor[OptionValue[A]] =
-    proc flatMap { result =>
-      if (result.isFailure || result.get.nonEmpty) constantProcessor(result)
-      else fallbackProc
-    }
+    CliProcessor(context => {
+      val (result, context2) = proc.run(context)
+      if (result.isFailure || result.get.nonEmpty) {
+        val helpContext = updateHelpContext(context2.helpContext, List((fallbackProc, None)))
+        (result, context2.copy(helpContext = helpContext))
+      } else fallbackProc.run(context2)
+    }, proc.optKey)
 
   /**
     * Returns a processor that prompts the user for entering the value of an

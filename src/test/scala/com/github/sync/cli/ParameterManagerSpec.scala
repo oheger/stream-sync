@@ -19,6 +19,7 @@ package com.github.sync.cli
 import java.io.IOException
 
 import com.github.sync.cli.ParameterManager.{OptionValue, Parameters}
+import org.mockito.Mockito
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -210,12 +211,13 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   it should "provide a fallback processor if the first processor yields a value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val proc1 = testProcessor(ResultOptionValue)
-    val proc2 = CliProcessor[OptionValue[String]](_ => throw new IllegalArgumentException("Unexpected call!"))
+    val proc2 = consoleReaderValue("someKey", password = true)
     val processor = ParameterManager.withFallback(proc1, proc2)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters should be(NextParameters)
     res.get should be(ResultValues)
+    Mockito.verifyZeroInteractions(consoleReader)
   }
 
   it should "provide a fallback processor if the first processor yields an empty value" in {
@@ -235,7 +237,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val exception = new IllegalArgumentException("Invalid option")
     val optionValue: OptionValue[String] = Failure(exception)
     val proc1 = testProcessor(optionValue)
-    val proc2 = testProcessor(ResultOptionValue)
+    val proc2 = constantProcessor(ResultOptionValue)
     val processor = ParameterManager.withFallback(proc1, proc2)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)

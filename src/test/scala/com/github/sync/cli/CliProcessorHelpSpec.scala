@@ -38,6 +38,9 @@ object CliProcessorHelpSpec {
   /** The platform-specific line separator. */
   private val CR = System.lineSeparator()
 
+  /** Constant for undefined parameters used per default to run processors. */
+  private val EmptyParameters = Parameters(Map.empty, Set.empty)
+
   /** A test column generator function. */
   private val TestColumnGenerator: ColumnGenerator =
     data => List(data.toString)
@@ -56,11 +59,12 @@ object CliProcessorHelpSpec {
     * Runs the given ''CliProcessor'' and returns the resulting help context.
     *
     * @param proc      the processor to be executed
+    * @param params the parameters to be used
     * @param optReader optional console reader for the context
     * @return the resulting help context
     */
-  private def generateHelpContext(proc: CliProcessor[_], optReader: Option[ConsoleReader] = None): CliHelpContext = {
-    val params = Parameters(Map.empty, Set.empty)
+  private def generateHelpContext(proc: CliProcessor[_], params: Parameters = EmptyParameters,
+                                  optReader: Option[ConsoleReader] = None): CliHelpContext = {
     implicit val reader: ConsoleReader = optReader getOrElse DefaultConsoleReader
     val (_, ctx) = ParameterManager.runProcessor(proc, params)
     ctx.helpContext
@@ -209,6 +213,17 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val helpContext = generateHelpContext(proc)
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(Value)
+  }
+
+  it should "update the help context with a fallback processor" in {
+    val paramsMap = Map(Key -> List("true"))
+    val params = Parameters(paramsMap, Set.empty)
+    val proc = optionValue(Key)
+      .toBoolean
+      .fallbackValues(false)
+
+    val helpContext = generateHelpContext(proc, params = params)
+    fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(false.toString)
   }
 
   it should "handle an uninitialized help context gracefully" in {
