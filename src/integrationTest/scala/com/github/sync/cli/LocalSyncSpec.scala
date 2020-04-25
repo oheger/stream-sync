@@ -74,16 +74,23 @@ class LocalSyncSpec extends BaseSyncSpec {
     checkFileNotPresent(dstFolder, "ignored.tmp")
   }
 
-  it should "generate a usage message if invalid parameters are passed in" in {
-    val ExpFragments = List("<sourceURI>", "<destinationURI>", SyncParameterManager.ApplyModeOption,
-      SyncParameterManager.TimeoutOption, SyncParameterManager.LogFileOption)
-    val options = Array("src/directory", "--filter", "exclude:*.tmp", "--foo", "bar")
-    val sync = createSync(overrideDispatcher = true)
+  it should "generate a usage message if no structure URIs are passed in" in {
+    val options = Array("--filter", "exclude:*.tmp", "--foo", "bar")
 
-    val output = futureResult(sync.runApp(options))
-    ExpFragments foreach { fragment =>
-      output should include(fragment)
-    }
+    val output = checkSyncOutput(options, "<sourceURI>", "<destinationURI>",
+      SyncParameterManager.ApplyModeOption, SyncParameterManager.TimeoutOption,
+      SyncParameterManager.LogFileOption)
+    output should not include "src-" + SyncStructureConfig.PropOneDrivePath
+    output should not include "src-" + SyncStructureConfig.PropDavDeleteBeforeOverride
+  }
+
+  it should "generate a usage message with the options for the local file system" in {
+    val options = Array("src/directory", "--filter", "exclude:*.tmp", "--foo", "bar")
+
+    val output = checkSyncOutput(options, "src-" + SyncStructureConfig.PropLocalFsTimeZone)
+    output should not include "dst-" + SyncStructureConfig.PropLocalFsTimeZone
+    output should not include "src-" + SyncStructureConfig.PropOneDrivePath
+    output should not include "src-" + SyncStructureConfig.PropDavDeleteBeforeOverride
   }
 
   it should "apply operations to an alternative target" in {

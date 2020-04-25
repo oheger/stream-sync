@@ -22,12 +22,17 @@ import java.util.UUID
 import akka.http.scaladsl.model.StatusCodes
 import com.github.sync.OAuthMockSupport.{CurrentTokenData, RefreshedTokenData}
 import com.github.sync.WireMockSupport._
+import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.onedrive.{OneDriveConfig, OneDriveStubbingSupport}
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 
 import scala.concurrent.ExecutionContext
 
+/**
+  * Integration test class for sync processes that contains tests related to
+  * OneDrive servers. The tests typically make use of a WireMock server.
+  */
 class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveStubbingSupport with OAuthMockSupport {
 
   import OneDriveStubbingSupport._
@@ -161,5 +166,14 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
     val subFolder = dstFolder.resolve("sub")
     checkFile(subFolder, "subFile.txt")
     checkFile(subFolder, "anotherSubFile.dat")
+  }
+
+  it should "generate a usage message if invalid parameters are passed in" in {
+    val options = Array("onedrive:" + DriveID, "/some/path")
+
+    checkSyncOutput(options, "src-" + SyncStructureConfig.PropOneDrivePath,
+      "src-" + SyncStructureConfig.PropOneDriveServer, "src-" + SyncStructureConfig.PropOneDriveUploadChunkSize,
+      "src-" + SyncStructureConfig.PropAuthUser, "src-" + SyncStructureConfig.PropAuthPassword,
+      "src-" + OAuthParameterManager.PasswordOptionName, "src-" + OAuthParameterManager.StoragePathOptionName)
   }
 }

@@ -200,4 +200,22 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
         if (overrideDispatcher) system.dispatcher
         else super.ec
     }
+
+  /**
+    * Executes a Sync process with the provided command line arguments and
+    * captures the output. Checks whether the output contains all of the passed
+    * in text fragments.
+    *
+    * @param options      the command line options
+    * @param expFragments text fragments that must be contained in the output
+    * @return the output as string
+    */
+  protected def checkSyncOutput(options: Array[String], expFragments: String*): String = {
+    val sync = createSync(overrideDispatcher = true)
+    val output = futureResult(sync.runApp(options))
+    expFragments foreach { fragment =>
+      output should include(fragment)
+    }
+    output
+  }
 }

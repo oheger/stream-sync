@@ -24,10 +24,12 @@ import akka.stream._
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes._
+import com.github.sync.cli.CliHelpGenerator.OptionFilter
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
+import com.github.sync.cli.SyncStructureConfig.{DestinationRoleType, RoleType, SourceRoleType}
 import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.crypt.{CryptService, CryptStage}
 import com.github.sync.impl._
@@ -54,6 +56,15 @@ object Sync {
     */
   case class SyncResult(totalOperations: Int, successfulOperations: Int)
 
+  /**
+    * A specialized exception class to report a failure to parse the command
+    * line options.
+    *
+    * @param msg     the message about what went wrong
+    * @param options the parameters extracted from the command line
+    */
+  class SyncParamException(msg: String, val options: Parameters) extends RuntimeException(msg)
+
   def main(args: Array[String]): Unit = {
     val sync = new Sync
     sync.run(args)
@@ -76,14 +87,14 @@ object Sync {
   Future[SyncResult] = {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
 
-    for {argsMap <- ParameterManager.parseParameters(args)
-         (argsMap1, config) <- SyncParameterManager.extractSyncConfig(argsMap)
-         (argsMap2, filterData) <- FilterManager.parseFilters(argsMap1)
-         srcFactory <- factory.createSourceComponentsFactory(config)
-         dstFactory <- factory.createDestinationComponentsFactory(config)
-         _ <- ParameterManager.checkParametersConsumed(argsMap2)
-         result <- runSync(config, filterData, srcFactory, dstFactory)
-         } yield result
+    for {
+      (argsMap1, config) <- syncConfigFromParams(args)
+      (argsMap2, filterData) <- FilterManager.parseFilters(argsMap1)
+      srcFactory <- factory.createSourceComponentsFactory(config)
+      dstFactory <- factory.createDestinationComponentsFactory(config)
+      _ <- ParameterManager.checkParametersConsumed(argsMap2)
+      result <- runSync(config, filterData, srcFactory, dstFactory)
+    } yield result
   }
 
   /**
@@ -451,9 +462,31 @@ object Sync {
     syncProcess(factory, args)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
       .recover {
-        case e: IllegalArgumentException =>
+        case e: SyncParamException =>
           generateCliErrorMessage(e)
       }
+
+  /**
+    * Handles the parsing of command line parameters and returns a future with
+    * the ''SyncConfig'' that could be extracted. In case of invalid
+    * parameters, the future fails with an exception of type
+    * ''SyncParamException''.
+    *
+    * @param args          the array with command line options
+    * @param system        the actor system
+    * @param ec            the execution context
+    * @param consoleReader the console reader
+    * @return a future with the updated parameters and the ''SyncConfig''
+    */
+  private def syncConfigFromParams(args: Array[String])
+                                  (implicit system: ActorSystem, ec: ExecutionContext, consoleReader: ConsoleReader):
+  Future[(Parameters, SyncConfig)] =
+    ParameterManager.parseParameters(args) flatMap { argsMap =>
+      SyncParameterManager.extractSyncConfig(argsMap) recoverWith {
+        case e: IllegalArgumentException =>
+          Future.failed(new SyncParamException(e.getMessage, argsMap))
+      }
+    }
 
   /**
     * Generates a string with an error message if invalid parameters have been
@@ -463,17 +496,17 @@ object Sync {
     * @param exception the original CLI exception
     * @return the error and usage text
     */
-  private def generateCliErrorMessage(exception: IllegalArgumentException): String =
+  private def generateCliErrorMessage(exception: SyncParamException): String =
     exception.getMessage + CliHelpGenerator.CR + CliHelpGenerator.CR +
-      generateCliHelp()
+      generateCliHelp(exception.options)
 
   /**
     * Generates a help text with instructions how this application is used.
     *
+    * @param params the parsed command line arguments
     * @return the help text
     */
-  private def generateCliHelp(): String = {
-    val params = Parameters(Map.empty, Set.empty)
+  private def generateCliHelp(params: Parameters): String = {
     val (_, context) = ParameterManager.runProcessor(SyncParameterManager.syncConfigProcessor(),
       params)(DummyConsoleReader)
     val helpContext = context.helpContext
@@ -483,11 +516,15 @@ object Sync {
       wrapColumnGenerator(attributeColumnGenerator(AttrHelpText), 70),
       prefixColumnGenerator(attributeColumnGenerator(AttrFallbackValue), prefixText = Some("Default value: "))
     )
-
     val generators = Seq(
       optionNameColumnGenerator(),
       helpGenerator
     )
+
+    val srcGroup = structureGroup(params, SourceRoleType)
+    val dstGroup = structureGroup(params, DestinationRoleType)
+    val optionsFilter = andFilter(OptionsFilterFunc, groupFilter(srcGroup, dstGroup))
+
     val buf = new java.lang.StringBuilder
     buf.append("Usage: streamsync [options] ")
       .append(generateInputParamsOverview(helpContext).mkString(" "))
@@ -499,8 +536,48 @@ object Sync {
       .append(CR)
       .append("Supported options:")
       .append(CR)
-      .append(generateOptionsHelp(helpContext, filterFunc = OptionsFilterFunc)(generators: _*))
+      .append(generateOptionsHelp(helpContext, filterFunc = optionsFilter)(generators: _*))
       .toString
+  }
+
+  /**
+    * Returns a group name for the structure with the given role type. This
+    * function is used to determine the groups to be filtered for. The options
+    * to be displayed depend on the URIs that have been provided on the command
+    * line: If a URI for a role type is defined, the options related to the
+    * structure type of this role are displayed. Otherwise, no help for
+    * structure options is shown. That way, the user sees only help for options
+    * in the current context.
+    *
+    * @param params   the parsed command line arguments
+    * @param roleType the role type
+    * @return an ''Option'' with the name of the group
+    */
+  private def structureGroup(params: Parameters, roleType: RoleType): Option[String] =
+    ParameterManager.tryProcessor(
+      SyncStructureConfig.structureTypeSelectorProcessor(roleType, "uri"), params)(DefaultConsoleReader)
+      .toOption map (_._1)
+
+  /**
+    * Combines the given optional group filters to a combined filter function.
+    *
+    * @param srcGroup optional source group filter
+    * @param dstGroup optional destination group filter
+    * @return the combined group filter
+    */
+  private def groupFilter(srcGroup: Option[String], dstGroup: Option[String]): OptionFilter = {
+    // Adds options without a group to the given group filter
+    def noGroupOr(groupFilter: OptionFilter): OptionFilter =
+      CliHelpGenerator.orFilter(CliHelpGenerator.UnassignedGroupFilterFunc, groupFilter)
+
+    (srcGroup, dstGroup) match {
+      case (Some(g1), Some(g2)) =>
+        noGroupOr(CliHelpGenerator.orFilter(CliHelpGenerator.groupFilterFunc(g1),
+          CliHelpGenerator.groupFilterFunc(g2)))
+      case (Some(g), None) => noGroupOr(CliHelpGenerator.groupFilterFunc(g))
+      case (None, Some(g)) => noGroupOr(CliHelpGenerator.groupFilterFunc(g))
+      case (None, None) => CliHelpGenerator.UnassignedGroupFilterFunc
+    }
   }
 }
 

@@ -24,6 +24,7 @@ import akka.pattern.AskTimeoutException
 import akka.testkit.TestProbe
 import akka.util.{ByteString, Timeout}
 import com.github.sync.WireMockSupport.{BasicAuthFunc, Password, TokenAuthFunc, UserId}
+import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.{DecryptOpHandler, Secret}
 import com.github.sync.http.{BasicAuthConfig, HttpRequestActor}
 import com.github.sync.util.UriEncodingHelper
@@ -397,5 +398,14 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
       "--dst-modified-property", ModifiedProperty, "--dst-modified-namespace", ModifiedNamespace)
 
     expectFailedFuture[HttpRequestActor.RequestException](Sync.syncProcess(factory, options))
+  }
+
+  it should "generate a usage message if invalid parameters are passed in" in {
+    val options = Array("/some/path", "dav:" + serverUri("/target"), "--dst-delete-before-override", "invalid")
+
+    checkSyncOutput(options, "dst-" + SyncStructureConfig.PropDavDeleteBeforeOverride,
+      "dst-" + SyncStructureConfig.PropDavModifiedNamespace, "dst-" + SyncStructureConfig.PropDavModifiedProperty,
+      "dst-" + SyncStructureConfig.PropAuthUser, "dst-" + SyncStructureConfig.PropAuthPassword,
+      "dst-" + OAuthParameterManager.PasswordOptionName, "dst-" + OAuthParameterManager.StoragePathOptionName)
   }
 }

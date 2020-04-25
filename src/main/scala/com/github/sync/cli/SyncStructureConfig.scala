@@ -58,11 +58,28 @@ object SyncStructureConfig {
     */
   final val PropLocalFsTimeZone = "time-zone"
 
+  /** Help text for the local FS time zone option. */
+  final val HelpLocalFsTimeZone =
+    """Allows defining a time zone for the file system; modified timestamps of files are interpreted \
+      |in this time zone. This can be necessary for file systems like FAT32, which do not store \
+      |time zone information; otherwise, a change of the local time (e.g. when daylight saving \
+      |time starts or ends) can cause changes in the files to be reported. The value must be a \
+      |time zone ID that is accepted by the ZoneId class, such as "UTC+02".""".stripMargin
+
   /** Property for the user name if Basic Auth is used. */
   final val PropAuthUser = "user"
 
+  /** Help text for the basic auth user. */
+  final val HelpAuthUser =
+    """Sets the user name for basic authentication for this structure."""
+
   /** Property for the password if Basic Auth is used. */
   final val PropAuthPassword = "password"
+
+  /** Help text for the basic auth password. */
+  final val HelpAuthPassword =
+    """Sets the password for basic authentication for this structure. This option is required if a \
+      |user name is set. If it is not specified, it is read from the console.""".stripMargin
 
   /**
     * Property for the name of the WebDav property defining the last modified
@@ -70,6 +87,12 @@ object SyncStructureConfig {
     * property for the last modified time is used.
     */
   final val PropDavModifiedProperty = "modified-property"
+
+  /** Help text for the WebDav last modified property option. */
+  final val HelpDavModifiedProperty =
+    """Allows setting the name of the property with the timestamp of the last modification. \
+      |Different servers can use different properties for this purpose. This is optional; if \
+      |it is undefined, a default name for the last modified property is used.""".stripMargin
 
   /**
     * Property for the name of the WebDav property that defines a namespace for
@@ -80,6 +103,12 @@ object SyncStructureConfig {
     */
   final val PropDavModifiedNamespace = "modified-namespace"
 
+  /** Help text for the WebDav modified namespace option. */
+  final val HelpDavModifiedNamespace =
+    """Optionally defines a dedicated namespace for the property with the timestamp of the last \
+      |modification. This may be required for certain WebDav servers. If undefined, no special \
+      |namespace is used for this property.""".stripMargin
+
   /**
     * Property to determine whether a file to be overridden should be deleted
     * before it is uploaded. This may be necessary for some servers to have a
@@ -88,10 +117,20 @@ object SyncStructureConfig {
     */
   final val PropDavDeleteBeforeOverride = "delete-before-override"
 
+  /** Help text for the WebDav delete before override property. */
+  final val HelpDavDeleteBeforeOverride =
+    """Sets a flag whether a file override operation on a WebDav server should be preceded by a \
+      |delete operation. This can be required for specific servers if overrides are not reliable.""".stripMargin
+
   /**
     * Property for the relative path to be synced on a OneDrive drive.
     */
   final val PropOneDrivePath = "path"
+
+  /** Help text for the OneDrive sync path property. */
+  final val HelpOneDrivePath =
+    """Defines the relative path on the OneDrive server which should be synced. Using this option, arbitrary \
+      |sub paths can be synced.""".stripMargin
 
   /**
     * Property for the URI of the OneDrive server. This property is optional;
@@ -99,11 +138,22 @@ object SyncStructureConfig {
     */
   final val PropOneDriveServer = "server-uri"
 
+  /** Help text for the OneDrive server URI property. */
+  final val HelpOneDriveServer =
+    """Allows setting an alternative URI for the OneDrive server. This is needed only in special cases, as \
+      |the default OneDrive URI should be appropriate.""".stripMargin
+
   /**
     * Property for the chunk size (in MB) for file uploads to a OneDrive
     * server. This is an optional property.
     */
   final val PropOneDriveUploadChunkSize = "upload-chunk-size"
+
+  /** Help text for the OneDrive upload chunk size property. */
+  final val HelpOneDriveUploadChunkSize =
+    """Allows setting a chunk size for uploads to a OneDrive server. OneDrive has a size restriction for \
+      |file uploads. If a file larger than the threshold is to be uploaded, it needs to be split into \
+      |multiple chunks. This option defines the maximum file size in MB. It is optional.""".stripMargin
 
   /** Group name for the options for basic auth. */
   final val GroupBasicAuth = "authBasic"
@@ -239,6 +289,16 @@ object SyncStructureConfig {
                                      authConfig: AuthConfig) extends StructureConfig
 
   /**
+    * Returns the name of the structure group with the given role type.
+    *
+    * @param group    the plain group name
+    * @param roleType the role type
+    * @return the group name decorated by the role type
+    */
+  def structureGroup(group: String, roleType: RoleType): String =
+    roleType.name + group
+
+  /**
     * Returns a ''CliProcessor'' to extract the configuration of the sync
     * structure for the role specified. This processor checks the type of the
     * structure (based on the sync URI parameter), and then creates a
@@ -249,9 +309,9 @@ object SyncStructureConfig {
     * @return the ''CliProcessor'' to extract the config of this role
     */
   def structureConfigProcessor(roleType: RoleType, uriOptionName: String): CliProcessor[Try[StructureConfig]] = {
-    val procMap = Map(GroupLocalFs -> localFsConfigProcessor(roleType),
-      GroupDav -> davConfigProcessor(roleType),
-      GroupOneDrive -> oneDriveConfigProcessor(roleType))
+    val procMap = Map(structureGroup(GroupLocalFs, roleType) -> localFsConfigProcessor(roleType),
+      structureGroup(GroupDav, roleType) -> davConfigProcessor(roleType),
+      structureGroup(GroupOneDrive, roleType) -> oneDriveConfigProcessor(roleType))
     conditionalGroupValue(structureTypeSelectorProcessor(roleType, uriOptionName), procMap)
   }
 
@@ -265,12 +325,12 @@ object SyncStructureConfig {
     * @param uriOptionName the name of the option for the structure URI
     * @return the processor that determines the group of the structure type
     */
-  private def structureTypeSelectorProcessor(roleType: RoleType, uriOptionName: String): CliProcessor[Try[String]] =
+  def structureTypeSelectorProcessor(roleType: RoleType, uriOptionName: String): CliProcessor[Try[String]] =
     inputValue(index = roleType.parameterIndex, optKey = Some(uriOptionName))
       .mapTo {
-        case RegDavUri(_) => GroupDav
-        case RegOneDriveID(_) => GroupOneDrive
-        case _ => GroupLocalFs
+        case RegDavUri(_) => structureGroup(GroupDav, roleType)
+        case RegOneDriveID(_) => structureGroup(GroupOneDrive, roleType)
+        case _ => structureGroup(GroupLocalFs, roleType)
       }.single
       .mandatory
 
@@ -282,7 +342,7 @@ object SyncStructureConfig {
     * @return the ''CliProcessor'' for the file system configuration
     */
   private def localFsConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] =
-    optionValue(roleType.configPropertyName(PropLocalFsTimeZone))
+    optionValue(roleType.configPropertyName(PropLocalFsTimeZone), help = Some(HelpLocalFsTimeZone))
       .mapTo(ZoneId.of)
       .single
       .map(_.map(optZone => FsStructureConfig(optZone)))
@@ -295,9 +355,12 @@ object SyncStructureConfig {
     * @return the ''CliProcessor'' for the WebDav configuration
     */
   private def davConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] = {
-    val procModProp = optionValue(roleType.configPropertyName(PropDavModifiedProperty)).single
-    val procModNs = optionValue(roleType.configPropertyName(PropDavModifiedNamespace)).single
-    val procDel = optionValue(roleType.configPropertyName(PropDavDeleteBeforeOverride))
+    val procModProp = optionValue(roleType.configPropertyName(PropDavModifiedProperty),
+      help = Some(HelpDavModifiedProperty)).single
+    val procModNs = optionValue(roleType.configPropertyName(PropDavModifiedNamespace),
+      help = Some(HelpDavModifiedNamespace)).single
+    val procDel = optionValue(roleType.configPropertyName(PropDavDeleteBeforeOverride),
+      help = Some(HelpDavDeleteBeforeOverride))
       .toBoolean
       .fallbackValues(false)
       .single
@@ -318,13 +381,15 @@ object SyncStructureConfig {
     * @return the ''CliProcessor'' for the OneDrive configuration
     */
   private def oneDriveConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] = {
-    val procPath = optionValue(roleType.configPropertyName(PropOneDrivePath))
+    val procPath = optionValue(roleType.configPropertyName(PropOneDrivePath), help = Some(HelpOneDrivePath))
       .single
       .mandatory
-    val procChunkSize = optionValue(roleType.configPropertyName(PropOneDriveUploadChunkSize))
+    val procChunkSize = optionValue(roleType.configPropertyName(PropOneDriveUploadChunkSize),
+      help = Some(HelpOneDriveUploadChunkSize))
       .toInt
       .single
-    val procServer = optionValue(roleType.configPropertyName(PropOneDriveServer)).single
+    val procServer = optionValue(roleType.configPropertyName(PropOneDriveServer),
+      help = Some(HelpOneDriveServer)).single
     for {
       triedPath <- procPath
       triedChunkSize <- procChunkSize
@@ -364,7 +429,7 @@ object SyncStructureConfig {
     * @return the ''CliProcessor'' for the basic auth config
     */
   private def basicAuthProcessor(roleType: RoleType): CliProcessor[Try[AuthConfig]] = {
-    val procUser = optionValue(roleType.configPropertyName(PropAuthUser))
+    val procUser = optionValue(roleType.configPropertyName(PropAuthUser), help = Some(HelpAuthUser))
       .single
       .mandatory
     for {
@@ -383,7 +448,7 @@ object SyncStructureConfig {
     */
   private def davPasswordOption(roleType: RoleType): CliProcessor[Try[String]] = {
     val prop = roleType.configPropertyName(PropAuthPassword)
-    optionValue(prop)
+    optionValue(prop, help = Some(HelpAuthPassword))
       .fallback(consoleReaderValue(prop, password = true))
       .single
       .mandatory
