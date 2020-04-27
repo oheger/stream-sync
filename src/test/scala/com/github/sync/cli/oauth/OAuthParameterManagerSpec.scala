@@ -20,10 +20,9 @@ import java.nio.file.Paths
 
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ParameterManager.{InputOption, Parameters}
-import com.github.sync.cli.oauth.OAuthParameterManager.{CommandPasswordFunc, IdpConfig}
+import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.cli.{ConsoleReader, ParameterManager}
-import com.github.sync.crypt.Secret
-import com.github.sync.http.oauth.OAuthConfig
+import com.github.sync.http.OAuthStorageConfig
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -43,9 +42,6 @@ object OAuthParameterManagerSpec {
   /** A test password. */
   private val Password = "tiger"
 
-  /** A test command name. */
-  private val CommandName = "check"
-
   /** A test authorization URL. */
   private val AuthEndpointUrl = "https://my-test-provider.org/auth"
 
@@ -64,18 +60,6 @@ object OAuthParameterManagerSpec {
   /** A set with test scope values. */
   private val Scopes = Set("read", "write", "draw", "pull", "exec")
 
-  /** A map with default parameter options. */
-  private val DefaultOptions = createBasicParametersMap()
-
-  /** The configuration for the test IDP. */
-  private val TestIdpConfig = createTestIdpConfig()
-
-  /**
-    * A default function to determine whether a password is needed. This
-    * function returns always '''true''' for the test command.
-    */
-  private val DefaultPwdFunc: CommandPasswordFunc = _ == CommandName
-
   /**
     * Implicit conversion from a simple map to a ''Parameters'' object. As we
     * use single values in most cases, this simplifies tests.
@@ -89,13 +73,23 @@ object OAuthParameterManagerSpec {
   /**
     * Creates a map with default values for the basic command line options.
     *
+    * @param command the name of the command
     * @return the map with default option values
     */
-  private def createBasicParametersMap(): Map[String, String] =
+  private def createBasicParametersMap(command: String): Map[String, String] =
     Map(OAuthParameterManager.StoragePathOption -> StoragePath,
       OAuthParameterManager.NameOption -> ProviderName,
       OAuthParameterManager.PasswordOption -> Password,
-      InputOption -> CommandName)
+      InputOption -> command)
+
+  /**
+    * Creates a map with command line options for an init command.
+    *
+    * @param initArgs the command-specific options
+    * @return a map with full command line options for an init command
+    */
+  private def createInitParametersMap(initArgs: Map[String, String]): Map[String, String] =
+    createBasicParametersMap(OAuthParameterManager.CommandInitIDP) ++ initArgs
 
   /**
     * Returns a string with the test scope values separated by the given
@@ -105,28 +99,6 @@ object OAuthParameterManagerSpec {
     * @return the string with scope values
     */
   private def scopeString(separator: String): String = Scopes.mkString(separator)
-
-  /**
-    * Creates the configuration for the test IDP with the expected values.
-    *
-    * @return the test IDP configuration
-    */
-  private def createTestIdpConfig(): IdpConfig =
-    IdpConfig(OAuthConfig(authorizationEndpoint = AuthEndpointUrl, tokenEndpoint = TokenEndpointUrl,
-      scope = scopeString(" "), redirectUri = Redirect, clientID = ClientID),
-      Secret(ClientSecret))
-
-  /**
-    * Compares the given configuration against the test IDP configuration.
-    * This
-    *
-    * @param config the configuration to be compared
-    * @return a flag whether this is equal to the test config
-    */
-  private def equalsTestConfig(config: IdpConfig): Boolean = {
-    val confWithSecret = config.copy(clientSecret = TestIdpConfig.clientSecret)
-    confWithSecret == TestIdpConfig && config.clientSecret.secret == TestIdpConfig.clientSecret.secret
-  }
 }
 
 /**
@@ -155,33 +127,72 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     exception.getMessage
   }
 
-  "OAuthParameterManager" should "extract a valid command config" in {
-    val (config, nextParams) = futureResult(OAuthParameterManager.extractCommandConfig(DefaultOptions)(DefaultPwdFunc))
+  /**
+    * Checks whether the correct options for the storage configuration have
+    * been extracted.
+    *
+    * @param storageConfig the configuration to be checked
+    */
+  private def checkStorageConfig(storageConfig: OAuthStorageConfig): Unit = {
+    storageConfig.rootDir should be(Paths.get(StoragePath))
+    storageConfig.baseName should be(ProviderName)
+    storageConfig.optPassword.get.secret should be(Password)
+  }
 
-    config.command should be(CommandName)
-    config.storageConfig.rootDir should be(Paths.get(StoragePath))
-    config.storageConfig.baseName should be(ProviderName)
-    config.storageConfig.optPassword.get.secret should be(Password)
+  "OAuthParameterManager" should "extract a valid remove command config" in {
+    val params = createBasicParametersMap(OAuthParameterManager.CommandRemoveIDP)
+    val (config, nextParams) = futureResult(OAuthParameterManager.extractCommandConfig(params))
+
+    config match {
+      case RemoveCommandConfig(storageConfig) =>
+        checkStorageConfig(storageConfig)
+      case c =>
+        fail("Unexpected result: " + c)
+    }
     nextParams.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
       OAuthParameterManager.EncryptOption, ParameterManager.InputOption)
   }
 
-  it should "report missing mandatory parameters when creating a command config" in {
+  it should "extract a valid login command config" in {
+    val params = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP)
+    val (config, nextParams) = futureResult(OAuthParameterManager.extractCommandConfig(params))
+
+    config match {
+      case LoginCommandConfig(storageConfig) =>
+        checkStorageConfig(storageConfig)
+      case c =>
+        fail("Unexpected result: " + c)
+    }
+    nextParams.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
+      OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
+      OAuthParameterManager.EncryptOption, ParameterManager.InputOption)
+  }
+
+  it should "report missing mandatory parameters when creating a storage config" in {
+    val args = Map(OAuthParameterManager.PasswordOption -> Password,
+      ParameterManager.InputOption -> OAuthParameterManager.CommandLoginIDP)
+
+    expectFailedFuture(OAuthParameterManager.extractCommandConfig(args),
+      OAuthParameterManager.NameOption, OAuthParameterManager.StoragePathOption)
+  }
+
+  it should "report a missing command" in {
     val args = Map(OAuthParameterManager.PasswordOption -> Password)
 
-    expectFailedFuture(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc),
-      OAuthParameterManager.NameOption, OAuthParameterManager.StoragePathOption,
-      OAuthParameterManager.CommandOption, "no command")
+    val output = expectFailedFuture(OAuthParameterManager.extractCommandConfig(args),
+      OAuthParameterManager.CommandOption)
+    output should not include OAuthParameterManager.NameOption
   }
 
   it should "reject a command line with multiple commands" in {
-    val parameters: Parameters = DefaultOptions
+    val parameters: Parameters = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP)
     val wrongParameters = parameters.copy(parametersMap =
-      parameters.parametersMap + (ParameterManager.InputOption -> List("cmd1", "cmd2")))
+      parameters.parametersMap + (ParameterManager.InputOption ->
+        List(OAuthParameterManager.CommandLoginIDP, OAuthParameterManager.CommandRemoveIDP)))
 
-    expectFailedFuture(OAuthParameterManager.extractCommandConfig(wrongParameters)(DefaultPwdFunc),
-      OAuthParameterManager.CommandOption, "too many")
+    expectFailedFuture(OAuthParameterManager.extractCommandConfig(wrongParameters),
+      "Too many input arguments")
   }
 
   it should "read the password for the storage config from the console if required" in {
@@ -189,70 +200,68 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     val reader = mock[ConsoleReader]
     when(reader.readOption(OAuthParameterManager.PasswordOption, password = true))
       .thenReturn(Password)
-    val args = DefaultOptions - OAuthParameterManager.PasswordOption
+    val args = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP) - OAuthParameterManager.PasswordOption
 
-    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc)(ec = ec,
-      consoleReader = reader))
-    config.storageConfig.optPassword.get.secret should be(Password)
-  }
-
-  it should "evaluate a positive encrypt option when creating a storage configuration" in {
-    val ec = implicitly[ExecutionContext]
-    val reader = mock[ConsoleReader]
-    when(reader.readOption(OAuthParameterManager.PasswordOption, password = true))
-      .thenReturn(Password)
-    val args = DefaultOptions - OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "true")
-
-    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc)(ec = ec,
-      consoleReader = reader))
+    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args)(ec = ec, consoleReader = reader))
     config.storageConfig.optPassword.get.secret should be(Password)
   }
 
   it should "support an undefined password for the storage configuration" in {
-    val args = DefaultOptions - OAuthParameterManager.PasswordOption
+    val args = createBasicParametersMap(OAuthParameterManager.CommandRemoveIDP) - OAuthParameterManager.PasswordOption
 
-    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args) { name =>
-      name != CommandName
-    })
+    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args))
     config.storageConfig.optPassword should be(None)
     verifyZeroInteractions(consoleReader)
   }
 
   it should "evaluate a negative encrypt option when creating a storage configuration" in {
-    val args = DefaultOptions - OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "false")
+    val args = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP) -
+      OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "false")
 
-    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc))
+    val (config, _) = futureResult(OAuthParameterManager.extractCommandConfig(args))
     config.storageConfig.optPassword should be(None)
     verifyZeroInteractions(consoleReader)
   }
 
   it should "detect an invalid encryption option" in {
-    val args = DefaultOptions - OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "?")
+    val args = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP) -
+      OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "?")
 
-    expectFailedFuture(OAuthParameterManager.extractCommandConfig(args)(DefaultPwdFunc),
-      OAuthParameterManager.EncryptOption)
+    expectFailedFuture(OAuthParameterManager.extractCommandConfig(args), OAuthParameterManager.EncryptOption)
     verifyZeroInteractions(consoleReader)
   }
 
   /**
-    * Helper function to check whether an IDP configuration can be extracted.
+    * Helper function to check whether an init configuration can be extracted.
     *
     * @param scopeSeparator the separator for scope values
     */
   private def checkExtractValidIdpConfiguration(scopeSeparator: String): Unit = {
-    val args = Map(OAuthParameterManager.AuthEndpointOption -> AuthEndpointUrl,
+    val initArgs = Map(OAuthParameterManager.AuthEndpointOption -> AuthEndpointUrl,
       OAuthParameterManager.TokenEndpointOption -> TokenEndpointUrl,
       OAuthParameterManager.RedirectUrlOption -> Redirect,
       OAuthParameterManager.ScopeOption -> scopeString(scopeSeparator),
       OAuthParameterManager.ClientIDOption -> ClientID,
       OAuthParameterManager.ClientSecretOption -> ClientSecret)
+    val args = createInitParametersMap(initArgs)
 
-    val (config, next) = ParameterManager.runProcessor(OAuthParameterManager.idpConfigProcessor, args)
-    next.parameters.accessedParameters should contain only(OAuthParameterManager.AuthEndpointOption,
+    val (config, next) = futureResult(OAuthParameterManager.extractCommandConfig(args))
+    next.accessedParameters should contain allOf(OAuthParameterManager.AuthEndpointOption,
       OAuthParameterManager.TokenEndpointOption, OAuthParameterManager.RedirectUrlOption,
       OAuthParameterManager.ScopeOption, OAuthParameterManager.ClientIDOption,
       OAuthParameterManager.ClientSecretOption)
-    equalsTestConfig(config.get) shouldBe true
+    config match {
+      case InitCommandConfig(oauthConfig, clientSecret, storageConfig) =>
+        oauthConfig.authorizationEndpoint should be(AuthEndpointUrl)
+        oauthConfig.tokenEndpoint should be(TokenEndpointUrl)
+        oauthConfig.scope should be(scopeString(" "))
+        oauthConfig.redirectUri should be(Redirect)
+        oauthConfig.clientID should be(ClientID)
+        clientSecret.secret should be(ClientSecret)
+        checkStorageConfig(storageConfig)
+      case c =>
+        fail("Unexpected configuration: " + c)
+    }
   }
 
   it should "extract a valid IDP configuration" in {
@@ -264,25 +273,34 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
   }
 
   it should "read the client secret from the console if necessary" in {
+    val ec = implicitly[ExecutionContext]
     val reader = mock[ConsoleReader]
     when(reader.readOption(OAuthParameterManager.ClientSecretOption, password = true))
       .thenReturn(ClientSecret)
-    val args = Map(OAuthParameterManager.AuthEndpointOption -> AuthEndpointUrl,
+    val initArgs = Map(OAuthParameterManager.AuthEndpointOption -> AuthEndpointUrl,
       OAuthParameterManager.TokenEndpointOption -> TokenEndpointUrl,
       OAuthParameterManager.RedirectUrlOption -> Redirect,
       OAuthParameterManager.ScopeOption -> scopeString(" "),
       OAuthParameterManager.ClientIDOption -> ClientID)
+    val args = createInitParametersMap(initArgs)
 
-    val (config, next) = ParameterManager.runProcessor(OAuthParameterManager.idpConfigProcessor, args)(reader)
-    next.parameters.accessedParameters should contain(OAuthParameterManager.ClientSecretOption)
-    equalsTestConfig(config.get) shouldBe true
+    val (config, next) = futureResult(OAuthParameterManager.extractCommandConfig(args)(ec, reader))
+    next.accessedParameters should contain(OAuthParameterManager.ClientSecretOption)
+    config match {
+      case InitCommandConfig(oauthConfig, clientSecret, storageConfig) =>
+        oauthConfig.clientID should be(ClientID)
+        clientSecret.secret should be(ClientSecret)
+        checkStorageConfig(storageConfig)
+      case c =>
+        fail("Unexpected configuration:" + c)
+    }
   }
 
-  it should "report errors for missing mandatory properties of the IDP config" in {
-    val args = Map(OAuthParameterManager.ClientSecretOption -> ClientSecret)
+  it should "report errors for missing mandatory properties of an init command config" in {
+    val args = createBasicParametersMap(OAuthParameterManager.CommandInitIDP) ++
+      Map(OAuthParameterManager.ClientSecretOption -> ClientSecret)
 
-    expectFailedFuture(Future.fromTry(
-      ParameterManager.tryProcessor(OAuthParameterManager.idpConfigProcessor, args)),
+    expectFailedFuture(OAuthParameterManager.extractCommandConfig(args),
       OAuthParameterManager.AuthEndpointOption, OAuthParameterManager.TokenEndpointOption,
       OAuthParameterManager.RedirectUrlOption, OAuthParameterManager.ScopeOption,
       OAuthParameterManager.ClientIDOption)

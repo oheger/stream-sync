@@ -22,8 +22,7 @@ import java.nio.file.Paths
 import akka.Done
 import akka.actor.ActorSystem
 import com.github.sync.AsyncTestHelper
-import com.github.sync.cli.ConsoleReader
-import com.github.sync.cli.ParameterManager.ParametersMap
+import com.github.sync.cli.oauth.OAuthParameterManager.InitCommandConfig
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
@@ -51,31 +50,19 @@ object OAuthInitCommandSpec {
   /** The content of the client secret. */
   private val ClientSecret = "<very secret client>"
 
-  /** The map with command line parameters for the test command. */
-  private val CommandParameters = createParametersMap()
-
-  /**
-    * Creates the map with test parameters for the command.
-    *
-    * @return the parameters map
-    */
-  private def createParametersMap(): ParametersMap =
-    Map(OAuthParameterManager.AuthEndpointOption -> List(TestConfig.authorizationEndpoint),
-      OAuthParameterManager.TokenEndpointOption -> List(TestConfig.tokenEndpoint),
-      OAuthParameterManager.RedirectUrlOption -> List(TestConfig.redirectUri),
-      OAuthParameterManager.ScopeOption -> List(TestConfig.scope),
-      OAuthParameterManager.ClientIDOption -> List(TestConfig.clientID),
-      OAuthParameterManager.ClientSecretOption -> List(ClientSecret))
+  /** The default configuration for the init command. */
+  private val InitConfig = InitCommandConfig(oauthConfig = TestConfig, clientSecret = Secret(ClientSecret),
+    storageConfig = StorageConfig)
 }
 
 /**
-  * Test class for ''OAuthInitCommand''.
+  * Test class for the functionality to initialize an IDP.
   */
 class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar with AsyncTestHelper {
 
   import OAuthInitCommandSpec._
 
-  "OAuthInitCommand" should "initialize a new IDP" in {
+  "OAuthCommands" should "initialize a new IDP" in {
     val helper = new CommandTestHelper
 
     val result = futureResult(helper.prepareStorageService()
@@ -104,12 +91,9 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
   }
 
   /**
-    * A test helper class managing dependencies of a command.
+    * A test helper class managing dependencies of the execution.
     */
   private class CommandTestHelper {
-    /** Implicit console reader required for command execution. */
-    private implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-
     /** Implicit actor system required for command execution. */
     private implicit val actorSystem: ActorSystem = mock[ActorSystem]
 
@@ -153,10 +137,7 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       *
       * @return the result of the execution
       */
-    def runCommand(): Future[String] = {
-      val cmd = new OAuthInitCommand
-      cmd.run(StorageConfig, storageService, CommandParameters)
-    }
+    def runCommand(): Future[String] = OAuthCommands.initIdp(InitConfig, storageService)
   }
 
 }

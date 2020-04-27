@@ -25,8 +25,8 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
 import akka.testkit.TestKit
-import com.github.sync.cli.ParameterManager.Parameters
-import com.github.sync.cli.oauth.{BrowserHandler, OAuthLoginCommand}
+import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
+import com.github.sync.cli.oauth.{BrowserHandler, OAuthCommands}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth._
@@ -52,6 +52,9 @@ object OAuthLoginCommandSpec {
 
   /** A test storage configuration used by test cases. */
   private val TestStorageConfig = OAuthStorageConfig(Paths.get("idp-data"), "testIdp", None)
+
+  /** The configuration for the login command. */
+  private val LoginConfig = LoginCommandConfig(TestStorageConfig)
 
   /**
     * A basic OAuth configuration. The URL for the token endpoint has to be
@@ -118,7 +121,7 @@ object OAuthLoginCommandSpec {
 }
 
 /**
-  * Test class for ''OAuthLoginCommand''.
+  * Test class for OAuth login functionality.
   */
 class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with Matchers with MockitoSugar with WireMockSupport with AsyncTestHelper {
@@ -164,19 +167,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     awaitCond(portIsReleased(port))
   }
 
-  "OAuthLoginCommand" should "create a default browser helper" in {
-    val command = new OAuthLoginCommand
-
-    command.browserHandler should not be null
-  }
-
-  it should "create a default token retriever service" in {
-    val command = new OAuthLoginCommand
-
-    command.tokenService should be(OAuthTokenRetrieverServiceImpl)
-  }
-
-  it should "execute a successful login" in {
+  "The login function" should "execute a successful login" in {
     stubTokenRequest()
     val helper = new CommandTestHelper
 
@@ -253,9 +244,6 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     /** Buffer to capture the output of the command. */
     private val outputBuf = new StringBuffer
 
-    /** The command to be tested. */
-    private val command = createCommand()
-
     /**
       * Executes the test command and returns the resulting ''Future''.
       *
@@ -263,7 +251,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @return the ''Future'' returned by the command
       */
     def runCommand()(implicit consoleReader: ConsoleReader): Future[String] =
-      command.run(TestStorageConfig, storageService, Parameters(Map.empty, Set.empty))
+      OAuthCommands.login(LoginConfig, storageService, tokenService, browserHandler, consoleReader,
+        str => outputBuf.append(str))
 
     /**
       * Executes the test command with an initialized console reader mock and
@@ -431,7 +420,6 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       when(service.fetchTokens(any(), any(), any(), any())(any(), any()))
         .thenAnswer((invocation: InvocationOnMock) => {
           val args = invocation.getArguments
-          println(s"fetchToken operation with arguments ${args.mkString(", ")}")
           OAuthTokenRetrieverServiceImpl.fetchTokens(args.head.asInstanceOf[ActorRef],
             args(1).asInstanceOf[OAuthConfig], args(2).asInstanceOf[Secret],
             args(3).asInstanceOf[String])(args(4).asInstanceOf[ExecutionContext],
@@ -454,22 +442,5 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
         .thenReturn(Future.successful(Done))
       service
     }
-
-    /**
-      * Creates the command instance to be tested.
-      *
-      * @return the test command instance
-      */
-    private def createCommand(): OAuthLoginCommand =
-      new OAuthLoginCommand(tokenService, browserHandler) {
-        /**
-          * @inheritdoc This implementation captures the output.
-          */
-        override protected def output(s: String): Unit = {
-          super.output(s)
-          outputBuf append s
-        }
-      }
   }
-
 }

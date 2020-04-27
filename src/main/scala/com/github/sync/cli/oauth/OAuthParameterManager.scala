@@ -25,7 +25,7 @@ import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.OAuthConfig
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 /**
   * A service responsible for parsing parameters for OAuth commands.
@@ -34,6 +34,15 @@ import scala.util.{Failure, Success, Try}
   * from the command line required by the commands supported.
   */
 object OAuthParameterManager {
+  /** The command to initialize an IDP. */
+  final val CommandInitIDP = "init"
+
+  /** The command to remove all the data of an IDP. */
+  final val CommandRemoveIDP = "remove"
+
+  /** The command to perform a login into an IDP. */
+  final val CommandLoginIDP = "login"
+
   /** Name of the option that defines the storage path for OAuth data. */
   val StoragePathOptionName = "idp-storage-path"
 
@@ -107,28 +116,55 @@ object OAuthParameterManager {
   type CommandPasswordFunc = String => Boolean
 
   /**
-    * A data class collecting data that is needed for the execution of an OAuth
-    * command.
+    * A base trait for configurations for command classes.
     *
-    * Each command has a name that identifies it. Then a (sometimes limited)
-    * ''OAuthStorageConfig'' is needed.
-    *
-    * @param command       the command name
-    * @param storageConfig the storage configuration
+    * For each command supported by the OAuth CLI a concrete command
+    * configuration class exists that extends this trait. As a common property,
+    * each command has a (sometimes limited) ''OAuthStorageConfig''.
     */
-  case class CommandConfig(command: String, storageConfig: OAuthStorageConfig)
+  sealed trait CommandConfig {
+    /**
+      * Returns the ''OAuthStorageConfig'' for the command.
+      *
+      * @return the ''OAuthStorageConfig''
+      */
+    def storageConfig: OAuthStorageConfig
+  }
 
   /**
-    * A data class collecting all the data required to describe an OAuth
-    * identity provider.
+    * A data class collecting all the data required by the command to
+    * initialize an OAuth identity provider.
     *
     * This is basically a combination of the (public) OAuth configuration plus
     * the client secret.
     *
-    * @param oauthConfig  the OAuth configuration
-    * @param clientSecret the client secret
+    * @param oauthConfig   the OAuth configuration
+    * @param clientSecret  the client secret
+    * @param storageConfig the ''OAuthStorageConfig''
     */
-  case class IdpConfig(oauthConfig: OAuthConfig, clientSecret: Secret)
+  case class InitCommandConfig(oauthConfig: OAuthConfig,
+                               clientSecret: Secret,
+                               override val storageConfig: OAuthStorageConfig) extends CommandConfig
+
+  /**
+    * A data class collecting all the data required by the command to remove an
+    * OAuth identity provider.
+    *
+    * The remove command requires no additional configuration.
+    *
+    * @param storageConfig the ''OAuthStorageConfig''
+    */
+  case class RemoveCommandConfig(override val storageConfig: OAuthStorageConfig) extends CommandConfig
+
+  /**
+    * A data class collecting all the data required by the command to login
+    * into an OAuth identity provider.
+    *
+    * The login command requires no additional configuration.
+    *
+    * @param storageConfig the ''OAuthStorageConfig''
+    */
+  case class LoginCommandConfig(override val storageConfig: OAuthStorageConfig) extends CommandConfig
 
   /**
     * A ''CliProcessor'' for extracting the command passed in the
@@ -136,38 +172,25 @@ object OAuthParameterManager {
     * must be exactly one command.
     */
   private val commandProcessor: CliProcessor[Try[String]] =
-    ParameterManager.optionValue(ParameterManager.InputOption)
-      .map { triedValue =>
-        triedValue flatMap {
-          case h :: t if t.isEmpty =>
-            Success(h)
-          case _ :: _ =>
-            Failure(paramException(CommandOption, "too many commands specified; only a single one is supported"))
-          case _ =>
-            Failure(paramException(CommandOption, "no command was specified"))
-        }
-      }
+    ParameterManager.inputValue(0, optKey = Some(CommandOption), last = true)
+      .toLower
+      .single
+      .mandatory
 
   /**
     * Extracts a ''CommandConfig'' object from the parsed parameters. This
     * function is called first during command processing to determine which
-    * command is to be executed and fetch a set of basic properties. The
-    * boolean parameter determines whether a full ''OAuthStorageConfig'' is
-    * needed by the command. If set to '''false''', a password does not need to
-    * be specified. (This is used for commands that do not require access to
-    * secret data.) Of course, a validation of command line arguments takes
-    * place, and missing mandatory arguments are reported.
+    * command is to be executed and fetch a set of its properties.
     *
     * @param parameters    the object with parsed parameters
-    * @param needPwdFunc   function to check whether a password is needed
     * @param ec            the execution context
     * @param consoleReader the console reader
     * @return a ''Future'' with the config and updated parameters
     */
-  def extractCommandConfig(parameters: Parameters)(needPwdFunc: CommandPasswordFunc)
+  def extractCommandConfig(parameters: Parameters)
                           (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(CommandConfig, Parameters)] =
-    Future.fromTry(tryProcessor(commandConfigProcessor(needPwdFunc), parameters))
+    Future.fromTry(tryProcessor(commandConfigProcessor, parameters))
       .map(t => (t._1, t._2.parameters))
 
   /**
@@ -195,36 +218,51 @@ object OAuthParameterManager {
     *
     * @return the ''CliProcessor'' to extract IDP-related data
     */
-  def idpConfigProcessor: CliProcessor[Try[IdpConfig]] =
+  private def commandInitProcessor: CliProcessor[Try[CommandConfig]] =
     for {triedAuthUrl <- mandatoryStringOption(AuthEndpointOption)
          triedTokenUrl <- mandatoryStringOption(TokenEndpointOption)
          triedScope <- scopeProcessor
          triedRedirect <- mandatoryStringOption(RedirectUrlOption)
          triedID <- mandatoryStringOption(ClientIDOption)
          triedSecret <- clientSecretProcessor
-         } yield createIdpConfig(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect, triedID, triedSecret)
+         triedStorage <- storageConfigProcessor(needPassword = true)
+         } yield createIdpConfig(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect, triedID,
+      triedSecret, triedStorage)
+
+  /**
+    * Returns a ''CliProcessor'' to extract the configuration for the login
+    * command.
+    *
+    * @return the login command processor
+    */
+  private def commandLoginProcessor: CliProcessor[Try[CommandConfig]] =
+    storageConfigProcessor(needPassword = true)
+      .map(_.map(LoginCommandConfig))
+
+  /**
+    * Returns a ''CliProcessor'' to extract the configuration for the remove
+    * IDP command.
+    *
+    * @return the remove command processor
+    */
+  private def commandRemoveProcessor: CliProcessor[Try[CommandConfig]] =
+    storageConfigProcessor(needPassword = false)
+      .map(_.map(RemoveCommandConfig))
 
   /**
     * Returns a ''CliProcessor'' for extracting a ''CommandConfig'' object.
+    * This processor extracts the command name from the first input argument.
+    * Then a conditional group is applied to extract the specific arguments for
+    * this command.
     *
-    * @param needPwdFunc function to check whether a password is needed
     * @return the ''CliProcessor'' for a ''CommandConfig''
     */
-  private def commandConfigProcessor(needPwdFunc: CommandPasswordFunc): CliProcessor[Try[CommandConfig]] =
-    for {triedCmd <- commandProcessor
-         triedConfig <- storageConfigProcessor(needPwdFunc(triedCmd.getOrElse("")))
-         } yield createCommandConfig(triedCmd, triedConfig)
-
-  /**
-    * Creates a ''CommandConfig'' object from the given components.
-    *
-    * @param triedCommand       the command name component
-    * @param triedStorageConfig the storage config component
-    * @return a ''Try'' with the resulting ''CommandConfig''
-    */
-  private def createCommandConfig(triedCommand: Try[String], triedStorageConfig: Try[OAuthStorageConfig]):
-  Try[CommandConfig] =
-    createRepresentation(triedCommand, triedStorageConfig)(CommandConfig.apply)
+  private def commandConfigProcessor: CliProcessor[Try[CommandConfig]] = {
+    val groupMap = Map(CommandInitIDP -> commandInitProcessor,
+      CommandLoginIDP -> commandLoginProcessor,
+      CommandRemoveIDP -> commandRemoveProcessor)
+    conditionalGroupValue(commandProcessor, groupMap)
+  }
 
   /**
     * Returns a ''CliProcessor'' for extracting the password of the storage
@@ -292,7 +330,8 @@ object OAuthParameterManager {
     }
 
   /**
-    * Tries to create an ''IdpConfig'' from the given components.
+    * Tries to create a configuration for the init command from the given
+    * components.
     *
     * @param triedAuthUrl  the authorization URL component
     * @param triedTokenUrl the token URL component
@@ -300,16 +339,18 @@ object OAuthParameterManager {
     * @param triedRedirect the redirect URL component
     * @param triedID       the client ID component
     * @param triedSecret   the client secret component
-    * @return a ''Try'' with the generated IDP configuration
+    * @param triedStorage  the storage config component
+    * @return a ''Try'' with the generated init command configuration
     */
   private def createIdpConfig(triedAuthUrl: Try[String], triedTokenUrl: Try[String], triedScope: Try[String],
-                              triedRedirect: Try[String], triedID: Try[String], triedSecret: Try[Secret]):
-  Try[IdpConfig] = createRepresentation(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect,
-    triedID, triedSecret) { (authUrl, tokenUrl, scope, redirect, id, secret) =>
-    val oauthConfig = OAuthConfig(authorizationEndpoint = authUrl, tokenEndpoint = tokenUrl,
-      scope = scope, redirectUri = redirect, clientID = id)
-    IdpConfig(oauthConfig, secret)
-  }
+                              triedRedirect: Try[String], triedID: Try[String], triedSecret: Try[Secret],
+                              triedStorage: Try[OAuthStorageConfig]): Try[InitCommandConfig] =
+    createRepresentation(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect,
+      triedID, triedSecret, triedStorage) { (authUrl, tokenUrl, scope, redirect, id, secret, storage) =>
+      val oauthConfig = OAuthConfig(authorizationEndpoint = authUrl, tokenEndpoint = tokenUrl,
+        scope = scope, redirectUri = redirect, clientID = id)
+      InitCommandConfig(oauthConfig, secret, storage)
+    }
 
   /**
     * Convenience function for the frequent use case to create a

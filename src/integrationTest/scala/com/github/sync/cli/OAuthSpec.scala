@@ -81,32 +81,29 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
   }
 
   "OAuth" should "execute a command to create an IDP" in {
-    checkExecIdpInitCommand(OAuth.CommandInitIDP)
+    checkExecIdpInitCommand(OAuthParameterManager.CommandInitIDP)
   }
 
   it should "ignore case in command names" in {
-    checkExecIdpInitCommand(OAuth.CommandInitIDP.toUpperCase(Locale.ROOT))
+    checkExecIdpInitCommand(OAuthParameterManager.CommandInitIDP.toUpperCase(Locale.ROOT))
   }
 
   it should "handle an unknown command" in {
-    val UnknownCommand = "justDoIt"
+    val UnknownCommand = "just_do_it"
     val args = Array(UnknownCommand, OAuthParameterManager.StoragePathOption,
       testDirectory.toAbsolutePath.toString, OAuthParameterManager.NameOption, "foo")
 
     val output = runAndCaptureOut(args)
     output should not include "success"
     output should include(UnknownCommand)
-    output should include("Supported commands")
-    OAuth.SupportedCommands.keys foreach { cmd =>
-      output should include(cmd)
-    }
+    //TODO check for generated help message
   }
 
   it should "execute a command to remove an IDP" in {
     val storageConfig = OAuthStorageConfig(testDirectory, "testIdp", None)
     val configFile = storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile)
     writeFileContent(configFile, FileTestHelper.TestData)
-    val args = Array(OAuth.CommandRemoveIDP, OAuthParameterManager.StoragePathOption,
+    val args = Array(OAuthParameterManager.CommandRemoveIDP, OAuthParameterManager.StoragePathOption,
       storageConfig.rootDir.toString, OAuthParameterManager.NameOption, storageConfig.baseName)
 
     val output = runAndCaptureOut(args)
@@ -117,17 +114,11 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
 
   it should "handle a remove command that does not remove any files" in {
     val storageConfig = OAuthStorageConfig(testDirectory, "unknownIdp", None)
-    val args = Array(OAuth.CommandRemoveIDP, OAuthParameterManager.StoragePathOption,
+    val args = Array(OAuthParameterManager.CommandRemoveIDP, OAuthParameterManager.StoragePathOption,
       storageConfig.rootDir.toString, OAuthParameterManager.NameOption, storageConfig.baseName)
 
     val output = runAndCaptureOut(args)
     output should include(storageConfig.baseName)
     output should include("no files")
-  }
-
-  it should "support the login command with correct settings" in {
-    val data = OAuth.SupportedCommands(OAuth.CommandLoginIDP)
-
-    data.needStoragePwd shouldBe true
   }
 }
