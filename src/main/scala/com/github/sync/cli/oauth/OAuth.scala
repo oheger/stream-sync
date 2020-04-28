@@ -43,14 +43,16 @@ object OAuth {
     * @param args the command line arguments
     */
   def main(args: Array[String]): Unit = {
-    new OAuth().run(args)
+    new OAuth(OAuthCommandsImpl).run(args)
   }
 }
 
 /**
   * The implementation class of the CLI extending [[ActorSystemLifeCycle]].
+  *
+  * @param commands the service to execute the CLI commands
   */
-class OAuth extends ActorSystemLifeCycle {
+class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
 
   override val name: String = "OAuthCLI"
 
@@ -78,12 +80,12 @@ class OAuth extends ActorSystemLifeCycle {
     val storageService = OAuthStorageServiceImpl
     cmdConfig match {
       case initConfig: InitCommandConfig =>
-        OAuthCommands.initIdp(initConfig, storageService)
+        commands.initIdp(initConfig, storageService)
       case loginConfig: LoginCommandConfig =>
-        OAuthCommands.login(loginConfig, storageService, OAuthTokenRetrieverServiceImpl, BrowserHandler(),
+        commands.login(loginConfig, storageService, OAuthTokenRetrieverServiceImpl, BrowserHandler(),
           consoleReader)
       case removeConfig: RemoveCommandConfig =>
-        OAuthCommands.removeIdp(removeConfig, storageService)
+        commands.removeIdp(removeConfig, storageService)
     }
   }
 }

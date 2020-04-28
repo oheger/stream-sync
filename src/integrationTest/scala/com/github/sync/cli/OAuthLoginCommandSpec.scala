@@ -26,7 +26,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
 import akka.testkit.TestKit
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.cli.oauth.{BrowserHandler, OAuthCommands}
+import com.github.sync.cli.oauth.{BrowserHandler, OAuthCommandsImpl}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth._
@@ -251,7 +251,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @return the ''Future'' returned by the command
       */
     def runCommand()(implicit consoleReader: ConsoleReader): Future[String] =
-      OAuthCommands.login(LoginConfig, storageService, tokenService, browserHandler, consoleReader,
+      OAuthCommandsImpl.login(LoginConfig, storageService, tokenService, browserHandler, consoleReader,
         str => outputBuf.append(str))
 
     /**

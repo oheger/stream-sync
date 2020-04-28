@@ -137,7 +137,7 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       *
       * @return the result of the execution
       */
-    def runCommand(): Future[String] = OAuthCommands.initIdp(InitConfig, storageService)
+    def runCommand(): Future[String] = OAuthCommandsImpl.initIdp(InitConfig, storageService)
   }
 
 }

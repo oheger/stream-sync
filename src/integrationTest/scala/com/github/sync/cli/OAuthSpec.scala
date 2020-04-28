@@ -21,12 +21,19 @@ import java.nio.file.Files
 import java.util.Locale
 
 import com.github.sync.FileTestHelper
-import com.github.sync.cli.oauth.{OAuth, OAuthParameterManager}
+import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
+import com.github.sync.cli.oauth.{OAuth, OAuthCommands, OAuthParameterManager}
 import com.github.sync.http.OAuthStorageConfig
-import com.github.sync.http.oauth.OAuthStorageServiceImpl
+import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
+import org.mockito.ArgumentCaptor
+import org.mockito.Mockito._
+import org.mockito.Matchers.{any, eq => argEq}
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.mockito.MockitoSugar
+
+import scala.concurrent.Future
 
 /**
   * Integration test class for the ''OAuth'' CLI application.
@@ -35,7 +42,7 @@ import org.scalatest.matchers.should.Matchers
   * unknown commands. This is achieved by directly invoking the ''main()''
   * function. Thus, only black-box testing is possible.
   */
-class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with FileTestHelper {
+class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with FileTestHelper with MockitoSugar {
   override protected def afterEach(): Unit = {
     tearDownTestFile()
     super.afterEach()
@@ -120,5 +127,23 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
     val output = runAndCaptureOut(args)
     output should include(storageConfig.baseName)
     output should include("no files")
+  }
+
+  it should "handle a command to log into an IDP" in {
+    val ResultText = "Login successful :-)"
+    val storageConfig = OAuthStorageConfig(testDirectory, "testIdp", None)
+    val args = Array(OAuthParameterManager.CommandLoginIDP, OAuthParameterManager.StoragePathOption,
+      storageConfig.rootDir.toString, OAuthParameterManager.NameOption, storageConfig.baseName,
+      OAuthParameterManager.PasswordOption, "password")
+    val commands = mock[OAuthCommands]
+    when(commands.login(any(), any(), any(), any(), any(), any())(any(), any()))
+      .thenReturn(Future.successful(ResultText))
+
+    val oauth = new OAuth(commands)
+    oauth.run(args)
+    val captor = ArgumentCaptor.forClass(classOf[LoginCommandConfig])
+    verify(commands).login(captor.capture(), argEq(OAuthStorageServiceImpl),
+      argEq(OAuthTokenRetrieverServiceImpl), any(), argEq(DefaultConsoleReader), any())(any(), any())
+    captor.getValue.storageConfig.baseName should be(storageConfig.baseName)
   }
 }
