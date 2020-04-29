@@ -565,6 +565,15 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     text should be(ExpText)
   }
 
+  it should "generate options help if no option is matched" in {
+    val helpContext = createHelpContext()
+      .addOption(Key, Some(HelpText))
+    val filter: OptionFilter = _ => false
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext, filterFunc = filter)(KeyColumnGenerator)
+    text should be("")
+  }
+
   it should "support changing the padding string for the option help table" in {
     val OtherPadding = " | "
     val helpContext = createHelpContext()

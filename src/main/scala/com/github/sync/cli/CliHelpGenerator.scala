@@ -473,30 +473,33 @@ object CliHelpGenerator {
     val metaData = context.optionMetaData
       .filter(filterFunc)
       .toSeq
-    val rows = sortFunc(metaData)
-      .map(generateColumns)
-    val widths = rows map columnWidths
-    val maxWidths = widths.transpose.map(_.max)
-    val spaces = paddingString(maxWidths)
+    if (metaData.isEmpty) ""
+    else {
+      val rows = sortFunc(metaData)
+        .map(generateColumns)
+      val widths = rows map columnWidths
+      val maxWidths = widths.transpose.map(_.max)
+      val spaces = paddingString(maxWidths)
 
-    // generates the row for an option that can consist of multiple lines;
-    // the lines have to be correctly aligned and padded
-    def generateRow(columns: Seq[List[String]]): Seq[String] = {
-      val maxLineCount = columns.map(_.size).max
-      val emptyList = List.fill(maxLineCount)("")
-      val filledColumns = columns.map(list => growList(list, maxLineCount, emptyList))
+      // generates the row for an option that can consist of multiple lines;
+      // the lines have to be correctly aligned and padded
+      def generateRow(columns: Seq[List[String]]): Seq[String] = {
+        val maxLineCount = columns.map(_.size).max
+        val emptyList = List.fill(maxLineCount)("")
+        val filledColumns = columns.map(list => growList(list, maxLineCount, emptyList))
 
-      filledColumns.transpose.map(_.zip(maxWidths))
-        .map { line =>
-          line.map { t =>
-            val cell = t._1
-            cell + spaces.substring(0, t._2 - cell.length)
-          }.mkString(padding)
-        }
+        filledColumns.transpose.map(_.zip(maxWidths))
+          .map { line =>
+            line.map { t =>
+              val cell = t._1
+              cell + spaces.substring(0, t._2 - cell.length)
+            }.mkString(padding)
+          }
+      }
+
+      rows.flatMap(generateRow)
+        .mkString(CR)
     }
-
-    rows.flatMap(generateRow)
-      .mkString(CR)
   }
 
   /**
