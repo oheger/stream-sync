@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.cli
+package com.github.sync.cli.oauth
 
 import java.io.IOException
 import java.net.{ServerSocket, Socket}
@@ -25,8 +25,8 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
 import akka.testkit.TestKit
+import com.github.sync.cli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.cli.oauth.{BrowserHandler, OAuthCommandsImpl}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth._

@@ -16,11 +16,14 @@
 
 package com.github.sync.cli.oauth
 
+import akka.actor.ActorSystem
+import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.cli.{ActorSystemLifeCycle, ConsoleReader, DefaultConsoleReader, ParameterManager}
+import com.github.sync.cli._
 import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
 /**
   * An object implementing a CLI with commands related to OAuth identity
@@ -35,6 +38,16 @@ import scala.concurrent.Future
   * command.
   */
 object OAuth {
+
+  /**
+    * A specialized exception class to report a failure to parse the command
+    * line options.
+    *
+    * @param msg     the message about what went wrong
+    * @param options the parameters extracted from the command line
+    */
+  class OAuthParamException(msg: String, val options: Parameters) extends RuntimeException(msg)
+
   /**
     * The main function of this CLI application. Processes the command line and
     * invokes the desired command. If parameter parsing fails, an error message
@@ -45,6 +58,28 @@ object OAuth {
   def main(args: Array[String]): Unit = {
     new OAuth(OAuthCommandsImpl).run(args)
   }
+
+  /**
+    * Handles the parsing of command line parameters and returns a future with
+    * the ''CommandConfig'' that could be extracted. In case of invalid
+    * parameters, the future fails with an exception of type
+    * ''OAuthParamException''.
+    *
+    * @param args          the array with command line options
+    * @param system        the actor system
+    * @param ec            the execution context
+    * @param consoleReader the console reader
+    * @return a future with the updated parameters and the ''CommandConfig''
+    */
+  private def commandConfigFromParams(args: Array[String])
+                                     (implicit system: ActorSystem, ec: ExecutionContext,
+                                      consoleReader: ConsoleReader): Future[(CommandConfig, Parameters)] =
+    ParameterManager.parseParameters(args) flatMap { argsMap =>
+      OAuthParameterManager.extractCommandConfig(argsMap) recoverWith {
+        case e: IllegalArgumentException =>
+          Future.failed(new OAuthParamException(e.getMessage, argsMap))
+      }
+    }
 }
 
 /**
@@ -54,6 +89,8 @@ object OAuth {
   */
 class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
 
+  import OAuth._
+
   override val name: String = "OAuthCLI"
 
   /**
@@ -62,10 +99,13 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
     */
   override protected def runApp(args: Array[String]): Future[String] = {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
-    for {params <- ParameterManager.parseParameters(args)
-         (cmdConf, _) <- OAuthParameterManager.extractCommandConfig(params)
-         result <- executeCommand(cmdConf)
-         } yield result //TODO check whether all parameters have been accessed
+    (for {(cmdConf, params2) <- commandConfigFromParams(args)
+          _ <- ParameterManager.checkParametersConsumed(params2)
+          result <- executeCommand(cmdConf)
+          } yield result) recover {
+      case e: OAuthParamException =>
+        generateHelpMessage(e, e.options)
+    }
   }
 
   /**
@@ -87,5 +127,58 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
       case removeConfig: RemoveCommandConfig =>
         commands.removeIdp(removeConfig, storageService)
     }
+  }
+
+  /**
+    * Generates a string with a help text for this CLI application.
+    *
+    * @param exception the exception causing the help to be displayed
+    * @param params    the parameters passed to the command line
+    * @return a string with the help message
+    */
+  private def generateHelpMessage(exception: Throwable, params: ParameterManager.Parameters): String = {
+    val (_, context) = ParameterManager.runProcessor(OAuthParameterManager.commandConfigProcessor,
+      params)(DummyConsoleReader)
+    val helpContext = context.helpContext
+
+    import CliHelpGenerator._
+    val helpGenerator = composeColumnGenerator(
+      wrapColumnGenerator(attributeColumnGenerator(AttrHelpText), 70),
+      prefixColumnGenerator(attributeColumnGenerator(AttrFallbackValue), prefixText = Some("Default value: "))
+    )
+    val generators = Seq(
+      optionNameColumnGenerator(),
+      helpGenerator
+    )
+
+    val triedCmdGroup = ParameterManager.tryProcessor(OAuthParameterManager.commandProcessor,
+      params)(DefaultConsoleReader)
+    val groupFilter = triedCmdGroup match {
+      case Success((command, _)) => groupFilterFunc(command)
+      case Failure(_) => UnassignedGroupFilterFunc
+    }
+    val optionsFilter = andFilter(groupFilter, OptionsFilterFunc)
+
+    val buf = new java.lang.StringBuilder
+    buf.append(exception.getMessage)
+      .append(CR)
+      .append(CR)
+    buf.append("Usage: OAuth ")
+      .append(generateInputParamsOverview(helpContext).mkString(" "))
+      .append(" [options]")
+      .append(CR)
+      .append(CR)
+      .append(generateOptionsHelp(helpContext, sortFunc = inputParamSortFunc(helpContext),
+        filterFunc = InputParamsFilterFunc)(generators: _*))
+
+    val optionsHelp = generateOptionsHelp(helpContext, filterFunc = optionsFilter)(generators: _*)
+    if (optionsHelp.nonEmpty) {
+      buf.append(CR)
+        .append(CR)
+        .append("Supported options:")
+        .append(CR)
+        .append(optionsHelp)
+    }
+    buf.toString
   }
 }

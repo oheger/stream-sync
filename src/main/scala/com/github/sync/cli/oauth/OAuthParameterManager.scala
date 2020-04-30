@@ -44,66 +44,130 @@ object OAuthParameterManager {
   final val CommandLoginIDP = "login"
 
   /** Name of the option that defines the storage path for OAuth data. */
-  val StoragePathOptionName = "idp-storage-path"
+  final val StoragePathOptionName = "idp-storage-path"
 
   /** The option that defines the storage path for OAuth data. */
-  val StoragePathOption: String = OptionPrefix + StoragePathOptionName
+  final val StoragePathOption: String = OptionPrefix + StoragePathOptionName
+
+  /** Help text for the storage path option. */
+  final val HelpStoragePathOption =
+    """Determines a path (relative or absolute) where data about identity providers is stored. \
+      |The init command stores the data about the new IDP in this path; other commands retrieve \
+      |the data from there.""".stripMargin
 
   /** Name of the option that defines the (base) name of an IDP. */
-  val NameOptionName = "idp-name"
+  final val NameOptionName = "idp-name"
 
   /** The option that defines the (base) name of an IDP. */
-  val NameOption: String = OptionPrefix + NameOptionName
+  final val NameOption: String = OptionPrefix + NameOptionName
+
+  /** Help text for the IDP name option. */
+  final val HelpNameOption =
+    """Defines the name of the identity provider affected by this command. The data about this IDP is \
+      |stored in the folder defined by the storage path option in a couple of files whose names are \
+      |derived from the IDP name.""".stripMargin
 
   /** Name of the option that defines a password for the data of an IDP. */
-  val PasswordOptionName = "idp-password"
+  final val PasswordOptionName = "idp-password"
 
   /**
     * The option that defines a password for the data of an IDP. If a
     * password is provided, sensitive information is encrypted with it.
     */
-  val PasswordOption: String = OptionPrefix + PasswordOptionName
+  final val PasswordOption: String = OptionPrefix + PasswordOptionName
+
+  /** Help test for the password option. */
+  final val HelpPasswordOption =
+    """Sets a password for the identity provider affected by this command. The password is used \
+      |to encrypt sensitive data about the IDP in the storage folder.""".stripMargin
 
   /** Name of the option that defines whether encryption is used. */
-  val EncryptOptionName = "encrypt-idp-data"
+  final val EncryptOptionName = "encrypt-idp-data"
 
   /**
     * The boolean option that defines whether sensitive data of an IDP needs
     * to be encrypted. If this is '''true''' (which is also the default), a
     * password must be present (and is read from the console if necessary).
     */
-  val EncryptOption: String = OptionPrefix + EncryptOptionName
+  final val EncryptOption: String = OptionPrefix + EncryptOptionName
+
+  /** Help text for the encrypt IDP option. */
+  final val HelpEncryptOption =
+    """A flag that controls whether sensitive data about the identity provider affected by this \
+      |command needs to be encrypted by a password. If set to true, a password is obtained either \
+      |from the corresponding command line option or read from the console. When the data files \
+      |for the IDP are read or written this password is used for encryption.""".stripMargin
 
   /**
     * Name of the option that defines the authorization endpoint for an IDP.
     */
-  val AuthEndpointOption: String = ParameterManager.OptionPrefix + "auth-url"
+  final val AuthEndpointOption: String = ParameterManager.OptionPrefix + "auth-url"
+
+  /** Help text for the authorization endpoint option. */
+  final val HelpAuthEndpointOption =
+    """The URL used by the identity provider for authorization code requests."""
 
   /** Name of the option that defines the token endpoint for an IDP. */
-  val TokenEndpointOption: String = ParameterManager.OptionPrefix + "token-url"
+  final val TokenEndpointOption: String = ParameterManager.OptionPrefix + "token-url"
+
+  /** Help text for the token endpoint option. */
+  final val HelpTokenEndpointOption =
+    """The URL used by the identity provider for requests for access tokens. Requests to this URL \
+      |are sent to trade an authorization code against an access/refresh token pair and to refresh \
+      |expired access tokens.""".stripMargin
 
   /** Name of the option that defines the redirect URL for an IDP. */
-  val RedirectUrlOption: String = ParameterManager.OptionPrefix + "redirect-url"
+  final val RedirectUrlOption: String = ParameterManager.OptionPrefix + "redirect-url"
+
+  /** Help text for the redirect URL option. */
+  final val HelpRedirectUrlOption =
+    """Defines the redirect URL. After the user has logged in into the identity provider, her user agent is \
+      |redirected to this URL, and the authorization code is appended as parameter.""".stripMargin
 
   /**
     * Name of the option that defines the scope values to be requested when
     * asking for a token. The value can contain multiple scope values separated
     * by either comma or whitespace.
     */
-  val ScopeOption: String = ParameterManager.OptionPrefix + "scope"
+  final val ScopeOption: String = ParameterManager.OptionPrefix + "scope"
+
+  /** Help text for the scope option. */
+  final val HelpScopeOption =
+    """Defines the scope to be requested when querying an access token."""
 
   /** Name of the option that defines the client ID for an IDP. */
-  val ClientIDOption: String = ParameterManager.OptionPrefix + "client-id"
+  final val ClientIDOption: String = ParameterManager.OptionPrefix + "client-id"
+
+  /** Help text for the client ID option. */
+  final val HelpClientIDOption =
+    """Sets the ID of this OAuth client. This is needed to authenticate this application against the \
+      |identity provider.""".stripMargin
 
   /** Name of the option that defines the client secret for an IDP. */
-  val ClientSecretOption: String = ParameterManager.OptionPrefix + "client-secret"
+  final val ClientSecretOption: String = ParameterManager.OptionPrefix + "client-secret"
+
+  /** Help text for the client secret option. */
+  final val HelpClientSecretOption =
+    """Sets the secret of this OAuth client. This is needed to authenticate this application against \
+      |the identity provider. If the secret is not passed in via the command line, it is read from \
+      |the console.""".stripMargin
 
   /**
     * A name to be displayed if there is something wrong with the command.
     * Here a different name is used than for the underlying input option of
     * ''ParameterManager''.
     */
-  val CommandOption = "command"
+  final val CommandOption = "command"
+
+  /** Help text for the command option. */
+  final val HelpCommandOption =
+    s"""The command to be executed. This defines the operation to be performed by this \\
+       |application. Supported commands are the following (case does not matter):
+       |$CommandInitIDP: Adds a new OAuth Identity Provider (IDP) with its options.
+       |$CommandLoginIDP: Starts an authorization code grant flow with an IDP.
+       |$CommandRemoveIDP: Removes the data about a specific IDP.
+       |Pass in a command name without any further options to see the parameters that are \\
+       |supported by this specific command.""".stripMargin
 
   /**
     * Definition of a function type that is used to determine whether for a
@@ -171,8 +235,8 @@ object OAuthParameterManager {
     * command line. The command determines the actions to be executed. There
     * must be exactly one command.
     */
-  private val commandProcessor: CliProcessor[Try[String]] =
-    ParameterManager.inputValue(0, optKey = Some(CommandOption), last = true)
+  final val commandProcessor: CliProcessor[Try[String]] =
+    ParameterManager.inputValue(0, optKey = Some(CommandOption), optHelp = Some(HelpCommandOption), last = true)
       .toLower
       .single
       .mandatory
@@ -194,6 +258,21 @@ object OAuthParameterManager {
       .map(t => (t._1, t._2.parameters))
 
   /**
+    * Returns a ''CliProcessor'' for extracting a ''CommandConfig'' object.
+    * This processor extracts the command name from the first input argument.
+    * Then a conditional group is applied to extract the specific arguments for
+    * this command.
+    *
+    * @return the ''CliProcessor'' for a ''CommandConfig''
+    */
+  def commandConfigProcessor: CliProcessor[Try[CommandConfig]] = {
+    val groupMap = Map(CommandInitIDP -> commandInitProcessor,
+      CommandLoginIDP -> commandLoginProcessor,
+      CommandRemoveIDP -> commandRemoveProcessor)
+    conditionalGroupValue(commandProcessor, groupMap)
+  }
+
+  /**
     * Returns a ''CliProcessor'' for extracting an ''OAuthStorageConfig''
     * object. Whether a password is required or not is determined by the given
     * boolean parameter. If it is required, but not provided, it is read from
@@ -205,12 +284,21 @@ object OAuthParameterManager {
     * @return the ''CliProcessor'' for the ''OAuthStorageConfig''
     */
   def storageConfigProcessor(needPassword: Boolean, prefix: String = OptionPrefix):
-  CliProcessor[Try[OAuthStorageConfig]] =
-    for {name <- mandatoryStringOption(prefix + NameOptionName)
-         path <- asMandatory(pathOptionValue(prefix + StoragePathOptionName))
+  CliProcessor[Try[OAuthStorageConfig]] = {
+    val procPath = optionValue(prefix + StoragePathOptionName, help = Some(HelpStoragePathOption))
+      .toPath
+      .single
+      .mandatory
+    val procName = optionValue(prefix + NameOptionName, help = Some(HelpNameOption))
+      .single
+      .mandatory
+
+    for {name <- procName
+         path <- procPath
          pwd <- storagePasswordProcessor(needPassword, prefix + EncryptOptionName, prefix + PasswordOptionName)
-         crypt <- booleanOptionValue(prefix + EncryptOptionName)
+         crypt <- cryptFlagProcessor(prefix + EncryptOptionName, needPassword)
          } yield createStorageConfig(name, path, pwd, crypt)
+  }
 
   /**
     * Returns a ''CliProcessor'' to extract the data for an IDP from the
@@ -219,11 +307,11 @@ object OAuthParameterManager {
     * @return the ''CliProcessor'' to extract IDP-related data
     */
   private def commandInitProcessor: CliProcessor[Try[CommandConfig]] =
-    for {triedAuthUrl <- mandatoryStringOption(AuthEndpointOption)
-         triedTokenUrl <- mandatoryStringOption(TokenEndpointOption)
+    for {triedAuthUrl <- mandatoryStringOption(AuthEndpointOption, HelpAuthEndpointOption)
+         triedTokenUrl <- mandatoryStringOption(TokenEndpointOption, HelpTokenEndpointOption)
          triedScope <- scopeProcessor
-         triedRedirect <- mandatoryStringOption(RedirectUrlOption)
-         triedID <- mandatoryStringOption(ClientIDOption)
+         triedRedirect <- mandatoryStringOption(RedirectUrlOption, HelpRedirectUrlOption)
+         triedID <- mandatoryStringOption(ClientIDOption, HelpClientIDOption)
          triedSecret <- clientSecretProcessor
          triedStorage <- storageConfigProcessor(needPassword = true)
          } yield createIdpConfig(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect, triedID,
@@ -250,21 +338,6 @@ object OAuthParameterManager {
       .map(_.map(RemoveCommandConfig))
 
   /**
-    * Returns a ''CliProcessor'' for extracting a ''CommandConfig'' object.
-    * This processor extracts the command name from the first input argument.
-    * Then a conditional group is applied to extract the specific arguments for
-    * this command.
-    *
-    * @return the ''CliProcessor'' for a ''CommandConfig''
-    */
-  private def commandConfigProcessor: CliProcessor[Try[CommandConfig]] = {
-    val groupMap = Map(CommandInitIDP -> commandInitProcessor,
-      CommandLoginIDP -> commandLoginProcessor,
-      CommandRemoveIDP -> commandRemoveProcessor)
-    conditionalGroupValue(commandProcessor, groupMap)
-  }
-
-  /**
     * Returns a ''CliProcessor'' for extracting the password of the storage
     * configuration. If a password is required (as indicated by the boolean
     * parameter), it is read from the console if it has not been specified on
@@ -277,14 +350,27 @@ object OAuthParameterManager {
     */
   private def storagePasswordProcessor(needPassword: Boolean, encOption: String, pwdOption: String):
   CliProcessor[SingleOptionValue[String]] = {
-    val condProc = optionValue(encOption)
+    val condProc = cryptFlagProcessor(encOption, needPassword)
+    optionValue(pwdOption, help = Some(HelpPasswordOption))
+      .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true)))
+      .single
+  }
+
+  /**
+    * Returns a ''CliProcessor'' for extracting the encryption flag of the
+    * storage configuration. The flag determines whether a password is required
+    * to encrypt IDP data stored locally.
+    *
+    * @param encOption    the name of the encrypt flag option
+    * @param needPassword default value for the flag
+    * @return the ''CliProcessor'' to extract the encrypt flag
+    */
+  private def cryptFlagProcessor(encOption: String, needPassword: Boolean): CliProcessor[Try[Boolean]] = {
+    optionValue(encOption, help = Some(HelpEncryptOption))
       .toBoolean
       .fallbackValues(needPassword)
       .single
       .mandatory
-    optionValue(pwdOption)
-      .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true)))
-      .single
   }
 
   /**
@@ -294,7 +380,7 @@ object OAuthParameterManager {
     * @return the ''CliProcessor'' for scope
     */
   private def scopeProcessor: CliProcessor[Try[String]] =
-    optionValue(ScopeOption)
+    optionValue(ScopeOption, help = Some(HelpScopeOption))
       .mapTo(_.replace(',', ' '))
       .single
       .mandatory
@@ -307,7 +393,7 @@ object OAuthParameterManager {
     * @return the ''CliProcessor'' for the client secret
     */
   private def clientSecretProcessor: CliProcessor[Try[Secret]] =
-    optionValue(ClientSecretOption)
+    optionValue(ClientSecretOption, help = Some(HelpClientSecretOption))
       .fallback(consoleReaderValue(ClientSecretOption, password = true))
       .mapTo(pwd => Secret(pwd))
       .single
@@ -324,7 +410,7 @@ object OAuthParameterManager {
     * @return a ''Try'' with the generated storage configuration
     */
   private def createStorageConfig(triedName: Try[String], triedPath: Try[Path], triedPwd: Try[Option[String]],
-                                  triedCrypt: Try[Option[Boolean]]): Try[OAuthStorageConfig] =
+                                  triedCrypt: Try[Boolean]): Try[OAuthStorageConfig] =
     createRepresentation(triedName, triedPath, triedPwd, triedCrypt) { (name, path, pwd, _) =>
       OAuthStorageConfig(baseName = name, rootDir = path, optPassword = pwd.map(Secret(_)))
     }
@@ -356,9 +442,12 @@ object OAuthParameterManager {
     * Convenience function for the frequent use case to create a
     * ''CliProcessor'' for a mandatory string value.
     *
-    * @param key the key of the option
+    * @param key  the key of the option
+    * @param help the help text of the option
     * @return the processor to extract this option
     */
-  private def mandatoryStringOption(key: String): CliProcessor[Try[String]] =
-    asMandatory(stringOptionValue(key))
+  private def mandatoryStringOption(key: String, help: String): CliProcessor[Try[String]] =
+    optionValue(key, Some(help))
+      .single
+      .mandatory
 }
