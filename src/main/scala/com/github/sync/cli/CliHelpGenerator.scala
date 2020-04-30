@@ -385,24 +385,6 @@ object CliHelpGenerator {
   }
 
   /**
-    * Type definition of a function that performs a modification of a
-    * ''CliHelpContext''. The current context is passed in as argument, the
-    * modified one is the result.
-    */
-  type HelpContextUpdater = CliHelpContext => CliHelpContext
-
-  /**
-    * Returns a ''HelpContextUpdater'' that adds an attribute with its key and
-    * value to the [[CliHelpContext]].
-    *
-    * @param attrKey   the key of the attribute to be added
-    * @param attrValue the value of the attribute
-    * @return the updater that sets exactly this attribute
-    */
-  def addAttributeUpdater(attrKey: String, attrValue: String): HelpContextUpdater =
-    context => context.addAttribute(attrKey, attrValue)
-
-  /**
     * Checks whether the option whose attributes are provided belongs to the
     * given group.
     *

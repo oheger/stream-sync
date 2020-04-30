@@ -22,7 +22,7 @@ import java.util.Locale
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{FileIO, Framing, Sink}
 import akka.util.ByteString
-import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, HelpContextUpdater, InputParameterRef}
+import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, InputParameterRef}
 
 import scala.annotation.tailrec
 import scala.collection.SortedSet
@@ -197,6 +197,12 @@ object ParameterManager {
   }
 
   /**
+    * Type definition of a function that updates a parameter context. The
+    * function is passed the current context, it returns the modified one.
+    */
+  type ParameterContextUpdater = ParameterContext => ParameterContext
+
+  /**
     * A case class representing a processor for command line options.
     *
     * This is a kind of state action. Such processors can be combined to
@@ -227,18 +233,16 @@ object ParameterManager {
 
     /**
       * Returns a ''CliProcessor'' based on the current one that applies a
-      * mapping function to the original result and also modifies the help
-      * context.
+      * mapping function to the original result and also modifies the
+      * parameter context.
       *
-      * @param f    the mapping function
-      * @param fCtx the function to update the help context
+      * @param f the mapping function that is also passed the context
       * @tparam B the result type of the new processor
       * @return the new ''CliProcessor''
       */
-    def mapWithHelpContext[B](f: A => B)(fCtx: HelpContextUpdater): CliProcessor[B] = {
+    def mapWithContext[B](f: (A, ParameterContext) => (B, ParameterContext)): CliProcessor[B] = {
       val fProc: A => CliProcessor[B] = a => {
-        val procMap = CliProcessor(ctx => (f(a), ctx))
-        updatingHelpCtxProcessor(procMap)(fCtx)
+        CliProcessor(ctx => f(a, ctx))
       }
       flatMap(fProc)
     }
@@ -857,12 +861,14 @@ object ParameterManager {
     * @return the processor extracting the single option value
     */
   def asSingleOptionValue[A](proc: CliProcessor[OptionValue[A]]): CliProcessor[SingleOptionValue[A]] =
-    proc.mapWithHelpContext(optionValue =>
-      optionValue flatMap { values =>
+    proc.mapWithContext((optionValue, context) => {
+      val res = optionValue flatMap { values =>
         if (values.size > 1)
           Failure(paramException(proc.key, s"should have a single value, but has multiple values - $optionValue"))
         else Success(values.headOption)
-      })(CliHelpGenerator.addAttributeUpdater(CliHelpGenerator.AttrMultiplicity, "0..1"))
+      }
+      (res, context.updateHelpContext(CliHelpGenerator.AttrMultiplicity, "0..1"))
+    })
 
   /**
     * Returns a processor that enforces an option to have a defined value. If
@@ -874,10 +880,13 @@ object ParameterManager {
     * @return the processor returning a mandatory value
     */
   def asMandatory[A](proc: CliProcessor[SingleOptionValue[A]]): CliProcessor[Try[A]] =
-    proc.mapWithHelpContext(_.flatMap {
-      case Some(v) => Success(v)
-      case None => Failure(paramException(proc.key, "mandatory option has no value"))
-    })(CliHelpGenerator.addAttributeUpdater(CliHelpGenerator.AttrMultiplicity, "1..1"))
+    proc.mapWithContext((optionValue, context) => {
+      val res = optionValue.flatMap {
+        case Some(v) => Success(v)
+        case None => Failure(paramException(proc.key, "mandatory option has no value"))
+      }
+      (res, context.updateHelpContext(CliHelpGenerator.AttrMultiplicity, "1..1"))
+    })
 
   /**
     * Returns a processor that enforces the given multiplicity for the values
@@ -893,14 +902,17 @@ object ParameterManager {
     */
   def withMultiplicity[A](proc: CliProcessor[OptionValue[A]], atLeast: Int, atMost: Int):
   CliProcessor[OptionValue[A]] =
-    proc.mapWithHelpContext(_.flatMap { values =>
-      if (values.size < atLeast)
-        Failure(paramException(proc.key, s"option must have at least $atLeast values"))
-      else if (values.size > atMost)
-        Failure(paramException(proc.key, s"option must have at most $atMost values"))
-      else Success(values)
-    })(CliHelpGenerator.addAttributeUpdater(CliHelpGenerator.AttrMultiplicity,
-      Multiplicity(atLeast, atMost).toString))
+    proc.mapWithContext((optionValue, context) => {
+      val res = optionValue.flatMap { values =>
+        if (values.size < atLeast)
+          Failure(paramException(proc.key, s"option must have at least $atLeast values"))
+        else if (values.size > atMost)
+          Failure(paramException(proc.key, s"option must have at most $atMost values"))
+        else Success(values)
+      }
+      (res, context.updateHelpContext(CliHelpGenerator.AttrMultiplicity,
+        Multiplicity(atLeast, atMost).toString))
+    })
 
   /**
     * Returns a processor that modifies the result of another processor by
@@ -1690,22 +1702,6 @@ object ParameterManager {
       case h :: Nil => h.toString
       case l => l.mkString("<", ", ", ">")
     }
-
-  /**
-    * Returns a ''CliProcessor'' that invokes another processor and updates the
-    * ''CliHelpContext'' using a ''HelpContextUpdater''.
-    *
-    * @param proc    the ''CliProcessor'' to be invoked
-    * @param fUpdate the update function for the help context
-    * @tparam A the result type of the ''CliProcessor''
-    * @return the decorated ''CliProcessor'' that updates the help context
-    */
-  private def updatingHelpCtxProcessor[A](proc: CliProcessor[A])(fUpdate: HelpContextUpdater): CliProcessor[A] =
-    CliProcessor(context => {
-      val nextHelpCtx = fUpdate(context.helpContext)
-      val nextCtx = context.copy(helpContext = nextHelpCtx)
-      proc.run(nextCtx)
-    }, proc.optKey)
 
   /**
     * Returns a ''ParameterContext'' to be used for the invocation of a
