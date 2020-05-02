@@ -114,17 +114,18 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
 
   /**
     * Expects a failed future from a parsing operation. It is checked whether
-    * the future is actually failed with an ''IllegalArgumentException'' that
-    * has a specific error message.
+    * the future is actually failed with an ''ParameterExtractionException''
+    * that has a specific error message.
     *
     * @param future   the future to be checked
     * @param msgParts text parts to be expected in the exception message
     * @return the error message from the exception
     */
   private def expectFailedFuture(future: Future[_], msgParts: String*): String = {
-    val exception = expectFailedFuture[IllegalArgumentException](future)
-    msgParts foreach (part => exception.getMessage should include(part))
-    exception.getMessage
+    val exception = expectFailedFuture[ParameterExtractionException](future)
+    val message = exception.failures.mkString(" ")
+    msgParts foreach (part => message should include(part))
+    message
   }
 
   /**

@@ -18,13 +18,14 @@ package com.github.sync.cli
 
 import java.io.IOException
 
-import com.github.sync.cli.ParameterManager.{OptionValue, Parameters}
+import com.github.sync.cli.ParameterManager.{OptionValue, ParameterContext, Parameters}
 import org.mockito.Mockito
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
+import scala.collection.SortedSet
 import scala.util.{Failure, Success, Try}
 
 object ParameterManagerSpec {
@@ -52,6 +53,11 @@ object ParameterManagerSpec {
 
   /** Another test Parameters object representing updated parameters. */
   private val NextParameters = Parameters(Map("bar" -> List("v2", "v3")), Set("x", "y"))
+
+  /** A test PaameterContext object. */
+  private val TestContext = ParameterContext(TestParameters,
+    new CliHelpGenerator.CliHelpContext(Map.empty, SortedSet.empty, None, Nil),
+    DummyConsoleReader)
 }
 
 /**
@@ -63,6 +69,72 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
   import ParameterManager._
   import ParameterManagerSpec._
+
+  /**
+    * Tries to cast the given ''Throwable'' to a
+    * ''ParameterExtractionException'' or fails if this is not possible.
+    *
+    * @param exception the exception
+    * @return the ''ParameterExtractionException''
+    */
+  private def extractionException(exception: Throwable): ParameterExtractionException =
+    exception match {
+      case pe: ParameterExtractionException => pe
+      case e => fail("Unexpected exception: " + e)
+    }
+
+  /**
+    * Expects that the given ''Try'' is a failure wrapping a
+    * ''ParameterExtractionException''. This exception is returned.
+    *
+    * @param res the tried result
+    * @tparam T the result type of the ''Try''
+    * @return the exception that was extracted
+    */
+  private def expectExtractionException[T](res: Try[T]): ParameterExtractionException =
+    res match {
+      case Failure(exception) => extractionException(exception)
+      case r => fail("Unexpected result: " + r)
+    }
+
+  /**
+    * Checks the properties of an ''ExtractionFailure''.
+    *
+    * @param failure     the failure object to be checked
+    * @param expKey      the expected key
+    * @param expParams   the expected parameters map
+    * @param expMsgParts strings to be contained in the message
+    * @return the ''ExtractionFailure'' unchanged
+    */
+  private def checkExtractionFailure(failure: ExtractionFailure, expKey: String = Key,
+                                     expParams: ParametersMap = TestParameters.parametersMap)
+                                    (expMsgParts: String*): ExtractionFailure = {
+
+    failure.key should be(expKey)
+    failure.context.parameters.parametersMap should be(expParams)
+    expMsgParts foreach { part =>
+      failure.message should include(part)
+    }
+    failure
+  }
+
+  /**
+    * Checks the ''ExtractionFailure'' of a ''ParameterExtractionException''.
+    * It is expected that the exception contains only a single failure. The
+    * properties of this failure are checked.
+    *
+    * @param exception   the exception to be checked
+    * @param expKey      the expected key
+    * @param expParams   the expected parameters map
+    * @param expMsgParts strings to be contained in the message
+    * @return the ''ExtractionFailure'' unchanged
+    */
+  private def checkExtractionException(exception: ParameterExtractionException, expKey: String = Key,
+                                       expParams: ParametersMap = NextParameters.parametersMap)
+                                      (expMsgParts: String*): ExtractionFailure = {
+    exception.failures should have size 1
+    checkExtractionFailure(exception.failures.head, expKey, expParams)(expMsgParts: _*)
+  }
 
   "Parameters" should "be creatable from a parameters map" in {
     val paramMap = Map("foo" -> List("v1", "v2"), "bar" -> List("v3"))
@@ -107,6 +179,22 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val params2 = params.keyAccessed("bar")
     params2 should be theSameInstanceAs params
+  }
+
+  "ParameterExtractionException" should "not allow creating an instance without failures" in {
+    intercept[IllegalArgumentException] {
+      ParameterExtractionException(Nil)
+    }
+  }
+
+  it should "generate a message from the failures" in {
+    val failure1 = ExtractionFailure(Key, "Message 1", TestContext)
+    val failure2 = ExtractionFailure(Key + "_other", "Other message", TestContext)
+    val ExpMsg = failure1.key + ": " + failure1.message + ", " +
+    failure2.key + ": " + failure2.message
+
+    val exception = ParameterExtractionException(List(failure1, failure2))
+    exception.getMessage should be(ExpMsg)
   }
 
   /**
@@ -162,7 +250,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   }
 
   it should "wrap a function in a Try" in {
-    val triedResult = ParameterManager.paramTry(Key)(ProcessorResult)
+    val triedResult = ParameterManager.paramTry(TestContext, Key)(ProcessorResult)
 
     triedResult should be(Success(ProcessorResult))
   }
@@ -170,14 +258,9 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   it should "catch the exception thrown by a function and wrap it" in {
     val exception = new IOException("Fatal error")
 
-    val triedResult = ParameterManager.paramTry[String](Key)(throw exception)
-    triedResult match {
-      case Failure(ex) =>
-        ex shouldBe a[IllegalArgumentException]
-        ex.getCause should be(exception)
-        ex.getMessage should be(Key + ": java.io.IOException - " + exception.getLocalizedMessage)
-      case s => fail("Unexpected result: " + s)
-    }
+    val triedResult = ParameterManager.paramTry[String](TestContext, Key)(throw exception)
+    checkExtractionException(expectExtractionException(triedResult),
+      expParams = TestParameters.parametersMap)("java.io.IOException - " + exception.getMessage)
   }
 
   it should "provide a constant processor" in {
@@ -274,14 +357,8 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters should be(NextParameters)
-    res match {
-      case Failure(exception) =>
-        exception.getMessage should include(Key)
-        exception.getMessage should include("multiple values")
-        exception.getMessage should include(MultiValue.toString)
-        exception shouldBe a[IllegalArgumentException]
-      case s => fail("Unexpected result: " + s)
-    }
+    val paramEx = expectExtractionException(res)
+    checkExtractionException(paramEx)("multiple values", MultiValue.toString)
   }
 
   it should "provide a mapping processor that handles a failed result" in {
@@ -325,13 +402,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters should be(NextParameters)
-    res match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(Key)
-        exception.getCause shouldBe a[NumberFormatException]
-      case s => fail("Unexpected result: " + s)
-    }
+    checkExtractionException(expectExtractionException(res))(classOf[NumberFormatException].getName)
   }
 
   it should "provide a mapping processor with fallbacks if the value is defined" in {
@@ -368,19 +439,14 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
   it should "provide a processor that converts an option value to int and handles errors" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val StrValue: OptionValue[String] = Try(Some("not a valid number"))
+    val NoIntValue = "not a valid number"
+    val StrValue: OptionValue[String] = Try(Some(NoIntValue))
     val proc = testProcessor(StrValue)
     val processor = ParameterManager.asIntOptionValue(proc)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters should be(NextParameters)
-    res match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(Key)
-        exception.getCause shouldBe a[NumberFormatException]
-      case s => fail("Unexpected result: " + s)
-    }
+    checkExtractionException(expectExtractionException(res))(classOf[NumberFormatException].getName, NoIntValue)
   }
 
   /**
@@ -421,13 +487,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters should be(NextParameters)
-    res match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(Key)
-        exception.getMessage should include(StrValue)
-      case s => fail("Unexpected result: " + s)
-    }
+    checkExtractionException(expectExtractionException(res))(StrValue)
   }
 
   it should "provide a processor that converts string values to lower case" in {
@@ -476,13 +536,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters should be(NextParameters)
-    res match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(Key)
-        exception.getMessage should include(Value)
-      case s => fail("Unexpected result: " + s)
-    }
+    checkExtractionException(expectExtractionException(res))("enum", Value)
   }
 
   it should "provide a processor that returns a mandatory value" in {
@@ -504,13 +558,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters should be(NextParameters)
-    res match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(Key)
-        exception.getMessage should include("no value")
-      case s => fail("Unexpected result: " + s)
-    }
+    checkExtractionException(expectExtractionException(res))("no value")
   }
 
   it should "provide a processor that reads from the console" in {
@@ -617,13 +665,8 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters should be(NextParameters)
-    res match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(Key)
-        exception.getMessage should include(s"'$GroupName''")
-      case r => fail("Unexpected result: " + r)
-    }
+    checkExtractionException(expectExtractionException(res),
+      expParams = TestParameters.parametersMap)(s"'$GroupName''")
   }
 
   it should "provide a processor that checks whether an option is defined if the option has a value" in {
@@ -693,13 +736,8 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.inputValue(-InputValues.size - 1)
 
     val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
-    res match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(ParameterManager.InputOption)
-        exception.getMessage should include("-1")
-      case r => fail("Unexpected result: " + r)
-    }
+    checkExtractionException(expectExtractionException(res), expKey = ParameterManager.InputOption,
+      expParams = TestParametersWithInputs.parametersMap)("-1")
   }
 
   it should "yield a failure if the index of an input value is too big" in {
@@ -707,13 +745,8 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.inputValues(1, InputValues.size, optKey = Some(Key))
 
     val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
-    res match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(ParameterManager.InputOption)
-        exception.getMessage should include(s"$Key")
-      case r => fail("Unexpected result: " + r)
-    }
+    checkExtractionException(expectExtractionException(res), expKey = ParameterManager.InputOption,
+      expParams = TestParametersWithInputs.parametersMap)("few input arguments")
   }
 
   it should "yield a failure if too many input parameters have been specified" in {
@@ -721,12 +754,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.inputValue(1, Some("destination"), last = true)
 
     val res = ParameterManager.tryProcessor(processor, TestParametersWithInputs)
-    res match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(ParameterManager.InputOption)
-        exception.getMessage should include("at most 2")
-      case r => fail("Unexpected result: " + r)
-    }
+    checkExtractionException(expectExtractionException(res), expKey = ParameterManager.InputOption,
+      expParams = TestParametersWithInputs.parametersMap)("at most 2")
   }
 }

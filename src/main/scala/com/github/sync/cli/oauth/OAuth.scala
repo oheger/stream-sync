@@ -17,7 +17,7 @@
 package com.github.sync.cli.oauth
 
 import akka.actor.ActorSystem
-import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.ParameterManager.{ParameterExtractionException, Parameters}
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.cli._
 import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
@@ -76,7 +76,7 @@ object OAuth {
                                       consoleReader: ConsoleReader): Future[(CommandConfig, Parameters)] =
     ParameterManager.parseParameters(args) flatMap { argsMap =>
       OAuthParameterManager.extractCommandConfig(argsMap) recoverWith {
-        case e: IllegalArgumentException =>
+        case e: ParameterExtractionException =>
           Future.failed(new OAuthParamException(e.getMessage, argsMap))
       }
     }

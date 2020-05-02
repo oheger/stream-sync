@@ -26,7 +26,7 @@ import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes._
 import com.github.sync.cli.CliHelpGenerator.OptionFilter
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.ParameterManager.{ParameterExtractionException, Parameters}
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
 import com.github.sync.cli.SyncStructureConfig.{DestinationRoleType, RoleType, SourceRoleType}
@@ -483,7 +483,7 @@ object Sync {
   Future[(Parameters, SyncConfig)] =
     ParameterManager.parseParameters(args) flatMap { argsMap =>
       SyncParameterManager.extractSyncConfig(argsMap) recoverWith {
-        case e: IllegalArgumentException =>
+        case e: ParameterExtractionException =>
           Future.failed(new SyncParamException(e.getMessage, argsMap))
       }
     }

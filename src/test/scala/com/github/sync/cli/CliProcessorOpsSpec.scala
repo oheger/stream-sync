@@ -23,6 +23,7 @@ import com.github.sync.cli.ParameterManager._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import scala.collection.SortedSet
 import scala.util.{Failure, Success, Try}
 
 object CliProcessorOpsSpec {
@@ -238,9 +239,8 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
 
     val result = runProcessor(proc)
     result match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(UndefinedKey)
+      case Failure(exception: ParameterExtractionException) =>
+        exception.failures.head.key should be(UndefinedKey)
       case r => fail("Unexpected result: " + r)
     }
   }
@@ -257,10 +257,10 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
 
     val result = runProcessor(proc)
     result match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(KeyAnswer)
-        exception.getMessage should include("at least 2")
+      case Failure(exception: ParameterExtractionException) =>
+        val failure = exception.failures.head
+        failure.key should be(KeyAnswer)
+        failure.message should include("at least 2")
       case r => fail("Unexpected result: " + r)
     }
   }
@@ -270,10 +270,10 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
 
     val result = runProcessor(proc)
     result match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(KeyNumbers)
-        exception.getMessage should include("at most " + (NumberValues.size - 1))
+      case Failure(exception: ParameterExtractionException) =>
+        val failure = exception.failures.head
+        failure.key should be(KeyNumbers)
+        failure.message should include("at most " + (NumberValues.size - 1))
       case r => fail("Unexpected result: " + r)
     }
   }
@@ -304,6 +304,12 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "handle failures when combining multiple options" in {
+    def checkFailureContained(ex: ParameterExtractionException, keys: String*): Unit = {
+      keys foreach { key =>
+        ex.failures.find(_.key == key) should not be None
+      }
+    }
+
     val params: Parameters = Map(KeyNumbers -> ("noNumber" :: NumberValues.map(_.toString)),
       KeyAnswer -> List("xy"),
       KeyFlag -> List("undefined"))
@@ -311,11 +317,10 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
 
     val result = runProcessor(proc, params)
     result match {
-      case Failure(exception) =>
-        exception shouldBe a[IllegalArgumentException]
-        exception.getMessage should include(KeyNumbers)
-        exception.getMessage should include(KeyAnswer)
-        exception.getMessage should include(KeyFlag)
+      case Failure(exception: ParameterExtractionException) =>
+        checkFailureContained(exception, KeyNumbers, KeyAnswer, KeyFlag)
+        val context = exception.parameterContext
+        context.parameters.parametersMap should be(params.parametersMap)
       case r => fail("Unexpected result: " + r)
     }
   }
@@ -329,16 +334,45 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "handle failures when creating a representation from components" in {
-    val exception1 = new IOException("failure 1")
-    val exception2 = new IllegalStateException("failure 2")
+    val helpCtx = new CliHelpGenerator.CliHelpContext(Map.empty, SortedSet.empty, None, Nil)
+    val context = ParameterContext(TestParameters, helpCtx, DummyConsoleReader)
+    val failure1 = ExtractionFailure(KeyFlag, "Flag failure", context)
+    val failure2 = ExtractionFailure(KeyAnswer, "Answer failure", context)
+    val exception1 = ParameterExtractionException(failure1)
+    val exception2 = ParameterExtractionException(failure2)
     val c1 = Failure(exception1)
     val c2 = Failure(exception2)
 
     val triedValues = createRepresentation(c1, c2)((_, _) => throw new IllegalStateException("Failure"))
     triedValues match {
-      case Failure(exception) =>
-        exception.getMessage should include(exception1.getMessage)
-        exception.getMessage should include(exception2.getMessage)
+      case Failure(exception: ParameterExtractionException) =>
+        exception.failures should be(List(failure1, failure2))
+        exception.parameterContext should be(context)
+      case r => fail("Unexpected result: " + r)
+    }
+  }
+
+  it should "handle other exceptions when creating a representation from components" in {
+    val exception1 = new IOException("failure 1")
+    val exception2 = new IllegalStateException("failure 2")
+    val c1 = Failure(exception1)
+    val c2 = Failure(exception2)
+
+    def checkFailure(failure: ExtractionFailure, exception: Throwable): Unit = {
+      failure.key should be("")
+      failure.message should be(exception.getMessage)
+      failure.context.parameters should be(Parameters(Map.empty, Set.empty))
+      val helpCtx = failure.context.helpContext
+      helpCtx.options should have size 0
+      helpCtx.inputs should have size 0
+    }
+
+    val triedValues = createRepresentation(c1, c2)((_, _) => throw new IllegalStateException("Failure"))
+    triedValues match {
+      case Failure(exception: ParameterExtractionException) =>
+        exception.failures should have size 2
+        checkFailure(exception.failures.head, exception1)
+        checkFailure(exception.failures(1), exception2)
       case r => fail("Unexpected result: " + r)
     }
   }

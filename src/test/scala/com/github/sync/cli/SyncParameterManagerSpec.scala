@@ -22,7 +22,7 @@ import java.time.ZoneId
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import akka.util.Timeout
-import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.ParameterManager.{ParameterExtractionException, Parameters}
 import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptMode}
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.http.NoAuth
@@ -83,7 +83,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @return the error message from the exception
     */
   private def expectFailedFuture(future: Future[_], msgParts: String*): String = {
-    val exception = expectFailedFuture[IllegalArgumentException](future)
+    val exception = expectFailedFuture[ParameterExtractionException](future)
     msgParts foreach (part => exception.getMessage should include(part))
     exception.getMessage
   }
@@ -165,7 +165,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val undefOption = "--undefinedOption"
     val args = List("--opt1", "optValue", undefOption)
 
-    expectFailedFuture(parseParametersFuture(args), undefOption)
+    val exception = expectFailedFuture[IllegalArgumentException](parseParametersFuture(args))
+    exception.getMessage should include(undefOption)
   }
 
   it should "convert options to lower case" in {
@@ -504,8 +505,9 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (SyncParameterManager.DestPasswordOption -> List("dstSecret"))
 
     val (next, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
-    expectFailedFuture(ParameterManager.checkParametersConsumed(next),
-      SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption)
+    val exception = expectFailedFuture[IllegalArgumentException](ParameterManager.checkParametersConsumed(next))
+    exception.getMessage should include(SyncParameterManager.SourcePasswordOption)
+    exception.getMessage should include(SyncParameterManager.DestPasswordOption)
   }
 
   it should "read the crypt passwords from the console if necessary" in {
