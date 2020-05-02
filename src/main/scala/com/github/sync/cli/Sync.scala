@@ -56,15 +56,6 @@ object Sync {
     */
   case class SyncResult(totalOperations: Int, successfulOperations: Int)
 
-  /**
-    * A specialized exception class to report a failure to parse the command
-    * line options.
-    *
-    * @param msg     the message about what went wrong
-    * @param options the parameters extracted from the command line
-    */
-  class SyncParamException(msg: String, val options: Parameters) extends RuntimeException(msg)
-
   def main(args: Array[String]): Unit = {
     val sync = new Sync
     sync.run(args)
@@ -88,7 +79,8 @@ object Sync {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
 
     for {
-      (argsMap1, config) <- syncConfigFromParams(args)
+      argsMap <- ParameterManager.parseParameters(args)
+      (argsMap1, config) <- SyncParameterManager.extractSyncConfig(argsMap)
       (argsMap2, filterData) <- FilterManager.parseFilters(argsMap1)
       srcFactory <- factory.createSourceComponentsFactory(config)
       dstFactory <- factory.createDestinationComponentsFactory(config)
@@ -462,31 +454,9 @@ object Sync {
     syncProcess(factory, args)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
       .recover {
-        case e: SyncParamException =>
+        case e: ParameterExtractionException =>
           generateCliErrorMessage(e)
       }
-
-  /**
-    * Handles the parsing of command line parameters and returns a future with
-    * the ''SyncConfig'' that could be extracted. In case of invalid
-    * parameters, the future fails with an exception of type
-    * ''SyncParamException''.
-    *
-    * @param args          the array with command line options
-    * @param system        the actor system
-    * @param ec            the execution context
-    * @param consoleReader the console reader
-    * @return a future with the updated parameters and the ''SyncConfig''
-    */
-  private def syncConfigFromParams(args: Array[String])
-                                  (implicit system: ActorSystem, ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(Parameters, SyncConfig)] =
-    ParameterManager.parseParameters(args) flatMap { argsMap =>
-      SyncParameterManager.extractSyncConfig(argsMap) recoverWith {
-        case e: ParameterExtractionException =>
-          Future.failed(new SyncParamException(e.getMessage, argsMap))
-      }
-    }
 
   /**
     * Generates a string with an error message if invalid parameters have been
@@ -496,9 +466,9 @@ object Sync {
     * @param exception the original CLI exception
     * @return the error and usage text
     */
-  private def generateCliErrorMessage(exception: SyncParamException): String =
+  private def generateCliErrorMessage(exception: ParameterExtractionException): String =
     exception.getMessage + CliHelpGenerator.CR + CliHelpGenerator.CR +
-      generateCliHelp(exception.options)
+      generateCliHelp(exception.parameterContext.parameters)
 
   /**
     * Generates a help text with instructions how this application is used.
