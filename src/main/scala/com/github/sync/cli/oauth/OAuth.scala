@@ -16,13 +16,12 @@
 
 package com.github.sync.cli.oauth
 
-import akka.actor.ActorSystem
-import com.github.sync.cli.ParameterManager.{ParameterExtractionException, Parameters}
-import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
+import com.github.sync.cli.ParameterManager.ParameterExtractionException
 import com.github.sync.cli._
+import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 /**
@@ -38,16 +37,6 @@ import scala.util.{Failure, Success}
   * command.
   */
 object OAuth {
-
-  /**
-    * A specialized exception class to report a failure to parse the command
-    * line options.
-    *
-    * @param msg     the message about what went wrong
-    * @param options the parameters extracted from the command line
-    */
-  class OAuthParamException(msg: String, val options: Parameters) extends RuntimeException(msg)
-
   /**
     * The main function of this CLI application. Processes the command line and
     * invokes the desired command. If parameter parsing fails, an error message
@@ -58,28 +47,6 @@ object OAuth {
   def main(args: Array[String]): Unit = {
     new OAuth(OAuthCommandsImpl).run(args)
   }
-
-  /**
-    * Handles the parsing of command line parameters and returns a future with
-    * the ''CommandConfig'' that could be extracted. In case of invalid
-    * parameters, the future fails with an exception of type
-    * ''OAuthParamException''.
-    *
-    * @param args          the array with command line options
-    * @param system        the actor system
-    * @param ec            the execution context
-    * @param consoleReader the console reader
-    * @return a future with the updated parameters and the ''CommandConfig''
-    */
-  private def commandConfigFromParams(args: Array[String])
-                                     (implicit system: ActorSystem, ec: ExecutionContext,
-                                      consoleReader: ConsoleReader): Future[(CommandConfig, Parameters)] =
-    ParameterManager.parseParameters(args) flatMap { argsMap =>
-      OAuthParameterManager.extractCommandConfig(argsMap) recoverWith {
-        case e: ParameterExtractionException =>
-          Future.failed(new OAuthParamException(e.getMessage, argsMap))
-      }
-    }
 }
 
 /**
@@ -89,8 +56,6 @@ object OAuth {
   */
 class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
 
-  import OAuth._
-
   override val name: String = "OAuthCLI"
 
   /**
@@ -99,12 +64,13 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
     */
   override protected def runApp(args: Array[String]): Future[String] = {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
-    (for {(cmdConf, params2) <- commandConfigFromParams(args)
+    (for {params <- ParameterManager.parseParameters(args)
+          (cmdConf, params2) <- OAuthParameterManager.extractCommandConfig(params)
           _ <- ParameterManager.checkParametersConsumed(params2)
           result <- executeCommand(cmdConf)
           } yield result) recover {
-      case e: OAuthParamException =>
-        generateHelpMessage(e, e.options)
+      case e: ParameterExtractionException =>
+        generateHelpMessage(e, e.parameterContext.parameters)
     }
   }
 
