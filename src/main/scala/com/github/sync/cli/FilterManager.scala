@@ -23,7 +23,7 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 import com.github.sync.SyncTypes._
-import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.ParameterManager.{ParameterContext, Parameters}
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
@@ -127,36 +127,34 @@ object FilterManager {
   private val ActionTypeSeparator = ","
 
   /**
-    * Extracts filtering information from the map with command line arguments.
+    * Extracts filtering information from the parameter context.
     *
-    * The passed in map contains all command line arguments provided to the
+    * The passed in context contains all command line arguments provided to the
     * CLI keyed by command line options (already converted to uppercase). As
     * options can be repeated, the values of the map are lists. The function
     * tries to filter out all options that are related to filtering and removes
     * them from the arguments map. The single options are processed and
     * converted into ''SyncOperationFilter'' filters.
     *
-    * The resulting future contains a map with filtering options removed and
-    * the produced ''SyncFilterData''. The updated map with command line
-    * arguments can be used for further checks of options. If one of the
-    * filtering parameters was invalid and could not be parsed, the resulting
-    * future is failed.
+    * The resulting future contains the produced ''SyncFilterData'' and an
+    * updated ''ParameterContext'' object. If one of the filtering parameters
+    * was invalid and could not be parsed, the resulting future is failed.
     *
-    * @param arguments a map with information about command line arguments
-    * @param ec        the execution context
-    * @return a future with an updated map with arguments and the extracted
-    *         ''SyncFilterData''
+    * @param paramCtx the ''ParameterContext'' allowing access to CLI options
+    * @param ec       the execution context
+    * @return a future with the extracted ''SyncFilterData'' and the updated
+    *         ''ParameterContext''
     */
-  def parseFilters(arguments: Parameters)(implicit ec: ExecutionContext):
-  Future[(Parameters, SyncFilterData)] = {
-    val futCleanedMap = markFilterParametersAccessed(arguments)
+  def parseFilters(paramCtx: ParameterContext)(implicit ec: ExecutionContext):
+  Future[(SyncFilterData, ParameterContext)] = {
+    val futCleanedMap = markFilterParametersAccessed(paramCtx)
     val futCommonFilters =
-      parseExpressionsOfFilterOption(arguments.parametersMap.getOrElse(ArgCommonFilter, Nil), Nil)
+      parseExpressionsOfFilterOption(paramCtx.parameters.parametersMap.getOrElse(ArgCommonFilter, Nil), Nil)
     for {cleanedMap <- futCleanedMap
          commonFilters <- futCommonFilters
-         filterData1 <- parseFiltersPerActionType(arguments, commonFilters)
-         filterData <- parseActionFilter(arguments, filterData1)
-         } yield (cleanedMap, SyncFilterData(filterData))
+         filterData1 <- parseFiltersPerActionType(paramCtx.parameters, commonFilters)
+         filterData <- parseActionFilter(paramCtx.parameters, filterData1)
+         } yield (SyncFilterData(filterData), cleanedMap)
   }
 
   /**
@@ -373,15 +371,16 @@ object FilterManager {
 
   /**
     * Marks all parameters supported by the filter manager as accessed in the
-    * given ''Parameters'' object.
+    * given ''ParameterContext'' object.
     *
-    * @param args the original ''Parameters'' object
-    * @return a future with the updated ''Parameters'' object
+    * @param paramCtx the original ''ParameterContext''
+    * @return a future with the updated ''ParameterContext''
     */
-  private def markFilterParametersAccessed(args: Parameters)
+  private def markFilterParametersAccessed(paramCtx: ParameterContext)
                                           (implicit ec: ExecutionContext):
-  Future[Parameters] = Future {
-    args keysAccessed AllFilterParameters
+  Future[ParameterContext] = Future {
+    val updatedParameters = paramCtx.parameters keysAccessed AllFilterParameters
+    paramCtx.copy(parameters = updatedParameters)
   }
 
   /**

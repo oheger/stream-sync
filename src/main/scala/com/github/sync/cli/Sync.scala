@@ -80,11 +80,11 @@ object Sync {
 
     for {
       argsMap <- ParameterManager.parseParameters(args)
-      (argsMap1, config) <- SyncParameterManager.extractSyncConfig(argsMap)
-      (argsMap2, filterData) <- FilterManager.parseFilters(argsMap1)
+      (config, paramCtx1) <- SyncParameterManager.extractSyncConfig(argsMap)
+      (filterData, paramCtx2) <- FilterManager.parseFilters(paramCtx1)
+      _ <- Future.fromTry(ParameterManager.checkParametersConsumed(paramCtx2))
       srcFactory <- factory.createSourceComponentsFactory(config)
       dstFactory <- factory.createDestinationComponentsFactory(config)
-      _ <- ParameterManager.checkParametersConsumed(argsMap2)
       result <- runSync(config, filterData, srcFactory, dstFactory)
     } yield result
   }

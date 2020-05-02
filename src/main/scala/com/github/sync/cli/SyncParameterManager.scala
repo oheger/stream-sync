@@ -20,7 +20,7 @@ import java.nio.file.Path
 import java.util.Locale
 
 import akka.util.Timeout
-import com.github.sync.cli.ParameterManager.{CliProcessor, Parameters, SingleOptionValue}
+import com.github.sync.cli.ParameterManager.{CliProcessor, ParameterContext, Parameters, SingleOptionValue}
 import com.github.sync.cli.SyncStructureConfig.StructureConfig
 
 import scala.concurrent.duration._
@@ -360,9 +360,8 @@ object SyncParameterManager {
     * @return a future with the extracted config and the updated arguments map
     */
   def extractSyncConfig(argsMap: Parameters)(implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(Parameters, SyncConfig)] =
-    Future.fromTry(ParameterManager.tryProcessor(syncConfigProcessor(), argsMap)
-      .map(t => (t._2.parameters, t._1)))
+  Future[(SyncConfig, ParameterContext)] =
+    Future.fromTry(ParameterManager.tryProcessor(syncConfigProcessor(), argsMap))
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all

@@ -142,7 +142,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
 
   "OAuthParameterManager" should "extract a valid remove command config" in {
     val params = createBasicParametersMap(OAuthParameterManager.CommandRemoveIDP)
-    val (config, nextParams) = futureResult(OAuthParameterManager.extractCommandConfig(params))
+    val (config, nextCtx) = futureResult(OAuthParameterManager.extractCommandConfig(params))
 
     config match {
       case RemoveCommandConfig(storageConfig) =>
@@ -150,14 +150,14 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       case c =>
         fail("Unexpected result: " + c)
     }
-    nextParams.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
+    nextCtx.parameters.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
       OAuthParameterManager.EncryptOption, ParameterManager.InputOption)
   }
 
   it should "extract a valid login command config" in {
     val params = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP)
-    val (config, nextParams) = futureResult(OAuthParameterManager.extractCommandConfig(params))
+    val (config, nextCtx) = futureResult(OAuthParameterManager.extractCommandConfig(params))
 
     config match {
       case LoginCommandConfig(storageConfig) =>
@@ -165,7 +165,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       case c =>
         fail("Unexpected result: " + c)
     }
-    nextParams.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
+    nextCtx.parameters.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
       OAuthParameterManager.EncryptOption, ParameterManager.InputOption)
   }
@@ -247,7 +247,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     val args = createInitParametersMap(initArgs)
 
     val (config, next) = futureResult(OAuthParameterManager.extractCommandConfig(args))
-    next.accessedParameters should contain allOf(OAuthParameterManager.AuthEndpointOption,
+    next.parameters.accessedParameters should contain allOf(OAuthParameterManager.AuthEndpointOption,
       OAuthParameterManager.TokenEndpointOption, OAuthParameterManager.RedirectUrlOption,
       OAuthParameterManager.ScopeOption, OAuthParameterManager.ClientIDOption,
       OAuthParameterManager.ClientSecretOption)
@@ -286,7 +286,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     val args = createInitParametersMap(initArgs)
 
     val (config, next) = futureResult(OAuthParameterManager.extractCommandConfig(args)(ec, reader))
-    next.accessedParameters should contain(OAuthParameterManager.ClientSecretOption)
+    next.parameters.accessedParameters should contain(OAuthParameterManager.ClientSecretOption)
     config match {
       case InitCommandConfig(oauthConfig, clientSecret, storageConfig) =>
         oauthConfig.clientID should be(ClientID)

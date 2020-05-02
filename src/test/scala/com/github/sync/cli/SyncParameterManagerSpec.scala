@@ -36,6 +36,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Failure
 
 object SyncParameterManagerSpec {
   /** Test source URI. */
@@ -179,25 +180,6 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     params.parametersMap should be(expArgMap)
   }
 
-  it should "validate a Parameters object with all parameters consumed" in {
-    val argsMap = Map("--foo" -> List("v1"), "--bar" -> List("v2", "v3"))
-    val accessed = Set("--foo", "--bar")
-    val params = Parameters(argsMap, accessed)
-    val result = futureResult(ParameterManager.checkParametersConsumed(params))
-
-    result should be(params)
-  }
-
-  it should "fail the check for consumed parameters if there are remaining parameters" in {
-    val argsMap = Map("foo" -> List("bar"), "bar" -> List("v"), "baz" -> List("vv"))
-    val accessed = Set("baz")
-
-    val ex = expectFailedFuture[IllegalArgumentException](
-      ParameterManager.checkParametersConsumed(Parameters(argsMap, accessed)))
-    ex.getMessage should include("foo")
-    ex.getMessage should include("bar")
-  }
-
   it should "add the content of parameter files to command line options" in {
     val OptionName1 = "--foo"
     val OptionName2 = "--test"
@@ -215,7 +197,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     argsMap(OptionName2) should contain only Opt2Val
     argsMap.keys should not contain ParameterManager.FileOption
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     Set(config.srcUri, config.dstUri) should contain only(uri1, uri2)
   }
 
@@ -260,10 +242,10 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "extract URI parameters if they are present" in {
-    val (params, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
+    val (config, params) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.srcUri should be(SourceUri)
     config.dstUri should be(DestinationUri)
-    params.accessedParameters should contain allElementsOf ArgsMap.keySet
+    params.parameters.accessedParameters should contain allElementsOf ArgsMap.keySet
   }
 
   it should "reject URI parameters if there are more than 2" in {
@@ -298,7 +280,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val roleType = SyncStructureConfig.SourceRoleType
     val argsMap = ArgsMap + (roleType.configPropertyName(SyncStructureConfig.PropLocalFsTimeZone) -> List(zid))
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.srcConfig should be(FsStructureConfig(Some(ZoneId.of(zid))))
   }
 
@@ -314,7 +296,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val ExpDavConfig = DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
       authConfig = NoAuth, deleteBeforeOverride = false)
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.dstConfig should be(ExpDavConfig)
   }
 
@@ -326,7 +308,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "return a default apply mode" in {
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.applyMode should be(ApplyModeTarget(DestinationUri))
   }
 
@@ -334,14 +316,14 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val applyUri = "/dest/apply/uri"
     val argsMap = ArgsMap + (SyncParameterManager.ApplyModeOption -> List("Target:" + applyUri))
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.applyMode should be(ApplyModeTarget(applyUri))
   }
 
   it should "return the apply mode NONE" in {
     val argsMap = ArgsMap + (SyncParameterManager.ApplyModeOption -> List("none"))
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.applyMode should be(ApplyModeNone)
   }
 
@@ -356,12 +338,12 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "return a default timeout if no timeout option is provided" in {
     val argsMap = ArgsMap - SyncParameterManager.TimeoutOption
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.timeout should be(SyncParameterManager.DefaultTimeout)
   }
 
   it should "return the configured timeout option value" in {
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.timeout should be(Timeout(TimeoutValue.seconds))
   }
 
@@ -374,7 +356,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "have an undefined log file option if none is specified" in {
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.logFilePath should be(None)
   }
 
@@ -382,7 +364,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val logFile = Paths.get("var", "logs", "sync.log").toAbsolutePath
     val argsMap = ArgsMap + (SyncParameterManager.LogFileOption -> List(logFile.toString))
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.logFilePath should be(Some(logFile))
   }
 
@@ -394,7 +376,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "have an undefined sync log option if none is specified" in {
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.syncLogPath should be(None)
   }
 
@@ -402,7 +384,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val syncLogFile = Paths.get("data", "sync", "log", "sync.log").toAbsolutePath
     val argsMap = ArgsMap + (SyncParameterManager.SyncLogOption -> List(syncLogFile.toString))
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.syncLogPath should be(Some(syncLogFile))
   }
 
@@ -414,7 +396,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "handle an undefined option for the file times threshold" in {
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
 
     config.ignoreTimeDelta should be(None)
   }
@@ -423,7 +405,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val Delta = 28
     val argsMap = ArgsMap + (SyncParameterManager.IgnoreTimeDeltaOption -> List(Delta.toString))
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.ignoreTimeDelta should be(Some(Delta))
   }
 
@@ -436,7 +418,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "handle an undefined option for the operations per second" in {
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
 
     config.opsPerSecond should be(None)
   }
@@ -445,7 +427,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val OpsCount = 17
     val argsMap = ArgsMap + (SyncParameterManager.OpsPerSecondOption -> List(OpsCount.toString))
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.opsPerSecond should be(Some(OpsCount))
   }
 
@@ -458,7 +440,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "return correct default options related to encryption" in {
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
 
     config.srcPassword should be(None)
     config.srcCryptMode shouldBe CryptMode.None
@@ -477,7 +459,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (SyncParameterManager.DestCryptModeOption -> List("FilesAndNAMEs")) +
       (SyncParameterManager.CryptCacheSizeOption -> List(CacheSize.toString))
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
     config.srcPassword should be(Some(SrcPwd))
     config.dstPassword should be(Some(DstPwd))
     config.srcCryptMode shouldBe CryptMode.Files
@@ -504,10 +486,13 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.SourcePasswordOption -> List("srcSecret")) +
       (SyncParameterManager.DestPasswordOption -> List("dstSecret"))
 
-    val (next, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
-    val exception = expectFailedFuture[IllegalArgumentException](ParameterManager.checkParametersConsumed(next))
-    exception.getMessage should include(SyncParameterManager.SourcePasswordOption)
-    exception.getMessage should include(SyncParameterManager.DestPasswordOption)
+    val (_, next) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    ParameterManager.checkParametersConsumed(next) match {
+      case Failure(exception: ParameterExtractionException) =>
+        exception.failures.map(_.key) should contain only(SyncParameterManager.SourcePasswordOption,
+          SyncParameterManager.DestPasswordOption)
+      case r => fail("Unexpected result: " + r)
+    }
   }
 
   it should "read the crypt passwords from the console if necessary" in {
@@ -521,7 +506,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     when(reader.readOption(SyncParameterManager.DestPasswordOption, password = true))
       .thenReturn(DstPwd)
 
-    val (_, config) = futureResult(SyncParameterManager.extractSyncConfig(argsMap)(consoleReader = reader,
+    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap)(consoleReader = reader,
       ec = system.dispatcher))
     config.srcPassword should be(Some(SrcPwd))
     config.dstPassword should be(Some(DstPwd))
@@ -542,8 +527,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap ++ otherOptions +
       (SyncParameterManager.IgnoreTimeDeltaOption -> List("1"))
 
-    val (updArgs, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
-    updArgs.accessedParameters should contain allOf(SyncParameterManager.ApplyModeOption,
+    val (_, updArgs) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    updArgs.parameters.accessedParameters should contain allOf(SyncParameterManager.ApplyModeOption,
       SyncParameterManager.TimeoutOption, SyncParameterManager.LogFileOption, SyncParameterManager.SyncLogOption,
       SyncParameterManager.IgnoreTimeDeltaOption, SyncParameterManager.OpsPerSecondOption,
       SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption,

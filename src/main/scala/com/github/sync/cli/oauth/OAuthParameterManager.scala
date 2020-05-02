@@ -253,9 +253,8 @@ object OAuthParameterManager {
     */
   def extractCommandConfig(parameters: Parameters)
                           (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(CommandConfig, Parameters)] =
+  Future[(CommandConfig, ParameterContext)] =
     Future.fromTry(tryProcessor(commandConfigProcessor, parameters))
-      .map(t => (t._1, t._2.parameters))
 
   /**
     * Returns a ''CliProcessor'' for extracting a ''CommandConfig'' object.

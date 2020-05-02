@@ -20,11 +20,13 @@ import java.time.{Instant, LocalDateTime, ZoneId}
 
 import com.github.sync.SyncTypes._
 import com.github.sync._
+import com.github.sync.cli.CliHelpGenerator.CliHelpContext
 import com.github.sync.cli.FilterManager.{ArgActionFilter, ArgCommonFilter, ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter, SyncFilterData, SyncOperationFilter}
-import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.ParameterManager.{ParameterContext, Parameters}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -73,6 +75,19 @@ object FilterManagerSpec {
     */
   private def createOperation(action: SyncAction, level: Int, element: FsElement = Element): SyncOperation =
     SyncOperation(element, action, level, element.originalUri, element.originalUri)
+
+  /**
+    * Helper function to start a parse operation for filter parameters on the
+    * arguments specified.
+    *
+    * @param args the command line arguments
+    * @return a future with the result of the parse operation
+    */
+  private def parseFilters(args: Parameters): Future[(SyncFilterData, ParameterContext)] = {
+    val helpContext = new CliHelpContext(Map.empty, SortedSet.empty, None, Nil)
+    val paramContext = ParameterContext(args, helpContext, DummyConsoleReader)
+    FilterManager.parseFilters(paramContext)
+  }
 }
 
 /**
@@ -158,10 +173,10 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
                                         rejectedOps: List[SyncOperation]): Unit = {
     val otherParam = "foo" -> List("bar")
     val args = filterArgs + otherParam
-    val (nextArgs, filterData) = futureResult(FilterManager.parseFilters(args))
+    val (filterData, nextContext) = futureResult(parseFilters(args))
     acceptedOps foreach (op => FilterManager.applyFilter(op, filterData) shouldBe true)
     rejectedOps foreach (op => FilterManager.applyFilter(op, filterData) shouldBe false)
-    nextArgs.accessedParameters should contain only(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter,
+    nextContext.parameters.accessedParameters should contain only(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter,
       ArgCommonFilter, ArgActionFilter)
   }
 
@@ -281,7 +296,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val expData = SyncFilterData(Map(ActionCreate -> Nil, ActionOverride -> Nil,
       ActionRemove -> Nil))
     val params = Parameters(Map.empty, Set.empty)
-    val (_, filterData) = futureResult(FilterManager.parseFilters(params))
+    val (filterData, _) = futureResult(parseFilters(params))
 
     filterData should be(expData)
   }
@@ -319,7 +334,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val args = Map(FilterManager.ArgCommonFilter -> List("min-level:2", "max-level:4"),
       FilterManager.ArgRemoveFilter -> List(InvalidExpression, "max-level=3"))
 
-    val futParsed = FilterManager.parseFilters(args)
+    val futParsed = parseFilters(args)
     expectParsingFailure(futParsed, InvalidExpression)
   }
 
@@ -354,7 +369,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val invalidTypes = List("unknown_type", "other_unknown_type")
     val args = Map(FilterManager.ArgActionFilter -> ("actionCreate" :: invalidTypes))
 
-    expectParsingFailure(FilterManager.parseFilters(args), invalidTypes.mkString(","))
+    expectParsingFailure(parseFilters(args), invalidTypes.mkString(","))
   }
 
   it should "parse a simple exclude filter expression" in {
@@ -471,6 +486,6 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val Expression = "date-before:9999-99-99T99:99:99"
     val args = Map(FilterManager.ArgCommonFilter -> List(Expression))
 
-    expectParsingFailure(FilterManager.parseFilters(args), Expression)
+    expectParsingFailure(parseFilters(args), Expression)
   }
 }

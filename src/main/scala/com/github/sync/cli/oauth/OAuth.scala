@@ -65,8 +65,8 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
   override protected def runApp(args: Array[String]): Future[String] = {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
     (for {params <- ParameterManager.parseParameters(args)
-          (cmdConf, params2) <- OAuthParameterManager.extractCommandConfig(params)
-          _ <- ParameterManager.checkParametersConsumed(params2)
+          (cmdConf, paramCtx) <- OAuthParameterManager.extractCommandConfig(params)
+          _ <- Future.fromTry(ParameterManager.checkParametersConsumed(paramCtx))
           result <- executeCommand(cmdConf)
           } yield result) recover {
       case e: ParameterExtractionException =>

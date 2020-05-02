@@ -54,7 +54,7 @@ object ParameterManagerSpec {
   /** Another test Parameters object representing updated parameters. */
   private val NextParameters = Parameters(Map("bar" -> List("v2", "v3")), Set("x", "y"))
 
-  /** A test PaameterContext object. */
+  /** A test ParameterContext object. */
   private val TestContext = ParameterContext(TestParameters,
     new CliHelpGenerator.CliHelpContext(Map.empty, SortedSet.empty, None, Nil),
     DummyConsoleReader)
@@ -191,7 +191,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val failure1 = ExtractionFailure(Key, "Message 1", TestContext)
     val failure2 = ExtractionFailure(Key + "_other", "Other message", TestContext)
     val ExpMsg = failure1.key + ": " + failure1.message + ", " +
-    failure2.key + ": " + failure2.message
+      failure2.key + ": " + failure2.message
 
     val exception = ParameterExtractionException(List(failure1, failure2))
     exception.getMessage should be(ExpMsg)
@@ -756,5 +756,34 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val res = ParameterManager.tryProcessor(processor, TestParametersWithInputs)
     checkExtractionException(expectExtractionException(res), expKey = ParameterManager.InputOption,
       expParams = TestParametersWithInputs.parametersMap)("at most 2")
+  }
+
+  it should "check whether all parameters have been consumed" in {
+    val Key2 = "otherKey1"
+    val Key3 = "otherKey2"
+    val parameters = Parameters(TestParameters.parametersMap +
+      (Key2 -> List("v1", "v2")) + (Key3 -> List("v3")), Set(Key, Key2, Key3))
+    val context = TestContext.copy(parameters = parameters)
+
+    val validatedContext = ParameterManager.checkParametersConsumed(context)
+    validatedContext should be(Success(context))
+  }
+
+  it should "detect parameters that have not been consumed" in {
+    val Key2 = "otherKey1"
+    val Key3 = "otherKey2"
+    val parameters = Parameters(TestParameters.parametersMap +
+      (Key2 -> List("v1", "v2")) + (Key3 -> List("v3")), Set(Key))
+    val context = TestContext.copy(parameters = parameters)
+
+    val validatedContext = ParameterManager.checkParametersConsumed(context)
+    validatedContext match {
+      case Failure(exception: ParameterExtractionException) =>
+        exception.failures should have size 2
+        exception.failures.map(_.key) should contain only(Key2, Key3)
+        exception.failures.forall(_.message.contains("Unexpected")) shouldBe true
+        exception.failures.forall(_.context == context) shouldBe true
+      case r => fail("Unexpected result: " + r)
+    }
   }
 }

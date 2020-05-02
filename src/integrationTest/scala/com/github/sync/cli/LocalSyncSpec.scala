@@ -93,6 +93,13 @@ class LocalSyncSpec extends BaseSyncSpec {
     output should not include "src-" + SyncStructureConfig.PropDavDeleteBeforeOverride
   }
 
+  it should "generate a usage and error message if unsupported options are passed in" in {
+    val options = Array("src/directory", "dst/targetFolder", "--unknown", "yes",
+      "--filter", "exclude:*.tmp", "--foo", "bar")
+
+    checkSyncOutput(options, "unknown", "foo", "Unexpected")
+  }
+
   it should "apply operations to an alternative target" in {
     val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))

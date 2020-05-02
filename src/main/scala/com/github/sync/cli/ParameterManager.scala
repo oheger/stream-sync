@@ -1109,20 +1109,30 @@ object ParameterManager {
     }
 
   /**
-    * Checks whether all parameters in the given parameters map have been
+    * Checks whether all parameters passed via the command line have been
     * consumed. This is a test to find out whether invalid parameters have been
-    * specified. During parameter processing, parameters that are recognized and
-    * processed by sub systems are removed from the map with parameters. So if
-    * there are remaining parameters, this means that the user has specified
-    * unknown or superfluous ones. In this case, parameter validation should
-    * fail and no action should be executed.
+    * specified. During parameter extraction, all parameters that have been
+    * accessed are marked. If at the end parameters remain that are not marked,
+    * this means that the user has specified unknown or superfluous ones. In
+    * this case, parameter validation should fail and no action should be
+    * executed by the application. In case, this function detects unused
+    * parameters, it returns a ''Failure'' with a
+    * [[ParameterExtractionException]]; this exception contains failures for
+    * all the unused keys found. Otherwise, result is a ''Success'' with the
+    * same ''ParameterContext''.
     *
-    * @param params the object with parameters to be checked
-    * @return a future with the passed in map if the check succeeds
+    * @param paramContext the ''ParameterContext'', updated by all extract
+    *                     operations
+    * @return a ''Try'' with the validated ''ParameterContext''
     */
-  def checkParametersConsumed(params: Parameters): Future[Parameters] =
-    if (params.allKeysAccessed) Future.successful(params)
-    else Future.failed(new IllegalArgumentException("Found unexpected parameters: " + params.notAccessedKeys))
+  def checkParametersConsumed(paramContext: ParameterContext): Try[ParameterContext] =
+    if(paramContext.parameters.allKeysAccessed) Success(paramContext)
+    else {
+      val failures = paramContext.parameters.notAccessedKeys map { key =>
+        ExtractionFailure(key, "Unexpected parameter", paramContext)
+      }
+      Failure(ParameterExtractionException(failures.toList))
+    }
 
   /**
     * Helper function to create an object representation for a set of
