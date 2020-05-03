@@ -26,7 +26,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.collection.SortedSet
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Random, Success, Try}
 
 object ParameterManagerSpec {
   /** A test option key. */
@@ -263,6 +263,13 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       expParams = TestParameters.parametersMap)("java.io.IOException - " + exception.getMessage)
   }
 
+  it should "handle a ParameterExtractionException thrown within a Try in a special way" in {
+    val exception = ParameterExtractionException(ExtractionFailure(Key, "Some error", TestContext))
+
+    val triedResult = ParameterManager.paramTry[String](TestContext, Key)(throw exception)
+    expectExtractionException(triedResult) should be theSameInstanceAs exception
+  }
+
   it should "provide a constant processor" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val processor = ParameterManager.constantProcessor(ProcessorResult)
@@ -403,6 +410,39 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
     next.parameters should be(NextParameters)
     checkExtractionException(expectExtractionException(res))(classOf[NumberFormatException].getName)
+  }
+
+  it should "provide a mapping processor that passes the ParameterContext to the mapping function" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val IntValues = List(17, 21, 44, 127)
+    val StrValues = IntValues map (_.toString)
+    val Result: OptionValue[Int] = Success(IntValues)
+    val proc = testProcessor(Result)
+    val processor = ParameterManager.mappedWithContext(proc) { (i, ctx) =>
+      val res = i.toString
+      val nextHelpCtx = ctx.helpContext.addOption(res, None)
+      (res, ctx.copy(helpContext = nextHelpCtx))
+    }
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.parameters should be(NextParameters)
+    res should be(Success(StrValues))
+    next.helpContext.options.keys should contain allOf(StrValues.head, StrValues.tail.head, StrValues.drop(2): _*)
+  }
+
+  it should "provide a mapping processor that collects multiple mapping errors" in {
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val InvalidValues = List("xy", "noNumber", "1234abc")
+    val ValidNumbers = List("17", "21", "44", "127")
+    val random = new Random
+    val Values = random.shuffle(ValidNumbers ::: InvalidValues)
+    val Result: OptionValue[String] = Success(Values)
+    val proc = testProcessor(Result)
+    val processor = ParameterManager.mapped(proc)(_.toInt)
+
+    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    next.parameters should be(NextParameters)
+    checkExtractionException(expectExtractionException(res))(InvalidValues: _*)
   }
 
   it should "provide a mapping processor with fallbacks if the value is defined" in {

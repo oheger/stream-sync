@@ -1006,10 +1006,48 @@ object ParameterManager {
     */
   def mapped[A, B](proc: CliProcessor[OptionValue[A]])(f: A => B):
   CliProcessor[OptionValue[B]] =
-    proc.mapWithContext((triedResult, context) => {
-      val res = triedResult.flatMap(o => paramTry(context, proc.key)(o.map(f)))
-      (res, context)
-    })
+    mappedWithContext(proc) { (a, context) =>
+      (f(a), context)
+    }
+
+  /**
+    * Returns a processor that modifies the result of another processor by
+    * applying a mapping function that has access to the current
+    * ''ParameterContext''. This function is analogous to ''mapped()'', but it
+    * expects a mapping function that is passed in a ''ParameterContext'' and
+    * returns an updated one.
+    *
+    * @param proc the processor to be decorated
+    * @param f    the mapping function to be applied
+    * @tparam A the original result type
+    * @tparam B the mapped result type
+    * @return the processor applying the mapping function
+    */
+  def mappedWithContext[A, B](proc: CliProcessor[OptionValue[A]])(f: (A, ParameterContext) => (B, ParameterContext)):
+  CliProcessor[OptionValue[B]] =
+    proc.mapWithContext { (triedResult, context) => {
+      val mappedResult = triedResult.map(o => {
+        val mappingResult = o.foldRight((context, List.empty[B], List.empty[ExtractionFailure])) { (a, t) =>
+          paramTry(t._1, proc.key)(f(a, t._1)) match {
+            case Success((b, nextCtx)) =>
+              (nextCtx, b :: t._2, t._3)
+            case f@Failure(_) =>
+              (t._1, t._2, collectErrorMessages(f) ::: t._3)
+          }
+        }
+        if (mappingResult._3.nonEmpty) {
+          val errMsg = mappingResult._3.map(_.message).mkString(", ")
+          (Failure[List[B]](ParameterExtractionException(mappingResult._3.head.copy(message = errMsg))), context)
+        } else (Success(mappingResult._2), mappingResult._1)
+      })
+
+      mappedResult match {
+        case Success(res) => res
+        case Failure(exception) =>
+          (Failure(exception), context)
+      }
+    }
+    }
 
   /**
     * Returns a processor that combines a map operation with applying constant
@@ -1098,14 +1136,11 @@ object ParameterManager {
     * @return the processor doing the enum mapping
     */
   def asEnum[A, B](proc: CliProcessor[OptionValue[A]])(fMap: A => Option[B]): CliProcessor[OptionValue[B]] =
-    proc mapWithContext { (optionValue, context) =>
-      val res = optionValue.map(values => values map { v =>
-        fMap(v) match {
-          case Some(value) => value
-          case None => throw paramException(context, proc.key, s"Invalid enum value: $v")
-        }
-      })
-      (res, context)
+    mappedWithContext(proc) { (res, context) =>
+      fMap(res) match {
+        case Some(value) => (value, context)
+        case None => throw paramException(context, proc.key, s"Invalid enum value: $res")
+      }
     }
 
   /**
@@ -1126,7 +1161,7 @@ object ParameterManager {
     * @return a ''Try'' with the validated ''ParameterContext''
     */
   def checkParametersConsumed(paramContext: ParameterContext): Try[ParameterContext] =
-    if(paramContext.parameters.allKeysAccessed) Success(paramContext)
+    if (paramContext.parameters.allKeysAccessed) Success(paramContext)
     else {
       val failures = paramContext.parameters.notAccessedKeys map { key =>
         ExtractionFailure(key, "Unexpected parameter", paramContext)
@@ -1642,8 +1677,9 @@ object ParameterManager {
     *         with a meaningful exception
     */
   def paramTry[T](context: ParameterContext, key: String)(f: => T): Try[T] =
-    Try(f) recover {
-      case ex => throw paramException(context, key, ex.getMessage, ex)
+    Try(f) recoverWith {
+      case pex: ParameterExtractionException => Failure(pex)
+      case ex => Failure(paramException(context, key, ex.getMessage, ex))
     }
 
   /**
