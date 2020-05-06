@@ -20,15 +20,12 @@ import java.time.{Instant, LocalDateTime, ZoneId}
 
 import com.github.sync.SyncTypes._
 import com.github.sync._
-import com.github.sync.cli.CliHelpGenerator.CliHelpContext
-import com.github.sync.cli.FilterManager.{ArgActionFilter, ArgCommonFilter, ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter, SyncFilterData, SyncOperationFilter}
-import com.github.sync.cli.ParameterManager.{ParameterContext, Parameters}
+import com.github.sync.cli.FilterManager._
+import com.github.sync.cli.ParameterManager.{ParameterContext, ParameterExtractionException, Parameters}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.collection.SortedSet
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import scala.util.{Failure, Success, Try}
 
 object FilterManagerSpec {
   /**
@@ -77,17 +74,14 @@ object FilterManagerSpec {
     SyncOperation(element, action, level, element.originalUri, element.originalUri)
 
   /**
-    * Helper function to start a parse operation for filter parameters on the
+    * Helper function to run a parse operation for filter parameters on the
     * arguments specified.
     *
     * @param args the command line arguments
-    * @return a future with the result of the parse operation
+    * @return the result of the parse operation
     */
-  private def parseFilters(args: Parameters): Future[(SyncFilterData, ParameterContext)] = {
-    val helpContext = new CliHelpContext(Map.empty, SortedSet.empty, None, Nil)
-    val paramContext = ParameterContext(args, helpContext, DummyConsoleReader)
-    FilterManager.parseFilters(paramContext)
-  }
+  private def parseFilters(args: Parameters): Try[(SyncFilterData, ParameterContext)] =
+    ParameterManager.tryProcessor(FilterManager.filterDataProcessor, args)(DefaultConsoleReader)
 }
 
 /**
@@ -98,16 +92,49 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
   import FilterManagerSpec._
 
   /**
-    * Expects a failed future from a parsing operation. It is checked whether
-    * the future is actually failed with an ''IllegalArgumentException'' that
-    * has a specific error message.
+    * Parses command line options related to filters and expects a success
+    * result. The result and the updated parameter context are returned.
     *
-    * @param future the future to be checked
-    * @param msg    text to be expected in the exception message
+    * @param args the command line arguments
+    * @return the result of the parse operation
     */
-  private def expectParsingFailure(future: Future[_], msg: String): Unit = {
-    val exception = expectFailedFuture[IllegalArgumentException](future)
-    exception.getMessage should include(msg)
+  private def parseFiltersSuccess(args: Parameters): (SyncFilterData, ParameterContext) =
+    parseFilters(args) match {
+      case Success(value) => value
+      case r => fail("Unexpected parse result: " + r)
+    }
+
+  /**
+    * Expects a failed result from a parsing operation. The exception of the
+    * expected type is extracted and returned.
+    *
+    * @param result the result to be checked
+    * @return the extracted exception
+    */
+  private def expectParsingFailure(result: Try[_]): ParameterExtractionException =
+    result match {
+      case Failure(exception: ParameterExtractionException) =>
+        exception
+      case r => fail("Unexpected result: " + r)
+    }
+
+  /**
+    * Expects a failed result from a parsing operation and does some checks on
+    * the exception. It is checked whether the tried result is actually failed
+    * with a ''ParameterExtractionException'' that has a specific error
+    * message and some default properties.
+    *
+    * @param result the result to be checked
+    * @param msg    texts to be expected in the exception message
+    * @return the extracted exception
+    */
+  private def expectAndCheckParsingFailure(result: Try[_], msg: String*): ParameterExtractionException = {
+    val exception = expectParsingFailure(result)
+    exception.failures should have size 1
+    msg foreach { m =>
+      exception.getMessage should include(m)
+    }
+    exception
   }
 
   /**
@@ -116,21 +143,9 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * @param expression the expression to be checked
     */
   private def expectInvalidFilterExpression(expression: String): Unit = {
-    val futResult = FilterManager.parseFilterOption(List(expression), ActionOverride, Nil)
-    expectParsingFailure(futResult, expression)
-  }
-
-  /**
-    * Checks whether a filter accepts and rejects operations as expected.
-    *
-    * @param filter     the filter to be checked
-    * @param opAccepted the operation to be accepted
-    * @param opRejected the operation to be rejected
-    */
-  private def checkFilter(filter: SyncOperationFilter, opAccepted: => SyncOperation,
-                          opRejected: => SyncOperation): Unit = {
-    filter(opAccepted) shouldBe true
-    filter(opRejected) shouldBe false
+    val args = Map(FilterManager.ArgOverrideFilter -> List(expression))
+    val exception = expectAndCheckParsingFailure(parseFilters(args))
+    exception.failures.head.key should be(FilterManager.ArgOverrideFilter)
   }
 
   /**
@@ -139,22 +154,15 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * given single expression. Then it invokes the result with the check
     * operations.
     *
-    * @param expression    the filter expression to be parsed
-    * @param opAccepted    the operation to be accepted
-    * @param opRejected    the operation to be rejected
-    * @param commonFilters the list with common filters
+    * @param expression the filter expression to be parsed
+    * @param opAccepted the operation to be accepted
+    * @param opRejected the operation to be rejected
     * @return the resulting list with parsed filters
     */
   private def checkParsedFilterExpression(expression: String, opAccepted: => SyncOperation,
-                                          opRejected: => SyncOperation,
-                                          commonFilters: List[SyncOperationFilter] = Nil):
-  List[SyncOperationFilter] = {
-    val result = futureResult(FilterManager.parseFilterOption(List(expression), ActionCreate,
-      commonFilters))
-    val filterExpressions = result(ActionCreate)
-    val filter = filterExpressions.head
-    checkFilter(filter, opAccepted, opRejected)
-    filterExpressions
+                                          opRejected: => SyncOperation): Unit = {
+    val argsMap = Map(FilterManager.ArgCreateFilter -> List(expression))
+    checkParseFilterArguments(argsMap, List(opAccepted), List(opRejected))
   }
 
   /**
@@ -162,7 +170,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * method processes the given map with filter expressions. It then checks
     * whether the resulting filter data accepts and rejects the expected
     * options. It is also checked whether all filter parameters have been
-    * removed from the parameters map.
+    * marked as accessed.
     *
     * @param filterArgs  the map with filter arguments
     * @param acceptedOps options expected to be accepted
@@ -173,7 +181,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
                                         rejectedOps: List[SyncOperation]): Unit = {
     val otherParam = "foo" -> List("bar")
     val args = filterArgs + otherParam
-    val (filterData, nextContext) = futureResult(parseFilters(args))
+    val (filterData, nextContext) = parseFiltersSuccess(args)
     acceptedOps foreach (op => FilterManager.applyFilter(op, filterData) shouldBe true)
     rejectedOps foreach (op => FilterManager.applyFilter(op, filterData) shouldBe false)
     nextContext.parameters.accessedParameters should contain only(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter,
@@ -181,20 +189,16 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
   }
 
   "FilterManager" should "parse an empty list of filter definitions" in {
-    val result = futureResult(FilterManager.parseFilterOption(Nil, ActionCreate, Nil))
+    val expData = SyncFilterData(Map(ActionCreate -> Nil, ActionOverride -> Nil,
+      ActionRemove -> Nil))
+    val params = Parameters(Map.empty, Set.empty)
+    val (filterData, _) = parseFiltersSuccess(params)
 
-    result should be(Map(ActionCreate -> Nil))
+    filterData should be(expData)
   }
 
-  it should "return a failed future for an unknown filter expression" in {
+  it should "return a failure for an unknown filter expression" in {
     expectInvalidFilterExpression("not supported filter expression")
-  }
-
-  it should "add the common filters to the result when parsing filter expressions" in {
-    val commonFilters = List[SyncOperationFilter](_ => true, op => op.level == 0)
-    val result = FilterManager.parseFilterOption(Nil, ActionRemove, commonFilters)
-
-    futureResult(result) should be(Map(ActionRemove -> commonFilters))
   }
 
   it should "parse a min-level filter expression" in {
@@ -215,40 +219,23 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     expectInvalidFilterExpression("min-level:nonNumber")
   }
 
-  it should "add the common filters to parsed filter expressions" in {
-    val Expression = "min-level:1"
-    val filter1: SyncOperationFilter = _ => true
-    val filter2: SyncOperationFilter = op => op.level == 0
-    val commonFilters = List[SyncOperationFilter](filter1, filter2)
-    val opAccepted = createOperation(ActionCreate, 1)
-
-    val allFilters = checkParsedFilterExpression(Expression, opAccepted,
-      opAccepted.copy(level = 0), commonFilters)
-    allFilters should contain allOf(filter1, filter2)
-  }
-
   it should "parse a max-level filter expression" in {
     val Expression = "max-level:5"
-    val opAccepted = createOperation(ActionRemove, 5)
-    val opRejected = createOperation(ActionRemove, 6)
+    val opAccepted = createOperation(ActionCreate, 5)
+    val opRejected = createOperation(ActionCreate, 6)
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
-  it should "parse all filter expressions" in {
-    val commonFilter: SyncOperationFilter = op => op.element.relativeUri == "/foo"
-    val Expression1 = "min-level:1"
-    val Expression2 = "max-level:4"
-    val opAcceptedMin = createOperation(ActionRemove, 1)
-    val opRejectedMin = createOperation(ActionRemove, 0)
-    val opAcceptedMax = createOperation(ActionRemove, 4)
-    val opRejectedMax = createOperation(ActionRemove, 5)
+  it should "add the common filters to parsed filter expressions" in {
+    val params = Map(FilterManager.ArgOverrideFilter -> List("min-level:2"),
+      FilterManager.ArgCommonFilter -> List("max-level:3"))
+    val acceptedOps = List(createOperation(ActionOverride, level = 2),
+      createOperation(ActionOverride, level = 3))
+    val rejectedOps = List(createOperation(ActionOverride, level = 1),
+      createOperation(ActionOverride, level = 4))
 
-    val allFilters = futureResult(FilterManager.parseFilterOption(List(Expression1, Expression2),
-      ActionRemove, List(commonFilter)))(ActionRemove)
-    checkFilter(allFilters(1), opAcceptedMin, opRejectedMin)
-    checkFilter(allFilters.head, opAcceptedMax, opRejectedMax)
-    allFilters should contain(commonFilter)
+    checkParseFilterArguments(params, acceptedOps, rejectedOps)
   }
 
   it should "accept operations if no filters are defined" in {
@@ -258,47 +245,31 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
   }
 
   it should "filter out a sync op based on the filter configuration" in {
-    val filterData = SyncFilterData(futureResult(FilterManager.parseFilterOption(
-      List("min-level:3"), ActionOverride, Nil)))
+    val params = Map(ArgOverrideFilter -> List("min-level:3"))
     val op = createOperation(ActionOverride, 2)
 
-    FilterManager.applyFilter(op, filterData) shouldBe false
+    checkParseFilterArguments(params, Nil, List(op))
   }
 
   it should "accept a sync op that matches all filter criteria" in {
-    val Expressions = List("min-level:1", "max-level:2")
-    val filterData = SyncFilterData(futureResult(FilterManager.parseFilterOption(Expressions,
-      ActionOverride, Nil)))
+    val params = Map(ArgOverrideFilter -> List("min-level:1", "max-level:2"))
     val op = createOperation(ActionOverride, 2)
 
-    FilterManager.applyFilter(op, filterData) shouldBe true
+    checkParseFilterArguments(params, List(op), Nil)
   }
 
   it should "only accept a sync condition if all filter criteria are fulfilled" in {
-    val Expressions = List("min-level:1", "max-level:2")
-    val filterData = SyncFilterData(futureResult(FilterManager.parseFilterOption(Expressions,
-      ActionOverride, Nil)))
+    val params = Map(ArgOverrideFilter -> List("min-level:1", "max-level:2"))
     val op = createOperation(ActionOverride, 3)
 
-    FilterManager.applyFilter(op, filterData) shouldBe false
+    checkParseFilterArguments(params, Nil, List(op))
   }
 
   it should "take the correct action into account when accepting sync operations" in {
-    val Expressions = List("min-level:1", "max-level:2")
-    val filterData = SyncFilterData(futureResult(FilterManager.parseFilterOption(Expressions,
-      ActionOverride, Nil)))
+    val params = Map(ArgOverrideFilter -> List("min-level:1", "max-level:2"))
     val op = createOperation(ActionCreate, 3)
 
-    FilterManager.applyFilter(op, filterData) shouldBe true
-  }
-
-  it should "parse arguments without filter expressions" in {
-    val expData = SyncFilterData(Map(ActionCreate -> Nil, ActionOverride -> Nil,
-      ActionRemove -> Nil))
-    val params = Parameters(Map.empty, Set.empty)
-    val (filterData, _) = futureResult(parseFilters(params))
-
-    filterData should be(expData)
+    checkParseFilterArguments(params, List(op), Nil)
   }
 
   it should "parse arguments with valid filter expressions" in {
@@ -334,8 +305,8 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val args = Map(FilterManager.ArgCommonFilter -> List("min-level:2", "max-level:4"),
       FilterManager.ArgRemoveFilter -> List(InvalidExpression, "max-level=3"))
 
-    val futParsed = parseFilters(args)
-    expectParsingFailure(futParsed, InvalidExpression)
+    val triedResult = parseFilters(args)
+    expectAndCheckParsingFailure(triedResult, InvalidExpression)
   }
 
   it should "support a filter to disable specific action types" in {
@@ -367,9 +338,17 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
 
   it should "handle invalid action type names in the action type filter" in {
     val invalidTypes = List("unknown_type", "other_unknown_type")
+    val expMessages = invalidTypes.map(t => "action type: " + t)
     val args = Map(FilterManager.ArgActionFilter -> ("actionCreate" :: invalidTypes))
 
-    expectParsingFailure(parseFilters(args), invalidTypes.mkString(","))
+    expectAndCheckParsingFailure(parseFilters(args), expMessages: _*)
+  }
+
+  it should "handle invalid action type names in a single action type filter expression" in {
+    val invalidTypes = "unknown_type,other_unknown_type"
+    val args = Map(FilterManager.ArgActionFilter -> List("actionCreate, " + invalidTypes))
+
+    expectAndCheckParsingFailure(parseFilters(args), "action types: " + invalidTypes)
   }
 
   it should "parse a simple exclude filter expression" in {
@@ -464,9 +443,9 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
 
   it should "support date-after filters without a time" in {
     val Expression = "date-after=2018-08-29"
-    val opAccepted = createOperation(ActionOverride, 0,
+    val opAccepted = createOperation(ActionCreate, 0,
       elementWithTime("ok", toInstant("2018-08-29T00:00:00")))
-    val opRejected = createOperation(ActionOverride, 0,
+    val opRejected = createOperation(ActionCreate, 0,
       elementWithTime("!", toInstant("2018-08-28T23:59:59")))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
@@ -474,9 +453,9 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
 
   it should "support date-before filters without a time" in {
     val Expression = "date-before=2018-08-30"
-    val opAccepted = createOperation(ActionOverride, 0,
+    val opAccepted = createOperation(ActionCreate, 0,
       elementWithTime("ok", toInstant("2018-08-29T23:59:59")))
-    val opRejected = createOperation(ActionOverride, 0,
+    val opRejected = createOperation(ActionCreate, 0,
       elementWithTime("!", toInstant("2018-08-30T00:00:00")))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
@@ -486,6 +465,22 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val Expression = "date-before:9999-99-99T99:99:99"
     val args = Map(FilterManager.ArgCommonFilter -> List(Expression))
 
-    expectParsingFailure(parseFilters(args), Expression)
+    expectAndCheckParsingFailure(parseFilters(args), Expression)
+  }
+
+  it should "collect all invalid filter expressions" in {
+    val InvalidEx1 = "max-level:xy"
+    val InvalidEx2 = "un-supported:true"
+    val InvalidEx3 = "date-before:9999-99-99T99:99:99"
+    val params = Map(FilterManager.ArgCreateFilter -> List("min-level:1", InvalidEx1),
+      FilterManager.ArgOverrideFilter -> List(InvalidEx2, "max-level:5", InvalidEx3),
+      FilterManager.ArgRemoveFilter -> List("min-level:15"))
+
+    val exception = expectParsingFailure(parseFilters(params))
+    val failuresMap = exception.failures.map(f => (f.key, f.message)).toMap
+    failuresMap.keys should contain only(FilterManager.ArgCreateFilter, FilterManager.ArgOverrideFilter)
+    failuresMap(FilterManager.ArgCreateFilter) should include(InvalidEx1)
+    failuresMap(FilterManager.ArgOverrideFilter) should include(InvalidEx2)
+    failuresMap(FilterManager.ArgOverrideFilter) should include(InvalidEx3)
   }
 }

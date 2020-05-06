@@ -23,11 +23,12 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 import com.github.sync.SyncTypes._
-import com.github.sync.cli.ParameterManager.{ParameterContext, Parameters}
+import com.github.sync.cli.ParameterManager.{CliProcessor, OptionValue, ParameterContext}
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
+import scala.util.{Success, Try}
 
 /**
   * A service that supports filtering of sync operations.
@@ -72,23 +73,12 @@ object FilterManager {
     */
   case class SyncFilterData(filters: ActionFilters)
 
-  /** Mapping from filter parameters to action types. */
-  private val ActionFilterParameters = List((ArgCreateFilter, ActionCreate),
-    (ArgOverrideFilter, ActionOverride), (ArgRemoveFilter, ActionRemove))
-
-  /** A set with the names of all parameters supported by this service. */
-  private val AllFilterParameters =
-    Set(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter, ArgCommonFilter, ArgActionFilter)
-
   /**
     * A map assigning names of action types to the corresponding type objects.
     * This is used to deactivate specific actions based on filter options.
     */
   private val ActionTypeNameMapping: Map[String, SyncAction] = Map("actioncreate" -> ActionCreate,
     "actionoverride" -> ActionOverride, "actionremove" -> ActionRemove)
-
-  /** A list with all defined action type names. */
-  private lazy val ActionTypeList = ActionTypeNameMapping.keys.toList
 
   /** Expression string to parse a numeric filter value. */
   private val DataTypeNumber =
@@ -145,37 +135,10 @@ object FilterManager {
     * @return a future with the extracted ''SyncFilterData'' and the updated
     *         ''ParameterContext''
     */
+  //TODO Remove after all dependencies have been reworked
   def parseFilters(paramCtx: ParameterContext)(implicit ec: ExecutionContext):
-  Future[(SyncFilterData, ParameterContext)] = {
-    val futCleanedMap = markFilterParametersAccessed(paramCtx)
-    val futCommonFilters =
-      parseExpressionsOfFilterOption(paramCtx.parameters.parametersMap.getOrElse(ArgCommonFilter, Nil), Nil)
-    for {cleanedMap <- futCleanedMap
-         commonFilters <- futCommonFilters
-         filterData1 <- parseFiltersPerActionType(paramCtx.parameters, commonFilters)
-         filterData <- parseActionFilter(paramCtx.parameters, filterData1)
-         } yield (SyncFilterData(filterData), cleanedMap)
-  }
-
-  /**
-    * Parses the filter definitions for a single action type. This function
-    * evaluates the supported filter conditions and creates corresponding
-    * filter functions. The results are combined with the common filters and
-    * added to a map keyed by the action type. The parameter with common
-    * filters is useful if the user has provided filters that should be applied
-    * to all action types.
-    *
-    * @param expressions   the filter expressions for the current action type
-    *                      from the command line
-    * @param action        the current action type
-    * @param commonFilters a sequence with common filter definitions
-    * @param ec            the execution context
-    * @return a future with parsed filter definitions
-    */
-  def parseFilterOption(expressions: Iterable[String], action: SyncAction,
-                        commonFilters: List[SyncOperationFilter] = Nil)
-                       (implicit ec: ExecutionContext): Future[ActionFilters] =
-    parseExpressionsOfFilterOption(expressions, commonFilters)(ec) map (lst => Map(action -> lst))
+  Future[(SyncFilterData, ParameterContext)] =
+    Future.successful((SyncFilterData(Map.empty), paramCtx))
 
   /**
     * Applies the given filter data to the specified ''SyncOperation'' and
@@ -196,6 +159,77 @@ object FilterManager {
 
     doApplyFilter(filterData.filters.getOrElse(op.action, Nil))
   }
+
+  /**
+    * Returns a ''CliProcessor'' that extracts all command line options related
+    * to filters and constructs a ''SyncFilterData'' object based on this.
+    *
+    * @return the ''CliProcessor'' for filter options
+    */
+  def filterDataProcessor: CliProcessor[Try[SyncFilterData]] =
+    for {
+      exprCommon <- filterExpressionProcessor(ArgCommonFilter)
+      exprCreate <- filterExpressionProcessor(ArgCreateFilter)
+      exprOverride <- filterExpressionProcessor(ArgOverrideFilter)
+      exprRemove <- filterExpressionProcessor(ArgRemoveFilter)
+      enabledActions <- actionFilterProcessor
+    } yield createSyncFilterData(exprCommon, exprCreate, exprOverride, exprRemove, enabledActions)
+
+  /**
+    * Returns a ''CliProcessor'' that extracts the filter expressions for a
+    * specific action type.
+    *
+    * @param key the key of the action type
+    * @return the processor that extracts the filter expressions for this type
+    */
+  private def filterExpressionProcessor(key: String): CliProcessor[OptionValue[SyncOperationFilter]] =
+    ParameterManager.optionValue(key)
+      .mapTo(parseExpression)
+
+  /**
+    * Returns a ''CliProcessor'' that processes the action types filter. It
+    * returns a set with the types of the actions that are enabled.
+    *
+    * @return the processor to extract the enabled action types
+    */
+  private def actionFilterProcessor: CliProcessor[Try[Set[SyncAction]]] =
+    ParameterManager.optionValue(ArgActionFilter)
+      .mapTo(parseActionNames)
+      .fallback(ParameterManager.constantProcessor(Success(List(ActionTypeNameMapping.values.toSet))))
+      .map { triedSets => triedSets.map(s => s.flatten.toSet) }
+
+  /**
+    * Tries to create a ''SyncFilterData'' object from the passed in
+    * components.
+    *
+    * @param triedCommonFilters   the common filters component
+    * @param triedCreateFilters   the create filters component
+    * @param triedOverrideFilters the override filters component
+    * @param triedRemoveFilters   the remove filters component
+    * @param triedActionFilter    the action filter component
+    * @return a ''Try'' with the ''SyncFilterData''
+    */
+  private def createSyncFilterData(triedCommonFilters: OptionValue[SyncOperationFilter],
+                                   triedCreateFilters: OptionValue[SyncOperationFilter],
+                                   triedOverrideFilters: OptionValue[SyncOperationFilter],
+                                   triedRemoveFilters: OptionValue[SyncOperationFilter],
+                                   triedActionFilter: Try[Set[SyncAction]]): Try[SyncFilterData] =
+    ParameterManager.createRepresentation(triedCommonFilters, triedCreateFilters, triedOverrideFilters,
+      triedRemoveFilters, triedActionFilter) {
+      (commonFilters, createFilters, overrideFilters, removeFilters, actionFilter) =>
+        val commonsList = commonFilters.toList
+
+        def createMapping(action: SyncAction, filters: Iterable[SyncOperationFilter]):
+        (SyncAction, List[SyncOperationFilter]) = {
+          val resFilters = filters.toList ::: commonsList
+          action -> resFilters
+        }
+
+        val filtersMap = Map(createMapping(ActionCreate, createFilters),
+          createMapping(ActionOverride, overrideFilters),
+          createMapping(ActionRemove, removeFilters))
+        SyncFilterData(applyActionFilter(actionFilter, filtersMap))
+    }
 
   /**
     * Tries to transform the given expression string into a filter function. If
@@ -294,93 +328,39 @@ object FilterManager {
       .replace("*", "\\E.*\\Q")).r
 
   /**
-    * Parses the filter parameters for all action types and returns a map with
-    * all filters per action.
+    * Adds the filter for enabled/disabled action types to the map with
+    * filters. For each action type that is not contained in the set of enabled
+    * actions, a reject filter is put in front of the filters list.
     *
-    * @param args          the map with all arguments
-    * @param commonFilters a sequence with common filter definitions
-    * @param ec            the execution context
-    * @return a future with the parsed parameters for action filters
+    * @param enabledActionTypes a set with action types that are enabled
+    * @param filters            the current map with filters per action type
+    * @return the resulting map with action filters
     */
-  private def parseFiltersPerActionType(args: Parameters,
-                                        commonFilters: List[SyncOperationFilter])
-                                       (implicit ec: ExecutionContext): Future[ActionFilters] = {
-    Future.sequence(ActionFilterParameters map { t =>
-      parseFilterOption(args.parametersMap.getOrElse(t._1, Nil), t._2, commonFilters)
-    }) map (lst => lst.reduce(_ ++ _))
-  }
-
-  /**
-    * Parses the given list of filter expressions and converts it to a list of
-    * filter functions.
-    *
-    * @param expressions   the filter expressions to be parsed
-    * @param commonFilters a sequence with common filter definitions
-    * @param ec            the execution context
-    * @return a future with the parsed filter functions
-    */
-  private def parseExpressionsOfFilterOption(expressions: Iterable[String],
-                                             commonFilters: List[SyncOperationFilter])
-                                            (implicit ec: ExecutionContext):
-  Future[List[SyncOperationFilter]] = Future {
-    expressions.foldLeft(commonFilters) { (filters, expr) =>
-      parseExpression(expr) :: filters
-    }
-  }
-
-  /**
-    * Evaluates filter options to disable/enable specific actions. For all
-    * action types that are disabled a condition is added to their list of
-    * filters that always rejects sync operations.
-    *
-    * @param args    the map with command line arguments
-    * @param filters the action filters constructed so far
-    * @return the updated map of action filters
-    */
-  private def parseActionFilter(args: Parameters,
-                                filters: ActionFilters)
-                               (implicit ec: ExecutionContext): Future[ActionFilters] = Future {
-    val enabledActionTypes = extractEnabledActionTypes(args)
+  private def applyActionFilter(enabledActionTypes: Set[SyncAction], filters: ActionFilters): ActionFilters =
     filters.map { e =>
       e._1 ->
         (if (!enabledActionTypes.contains(e._1)) RejectFilter :: e._2
         else e._2)
     }
-  }
 
   /**
-    * Extracts the action types that are enabled for the current sync process.
-    * A validation is performed as well; unsupported action types cause an
-    * exception (causing the caller's future to fail).
+    * Converts a string with action filters to a corresponding set with the
+    * action types that are enabled.
     *
-    * @param args the map with command line arguments
-    * @return a set with all enabled action types
+    * @param actions the string value of the action filter
+    * @return the set with enabled action types
     */
-  private def extractEnabledActionTypes(args: Parameters): Set[SyncAction] = {
-    val actionTypeNames = args.parametersMap.getOrElse(ArgActionFilter, ActionTypeList)
-      .flatMap(_.split(ActionTypeSeparator))
+  private def parseActionNames(actions: String): Set[SyncAction] = {
+    val actionTypeNames = actions.split(ActionTypeSeparator)
       .map(_.trim.toLowerCase(Locale.ROOT))
     val invalidActionTypes = actionTypeNames filterNot ActionTypeNameMapping.contains
     if (invalidActionTypes.nonEmpty) {
-      throw new IllegalArgumentException("Invalid action types: " +
-        invalidActionTypes.mkString(ActionTypeSeparator))
+      val plural = if (invalidActionTypes.length > 1) "s" else ""
+      throw new IllegalArgumentException(
+        s"Invalid action type$plural: ${invalidActionTypes.mkString(ActionTypeSeparator)}")
     }
     actionTypeNames.map(ActionTypeNameMapping(_))
       .toSet
-  }
-
-  /**
-    * Marks all parameters supported by the filter manager as accessed in the
-    * given ''ParameterContext'' object.
-    *
-    * @param paramCtx the original ''ParameterContext''
-    * @return a future with the updated ''ParameterContext''
-    */
-  private def markFilterParametersAccessed(paramCtx: ParameterContext)
-                                          (implicit ec: ExecutionContext):
-  Future[ParameterContext] = Future {
-    val updatedParameters = paramCtx.parameters keysAccessed AllFilterParameters
-    paramCtx.copy(parameters = updatedParameters)
   }
 
   /**
