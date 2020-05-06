@@ -24,9 +24,10 @@ import akka.http.scaladsl.model.Uri
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.AsyncTestHelper
+import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.SyncComponentsFactory.SourceComponentsFactory
-import com.github.sync.cli.SyncParameterManager.SyncConfig
+import com.github.sync.cli.SyncParameterManager.{CryptConfig, SyncConfig}
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
 import com.github.sync.crypt.Secret
 import com.github.sync.http._
@@ -82,13 +83,17 @@ object SyncComponentsFactorySpec {
     * @return the resulting ''SyncConfig''
     */
   private def syncConfig(optSrcUri: Option[String] = None, optSrcConfig: Option[StructureConfig] = None,
-                         optDstUri: Option[String] = None, optDstConfig: Option[StructureConfig] = None): SyncConfig =
+                         optDstUri: Option[String] = None, optDstConfig: Option[StructureConfig] = None):
+  SyncConfig = {
+    val cryptConfig = CryptConfig(srcPassword = None, dstPassword = None,
+      srcCryptMode = SyncParameterManager.CryptMode.None, dstCryptMode = SyncParameterManager.CryptMode.None,
+      cryptCacheSize = 17)
     SyncConfig(srcUri = optSrcUri.getOrElse("/source"), srcConfig = optSrcConfig.getOrElse(TestStructureConfig),
       dstUri = optDstUri.getOrElse("/target"), dstConfig = optDstConfig.getOrElse(TestStructureConfig),
       applyMode = SyncParameterManager.ApplyModeTarget("uri"), timeout = TestTimeout, logFilePath = None,
-      syncLogPath = None, ignoreTimeDelta = None, srcPassword = None, dstPassword = None,
-      srcCryptMode = SyncParameterManager.CryptMode.None, dstCryptMode = SyncParameterManager.CryptMode.None,
-      cryptCacheSize = 17, opsPerSecond = None)
+      syncLogPath = None, ignoreTimeDelta = None, opsPerSecond = None, cryptConfig = cryptConfig,
+      filterData = SyncFilterData(Map.empty))
+  }
 }
 
 /**

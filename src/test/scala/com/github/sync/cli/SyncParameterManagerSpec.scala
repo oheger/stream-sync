@@ -23,7 +23,7 @@ import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.cli.ParameterManager.{ParameterExtractionException, Parameters}
-import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptMode}
+import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptConfig, CryptMode}
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.http.NoAuth
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
@@ -440,13 +440,12 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "return correct default options related to encryption" in {
+    val DefCryptConfig = CryptConfig(srcPassword = None, dstPassword = None,
+      srcCryptMode = CryptMode.None, dstCryptMode = CryptMode.None,
+      cryptCacheSize = SyncParameterManager.DefaultCryptCacheSize)
     val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
 
-    config.srcPassword should be(None)
-    config.srcCryptMode shouldBe CryptMode.None
-    config.dstPassword should be(None)
-    config.dstCryptMode shouldBe CryptMode.None
-    config.cryptCacheSize should be(SyncParameterManager.DefaultCryptCacheSize)
+    config.cryptConfig should be(DefCryptConfig)
   }
 
   it should "handle options related to encryption" in {
@@ -459,7 +458,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (SyncParameterManager.DestCryptModeOption -> List("FilesAndNAMEs")) +
       (SyncParameterManager.CryptCacheSizeOption -> List(CacheSize.toString))
 
-    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val (syncConfig, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
+    val config = syncConfig.cryptConfig
     config.srcPassword should be(Some(SrcPwd))
     config.dstPassword should be(Some(DstPwd))
     config.srcCryptMode shouldBe CryptMode.Files
@@ -508,8 +508,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
     val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap)(consoleReader = reader,
       ec = system.dispatcher))
-    config.srcPassword should be(Some(SrcPwd))
-    config.dstPassword should be(Some(DstPwd))
+    config.cryptConfig.srcPassword should be(Some(SrcPwd))
+    config.cryptConfig.dstPassword should be(Some(DstPwd))
   }
 
   it should "handle a crypt cache size below the allowed minimum" in {

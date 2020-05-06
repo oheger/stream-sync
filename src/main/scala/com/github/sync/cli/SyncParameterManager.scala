@@ -20,6 +20,7 @@ import java.nio.file.Path
 import java.util.Locale
 
 import akka.util.Timeout
+import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.{CliProcessor, ParameterContext, Parameters, SingleOptionValue}
 import com.github.sync.cli.SyncStructureConfig.StructureConfig
 
@@ -257,6 +258,24 @@ object SyncParameterManager {
   }
 
   /**
+    * A class that combines the properties related to encryption during a sync
+    * process.
+    *
+    * @param srcPassword    an option with the password for the sync source;
+    *                       if set, files from the source are encrypted
+    * @param srcCryptMode   the crypt mode for the source structure
+    * @param dstPassword    an option with the password for the sync dest;
+    *                       if set, files written to dest get encrypted
+    * @param dstCryptMode   the crypt mode for the destination structure
+    * @param cryptCacheSize the size of the cache for encrypted names
+    */
+  case class CryptConfig(srcPassword: Option[String],
+                         srcCryptMode: CryptMode.Value,
+                         dstPassword: Option[String],
+                         dstCryptMode: CryptMode.Value,
+                         cryptCacheSize: Int)
+
+  /**
     * A class that holds the configuration options for a sync process.
     *
     * An instance of this class is created from the command line options passed
@@ -273,15 +292,10 @@ object SyncParameterManager {
     *                        operations to be executed
     * @param ignoreTimeDelta optional threshold for a time difference between
     *                        two files that should be ignored
-    * @param srcPassword     an option with the password for the sync source;
-    *                        if set, files from the source are encrypted
-    * @param srcCryptMode    the crypt mode for the source structure
-    * @param dstPassword     an option with the password for the sync dest;
-    *                        if set, files written to dest get encrypted
-    * @param dstCryptMode    the crypt mode for the destination structure
-    * @param cryptCacheSize  the size of the cache for encrypted names
+    * @param cryptConfig     the configuration related to encryption
     * @param opsPerSecond    optional restriction for the number of sync
     *                        operations per second
+    * @param filterData      an object with information about filters
     */
   case class SyncConfig(srcUri: String,
                         dstUri: String,
@@ -292,12 +306,9 @@ object SyncParameterManager {
                         logFilePath: Option[Path],
                         syncLogPath: Option[Path],
                         ignoreTimeDelta: Option[Int],
-                        srcPassword: Option[String],
-                        srcCryptMode: CryptMode.Value,
-                        dstPassword: Option[String],
-                        dstCryptMode: CryptMode.Value,
-                        cryptCacheSize: Int,
-                        opsPerSecond: Option[Int])
+                        cryptConfig: CryptConfig,
+                        opsPerSecond: Option[Int],
+                        filterData: SyncFilterData)
 
   /** Prefix for regular expressions related to the target apply mode. */
   private val RegApplyTargetPrefix = "(?i)TARGET"
@@ -338,13 +349,10 @@ object SyncParameterManager {
     syncLog <- ParameterManager.optionValue(SyncLogOption, Some(SyncLogHelp)).toPath.single
     timeDelta <- ignoreTimeDeltaProcessor()
     opsPerSec <- opsPerSecondProcessor()
-    srcPwd <- cryptPasswordProcessor(SourceCryptModeOption, SourcePasswordOption)
-    dstPwd <- cryptPasswordProcessor(DestCryptModeOption, DestPasswordOption)
-    srcCrypt <- cryptModeProcessor(SourceCryptModeOption)
-    dstCrypt <- cryptModeProcessor(DestCryptModeOption)
-    cacheSize <- cryptCacheSizeProcessor()
+    cryptConf <- cryptConfigProcessor
+    filters <- FilterManager.filterDataProcessor
   } yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, mode, timeout, logFile, syncLog, timeDelta,
-    opsPerSec, srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
+    opsPerSec, cryptConf, filters)
 
   /**
     * Extracts an object with configuration options for the sync process from
@@ -369,21 +377,18 @@ object SyncParameterManager {
     * created. Otherwise, all error messages are collected and returned in a
     * failed ''Try''.
     *
-    * @param triedSrcUri         the source URI component
-    * @param triedDstUri         the dest URI component
-    * @param triedSrcConfig      the source structure config component
-    * @param triedDstConfig      the destination structure config component
-    * @param triedApplyMode      the apply mode component
-    * @param triedTimeout        the timeout component
-    * @param triedLogFile        the log file component
-    * @param triedSyncLog        the sync log component
-    * @param triedTimeDelta      the ignore file time delta component
-    * @param triedOpsPerSec      the ops per second component
-    * @param triedSrcPassword    the source password component
-    * @param triedSrcCryptMode   the source files crypt mode component
-    * @param triedDstPassword    the destination password component
-    * @param triedDstCryptMode   the destination crypt mode component
-    * @param triedCryptCacheSize the crypt cache size component
+    * @param triedSrcUri      the source URI component
+    * @param triedDstUri      the dest URI component
+    * @param triedSrcConfig   the source structure config component
+    * @param triedDstConfig   the destination structure config component
+    * @param triedApplyMode   the apply mode component
+    * @param triedTimeout     the timeout component
+    * @param triedLogFile     the log file component
+    * @param triedSyncLog     the sync log component
+    * @param triedTimeDelta   the ignore file time delta component
+    * @param triedOpsPerSec   the ops per second component
+    * @param triedCryptConfig the component with the crypt config
+    * @param triedFilterData  the component with the filter data
     * @return a ''Try'' with the config
     */
   private def createSyncConfig(triedSrcUri: Try[String],
@@ -396,15 +401,11 @@ object SyncParameterManager {
                                triedSyncLog: Try[Option[Path]],
                                triedTimeDelta: Try[Option[Int]],
                                triedOpsPerSec: Try[Option[Int]],
-                               triedSrcPassword: Try[Option[String]],
-                               triedSrcCryptMode: Try[CryptMode.Value],
-                               triedDstPassword: Try[Option[String]],
-                               triedDstCryptMode: Try[CryptMode.Value],
-                               triedCryptCacheSize: Try[Int]): Try[SyncConfig] =
+                               triedCryptConfig: Try[CryptConfig],
+                               triedFilterData: Try[SyncFilterData]): Try[SyncConfig] =
     ParameterManager.createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
-      triedApplyMode, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedSrcPassword,
-      triedSrcCryptMode, triedDstPassword, triedDstCryptMode, triedCryptCacheSize,
-      triedOpsPerSec)(SyncConfig.apply)
+      triedApplyMode, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedCryptConfig,
+      triedOpsPerSec, triedFilterData)(SyncConfig)
 
   /**
     * Returns a processor that extracts the source URI from the first input
@@ -491,6 +492,20 @@ object SyncParameterManager {
       .single
 
   /**
+    * Returns a processor that extracts the parameters related to cryptography.
+    *
+    * @return the processor for the ''CryptConfig''
+    */
+  private def cryptConfigProcessor: CliProcessor[Try[CryptConfig]] =
+    for {
+      srcPwd <- cryptPasswordProcessor(SourceCryptModeOption, SourcePasswordOption)
+      dstPwd <- cryptPasswordProcessor(DestCryptModeOption, DestPasswordOption)
+      srcCrypt <- cryptModeProcessor(SourceCryptModeOption)
+      dstCrypt <- cryptModeProcessor(DestCryptModeOption)
+      cacheSize <- cryptCacheSizeProcessor()
+    } yield createCryptConfig(srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
+
+  /**
     * Returns a processor that extracts the value of the option for the crypt
     * cache size. The string value is converted to an integer, and some
     * validation is performed.
@@ -525,6 +540,22 @@ object SyncParameterManager {
       .fallback(ParameterManager.consoleReaderValue(keyPwd, password = true))
     ParameterManager.conditionalValue(condProc, pwdProc).single
   }
+
+  /**
+    * Tries to create a ''CryptConfig'' object from the given components.
+    *
+    * @param triedSrcPwd         the source password component
+    * @param triedSrcCryptMode   the source crypt mode component
+    * @param triedDstPwd         the destination password component
+    * @param triedDstCryptMode   the destination crypt mode component
+    * @param triedCryptCacheSize the crypt cache size component
+    * @return a ''Try'' with the ''CryptConfig''
+    */
+  private def createCryptConfig(triedSrcPwd: Try[Option[String]], triedSrcCryptMode: Try[CryptMode.Value],
+                                triedDstPwd: Try[Option[String]], triedDstCryptMode: Try[CryptMode.Value],
+                                triedCryptCacheSize: Try[Int]): Try[CryptConfig] =
+    ParameterManager.createRepresentation(triedSrcPwd, triedSrcCryptMode, triedDstPwd, triedDstCryptMode,
+      triedCryptCacheSize)(CryptConfig)
 
   /**
     * Returns a processor that extracts the timeout from the command line.

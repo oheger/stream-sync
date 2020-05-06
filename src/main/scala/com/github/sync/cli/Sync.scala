@@ -80,12 +80,11 @@ object Sync {
 
     for {
       argsMap <- ParameterManager.parseParameters(args)
-      (config, paramCtx1) <- SyncParameterManager.extractSyncConfig(argsMap)
-      (filterData, paramCtx2) <- FilterManager.parseFilters(paramCtx1)
-      _ <- Future.fromTry(ParameterManager.checkParametersConsumed(paramCtx2))
+      (config, paramCtx) <- SyncParameterManager.extractSyncConfig(argsMap)
+      _ <- Future.fromTry(ParameterManager.checkParametersConsumed(paramCtx))
       srcFactory <- factory.createSourceComponentsFactory(config)
       dstFactory <- factory.createDestinationComponentsFactory(config)
-      result <- runSync(config, filterData, srcFactory, dstFactory)
+      result <- runSync(config, srcFactory, dstFactory)
     } yield result
   }
 
@@ -93,19 +92,18 @@ object Sync {
     * Runs the stream that represents the sync process.
     *
     * @param config     the ''SyncConfig''
-    * @param filterData data about the current filter definition
     * @param srcFactory the factory for creating source components
     * @param dstFactory the factory for creating destination components
     * @param system     the actor system
     * @return a future with information about the result of the process
     */
-  private def runSync(config: SyncConfig, filterData: SyncFilterData,
-                      srcFactory: SourceComponentsFactory, dstFactory: DestinationComponentsFactory)
+  private def runSync(config: SyncConfig, srcFactory: SourceComponentsFactory,
+                      dstFactory: DestinationComponentsFactory)
                      (implicit system: ActorSystem): Future[SyncResult] = {
     import system.dispatcher
     for {
       source <- createSyncSource(config, srcFactory, dstFactory)
-      decoratedSource <- decorateSource(source, config, filterData)
+      decoratedSource <- decorateSource(source, config)
       stage <- createApplyStage(config, srcFactory, dstFactory)
       g <- createSyncStream(decoratedSource, stage, config.logFilePath)
       res <- g.run()
@@ -132,10 +130,11 @@ object Sync {
     case Some(path) =>
       createSyncSourceFromLog(config, path)
     case None =>
-      val srcSource = srcFactory.createSource(createElementSourceFactory(createResultTransformer(config.srcPassword,
-        config.srcCryptMode, config.cryptCacheSize)))
+      val cryptConf = config.cryptConfig
+      val srcSource = srcFactory.createSource(createElementSourceFactory(createResultTransformer(cryptConf.srcPassword,
+        cryptConf.srcCryptMode, cryptConf.cryptCacheSize)))
       val dstSource = dstFactory.createDestinationSource(createElementSourceFactory(
-        createResultTransformer(config.dstPassword, config.dstCryptMode, config.cryptCacheSize)))
+        createResultTransformer(cryptConf.dstPassword, cryptConf.dstCryptMode, cryptConf.cryptCacheSize)))
       Future.successful(createGraphForSyncSource(srcSource, dstSource, config.ignoreTimeDelta getOrElse 1))
   }
 
@@ -164,14 +163,13 @@ object Sync {
     * Applies some further configuration options to the source of the sync
     * process, such as filtering or throttling.
     *
-    * @param source     the original source
-    * @param config     the sync configuration
-    * @param filterData data about the current filter definition
+    * @param source the original source
+    * @param config the sync configuration
     * @return the decorated source
     */
-  private def decorateSource(source: Source[SyncOperation, Any], config: SyncConfig, filterData: SyncFilterData):
+  private def decorateSource(source: Source[SyncOperation, Any], config: SyncConfig):
   Future[Source[SyncOperation, Any]] = {
-    val filteredSource = source.filter(createSyncFilter(filterData))
+    val filteredSource = source.filter(createSyncFilter(config.filterData))
     val throttledSource = config.opsPerSecond match {
       case Some(value) =>
         filteredSource.throttle(value, 1.second)
@@ -281,18 +279,20 @@ object Sync {
   private def decorateApplyStage(config: SyncConfig, dstFactory: DestinationComponentsFactory,
                                  stage: Flow[SyncOperation, SyncOperation, NotUsed])
                                 (implicit ec: ExecutionContext, system: ActorSystem):
-  Flow[SyncOperation, SyncOperation, NotUsed] =
-    if (config.dstPassword.isEmpty || config.dstCryptMode != CryptMode.FilesAndNames) stage
+  Flow[SyncOperation, SyncOperation, NotUsed] = {
+    val cryptConf = config.cryptConfig
+    if (cryptConf.dstPassword.isEmpty || cryptConf.dstCryptMode != CryptMode.FilesAndNames) stage
     else {
       val sourceFactory = createElementSourceFactory(None)
       val srcFunc: IterateSourceFunc = startFolderUri => {
         Future.successful(dstFactory.createPartialSource(sourceFactory, startFolderUri))
       }
-      val cryptFunc = CryptService.mapOperationFunc(CryptStage.keyFromString(config.dstPassword.get), srcFunc)
+      val cryptFunc = CryptService.mapOperationFunc(CryptStage.keyFromString(cryptConf.dstPassword.get), srcFunc)
       val cryptStage = new StatefulStage[SyncOperation, SyncOperation,
-        LRUCache[String, String]](LRUCache[String, String](config.cryptCacheSize))(cryptFunc)
+        LRUCache[String, String]](LRUCache[String, String](cryptConf.cryptCacheSize))(cryptFunc)
       Flow[SyncOperation].via(cryptStage).via(stage)
     }
+  }
 
   /**
     * Appends a [[CleanupStage]] to the given flow for the apply stage. This
@@ -323,10 +323,12 @@ object Sync {
     * @return the decorated ''SourceFileProvider''
     */
   private def decorateSourceFileProvider(provider: SourceFileProvider, config: SyncConfig)
-                                        (implicit ec: ExecutionContext): SourceFileProvider =
-    if (config.srcPassword.nonEmpty || config.dstPassword.nonEmpty)
-      CryptAwareSourceFileProvider(provider, config.srcPassword, config.dstPassword)
+                                        (implicit ec: ExecutionContext): SourceFileProvider = {
+    val cryptConf = config.cryptConfig
+    if (cryptConf.srcPassword.nonEmpty || cryptConf.dstPassword.nonEmpty)
+      CryptAwareSourceFileProvider(provider, cryptConf.srcPassword, cryptConf.dstPassword)
     else provider
+  }
 
   /**
     * Creates a ''RunnableGraph'' representing the stream for a sync process.

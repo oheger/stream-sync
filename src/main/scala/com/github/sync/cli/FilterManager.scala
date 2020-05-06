@@ -23,10 +23,9 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 import com.github.sync.SyncTypes._
-import com.github.sync.cli.ParameterManager.{CliProcessor, OptionValue, ParameterContext}
+import com.github.sync.cli.ParameterManager.{CliProcessor, OptionValue}
 
 import scala.annotation.tailrec
-import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
 import scala.util.{Success, Try}
 
@@ -47,19 +46,65 @@ object FilterManager {
   type ActionFilters = Map[SyncAction, List[SyncOperationFilter]]
 
   /** Command line option to define a filter for create actions. */
-  val ArgCreateFilter = "--filter-create"
+  final val ArgCreateFilter = "--filter-create"
+
+  /** Help text for the create filter option. */
+  final val HelpCreateFilter =
+    """Like the filter option, but the filter expressions defined by this option are evaluated \
+      |only when creating files or folders.""".stripMargin
 
   /** Command line option to define a filter for override actions. */
-  val ArgOverrideFilter = "--filter-override"
+  final val ArgOverrideFilter = "--filter-override"
+
+  /** Help text for the override filter option. */
+  final val HelpOverrideFilter =
+    """Like the filter option, but the filter expressions defined by this option are evaluated \
+      |only when files are overridden in the target structure.""".stripMargin
 
   /** Command line option to define a filter for remove actions. */
-  val ArgRemoveFilter = "--filter-remove"
+  final val ArgRemoveFilter = "--filter-remove"
+
+  /** Help text for the remove filter option. */
+  final val HelpRemoveFilter =
+    """Like the filter option, but the filter expressions defined by this option are evaluated \
+      |only when removing files or folders.""".stripMargin
 
   /** Command line option to define a filter for all actions. */
-  val ArgCommonFilter = "--filter"
+  final val ArgCommonFilter = "--filter"
+
+  /** Help text for the common filter option. */
+  final val HelpCommonFilter =
+    """Defines filter conditions that are applied to all kinds of actions. Only actions that match \
+      |all filter criteria are executed during the sync process. This option can be repeated an \
+      |arbitrary number of times to define multiple filter criteria. Option values must be valid \
+      |filter expressions. The following expressions can be used:
+      |  minlevel:<n> - Only files and folders with a level equal or higher than this value are \
+      |processed. (Elements in the root folder have level 0, direct sub folders \
+      |of the root folder have level 1 and so on.) Example: minlevel:2
+      |  maxlevel:<n> - Like minlevel, but defines a maximum level for the elements to be \
+      |processed; e.g. maxlevel:7
+      |  exclude:<glob> - Defines glob expressions for files and folder paths. The matched \
+      |paths are excluded from the sync process. Globs can contain the placeholders '?' for a \
+      |single character and '*' for an arbitrary number of characters. Example: exclude:*.tmp
+      |  include:<glob> - Like exclude, but with this option the paths to be included in the \
+      |sync process can be specified; e.g. include:project1/*
+      |  date-after:<time> - Allows selecting only files whose date of last modification is \
+      |equal or after a given reference date. The reference date is specified in ISO format \
+      |with an optional time portion, as in date-after:2018-09-01T22:00:00 or \
+      |date-after:2020-01-01.
+      |  date-before<time> - Like date-after, but only selects files with a date of last \
+      |modification that is before a reference date; e.g. date-before:2020-01-01""".stripMargin
 
   /** Command line option for the filter to disable specific sync actions. */
-  val ArgActionFilter = "--actions"
+  final val ArgActionFilter = "--actions"
+
+  /** Help text for the actions filter option. */
+  final val HelpActionFilter =
+    """With this option it is possible to execute only specific types of actions during a sync \
+      |process. The option can be repeated, its value is either a single action type or a \
+      |comma-delimited list of action types. Possible action types are actionCreate, \
+      |actionOverride, and actionRemove (ignoring case). For instance, if no elements should \
+      |be removed, specify only the other action types: --actions actionCreate,actionOverride""".stripMargin
 
   /**
     * Data class defining the filtering during a sync process.
@@ -117,30 +162,6 @@ object FilterManager {
   private val ActionTypeSeparator = ","
 
   /**
-    * Extracts filtering information from the parameter context.
-    *
-    * The passed in context contains all command line arguments provided to the
-    * CLI keyed by command line options (already converted to uppercase). As
-    * options can be repeated, the values of the map are lists. The function
-    * tries to filter out all options that are related to filtering and removes
-    * them from the arguments map. The single options are processed and
-    * converted into ''SyncOperationFilter'' filters.
-    *
-    * The resulting future contains the produced ''SyncFilterData'' and an
-    * updated ''ParameterContext'' object. If one of the filtering parameters
-    * was invalid and could not be parsed, the resulting future is failed.
-    *
-    * @param paramCtx the ''ParameterContext'' allowing access to CLI options
-    * @param ec       the execution context
-    * @return a future with the extracted ''SyncFilterData'' and the updated
-    *         ''ParameterContext''
-    */
-  //TODO Remove after all dependencies have been reworked
-  def parseFilters(paramCtx: ParameterContext)(implicit ec: ExecutionContext):
-  Future[(SyncFilterData, ParameterContext)] =
-    Future.successful((SyncFilterData(Map.empty), paramCtx))
-
-  /**
     * Applies the given filter data to the specified ''SyncOperation'' and
     * returns a flag whether the operation is accepted by the filter. This
     * method can be used during a sync process to filter out operations based
@@ -168,10 +189,10 @@ object FilterManager {
     */
   def filterDataProcessor: CliProcessor[Try[SyncFilterData]] =
     for {
-      exprCommon <- filterExpressionProcessor(ArgCommonFilter)
-      exprCreate <- filterExpressionProcessor(ArgCreateFilter)
-      exprOverride <- filterExpressionProcessor(ArgOverrideFilter)
-      exprRemove <- filterExpressionProcessor(ArgRemoveFilter)
+      exprCommon <- filterExpressionProcessor(ArgCommonFilter, HelpCommonFilter)
+      exprCreate <- filterExpressionProcessor(ArgCreateFilter, HelpCreateFilter)
+      exprOverride <- filterExpressionProcessor(ArgOverrideFilter, HelpOverrideFilter)
+      exprRemove <- filterExpressionProcessor(ArgRemoveFilter, HelpRemoveFilter)
       enabledActions <- actionFilterProcessor
     } yield createSyncFilterData(exprCommon, exprCreate, exprOverride, exprRemove, enabledActions)
 
@@ -179,11 +200,12 @@ object FilterManager {
     * Returns a ''CliProcessor'' that extracts the filter expressions for a
     * specific action type.
     *
-    * @param key the key of the action type
+    * @param key  the key of the action type
+    * @param help the help text for this option
     * @return the processor that extracts the filter expressions for this type
     */
-  private def filterExpressionProcessor(key: String): CliProcessor[OptionValue[SyncOperationFilter]] =
-    ParameterManager.optionValue(key)
+  private def filterExpressionProcessor(key: String, help: String): CliProcessor[OptionValue[SyncOperationFilter]] =
+    ParameterManager.optionValue(key, help = Some(help))
       .mapTo(parseExpression)
 
   /**
@@ -193,7 +215,7 @@ object FilterManager {
     * @return the processor to extract the enabled action types
     */
   private def actionFilterProcessor: CliProcessor[Try[Set[SyncAction]]] =
-    ParameterManager.optionValue(ArgActionFilter)
+    ParameterManager.optionValue(ArgActionFilter, help = Some(HelpActionFilter))
       .mapTo(parseActionNames)
       .fallback(ParameterManager.constantProcessor(Success(List(ActionTypeNameMapping.values.toSet))))
       .map { triedSets => triedSets.map(s => s.flatten.toSet) }
