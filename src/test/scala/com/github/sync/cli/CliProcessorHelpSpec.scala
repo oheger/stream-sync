@@ -839,6 +839,17 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     result should contain only ExpResult
   }
 
+  it should "provide a filter function that filters for a specific attribute" in {
+    val helpContext = createHelpContext()
+      .addOption(Key, Some(HelpText))
+      .addOption("ignored", None)
+    val ExpResult = OptionMetaData(Key, helpContext.options(Key))
+
+    val result = helpContext.optionMetaData
+      .filter(CliHelpGenerator.attributeFilterFunc(CliHelpGenerator.AttrHelpText))
+    result should contain only ExpResult
+  }
+
   it should "allow combining filters with AND semantics" in {
     val helpContext = createHelpContext()
       .addOption(Key, Some(HelpText))

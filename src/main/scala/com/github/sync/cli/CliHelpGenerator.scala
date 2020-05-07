@@ -529,6 +529,16 @@ object CliHelpGenerator {
       groups.forall(group => isInGroup(data.attributes, group))
 
   /**
+    * Returns a filter function that accepts only options that have the given
+    * attribute.
+    *
+    * @param attrKey the key of the required attribute
+    * @return the function that filters for options with this attribute
+    */
+  def attributeFilterFunc(attrKey: String): OptionFilter =
+    data => data.attributes.attributes contains attrKey
+
+  /**
     * Returns a filter function implementing AND logic. The resulting filter
     * accepts an element if and only if all of the filters provided accept it.
     *
