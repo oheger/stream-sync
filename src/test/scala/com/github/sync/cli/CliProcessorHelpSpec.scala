@@ -59,7 +59,7 @@ object CliProcessorHelpSpec {
     * Runs the given ''CliProcessor'' and returns the resulting help context.
     *
     * @param proc      the processor to be executed
-    * @param params the parameters to be used
+    * @param params    the parameters to be used
     * @param optReader optional console reader for the context
     * @return the resulting help context
     */
@@ -478,10 +478,19 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
   it should "generate option help texts with default settings" in {
     val Count = 8
-    val ExpText = (1 to Count).map(testOptionMetaData).mkString(CR)
+    val ExpText = (1 to Count).map(testOptionMetaData).mkString(CR + CR)
     val helpContext = helpContextWithOptions(Count)
 
     val text = CliHelpGenerator.generateOptionsHelp(helpContext)(TestColumnGenerator)
+    text should be(ExpText)
+  }
+
+  it should "support changing the newline string" in {
+    val Count = 4
+    val ExpText = (1 to Count).map(testOptionMetaData).mkString(CR)
+    val helpContext = helpContextWithOptions(Count)
+
+    val text = CliHelpGenerator.generateOptionsHelp(helpContext, optNewline = None)(TestColumnGenerator)
     text should be(ExpText)
   }
 
@@ -489,8 +498,8 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val Count = 4
     val KeyMin = testKey(0).toLowerCase(Locale.ROOT)
     val KeyMax = testKey(Count + 1).toUpperCase(Locale.ROOT)
-    val ExpText = testOptionMetaData(KeyMin, HelpText + KeyMin) + CR +
-      (1 to Count).map(testOptionMetaData).mkString(CR) + CR +
+    val ExpText = testOptionMetaData(KeyMin, HelpText + KeyMin) + CR + CR +
+      (1 to Count).map(testOptionMetaData).mkString(CR + CR) + CR + CR +
       testOptionMetaData(KeyMax, HelpText + KeyMax)
     val helpContext = helpContextWithOptions(Count)
       .addOption(KeyMin, Some(HelpText + KeyMin))
@@ -503,7 +512,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   it should "support a custom sort function for options" in {
     val Count = 8
     val sortFunc: OptionSortFunc = _.sortWith(_.key > _.key) // reverse sort
-    val ExpText = (1 to Count).map(testOptionMetaData).reverse.mkString(CR)
+    val ExpText = (1 to Count).map(testOptionMetaData).reverse.mkString(CR + CR)
     val helpContext = helpContextWithOptions(Count)
 
     val text = CliHelpGenerator.generateOptionsHelp(helpContext, sortFunc = sortFunc)(TestColumnGenerator)
@@ -513,7 +522,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   it should "support filtering the options to generate help information for" in {
     val CountAll = 8
     val CountFiltered = 4
-    val ExpText = (1 to CountFiltered).map(testOptionMetaData).mkString(CR)
+    val ExpText = (1 to CountFiltered).map(testOptionMetaData).mkString(CR + CR)
     val helpContext = helpContextWithOptions(CountAll)
     val filterFunc: OptionFilter = _.key <= testKey(CountFiltered)
 
@@ -536,7 +545,7 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       .addOption(testKey(1), Some(ShortHelpText))
       .addOption(testKey(2), Some(HelpText))
     val ExpText = ShortHelpText + (" " * (HelpText.length - ShortHelpText.length)) +
-      CliHelpGenerator.DefaultPadding + testKey(1) + CR +
+      CliHelpGenerator.DefaultPadding + testKey(1) + CR + CR +
       HelpText + CliHelpGenerator.DefaultPadding + testKey(2)
 
     val text = CliHelpGenerator.generateOptionsHelp(helpContext)(HelpColumnGenerator, KeyColumnGenerator)

@@ -439,13 +439,17 @@ object CliHelpGenerator {
     * @param filterFunc a function to filter the options to be displayed; per
     *                   default, all options are shown
     * @param padding    a padding string inserted between columns
+    * @param optNewline an optional string added between the help texts of
+    *                   different options; by changing this string, one could
+    *                   add for instance empty lines or horizontal bars
     * @param columns    the functions to generate the single columns
     * @return a string with the help for command line options
     */
   def generateOptionsHelp(context: CliHelpContext,
                           sortFunc: OptionSortFunc = AlphabeticOptionSortFunc,
                           filterFunc: OptionFilter = AllFilterFunc,
-                          padding: String = DefaultPadding)
+                          padding: String = DefaultPadding,
+                          optNewline: Option[String] = Some(""))
                          (columns: ColumnGenerator*): String = {
 
     // generates the columns of an option by applying the column generators
@@ -470,16 +474,18 @@ object CliHelpGenerator {
         val emptyList = List.fill(maxLineCount)("")
         val filledColumns = columns.map(list => growList(list, maxLineCount, emptyList))
 
-        filledColumns.transpose.map(_.zip(maxWidths))
+        val lines = filledColumns.transpose.map(_.zip(maxWidths))
           .map { line =>
             line.map { t =>
               val cell = t._1
               cell + spaces.substring(0, t._2 - cell.length)
             }.mkString(padding)
           }
+        optNewline.fold(lines)(lines.toList :+ _)
       }
 
-      rows.flatMap(generateRow)
+      val generatedRows = rows.flatMap(generateRow)
+      optNewline.fold(generatedRows)(_ => generatedRows.dropRight(1)) // there is 1 newline too much
         .mkString(CR)
     }
   }
