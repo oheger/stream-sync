@@ -1699,6 +1699,23 @@ object ParameterManager {
   }
 
   /**
+    * Updates the given help context to contain all the error messages from the
+    * failures provided. For each ''ExtractionFailure'', the error message is
+    * added to the corresponding attribute of the option affected. The modified
+    * help context can then be used to generate formatted output with all error
+    * messages.
+    *
+    * @param helpContext the help context to be used as base
+    * @param failures    a collection with failures during extraction
+    * @return the modified help context
+    */
+  def addFailuresToHelpContext(helpContext: CliHelpContext, failures: Iterable[ExtractionFailure]): CliHelpContext =
+    failures.foldLeft(helpContext) { (ctx, failure) =>
+      ctx.addOption(failure.key, None)
+        .addAttribute(CliHelpGenerator.AttrErrorMessage, failure.message)
+    }
+
+  /**
     * Returns a collection containing all extraction failures from the given
     * components. This is used to create an object representation of a group of
     * command line arguments. Only if all components could be extracted

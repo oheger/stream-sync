@@ -58,6 +58,14 @@ object CliHelpGenerator {
     */
   final val AttrOptionType = "optionType"
 
+  /**
+    * The attribute to store an error message for an option. The attribute can
+    * be set if parameter extraction has failed for an option. It is then
+    * possible to generate output containing all error messages using all the
+    * column generators supported.
+    */
+  final val AttrErrorMessage = "errorMessage"
+
   /** Option type indicating a plain option. */
   final val OptionTypeOption = "option"
 

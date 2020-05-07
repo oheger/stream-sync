@@ -18,6 +18,7 @@ package com.github.sync.cli
 
 import java.io.IOException
 
+import com.github.sync.cli.CliHelpGenerator.CliHelpContext
 import com.github.sync.cli.ParameterManager.{OptionValue, ParameterContext, Parameters}
 import org.mockito.Mockito
 import org.mockito.Mockito._
@@ -825,5 +826,29 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
         exception.failures.forall(_.context == context) shouldBe true
       case r => fail("Unexpected result: " + r)
     }
+  }
+
+  it should "add failures to the help context" in {
+    val Key2 = "someOtherKey"
+    val Key3 = "oneMoreKey"
+    val Key4 = "additionalKey"
+    val helpContext = new CliHelpContext(Map.empty, SortedSet.empty, None, Nil)
+      .addOption(Key, Some("Help1"))
+      .addOption(Key2, None)
+      .addOption(Key3, Some("Help3"))
+    val failure1 = ExtractionFailure(Key, "error1", TestContext)
+    val failure3 = ExtractionFailure(Key3, "error3", TestContext)
+    val failure4 = ExtractionFailure(Key4, "error4", TestContext)
+
+    val updHelpCtx = ParameterManager.addFailuresToHelpContext(helpContext, List(failure1, failure3, failure4))
+    updHelpCtx.options(Key2) should be(helpContext.options(Key2))
+    val attr1 = updHelpCtx.options(Key)
+    attr1.attributes(CliHelpGenerator.AttrHelpText) should be("Help1")
+    attr1.attributes(CliHelpGenerator.AttrErrorMessage) should be(failure1.message)
+    val attr3 = updHelpCtx.options(Key3)
+    attr3.attributes(CliHelpGenerator.AttrErrorMessage) should be(failure3.message)
+    val attr4 = updHelpCtx.options(Key4)
+    attr4.attributes(CliHelpGenerator.AttrOptionType) should be(CliHelpGenerator.OptionTypeOption)
+    attr4.attributes(CliHelpGenerator.AttrErrorMessage) should be(failure4.message)
   }
 }
