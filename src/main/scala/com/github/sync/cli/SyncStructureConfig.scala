@@ -410,10 +410,12 @@ object SyncStructureConfig {
     val procBasicDefined = isDefinedProcessor(roleType.configPropertyName(PropAuthUser))
     val procOAuthDefined = isDefinedProcessor(roleType.configPropertyName(
       OAuthParameterManager.NameOptionName))
-    val condNoAuth = conditionalValue(procOAuthDefined, ifProc = constantOptionValue(GroupOAuth),
-      elseProc = constantOptionValue(GroupNoAuth))
+    val condNoAuth = conditionalValue(procOAuthDefined,
+      ifProc = constantOptionValueWithDesc(None, GroupOAuth),
+      elseProc = constantOptionValueWithDesc(None, GroupNoAuth))
     val groupSelector: CliProcessor[Try[String]] =
-      conditionalValue(procBasicDefined, ifProc = constantOptionValue(GroupBasicAuth), elseProc = condNoAuth)
+      conditionalValue(procBasicDefined, ifProc = constantOptionValueWithDesc(None, GroupBasicAuth),
+        elseProc = condNoAuth)
         .single.mandatory
     val groupMap = Map[String, CliProcessor[Try[AuthConfig]]](
       GroupBasicAuth -> basicAuthProcessor(roleType),

@@ -469,8 +469,26 @@ object Sync {
     * @return the error and usage text
     */
   private def generateCliErrorMessage(exception: ParameterExtractionException): String =
-    exception.getMessage + CliHelpGenerator.CR + CliHelpGenerator.CR +
+    "Invalid command line options detected:" + CliHelpGenerator.CR + CliHelpGenerator.CR +
+      generateErrorMessageFromFailures(exception) + CliHelpGenerator.CR + CliHelpGenerator.CR +
       generateCliHelp(exception.parameterContext.parameters)
+
+  /**
+    * Generates a formatted string for all the failures that occurred during
+    * command line processing.
+    *
+    * @param exception the exception with all extraction failures
+    * @return a string with formatted error messages
+    */
+  private def generateErrorMessageFromFailures(exception: ParameterExtractionException): String = {
+    import CliHelpGenerator._
+    val helpContext = ParameterManager.addFailuresToHelpContext(exception.parameterContext.helpContext,
+      exception.failures)
+    val errorGenerator = wrapColumnGenerator(attributeColumnGenerator(AttrErrorMessage), 70)
+    val optionsFilter = attributeFilterFunc(AttrErrorMessage)
+    generateOptionsHelp(helpContext, filterFunc = optionsFilter)(optionNameColumnGenerator(optionPrefix = ""),
+      errorGenerator)
+  }
 
   /**
     * Generates a help text with instructions how this application is used.
@@ -488,10 +506,6 @@ object Sync {
       wrapColumnGenerator(attributeColumnGenerator(AttrHelpText), 70),
       prefixColumnGenerator(attributeColumnGenerator(AttrFallbackValue), prefixText = Some("Default value: "))
     )
-    val generators = Seq(
-      optionNameColumnGenerator(),
-      helpGenerator
-    )
 
     val srcGroup = structureGroup(params, SourceRoleType)
     val dstGroup = structureGroup(params, DestinationRoleType)
@@ -503,12 +517,13 @@ object Sync {
       .append(CR)
       .append(CR)
       .append(generateOptionsHelp(helpContext, sortFunc = inputParamSortFunc(helpContext),
-        filterFunc = InputParamsFilterFunc)(generators: _*))
+        filterFunc = InputParamsFilterFunc)(optionNameColumnGenerator(optionPrefix = ""), helpGenerator))
       .append(CR)
       .append(CR)
       .append("Supported options:")
       .append(CR)
-      .append(generateOptionsHelp(helpContext, filterFunc = optionsFilter)(generators: _*))
+      .append(generateOptionsHelp(helpContext,
+        filterFunc = optionsFilter)(optionNameColumnGenerator(optionPrefix = "--"), helpGenerator))
       .toString
   }
 
