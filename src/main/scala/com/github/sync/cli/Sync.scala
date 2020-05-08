@@ -24,9 +24,10 @@ import akka.stream._
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes._
-import com.github.sync.cli.CliHelpGenerator.OptionFilter
+import com.github.sync.cli.CliHelpGenerator.{OptionFilter, OptionsFilterFunc, andFilter}
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterManager.{ParameterExtractionException, Parameters}
+import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.Sync.{groupFilter, structureGroup}
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
 import com.github.sync.cli.SyncStructureConfig.{DestinationRoleType, RoleType, SourceRoleType}
@@ -38,6 +39,7 @@ import com.github.sync.util.LRUCache
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
 /**
   * Main object to start the sync process.
@@ -455,77 +457,6 @@ object Sync {
   Future[String] =
     syncProcess(factory, args)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
-      .recover {
-        case e: ParameterExtractionException =>
-          generateCliErrorMessage(e)
-      }
-
-  /**
-    * Generates a string with an error message if invalid parameters have been
-    * provided. The text contains a detailed error message and usage
-    * instructions.
-    *
-    * @param exception the original CLI exception
-    * @return the error and usage text
-    */
-  private def generateCliErrorMessage(exception: ParameterExtractionException): String =
-    "Invalid command line options detected:" + CliHelpGenerator.CR + CliHelpGenerator.CR +
-      generateErrorMessageFromFailures(exception) + CliHelpGenerator.CR + CliHelpGenerator.CR +
-      generateCliHelp(exception.parameterContext.parameters)
-
-  /**
-    * Generates a formatted string for all the failures that occurred during
-    * command line processing.
-    *
-    * @param exception the exception with all extraction failures
-    * @return a string with formatted error messages
-    */
-  private def generateErrorMessageFromFailures(exception: ParameterExtractionException): String = {
-    import CliHelpGenerator._
-    val helpContext = ParameterManager.addFailuresToHelpContext(exception.parameterContext.helpContext,
-      exception.failures)
-    val errorGenerator = wrapColumnGenerator(attributeColumnGenerator(AttrErrorMessage), 70)
-    val optionsFilter = attributeFilterFunc(AttrErrorMessage)
-    generateOptionsHelp(helpContext, filterFunc = optionsFilter)(optionNameColumnGenerator(optionPrefix = ""),
-      errorGenerator)
-  }
-
-  /**
-    * Generates a help text with instructions how this application is used.
-    *
-    * @param params the parsed command line arguments
-    * @return the help text
-    */
-  private def generateCliHelp(params: Parameters): String = {
-    val (_, context) = ParameterManager.runProcessor(SyncParameterManager.syncConfigProcessor(),
-      params)(DummyConsoleReader)
-    val helpContext = context.helpContext
-
-    import CliHelpGenerator._
-    val helpGenerator = composeColumnGenerator(
-      wrapColumnGenerator(attributeColumnGenerator(AttrHelpText), 70),
-      prefixColumnGenerator(attributeColumnGenerator(AttrFallbackValue), prefixText = Some("Default value: "))
-    )
-
-    val srcGroup = structureGroup(params, SourceRoleType)
-    val dstGroup = structureGroup(params, DestinationRoleType)
-    val optionsFilter = andFilter(OptionsFilterFunc, groupFilter(srcGroup, dstGroup))
-
-    val buf = new java.lang.StringBuilder
-    buf.append("Usage: streamsync [options] ")
-      .append(generateInputParamsOverview(helpContext).mkString(" "))
-      .append(CR)
-      .append(CR)
-      .append(generateOptionsHelp(helpContext, sortFunc = inputParamSortFunc(helpContext),
-        filterFunc = InputParamsFilterFunc)(optionNameColumnGenerator(optionPrefix = ""), helpGenerator))
-      .append(CR)
-      .append(CR)
-      .append("Supported options:")
-      .append(CR)
-      .append(generateOptionsHelp(helpContext,
-        filterFunc = optionsFilter)(optionNameColumnGenerator(optionPrefix = "--"), helpGenerator))
-      .toString
-  }
 
   /**
     * Returns a group name for the structure with the given role type. This
@@ -575,8 +506,21 @@ object Sync {
   * in the companion object. By extending [[ActorSystemLifeCycle]], this class
   * has access to an actor system and can therefore initiate the sync process.
   */
-class Sync extends ActorSystemLifeCycle {
+class Sync extends ActorSystemLifeCycle[SyncConfig] {
   override val name: String = "Sync"
+
+  override protected def cliProcessor: ParameterManager.CliProcessor[Try[SyncConfig]] =
+    SyncParameterManager.syncConfigProcessor()
+
+  override protected def usageCaption(helpContext: CliHelpGenerator.CliHelpContext): String =
+    "Usage: streamsync [options] " + CliHelpGenerator.generateInputParamsOverview(helpContext).mkString(" ")
+
+  override protected def optionsGroupFilter(context: ParameterManager.ParameterContext): OptionFilter = {
+    val params = context.parameters
+    val srcGroup = structureGroup(params, SourceRoleType)
+    val dstGroup = structureGroup(params, DestinationRoleType)
+    andFilter(OptionsFilterFunc, groupFilter(srcGroup, dstGroup))
+  }
 
   /**
     * @inheritdoc This implementation starts the sync process using the actor

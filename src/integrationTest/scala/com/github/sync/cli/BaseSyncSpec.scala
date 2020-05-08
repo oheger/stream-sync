@@ -16,6 +16,7 @@
 
 package com.github.sync.cli
 
+import java.io.ByteArrayOutputStream
 import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}
 import java.time.Instant
@@ -212,7 +213,12 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     */
   protected def checkSyncOutput(options: Array[String], expFragments: String*): String = {
     val sync = createSync(overrideDispatcher = true)
-    val output = futureResult(sync.runApp(options))
+    val out = new ByteArrayOutputStream
+    Console.withOut(out) {
+      sync.run(options)
+    }
+
+    val output = new String(out.toByteArray)
     expFragments foreach { fragment =>
       output should include(fragment)
     }

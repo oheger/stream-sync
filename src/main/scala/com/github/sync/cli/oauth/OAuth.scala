@@ -16,13 +16,14 @@
 
 package com.github.sync.cli.oauth
 
-import com.github.sync.cli.ParameterManager.ParameterExtractionException
+import com.github.sync.cli.CliHelpGenerator.OptionFilter
+import com.github.sync.cli.ParameterManager.ParameterContext
 import com.github.sync.cli._
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
 
 import scala.concurrent.Future
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 /**
   * An object implementing a CLI with commands related to OAuth identity
@@ -54,7 +55,7 @@ object OAuth {
   *
   * @param commands the service to execute the CLI commands
   */
-class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
+class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle[CommandConfig] {
 
   override val name: String = "OAuthCLI"
 
@@ -64,14 +65,11 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
     */
   override protected def runApp(args: Array[String]): Future[String] = {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
-    (for {params <- ParameterManager.parseParameters(args)
-          (cmdConf, paramCtx) <- OAuthParameterManager.extractCommandConfig(params)
-          _ <- Future.fromTry(ParameterManager.checkParametersConsumed(paramCtx))
-          result <- executeCommand(cmdConf)
-          } yield result) recover {
-      case e: ParameterExtractionException =>
-        generateHelpMessage(e, e.parameterContext.parameters)
-    }
+    for {params <- ParameterManager.parseParameters(args)
+         (cmdConf, paramCtx) <- OAuthParameterManager.extractCommandConfig(params)
+         _ <- Future.fromTry(ParameterManager.checkParametersConsumed(paramCtx))
+         result <- executeCommand(cmdConf)
+         } yield result
   }
 
   /**
@@ -95,56 +93,22 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle {
     }
   }
 
-  /**
-    * Generates a string with a help text for this CLI application.
-    *
-    * @param exception the exception causing the help to be displayed
-    * @param params    the parameters passed to the command line
-    * @return a string with the help message
-    */
-  private def generateHelpMessage(exception: Throwable, params: ParameterManager.Parameters): String = {
-    val (_, context) = ParameterManager.runProcessor(OAuthParameterManager.commandConfigProcessor,
-      params)(DummyConsoleReader)
-    val helpContext = context.helpContext
+  override protected def cliProcessor: ParameterManager.CliProcessor[Try[CommandConfig]] =
+    OAuthParameterManager.commandConfigProcessor
 
+  override protected def usageCaption(helpContext: CliHelpGenerator.CliHelpContext): String =
+    "Usage: OAuth " +
+      CliHelpGenerator.generateInputParamsOverview(helpContext).mkString(" ") +
+      " [options]"
+
+  override protected def optionsGroupFilter(context: ParameterContext): OptionFilter = {
     import CliHelpGenerator._
-    val helpGenerator = composeColumnGenerator(
-      wrapColumnGenerator(attributeColumnGenerator(AttrHelpText), 70),
-      prefixColumnGenerator(attributeColumnGenerator(AttrFallbackValue), prefixText = Some("Default value: "))
-    )
-    val generators = Seq(
-      optionNameColumnGenerator(),
-      helpGenerator
-    )
-
     val triedCmdGroup = ParameterManager.tryProcessor(OAuthParameterManager.commandProcessor,
-      params)(DefaultConsoleReader)
+      context.parameters)(DefaultConsoleReader)
     val groupFilter = triedCmdGroup match {
       case Success((command, _)) => groupFilterFunc(command)
       case Failure(_) => UnassignedGroupFilterFunc
     }
-    val optionsFilter = andFilter(groupFilter, OptionsFilterFunc)
-
-    val buf = new java.lang.StringBuilder
-    buf.append(exception.getMessage)
-      .append(CR)
-      .append(CR)
-    buf.append("Usage: OAuth ")
-      .append(generateInputParamsOverview(helpContext).mkString(" "))
-      .append(" [options]")
-      .append(CR)
-      .append(CR)
-      .append(generateOptionsHelp(helpContext, sortFunc = inputParamSortFunc(helpContext),
-        filterFunc = InputParamsFilterFunc)(generators: _*))
-
-    val optionsHelp = generateOptionsHelp(helpContext, filterFunc = optionsFilter)(generators: _*)
-    if (optionsHelp.nonEmpty) {
-      buf.append(CR)
-        .append(CR)
-        .append("Supported options:")
-        .append(CR)
-        .append(optionsHelp)
-    }
-    buf.toString
+    andFilter(groupFilter, OptionsFilterFunc)
   }
 }

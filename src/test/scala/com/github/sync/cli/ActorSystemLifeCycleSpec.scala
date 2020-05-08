@@ -21,11 +21,13 @@ import java.io.ByteArrayOutputStream
 import akka.actor.{Actor, Props}
 import akka.pattern.ask
 import akka.util.Timeout
+import com.github.sync.cli.SyncParameterManager.SyncConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Try
 
 /**
   * Test class for ''ActorSystemLifeCycle''.
@@ -33,7 +35,7 @@ import scala.concurrent.duration._
 class ActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
   "ActorSystemLifeCycle" should "manage the life-cycle of an actor system" in {
     val CommandLine = Array("1", "2", "3")
-    val myApp = new ActorSystemLifeCycle {
+    val myApp = new ActorSystemLifeCycleTestImpl {
       override val name: String = "TestApp"
 
       override protected def runApp(args: Array[String]): Future[String] = {
@@ -61,7 +63,7 @@ class ActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
 
   it should "handle a failed Future returned by the application logic" in {
     val exception = new IllegalStateException("App crashed!")
-    val myApp = new ActorSystemLifeCycle {
+    val myApp = new ActorSystemLifeCycleTestImpl {
       override val name: String = "failingApp"
 
       override protected def runApp(args: Array[String]): Future[String] =
@@ -77,4 +79,17 @@ class ActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
     }
     myApp.actorSystem.whenTerminated.isCompleted shouldBe true
   }
+
+  /**
+    * A test implementation of ''ActorSystemLifeCycle'' that provides dummy
+    * implementations for methods that are not used by the tests.
+    */
+  private abstract class ActorSystemLifeCycleTestImpl extends ActorSystemLifeCycle[SyncConfig] {
+    override protected def cliProcessor: ParameterManager.CliProcessor[Try[SyncConfig]] =
+      SyncParameterManager.syncConfigProcessor()
+
+    override protected def usageCaption(helpContext: CliHelpGenerator.CliHelpContext): String =
+      "Test usage caption"
+  }
+
 }
