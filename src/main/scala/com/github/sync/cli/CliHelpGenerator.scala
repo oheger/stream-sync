@@ -16,8 +16,6 @@
 
 package com.github.sync.cli
 
-import java.util.Locale
-
 import scala.annotation.tailrec
 import scala.collection.SortedSet
 import scala.collection.mutable.ListBuffer
@@ -86,7 +84,8 @@ object CliHelpGenerator {
     * A standard sort function for options that implements an alphabetic
     * ordering (which is case-insensitive).
     */
-  final val AlphabeticOptionSortFunc: OptionSortFunc = _.sortWith((d1, d2) => toUpper(d1.key) < toUpper(d2.key))
+  final val AlphabeticOptionSortFunc: OptionSortFunc =
+    _.sortWith((d1, d2) => toUpperCase(d1.key) < toUpperCase(d2.key))
 
   /** A standard filter function which accepts all options. */
   final val AllFilterFunc: OptionFilter = _ => true
@@ -894,12 +893,4 @@ object CliHelpGenerator {
     val result = if (upperPart.nonEmpty) lowerPart + " " + upperPart else lowerPart
     symbols.markAsOptional(result, multiplicity.optional)
   }
-
-  /**
-    * Helper function to convert a string to uppercase for comparison.
-    *
-    * @param s the string
-    * @return the string as uppercase
-    */
-  private def toUpper(s: String): String = s.toUpperCase(Locale.ROOT)
 }

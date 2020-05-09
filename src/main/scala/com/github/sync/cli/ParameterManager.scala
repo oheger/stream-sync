@@ -17,7 +17,6 @@
 package com.github.sync.cli
 
 import java.nio.file.{Path, Paths}
-import java.util.Locale
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{FileIO, Framing, Sink}
@@ -581,7 +580,7 @@ object ParameterManager {
     @tailrec def doParseParameters(argsList: Seq[String], argsMap: InternalParamMap):
     InternalParamMap = argsList match {
       case opt :: value :: tail if isOption(opt) =>
-        doParseParameters(tail, appendOptionValue(argsMap, toLower(opt), value))
+        doParseParameters(tail, appendOptionValue(argsMap, toLowerCase(opt), value))
       case h :: t if !isOption(h) =>
         doParseParameters(t, appendOptionValue(argsMap, InputOption, h))
       case h :: _ =>
@@ -1110,7 +1109,7 @@ object ParameterManager {
     * @return the processor converting string values to lower case
     */
   def asLowerCase(proc: CliProcessor[OptionValue[String]]): CliProcessor[OptionValue[String]] =
-    mapped(proc)(toLower)
+    mapped(proc)(toLowerCase)
 
   /**
     * Returns a processor that converts the results of another processor to
@@ -1121,7 +1120,7 @@ object ParameterManager {
     * @return the processor converting string values to upper case
     */
   def asUpperCase(proc: CliProcessor[OptionValue[String]]): CliProcessor[OptionValue[String]] =
-    mapped(proc)(_.toUpperCase(Locale.ROOT))
+    mapped(proc)(toUpperCase)
 
   /**
     * Returns a processor that accepts a number of literals and maps them to
@@ -1833,14 +1832,6 @@ object ParameterManager {
         val (_, nextContext) = p._1.run(paramCtx)
         nextContext.helpContext.endGroupConditionally(p._2)
       }
-
-  /**
-    * Converts a string to lower case.
-    *
-    * @param s the string
-    * @return the string in lower case
-    */
-  private def toLower(s: String): String = s.toLowerCase(Locale.ROOT)
 
   /**
     * Generates the error message for an exception encountered during parameter
