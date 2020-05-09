@@ -219,7 +219,7 @@ object SyncStructureConfig {
       * @param property the property name
       * @return the full property name for this source type
       */
-    def configPropertyName(property: String): String = s"${ParameterManager.OptionPrefix}$name$property"
+    def configPropertyName(property: String): String = s"${ParameterParser.OptionPrefix}$name$property"
   }
 
   /**
@@ -464,7 +464,7 @@ object SyncStructureConfig {
     */
   private def oauthConfigProcessor(roleType: RoleType): CliProcessor[Try[AuthConfig]] = {
     OAuthParameterManager.storageConfigProcessor(needPassword = true,
-      prefix = OptionPrefix + roleType.name)
+      prefix = ParameterParser.OptionPrefix + roleType.name)
       .map { triedConfig =>
         triedConfig map (config => config.asInstanceOf[AuthConfig])
       }

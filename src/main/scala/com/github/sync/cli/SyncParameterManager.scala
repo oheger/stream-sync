@@ -65,7 +65,7 @@ object SyncParameterManager {
       |""".stripMargin
 
   /** Name of the option for the apply mode. */
-  final val ApplyModeOption: String = ParameterManager.OptionPrefix + "apply"
+  final val ApplyModeOption: String = ParameterParser.OptionPrefix + "apply"
 
   /** Help text for the apply mode option. */
   final val ApplyModeHelp =
@@ -78,7 +78,7 @@ object SyncParameterManager {
       |""".stripMargin
 
   /** Name of the option that defines a timeout for sync operations. */
-  final val TimeoutOption: String = ParameterManager.OptionPrefix + "timeout"
+  final val TimeoutOption: String = ParameterParser.OptionPrefix + "timeout"
 
   /** Help text for the timeout option. */
   final val TimeoutHelp =
@@ -87,7 +87,7 @@ object SyncParameterManager {
       |""".stripMargin
 
   /** Name of the option that defines the path to the log file. */
-  final val LogFileOption: String = ParameterManager.OptionPrefix + "log"
+  final val LogFileOption: String = ParameterParser.OptionPrefix + "log"
 
   /** Help text for the log file option. */
   final val LogFileHelp =
@@ -96,7 +96,7 @@ object SyncParameterManager {
       |""".stripMargin
 
   /** Name of the option that defines the path to the sync log file. */
-  final val SyncLogOption: String = ParameterManager.OptionPrefix + "sync-log"
+  final val SyncLogOption: String = ParameterParser.OptionPrefix + "sync-log"
 
   /** Help text for the sync log option. */
   final val SyncLogHelp =
@@ -111,7 +111,7 @@ object SyncParameterManager {
     * considered different only if the difference of their timestamps is
     * greater than this value (in seconds).
     */
-  final val IgnoreTimeDeltaOption: String = ParameterManager.OptionPrefix + "ignore-time-delta"
+  final val IgnoreTimeDeltaOption: String = ParameterParser.OptionPrefix + "ignore-time-delta"
 
   /** Help text for the ignore time delta option. */
   final val IgnoreTimeDeltaHelp =
@@ -126,7 +126,7 @@ object SyncParameterManager {
     * be executed within a second. This is useful for instance when syncing to
     * a server that accepts only a limit number of requests per time unit.
     */
-  final val OpsPerSecondOption: String = ParameterManager.OptionPrefix + "ops-per-second"
+  final val OpsPerSecondOption: String = ParameterParser.OptionPrefix + "ops-per-second"
 
   final val OpsPerSecondHelp =
     """Allows limiting the number of sync operations executed per second. The option value is the \
@@ -139,14 +139,14 @@ object SyncParameterManager {
     * structure. If defined, files from the source are decrypted using this
     * password when downloaded.
     */
-  final val SourcePasswordOption: String = ParameterManager.OptionPrefix + "src-encrypt-password"
+  final val SourcePasswordOption: String = ParameterParser.OptionPrefix + "src-encrypt-password"
 
   /**
     * Name of the option defining the encryption password for the destination
     * structure. If defined, files are encrypted using this password when they
     * are copied to the destination.
     */
-  final val DestPasswordOption: String = ParameterManager.OptionPrefix + "dst-encrypt-password"
+  final val DestPasswordOption: String = ParameterParser.OptionPrefix + "dst-encrypt-password"
 
   /** Help text for the crypt password option. */
   final val CryptPasswordHelp =
@@ -159,14 +159,14 @@ object SyncParameterManager {
     * Name of the option that determines te encryption mode for the source
     * structure. This also determines whether a password must be present.
     */
-  final val SourceCryptModeOption: String = ParameterManager.OptionPrefix + "src-crypt-mode"
+  final val SourceCryptModeOption: String = ParameterParser.OptionPrefix + "src-crypt-mode"
 
   /**
     * Name of the option that determines the encryption mode for the
     * destination structure. This also determines whether a password must be
     * present.
     */
-  final val DestCryptModeOption: String = ParameterManager.OptionPrefix + "dst-crypt-mode"
+  final val DestCryptModeOption: String = ParameterParser.OptionPrefix + "dst-crypt-mode"
 
   /** Help text for the crypt mode option. */
   final val CryptModeHelp =
@@ -183,7 +183,7 @@ object SyncParameterManager {
     * case, already encrypted or decrypted file names are stored in a cache, so
     * that they can be reused rather than having to compute them again.
     */
-  final val CryptCacheSizeOption: String = ParameterManager.OptionPrefix + "crypt-cache-size"
+  final val CryptCacheSizeOption: String = ParameterParser.OptionPrefix + "crypt-cache-size"
 
   /** Help text for the crypt cache size option. */
   final val CryptCacheSizeHelp =

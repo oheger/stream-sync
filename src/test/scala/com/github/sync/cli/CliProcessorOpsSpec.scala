@@ -493,7 +493,7 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "support the access to input parameters" in {
-    val parameters: Parameters = Map(InputOption -> List("1", "2", "3"))
+    val parameters: Parameters = Map(ParameterParser.InputOption -> List("1", "2", "3"))
     val processor = inputValue(-2)
       .toInt
       .single

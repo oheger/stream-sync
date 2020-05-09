@@ -20,6 +20,7 @@ import java.io.IOException
 
 import com.github.sync.cli.CliHelpGenerator.CliHelpContext
 import com.github.sync.cli.ParameterManager.{OptionValue, ParameterContext, Parameters}
+import com.github.sync.cli.ParameterParser.ParametersMap
 import org.mockito.Mockito
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -50,7 +51,7 @@ object ParameterManagerSpec {
 
   /** A test parameters object that contains input parameters. */
   private val TestParametersWithInputs: Parameters = TestParameters.parametersMap +
-    (ParameterManager.InputOption -> InputValues)
+    (ParameterParser.InputOption -> InputValues)
 
   /** Another test Parameters object representing updated parameters. */
   private val NextParameters = Parameters(Map("bar" -> List("v2", "v3")), Set("x", "y"))
@@ -734,7 +735,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.inputValue(0)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
-    next.parameters.accessedParameters should contain only ParameterManager.InputOption
+    next.parameters.accessedParameters should contain only ParameterParser.InputOption
     res.get should contain only InputValues.head
   }
 
@@ -743,7 +744,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.inputValues(0, 1)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
-    next.parameters.accessedParameters should contain only ParameterManager.InputOption
+    next.parameters.accessedParameters should contain only ParameterParser.InputOption
     res.get.toList should contain theSameElementsInOrderAs InputValues.take(2)
   }
 
@@ -752,7 +753,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.inputValues(0, InputValues.size - 1, last = true)
 
     val (res, next) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
-    next.parameters.accessedParameters should contain only ParameterManager.InputOption
+    next.parameters.accessedParameters should contain only ParameterParser.InputOption
     res.get.toList should contain theSameElementsInOrderAs InputValues
   }
 
@@ -777,7 +778,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.inputValue(-InputValues.size - 1)
 
     val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
-    checkExtractionException(expectExtractionException(res), expKey = ParameterManager.InputOption,
+    checkExtractionException(expectExtractionException(res), expKey = ParameterParser.InputOption,
       expParams = TestParametersWithInputs.parametersMap)("-1")
   }
 
@@ -786,7 +787,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.inputValues(1, InputValues.size, optKey = Some(Key))
 
     val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
-    checkExtractionException(expectExtractionException(res), expKey = ParameterManager.InputOption,
+    checkExtractionException(expectExtractionException(res), expKey = ParameterParser.InputOption,
       expParams = TestParametersWithInputs.parametersMap)("few input arguments")
   }
 
@@ -795,7 +796,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val processor = ParameterManager.inputValue(1, Some("destination"), last = true)
 
     val res = ParameterManager.tryProcessor(processor, TestParametersWithInputs)
-    checkExtractionException(expectExtractionException(res), expKey = ParameterManager.InputOption,
+    checkExtractionException(expectExtractionException(res), expKey = ParameterParser.InputOption,
       expParams = TestParametersWithInputs.parametersMap)("at most 2")
   }
 

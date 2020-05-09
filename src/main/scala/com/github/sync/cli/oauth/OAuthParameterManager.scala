@@ -19,7 +19,7 @@ package com.github.sync.cli.oauth
 import java.nio.file.Path
 
 import com.github.sync.cli.ParameterManager._
-import com.github.sync.cli.{ConsoleReader, ParameterManager}
+import com.github.sync.cli.{ConsoleReader, ParameterManager, ParameterParser}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.OAuthConfig
@@ -47,7 +47,7 @@ object OAuthParameterManager {
   final val StoragePathOptionName = "idp-storage-path"
 
   /** The option that defines the storage path for OAuth data. */
-  final val StoragePathOption: String = OptionPrefix + StoragePathOptionName
+  final val StoragePathOption: String = ParameterParser.OptionPrefix + StoragePathOptionName
 
   /** Help text for the storage path option. */
   final val HelpStoragePathOption =
@@ -59,7 +59,7 @@ object OAuthParameterManager {
   final val NameOptionName = "idp-name"
 
   /** The option that defines the (base) name of an IDP. */
-  final val NameOption: String = OptionPrefix + NameOptionName
+  final val NameOption: String = ParameterParser.OptionPrefix + NameOptionName
 
   /** Help text for the IDP name option. */
   final val HelpNameOption =
@@ -74,7 +74,7 @@ object OAuthParameterManager {
     * The option that defines a password for the data of an IDP. If a
     * password is provided, sensitive information is encrypted with it.
     */
-  final val PasswordOption: String = OptionPrefix + PasswordOptionName
+  final val PasswordOption: String = ParameterParser.OptionPrefix + PasswordOptionName
 
   /** Help test for the password option. */
   final val HelpPasswordOption =
@@ -89,7 +89,7 @@ object OAuthParameterManager {
     * to be encrypted. If this is '''true''' (which is also the default), a
     * password must be present (and is read from the console if necessary).
     */
-  final val EncryptOption: String = OptionPrefix + EncryptOptionName
+  final val EncryptOption: String = ParameterParser.OptionPrefix + EncryptOptionName
 
   /** Help text for the encrypt IDP option. */
   final val HelpEncryptOption =
@@ -101,14 +101,14 @@ object OAuthParameterManager {
   /**
     * Name of the option that defines the authorization endpoint for an IDP.
     */
-  final val AuthEndpointOption: String = ParameterManager.OptionPrefix + "auth-url"
+  final val AuthEndpointOption: String = ParameterParser.OptionPrefix + "auth-url"
 
   /** Help text for the authorization endpoint option. */
   final val HelpAuthEndpointOption =
     """The URL used by the identity provider for authorization code requests."""
 
   /** Name of the option that defines the token endpoint for an IDP. */
-  final val TokenEndpointOption: String = ParameterManager.OptionPrefix + "token-url"
+  final val TokenEndpointOption: String = ParameterParser.OptionPrefix + "token-url"
 
   /** Help text for the token endpoint option. */
   final val HelpTokenEndpointOption =
@@ -117,7 +117,7 @@ object OAuthParameterManager {
       |expired access tokens.""".stripMargin
 
   /** Name of the option that defines the redirect URL for an IDP. */
-  final val RedirectUrlOption: String = ParameterManager.OptionPrefix + "redirect-url"
+  final val RedirectUrlOption: String = ParameterParser.OptionPrefix + "redirect-url"
 
   /** Help text for the redirect URL option. */
   final val HelpRedirectUrlOption =
@@ -129,14 +129,14 @@ object OAuthParameterManager {
     * asking for a token. The value can contain multiple scope values separated
     * by either comma or whitespace.
     */
-  final val ScopeOption: String = ParameterManager.OptionPrefix + "scope"
+  final val ScopeOption: String = ParameterParser.OptionPrefix + "scope"
 
   /** Help text for the scope option. */
   final val HelpScopeOption =
     """Defines the scope to be requested when querying an access token."""
 
   /** Name of the option that defines the client ID for an IDP. */
-  final val ClientIDOption: String = ParameterManager.OptionPrefix + "client-id"
+  final val ClientIDOption: String = ParameterParser.OptionPrefix + "client-id"
 
   /** Help text for the client ID option. */
   final val HelpClientIDOption =
@@ -144,7 +144,7 @@ object OAuthParameterManager {
       |identity provider.""".stripMargin
 
   /** Name of the option that defines the client secret for an IDP. */
-  final val ClientSecretOption: String = ParameterManager.OptionPrefix + "client-secret"
+  final val ClientSecretOption: String = ParameterParser.OptionPrefix + "client-secret"
 
   /** Help text for the client secret option. */
   final val HelpClientSecretOption =
@@ -282,7 +282,7 @@ object OAuthParameterManager {
     * @param prefix       a prefix that is added to all option names
     * @return the ''CliProcessor'' for the ''OAuthStorageConfig''
     */
-  def storageConfigProcessor(needPassword: Boolean, prefix: String = OptionPrefix):
+  def storageConfigProcessor(needPassword: Boolean, prefix: String = ParameterParser.OptionPrefix):
   CliProcessor[Try[OAuthStorageConfig]] = {
     val procPath = optionValue(prefix + StoragePathOptionName, help = Some(HelpStoragePathOption))
       .toPath

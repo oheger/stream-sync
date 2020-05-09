@@ -61,7 +61,7 @@ object SyncStructureConfigSpec {
     * @return the ''Parameters'' object
     */
   private def toParameters(argsMap: Map[String, String], urlParams: List[String]): Parameters =
-    argsMap.map(e => (e._1, List(e._2))) + (ParameterManager.InputOption -> urlParams)
+    argsMap.map(e => (e._1, List(e._2))) + (ParameterParser.InputOption -> urlParams)
 
   /**
     * Generates the values of the input parameters option. The option contains
@@ -155,7 +155,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     * @param expParams the set with expected option names
     */
   private def checkAccessedParameters(paramCtx: ParameterContext, expParams: Set[String]): Unit = {
-    val accessedParams = expParams + ParameterManager.InputOption
+    val accessedParams = expParams + ParameterParser.InputOption
     paramCtx.parameters.accessedParameters should contain theSameElementsAs accessedParams
   }
 
@@ -277,7 +277,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
       SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
     )
-    val expAccessedKeys = args.keySet + ParameterManager.InputOption +
+    val expAccessedKeys = args.keySet + ParameterParser.InputOption +
       SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
       SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser)
 

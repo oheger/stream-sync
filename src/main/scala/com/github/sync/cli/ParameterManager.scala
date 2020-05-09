@@ -18,14 +18,10 @@ package com.github.sync.cli
 
 import java.nio.file.{Path, Paths}
 
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.{FileIO, Framing, Sink}
-import akka.util.ByteString
 import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, InputParameterRef}
+import com.github.sync.cli.ParameterParser.ParametersMap
 
-import scala.annotation.tailrec
 import scala.collection.SortedSet
-import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
 import scala.util.{Failure, Success, Try}
 
@@ -47,21 +43,6 @@ import scala.util.{Failure, Success, Try}
   * lower case.
   */
 object ParameterManager {
-  /** The prefix for arguments that are command line options. */
-  val OptionPrefix = "--"
-
-  /**
-    * Name of an option that collects the input strings that are no values of
-    * options.
-    */
-  val InputOption = "input"
-
-  /**
-    * Name of an option that defines a parameters file. The file is read, and
-    * its content is added to the command line options.
-    */
-  val FileOption: String = OptionPrefix + "file"
-
   /** A mapping storing the boolean literals for conversion. */
   private final val BooleanMapping = Map("true" -> true, "false" -> false)
 
@@ -88,13 +69,6 @@ object ParameterManager {
     * mapping processors operate on this type.
     */
   type SingleOptionValue[A] = Try[Option[A]]
-
-  /**
-    * Type definition for the map with resolved parameter values. The array
-    * with command line options is transformed in such a map which allows
-    * direct access to the value(s) assigned to options.
-    */
-  type ParametersMap = Map[String, Iterable[String]]
 
   /**
     * A data class storing the information required for extracting command
@@ -556,61 +530,6 @@ object ParameterManager {
     new CliProcessorSingleOps(proc)
 
   /**
-    * Type definition for an internal map type used during processing of
-    * command line arguments.
-    */
-  private type InternalParamMap = Map[String, List[String]]
-
-  /**
-    * Parses the command line arguments and converts them into a map keyed by
-    * options.
-    *
-    * @param args   the sequence with command line arguments
-    * @param ec     the execution context
-    * @param system the actor system
-    * @return a future with the parsed map of arguments
-    */
-  def parseParameters(args: Seq[String])(implicit ec: ExecutionContext, system: ActorSystem): Future[Parameters] = {
-    def appendOptionValue(argMap: InternalParamMap, opt: String, value: String):
-    InternalParamMap = {
-      val optValues = argMap.getOrElse(opt, List.empty)
-      argMap + (opt -> (optValues :+ value))
-    }
-
-    @tailrec def doParseParameters(argsList: Seq[String], argsMap: InternalParamMap):
-    InternalParamMap = argsList match {
-      case opt :: value :: tail if isOption(opt) =>
-        doParseParameters(tail, appendOptionValue(argsMap, toLowerCase(opt), value))
-      case h :: t if !isOption(h) =>
-        doParseParameters(t, appendOptionValue(argsMap, InputOption, h))
-      case h :: _ =>
-        throw new IllegalArgumentException("Option without value: " + h)
-      case Nil =>
-        argsMap
-    }
-
-    def parseParameterSeq(argList: Seq[String]): InternalParamMap =
-      doParseParameters(argList, Map.empty)
-
-    def parseParametersWithFiles(argList: Seq[String], currentParams: InternalParamMap,
-                                 processedFiles: Set[String]): Future[InternalParamMap] = Future {
-      combineParameterMaps(currentParams, parseParameterSeq(argList))
-    } flatMap { argMap =>
-      argMap get FileOption match {
-        case None =>
-          Future.successful(argMap)
-        case Some(files) =>
-          val filesToRead = files.toSet diff processedFiles
-          readAllParameterFiles(filesToRead.toList) flatMap { argList =>
-            parseParametersWithFiles(argList, argMap - FileOption, processedFiles ++ filesToRead)
-          }
-      }
-    }
-
-    parseParametersWithFiles(args.toList, Map.empty, Set.empty).map(mapToParameters)
-  }
-
-  /**
     * Returns an option value of the given type that does not contain any data.
     * This is used by some processors to set default values that are not
     * further evaluated.
@@ -745,14 +664,14 @@ object ParameterManager {
   def inputValues(fromIdx: Int, toIdx: Int, optKey: Option[String] = None, optHelp: Option[String] = None,
                   last: Boolean = false): CliProcessor[OptionValue[String]] =
     CliProcessor(context => {
-      val inputs = context.parameters.parametersMap.getOrElse(InputOption, Nil)
+      val inputs = context.parameters.parametersMap.getOrElse(ParameterParser.InputOption, Nil)
 
       // handles special negative index values and checks the index range
       def adjustAndCheckIndex(index: Int): Try[Int] = {
         val adjustedIndex = if (index < 0) inputs.size + index
         else index
         if (adjustedIndex >= 0 && adjustedIndex < inputs.size) Success(adjustedIndex)
-        else Failure(paramException(context, InputOption, tooFewErrorText(adjustedIndex)))
+        else Failure(paramException(context, ParameterParser.InputOption, tooFewErrorText(adjustedIndex)))
       }
 
       def tooFewErrorText(index: Int): String = {
@@ -761,14 +680,15 @@ object ParameterManager {
       }
 
       val result = if (last && inputs.size > toIdx + 1)
-        Failure(paramException(context, InputOption, s"Too many input arguments; expected at most ${toIdx + 1}"))
+        Failure(paramException(context, ParameterParser.InputOption,
+          s"Too many input arguments; expected at most ${toIdx + 1}"))
       else
         for {
           firstIndex <- adjustAndCheckIndex(fromIdx)
           lastIndex <- adjustAndCheckIndex(toIdx)
         } yield inputs.slice(firstIndex, lastIndex + 1)
       val helpContext = context.helpContext.addInputParameter(fromIdx, optKey, optHelp)
-      (result, context.update(context.parameters keyAccessed InputOption, helpContext))
+      (result, context.update(context.parameters keyAccessed ParameterParser.InputOption, helpContext))
     })
 
   /**
@@ -1748,65 +1668,6 @@ object ParameterManager {
     */
   private def failureFor(exception: Throwable): ExtractionFailure =
     ExtractionFailure(message = exception.getMessage, key = "", context = DummyParameterContext)
-
-  /**
-    * Checks whether the given argument string is an option. This is the case
-    * if it starts with the option prefix.
-    *
-    * @param arg the argument to be checked
-    * @return a flag whether this argument is an option
-    */
-  private def isOption(arg: String): Boolean = arg startsWith OptionPrefix
-
-  /**
-    * Creates a combined parameter map from the given source maps. The lists
-    * with the values of parameter options need to be concatenated.
-    *
-    * @param m1 the first map
-    * @param m2 the second map
-    * @return the combined map
-    */
-  private def combineParameterMaps(m1: InternalParamMap, m2: InternalParamMap): InternalParamMap =
-    m2.foldLeft(m1) { (resMap, e) =>
-      val values = resMap.getOrElse(e._1, List.empty)
-      resMap + (e._1 -> (e._2 ::: values))
-    }
-
-  /**
-    * Reads a file with parameters asynchronously and returns its single lines
-    * as a list of strings.
-    *
-    * @param path   the path to the parameters
-    * @param ec     the execution context
-    * @param system the actor system
-    * @return a future with the result of the read operation
-    */
-  private def readParameterFile(path: String)
-                               (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[List[String]] = {
-    val source = FileIO.fromPath(Paths get path)
-    val sink = Sink.fold[List[String], String](List.empty)((lst, line) => line :: lst)
-    source.via(Framing.delimiter(ByteString("\n"), 1024,
-      allowTruncation = true))
-      .map(bs => bs.utf8String.trim)
-      .filter(_.length > 0)
-      .runWith(sink)
-      .map(_.reverse)
-  }
-
-  /**
-    * Reads all parameter files referenced by the provided list. The arguments
-    * they contain are combined to a single sequence of strings.
-    *
-    * @param files  list with the files to be read
-    * @param ec     the execution context
-    * @param system the actor system
-    * @return a future with the result of the combined read operation
-    */
-  private def readAllParameterFiles(files: List[String])
-                                   (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[List[String]] =
-    Future.sequence(files.map(readParameterFile)).map(_.flatten)
 
   /**
     * Updates a help context by running some processors against it. This

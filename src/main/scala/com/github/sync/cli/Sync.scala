@@ -81,7 +81,7 @@ object Sync {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
 
     for {
-      argsMap <- ParameterManager.parseParameters(args)
+      argsMap <- Future.fromTry(ParameterParser.parseParameters(args))
       (config, paramCtx) <- SyncParameterManager.extractSyncConfig(argsMap)
       _ <- Future.fromTry(ParameterManager.checkParametersConsumed(paramCtx))
       srcFactory <- factory.createSourceComponentsFactory(config)

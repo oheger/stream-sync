@@ -16,21 +16,21 @@
 
 package com.github.sync.cli
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Paths
 import java.time.ZoneId
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import akka.util.Timeout
-import com.github.sync.cli.ParameterManager.{ParameterExtractionException, Parameters}
+import com.github.sync.cli.ParameterManager.ParameterExtractionException
 import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptConfig, CryptMode}
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.http.NoAuth
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito._
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -49,7 +49,7 @@ object SyncParameterManagerSpec {
   private val TimeoutValue = 44
 
   /** A map with test parameter values. */
-  private val ArgsMap = Map(ParameterManager.InputOption -> List(SourceUri, DestinationUri),
+  private val ArgsMap = Map(ParameterParser.InputOption -> List(SourceUri, DestinationUri),
     SyncParameterManager.TimeoutOption -> List(TimeoutValue.toString))
 }
 
@@ -89,159 +89,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     exception.getMessage
   }
 
-  /**
-    * Creates a temporary file that contains the given parameter strings.
-    *
-    * @param args the parameters to store in the file
-    * @return the path to the newly created file
-    */
-  private def createParameterFile(args: String*): Path =
-    createDataFile(parameterFileContent(args: _*))
-
-  /**
-    * Generates the content of a parameters file from the given parameter
-    * strings.
-    *
-    * @param args the parameters to store in the file
-    * @return the content of the parameter file as string
-    */
-  private def parameterFileContent(args: String*): String =
-    args.mkString("\r\n")
-
-  /**
-    * Adds a parameter to read the given file to a parameter list.
-    *
-    * @param path    the path to the file to be read
-    * @param argList the original parameter list
-    * @return the parameter list with the file parameter added
-    */
-  private def appendFileParameter(path: Path, argList: List[String]): List[String] =
-    ParameterManager.FileOption :: path.toString :: argList
-
-  /**
-    * Helper method for calling the parameter manager to parse a list of
-    * parameters.
-    *
-    * @param args the list of parameters to be parsed
-    * @return the parameters map as result of the parse operation
-    */
-  private def parseParameters(args: Seq[String]): Parameters =
-    futureResult(parseParametersFuture(args))
-
-  /**
-    * Helper method for calling the parameter manager's method to parse a list
-    * of parameters and returning the future result.
-    *
-    * @param args the list of parameters to be parsed
-    * @return the ''Future'' with the parse result
-    */
-  private def parseParametersFuture(args: Seq[String]): Future[Parameters] = ParameterManager.parseParameters(args)
-
-  "ParameterManager" should "parse an empty sequence of arguments" in {
-    val params = parseParameters(Nil)
-
-    params.parametersMap should have size 0
-    params.accessedParameters should have size 0
-  }
-
-  it should "correctly parse non-option parameters" in {
-    val syncUris = List("uri1", "uri2")
-    val expArgMap = Map(ParameterManager.InputOption -> syncUris)
-
-    val params = parseParameters(syncUris)
-    params.parametersMap should be(expArgMap)
-    params.accessedParameters should have size 0
-  }
-
-  it should "correctly parse arguments with options" in {
-    val args = Array("--opt1", "opt1Val1", "--opt2", "opt2Val1", "--opt1", "opt1Val2")
-    val expArgMap = Map("--opt1" -> List("opt1Val1", "opt1Val2"),
-      "--opt2" -> List("opt2Val1"))
-
-    val params = parseParameters(args)
-    params.parametersMap should be(expArgMap)
-  }
-
-  it should "fail with a correct message if an option is the last argument" in {
-    val undefOption = "--undefinedOption"
-    val args = List("--opt1", "optValue", undefOption)
-
-    val exception = expectFailedFuture[IllegalArgumentException](parseParametersFuture(args))
-    exception.getMessage should include(undefOption)
-  }
-
-  it should "convert options to lower case" in {
-    val args = List("--TestOption", "TestValue", "--FOO", "BAR", "testUri")
-    val expArgMap = Map("--testoption" -> List("TestValue"),
-      "--foo" -> List("BAR"),
-      ParameterManager.InputOption -> List("testUri"))
-
-    val params = parseParameters(args)
-    params.parametersMap should be(expArgMap)
-  }
-
-  it should "add the content of parameter files to command line options" in {
-    val OptionName1 = "--foo"
-    val OptionName2 = "--test"
-    val Opt1Val1 = "bar"
-    val Opt1Val2 = "baz"
-    val Opt2Val = "true"
-    val uri1 = "testUri1"
-    val uri2 = "testUri2"
-    val args = appendFileParameter(createParameterFile(OptionName1, Opt1Val1, uri1),
-      appendFileParameter(createParameterFile(OptionName2, Opt2Val),
-        OptionName1 :: Opt1Val2 :: uri2 :: Nil))
-
-    val argsMap = parseParameters(args).parametersMap
-    argsMap(OptionName1) should contain only(Opt1Val1, Opt1Val2)
-    argsMap(OptionName2) should contain only Opt2Val
-    argsMap.keys should not contain ParameterManager.FileOption
-
-    val (config, _) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
-    Set(config.srcUri, config.dstUri) should contain only(uri1, uri2)
-  }
-
-  it should "parse parameter files defined in another parameter file" in {
-    val OptionName1 = "--top-level"
-    val Option1Value = "onCommandLine"
-    val OptionName2 = "--level1"
-    val Option2Value = "inFirstFile"
-    val OptionName3 = "--deep"
-    val Option3Value = "inNestedFile"
-    val nestedFile = createParameterFile(OptionName3, Option3Value)
-    val args = appendFileParameter(
-      createParameterFile(ParameterManager.FileOption, nestedFile.toString,
-        OptionName2, Option2Value), OptionName1 :: Option1Value :: Nil)
-    val expArgs = Map(OptionName1 -> List(Option1Value),
-      OptionName2 -> List(Option2Value),
-      OptionName3 -> List(Option3Value))
-
-    val argsMap = parseParameters(args).parametersMap
-    argsMap should be(expArgs)
-  }
-
-  it should "deal with cyclic references in parameter files" in {
-    val file1 = createFileReference()
-    val file3 = createParameterFile(ParameterManager.FileOption, file1.toString, "--op3", "v3")
-    val file2 = createParameterFile(ParameterManager.FileOption, file3.toString, "--op2", "v2")
-    writeFileContent(file1, parameterFileContent(ParameterManager.FileOption, file2.toString,
-      "--op1", "v1", ParameterManager.FileOption, file2.toString))
-    val args = appendFileParameter(file1, Nil)
-    val expArgs = Map("--op1" -> List("v1"), "--op2" -> List("v2"), "--op3" -> List("v3"))
-
-    val argsMap = parseParameters(args).parametersMap
-    argsMap should be(expArgs)
-  }
-
-  it should "ignore empty lines in parameter files" in {
-    val args = appendFileParameter(createParameterFile("--foo", "bar", "", "--foo", "baz"),
-      "--test" :: "true" :: Nil)
-
-    val argsMap = parseParameters(args).parametersMap
-    argsMap.keys should contain only("--foo", "--test")
-  }
-
-  it should "extract URI parameters if they are present" in {
+  "SyncParameterManager" should "extract URI parameters if they are present" in {
     val (config, params) = futureResult(SyncParameterManager.extractSyncConfig(ArgsMap))
     config.srcUri should be(SourceUri)
     config.dstUri should be(DestinationUri)
@@ -249,27 +97,27 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "reject URI parameters if there are more than 2" in {
-    val argsMap = ArgsMap + (ParameterManager.InputOption -> List("u1", "u2", "u3"))
+    val argsMap = ArgsMap + (ParameterParser.InputOption -> List("u1", "u2", "u3"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap), "Too many input arguments")
   }
 
   it should "reject URI parameters if no destination URI is provided" in {
-    val argsMap = ArgsMap + (ParameterManager.InputOption -> List("u1"))
+    val argsMap = ArgsMap + (ParameterParser.InputOption -> List("u1"))
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Too few input arguments", "destinationURI")
   }
 
   it should "reject URI parameters if no URIs are provided" in {
-    val argsMap = ArgsMap + (ParameterManager.InputOption -> List.empty[String])
+    val argsMap = ArgsMap + (ParameterParser.InputOption -> List.empty[String])
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Too few input arguments", "'sourceURI'", "'destinationURI'")
   }
 
   it should "reject URI parameters if no non-option parameters are provided" in {
-    val argsMap = ArgsMap - ParameterManager.InputOption
+    val argsMap = ArgsMap - ParameterParser.InputOption
 
     expectFailedFuture(SyncParameterManager.extractSyncConfig(argsMap),
       "Too few input arguments", "'sourceURI'", "'destinationURI'")
@@ -292,7 +140,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap +
       (role.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> List(ModifiedProp)) +
       (role.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> List(ModifiedNs)) +
-      (ParameterManager.InputOption -> List(SourceUri, DavDestUri))
+      (ParameterParser.InputOption -> List(SourceUri, DavDestUri))
     val ExpDavConfig = DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
       authConfig = NoAuth, deleteBeforeOverride = false)
 
@@ -536,7 +384,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "combine multiple error messages when parsing the sync config" in {
-    val argsMap = Map(ParameterManager.InputOption -> List(SourceUri),
+    val argsMap = Map(ParameterParser.InputOption -> List(SourceUri),
       SyncParameterManager.ApplyModeOption -> List("invalidApplyMode"),
       SyncParameterManager.TimeoutOption -> List("invalidTimeout"),
       SyncParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))

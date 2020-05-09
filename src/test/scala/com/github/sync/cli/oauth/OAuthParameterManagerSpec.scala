@@ -19,9 +19,9 @@ package com.github.sync.cli.oauth
 import java.nio.file.Paths
 
 import com.github.sync.AsyncTestHelper
-import com.github.sync.cli.ParameterManager.{InputOption, Parameters}
+import com.github.sync.cli.ParameterManager.Parameters
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.cli.{ConsoleReader, ParameterManager}
+import com.github.sync.cli.{ConsoleReader, ParameterManager, ParameterParser}
 import com.github.sync.http.OAuthStorageConfig
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -80,7 +80,7 @@ object OAuthParameterManagerSpec {
     Map(OAuthParameterManager.StoragePathOption -> StoragePath,
       OAuthParameterManager.NameOption -> ProviderName,
       OAuthParameterManager.PasswordOption -> Password,
-      InputOption -> command)
+      ParameterParser.InputOption -> command)
 
   /**
     * Creates a map with command line options for an init command.
@@ -152,7 +152,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     }
     nextCtx.parameters.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
-      OAuthParameterManager.EncryptOption, ParameterManager.InputOption)
+      OAuthParameterManager.EncryptOption, ParameterParser.InputOption)
   }
 
   it should "extract a valid login command config" in {
@@ -167,12 +167,12 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     }
     nextCtx.parameters.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
-      OAuthParameterManager.EncryptOption, ParameterManager.InputOption)
+      OAuthParameterManager.EncryptOption, ParameterParser.InputOption)
   }
 
   it should "report missing mandatory parameters when creating a storage config" in {
     val args = Map(OAuthParameterManager.PasswordOption -> Password,
-      ParameterManager.InputOption -> OAuthParameterManager.CommandLoginIDP)
+      ParameterParser.InputOption -> OAuthParameterManager.CommandLoginIDP)
 
     expectFailedFuture(OAuthParameterManager.extractCommandConfig(args),
       OAuthParameterManager.NameOption, OAuthParameterManager.StoragePathOption)
@@ -189,7 +189,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
   it should "reject a command line with multiple commands" in {
     val parameters: Parameters = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP)
     val wrongParameters = parameters.copy(parametersMap =
-      parameters.parametersMap + (ParameterManager.InputOption ->
+      parameters.parametersMap + (ParameterParser.InputOption ->
         List(OAuthParameterManager.CommandLoginIDP, OAuthParameterManager.CommandRemoveIDP)))
 
     expectFailedFuture(OAuthParameterManager.extractCommandConfig(wrongParameters),
