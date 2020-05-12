@@ -168,8 +168,8 @@ object ParameterParser {
         doParseParameters(tail, appendOptionValue(argsMap, keyExtractor(opt), value))
       case h :: t if !isOptionFunc(h) =>
         doParseParameters(t, appendOptionValue(argsMap, InputOption, h))
-      case h :: _ =>
-        throw new IllegalArgumentException("Option without value: " + h)
+      case h :: t =>
+        doParseParameters(t, argsMap)
       case Nil =>
         argsMap
     }

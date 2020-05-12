@@ -163,13 +163,23 @@ class ParameterParserSpec extends AnyFlatSpec with Matchers with FileTestHelper 
     params should be(expArgMap)
   }
 
-  it should "fail with a correct message if an option is the last argument" in {
+  it should "ignore an option that is the last argument" in {
     val undefOption = "--undefinedOption"
     val args = List("--opt1", "optValue", undefOption)
+    val expArgsMap = Map("opt1" -> List("optValue"))
 
-    val exception = parseParametersFailure(args)
-    exception shouldBe a[IllegalArgumentException]
-    exception.getMessage should include(undefOption)
+    val params = parseParametersSuccess(args)
+    params should be(expArgsMap)
+  }
+
+  it should "ignore an option that is the last argument, but keep its other values" in {
+    val Key = "strangeOption"
+    val TestOption = "--" + Key
+    val args = List(TestOption, "v1", TestOption, "v2", TestOption)
+    val expArgsMap = Map(Key -> List("v1", "v2"))
+
+    val params = parseParametersSuccess(args)
+    params should be(expArgsMap)
   }
 
   it should "support different option prefixes" in {
