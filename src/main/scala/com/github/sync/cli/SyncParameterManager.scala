@@ -22,6 +22,7 @@ import java.util.Locale
 import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterManager.{CliProcessor, ParameterContext, Parameters, SingleOptionValue}
+import com.github.sync.cli.ParameterParser.ParametersMap
 import com.github.sync.cli.SyncStructureConfig.StructureConfig
 
 import scala.concurrent.duration._
@@ -44,6 +45,12 @@ import scala.util.Try
   * option key.
   */
 object SyncParameterManager {
+  /**
+    * The name of the command line option that references a file with further
+    * command line arguments.
+    */
+  final val FileOption = "file"
+
   /** Name of the input option for the URI of the source structure. */
   final val SourceUriOption = "sourceURI"
 
@@ -330,6 +337,20 @@ object SyncParameterManager {
     */
   private val RegApplyLog =
     """(?i)NONE""".r
+
+  /**
+    * A helper function for parsing the command line. This function invokes the
+    * parsing function from [[ParameterParser]] with the correct properties and
+    * wraps the result in a ''Future''.
+    *
+    * @param args the sequence with command line arguments
+    * @return a ''Future'' with the result of the parse operation
+    */
+  def parseParameters(args: Seq[String]): Future[ParametersMap] = {
+    val extractorFunc = ParameterParser.DefaultOptionPrefixes.extractorFunc andThen toLowerCase
+    Future.fromTry(ParameterParser.parseParameters(args, optFileOption = Some(FileOption),
+      keyExtractor = extractorFunc))
+  }
 
   /**
     * Returns a processor that extracts the ''SyncConfig'' from the command

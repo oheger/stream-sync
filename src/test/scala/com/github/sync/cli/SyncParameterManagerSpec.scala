@@ -393,4 +393,22 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       "undefined argument 'destinationURI'", "apply mode", SyncParameterManager.TimeoutOption,
       SyncParameterManager.CryptCacheSizeOption)
   }
+
+  it should "parse a command line correctly" in {
+    val fileOptions = Map("fileOpt1" -> "found", "fileOpt2" -> "foundAsWell")
+    val fileContent = fileOptions.toList
+      .flatMap(t => List("--" + t._1, t._2))
+      .mkString(CliHelpGenerator.CR)
+    val paramFile = createDataFile(fileContent)
+    val args = Array("--opt1", "value1", SourceUri, "--Opt2", "otherValue",
+      "--" + SyncParameterManager.FileOption, paramFile.toString)
+
+    val paramMap = futureResult(SyncParameterManager.parseParameters(args))
+    paramMap should not contain SyncParameterManager.FileOption
+    fileOptions foreach { entry =>
+      paramMap(toLowerCase(entry._1)) should contain only entry._2
+    }
+    paramMap("opt2") should contain only "otherValue"
+    paramMap(ParameterParser.InputOption) should contain only SourceUri
+  }
 }

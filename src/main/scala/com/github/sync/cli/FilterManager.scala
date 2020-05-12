@@ -46,7 +46,7 @@ object FilterManager {
   type ActionFilters = Map[SyncAction, List[SyncOperationFilter]]
 
   /** Command line option to define a filter for create actions. */
-  final val ArgCreateFilter = "--filter-create"
+  final val ArgCreateFilter = "filter-create"
 
   /** Help text for the create filter option. */
   final val HelpCreateFilter =
@@ -54,7 +54,7 @@ object FilterManager {
       |only when creating files or folders.""".stripMargin
 
   /** Command line option to define a filter for override actions. */
-  final val ArgOverrideFilter = "--filter-override"
+  final val ArgOverrideFilter = "filter-override"
 
   /** Help text for the override filter option. */
   final val HelpOverrideFilter =
@@ -62,7 +62,7 @@ object FilterManager {
       |only when files are overridden in the target structure.""".stripMargin
 
   /** Command line option to define a filter for remove actions. */
-  final val ArgRemoveFilter = "--filter-remove"
+  final val ArgRemoveFilter = "filter-remove"
 
   /** Help text for the remove filter option. */
   final val HelpRemoveFilter =
@@ -70,7 +70,7 @@ object FilterManager {
       |only when removing files or folders.""".stripMargin
 
   /** Command line option to define a filter for all actions. */
-  final val ArgCommonFilter = "--filter"
+  final val ArgCommonFilter = "filter"
 
   /** Help text for the common filter option. */
   final val HelpCommonFilter =
