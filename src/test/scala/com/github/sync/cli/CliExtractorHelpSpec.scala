@@ -19,7 +19,7 @@ package com.github.sync.cli
 import java.util.Locale
 
 import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, ColumnGenerator, InputParamOverviewSymbols, InputParameterRef, OptionAttributes, OptionFilter, OptionMetaData, OptionSortFunc}
-import com.github.sync.cli.ParameterManager._
+import com.github.sync.cli.ParameterExtractor._
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -28,7 +28,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.collection.SortedSet
 import scala.util.Success
 
-object CliProcessorHelpSpec {
+object CliExtractorHelpSpec {
   /** Key for a test option. */
   private val Key = "testOption"
 
@@ -38,7 +38,7 @@ object CliProcessorHelpSpec {
   /** The platform-specific line separator. */
   private val CR = System.lineSeparator()
 
-  /** Constant for undefined parameters used per default to run processors. */
+  /** Constant for undefined parameters used per default to run extractors. */
   private val EmptyParameters = Parameters(Map.empty, Set.empty)
 
   /** A test column generator function. */
@@ -56,17 +56,17 @@ object CliProcessorHelpSpec {
     data => data.attributes.attributes(CliHelpGenerator.AttrHelpText).split(CR).toList
 
   /**
-    * Runs the given ''CliProcessor'' and returns the resulting help context.
+    * Runs the given ''CliExtractor'' and returns the resulting help context.
     *
-    * @param proc      the processor to be executed
+    * @param ext      the extractor to be executed
     * @param params    the parameters to be used
     * @param optReader optional console reader for the context
     * @return the resulting help context
     */
-  private def generateHelpContext(proc: CliProcessor[_], params: Parameters = EmptyParameters,
+  private def generateHelpContext(ext: CliExtractor[_], params: Parameters = EmptyParameters,
                                   optReader: Option[ConsoleReader] = None): CliHelpContext = {
     implicit val reader: ConsoleReader = optReader getOrElse DefaultConsoleReader
-    val (_, ctx) = ParameterManager.runProcessor(proc, params)
+    val (_, ctx) = ParameterExtractor.runExtractor(ext, params)
     ctx.helpContext
   }
 
@@ -143,95 +143,95 @@ object CliProcessorHelpSpec {
 
 /**
   * Test class for testing whether help and usage texts can be generated
-  * correctly from ''CliProcessor'' objects.
+  * correctly from ''CliExtractor'' objects.
   */
-class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class CliExtractorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
-  import CliProcessorHelpSpec._
+  import CliExtractorHelpSpec._
 
   "The CLI library" should "store a help text for an option" in {
-    val proc = optionValue(Key, help = Some(HelpText))
+    val ext = optionValue(Key, help = Some(HelpText))
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     helpContext.options.keys should contain only Key
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrHelpText) should be(HelpText)
   }
 
-  it should "support a description for a constant value processor" in {
+  it should "support a description for a constant value extractor" in {
     val FallbackDesc = "This is the fallback value."
-    val constProcValue: OptionValue[String] = Success(List("foo"))
-    val fallbackProc = constantProcessor(constProcValue, Some(FallbackDesc))
-    val proc = optionValue(Key)
-      .fallback(fallbackProc)
+    val constExtValue: OptionValue[String] = Success(List("foo"))
+    val fallbackExt = constantExtractor(constExtValue, Some(FallbackDesc))
+    val ext = optionValue(Key)
+      .fallback(fallbackExt)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(FallbackDesc)
   }
 
   it should "support a description for constant values" in {
     val ValueDesc = "This is a meaningful default value."
-    val valueProc = constantOptionValueWithDesc(Some(ValueDesc), "foo", "bar")
-    val proc = optionValue(Key)
-      .fallback(valueProc)
+    val valueExt = constantOptionValueWithDesc(Some(ValueDesc), "foo", "bar")
+    val ext = optionValue(Key)
+      .fallback(valueExt)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(ValueDesc)
   }
 
   it should "support skipping a description for a constant value" in {
-    val valueProc = constantOptionValueWithDesc(None, "foo", "bar")
-    val proc = optionValue(Key)
-      .fallback(valueProc)
+    val valueExt = constantOptionValueWithDesc(None, "foo", "bar")
+    val ext = optionValue(Key)
+      .fallback(valueExt)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     helpContext.hasAttribute(Key, CliHelpGenerator.AttrFallbackValue) shouldBe false
   }
 
   it should "support a description for constant values via the DSL" in {
     val ValueDesc = "Description of this value."
-    val proc = optionValue(Key)
+    val ext = optionValue(Key)
       .fallbackValuesWithDesc(Some(ValueDesc), "foo", "bar", "baz")
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(ValueDesc)
   }
 
   it should "generate a description for constant values" in {
     val Values = List("val1", "val2", "val3")
     val ValueDesc = s"<${Values.head}, ${Values(1)}, ${Values(2)}>"
-    val proc = optionValue(Key)
+    val ext = optionValue(Key)
       .fallbackValues(Values.head, Values.tail: _*)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(ValueDesc)
   }
 
   it should "generate a description for a single constant value" in {
     val Value = "test"
-    val proc = optionValue(Key)
+    val ext = optionValue(Key)
       .fallbackValues(Value)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(Value)
   }
 
-  it should "update the help context with a fallback processor" in {
+  it should "update the help context with a fallback extractor" in {
     val paramsMap = Map(Key -> List("true"))
     val params = Parameters(paramsMap, Set.empty)
-    val proc = optionValue(Key)
+    val ext = optionValue(Key)
       .toBoolean
       .fallbackValues(false)
 
-    val helpContext = generateHelpContext(proc, params = params)
+    val helpContext = generateHelpContext(ext, params = params)
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrFallbackValue) should be(false.toString)
   }
 
   it should "handle an uninitialized help context gracefully" in {
-    val proc = CliProcessor(context => {
+    val ext = CliExtractor(context => {
       (42, context.updateHelpContext("test", "success"))
     })
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     helpContext.options should have size 0
   }
 
@@ -241,16 +241,16 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val Help2 = "The target directory"
     val Help3 = "List of the files to be copied"
     val ExpInputs = List(InputParameterRef(0, Key2), InputParameterRef(1, Key), InputParameterRef(2, Key3))
-    val procInp1 = inputValue(1, optKey = Some(Key), optHelp = Some(HelpText))
-    val procInp2 = inputValue(0, optKey = Some(Key2), optHelp = Some(Help2))
-    val procInp3 = inputValues(2, -1, optKey = Some(Key3), optHelp = Some(Help3))
-    val proc = for {
-      i1 <- procInp1
-      i2 <- procInp2
-      i3 <- procInp3
+    val extInp1 = inputValue(1, optKey = Some(Key), optHelp = Some(HelpText))
+    val extInp2 = inputValue(0, optKey = Some(Key2), optHelp = Some(Help2))
+    val extInp3 = inputValues(2, -1, optKey = Some(Key3), optHelp = Some(Help3))
+    val ext = for {
+      i1 <- extInp1
+      i2 <- extInp2
+      i3 <- extInp3
     } yield List(i1, i2, i3)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     helpContext.options.keySet should contain theSameElementsAs List(Key, Key2, Key3)
     helpContext.options(Key).attributes(CliHelpGenerator.AttrHelpText) should be(HelpText)
     helpContext.options(Key2).attributes(CliHelpGenerator.AttrHelpText) should be(Help2)
@@ -259,8 +259,8 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   }
 
   it should "support attributes for input parameters" in {
-    val proc = inputValue(1, Some(Key))
-    val helpContext1 = generateHelpContext(proc)
+    val ext = inputValue(1, Some(Key))
+    val helpContext1 = generateHelpContext(ext)
 
     val helpContext2 = helpContext1.addAttribute("foo", "bar")
     helpContext2.inputs should contain only InputParameterRef(1, Key)
@@ -275,26 +275,26 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val Key4 = "k4"
     val ExpInputs = List(InputParameterRef(0, Key1), InputParameterRef(1, Key2),
       InputParameterRef(-2, Key3), InputParameterRef(-1, Key4))
-    val procInp1 = inputValue(0, optKey = Some(Key1), optHelp = Some(HelpText))
-    val procInp2 = inputValue(1, optKey = Some(Key2))
-    val procInp3 = inputValue(-2, optKey = Some(Key3))
-    val procInp4 = inputValue(-1, optKey = Some(Key4))
-    val proc = for {
-      i1 <- procInp1
-      i4 <- procInp4
-      i3 <- procInp3
-      i2 <- procInp2
+    val extInp1 = inputValue(0, optKey = Some(Key1), optHelp = Some(HelpText))
+    val extInp2 = inputValue(1, optKey = Some(Key2))
+    val extInp3 = inputValue(-2, optKey = Some(Key3))
+    val extInp4 = inputValue(-1, optKey = Some(Key4))
+    val ext = for {
+      i1 <- extInp1
+      i4 <- extInp4
+      i3 <- extInp3
+      i2 <- extInp2
     } yield List(i1, i2, i3, i4)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     helpContext.inputs should contain theSameElementsInOrderAs ExpInputs
   }
 
   it should "generate a key for an input parameter if necessary" in {
     val Index = 17
-    val proc = inputValue(Index)
+    val ext = inputValue(Index)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     helpContext.inputs should contain only InputParameterRef(Index, CliHelpGenerator.KeyInput + Index)
   }
 
@@ -310,14 +310,14 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
   it should "set a multiplicity attribute for options with a single value" in {
     val Key2 = Key + "_other"
-    val proc1 = optionValue(Key).single
-    val proc2 = optionValue(Key2)
-    val proc = for {
-      v1 <- proc1
-      v2 <- proc2
+    val ext1 = optionValue(Key).single
+    val ext2 = optionValue(Key2)
+    val ext = for {
+      v1 <- ext1
+      v2 <- ext2
     } yield List(v1, v2)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     helpContext.options(Key).attributes(CliHelpGenerator.AttrMultiplicity) shouldBe "0..1"
     helpContext.hasAttribute(Key2, CliHelpGenerator.AttrMultiplicity) shouldBe false
   }
@@ -330,29 +330,29 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
   it should "set a multiplicity attribute for mandatory options" in {
     val Key2 = Key + "_optional"
-    val proc1 = optionValue(Key).single.mandatory
-    val proc2 = optionValue(Key2).single
-    val proc = for {
-      v1 <- proc1
-      v2 <- proc2
+    val ext1 = optionValue(Key).single.mandatory
+    val ext2 = optionValue(Key2).single
+    val ext = for {
+      v1 <- ext1
+      v2 <- ext2
     } yield List(v1, v2)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     helpContext.options(Key).attributes(CliHelpGenerator.AttrMultiplicity) shouldBe "1..1"
   }
 
   it should "support groups for conditional options" in {
-    val procCond = optionValue("condition").isDefined
-    val procIf = optionValue("if", Some("help-if"))
-    val procElse = optionValue("else", Some("help-else"))
-    val procOther = optionValue(Key, Some(HelpText))
-    val procCase = conditionalValue(procCond, procIf, procElse, Some("grp-if"), Some("grp-else"))
-    val proc = for {
-      v1 <- procCase
-      v2 = procOther
+    val extCond = optionValue("condition").isDefined
+    val extIf = optionValue("if", Some("help-if"))
+    val extElse = optionValue("else", Some("help-else"))
+    val extOther = optionValue(Key, Some(HelpText))
+    val extCase = conditionalValue(extCond, extIf, extElse, Some("grp-if"), Some("grp-else"))
+    val ext = for {
+      v1 <- extCase
+      v2 = extOther
     } yield List(v1, v2)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     helpContext.hasAttribute(Key, CliHelpGenerator.AttrGroup) shouldBe false
     val attrIf = helpContext.options("if")
     CliHelpGenerator.isInGroup(attrIf, "grp-if") shouldBe true
@@ -363,17 +363,17 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   }
 
   it should "support nested conditional groups" in {
-    val procCond1 = optionValue("condition1").isDefined
-    val procCond2 = optionValue("condition2").isDefined
-    val procIfNested = optionValue("if-nested", Some("help-if-nested"))
-    val procElseNested = optionValue("else-nested", Some("help-else-nested"))
-    val procElse = optionValue("else", Some("help-else"))
-    val procCaseNested = conditionalValue(procCond2, procIfNested, procElseNested,
+    val extCond1 = optionValue("condition1").isDefined
+    val extCond2 = optionValue("condition2").isDefined
+    val extIfNested = optionValue("if-nested", Some("help-if-nested"))
+    val extElseNested = optionValue("else-nested", Some("help-else-nested"))
+    val extElse = optionValue("else", Some("help-else"))
+    val extCaseNested = conditionalValue(extCond2, extIfNested, extElseNested,
       ifGroup = Some("grp-if-nested"), elseGroup = Some("grp-else-nested"))
-    val procCase = conditionalValue(procCond1, procCaseNested, procElse,
+    val extCase = conditionalValue(extCond1, extCaseNested, extElse,
       ifGroup = Some("grp-if"), elseGroup = Some("grp-else"))
 
-    val helpContext = generateHelpContext(procCase)
+    val helpContext = generateHelpContext(extCase)
     val attrIfNested = helpContext.options("if-nested")
     CliHelpGenerator.isInGroup(attrIfNested, "grp-if-nested") shouldBe true
     CliHelpGenerator.isInGroup(attrIfNested, "grp-if") shouldBe true
@@ -387,13 +387,13 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   }
 
   it should "merge the values of group attributes" in {
-    val procCond = optionValue("condition").isDefined
-    val procIf = optionValue(Key)
-    val procElse = optionValue(Key)
-    val procCase = conditionalValue(procCond, ifProc = procIf, ifGroup = Some("g1"),
-      elseProc = procElse, elseGroup = Some("g2"))
+    val extCond = optionValue("condition").isDefined
+    val extIf = optionValue(Key)
+    val extElse = optionValue(Key)
+    val extCase = conditionalValue(extCond, ifExt = extIf, ifGroup = Some("g1"),
+      elseExt = extElse, elseGroup = Some("g2"))
 
-    val helpContext = generateHelpContext(procCase)
+    val helpContext = generateHelpContext(extCase)
     val attr = helpContext.options(Key)
     CliHelpGenerator.groups(attr) should contain only("g1", "g2")
   }
@@ -417,62 +417,62 @@ class CliProcessorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     CliHelpGenerator.groups(attr) should have size 0
   }
 
-  it should "use a dummy console reader when running processors to get meta data" in {
+  it should "use a dummy console reader when running extractors to get meta data" in {
     val Key2 = "readerOption"
-    val procCond = optionValue("condition").isDefined
-    val procIf = optionValue(Key).fallback(consoleReaderValue(Key2, password = true))
-    val procElse = optionValue(Key2)
-    val procCase = conditionalValue(procCond, ifProc = procIf, ifGroup = Some("g1"),
-      elseProc = procElse, elseGroup = Some("g2"))
+    val extCond = optionValue("condition").isDefined
+    val extIf = optionValue(Key).fallback(consoleReaderValue(Key2, password = true))
+    val extElse = optionValue(Key2)
+    val extCase = conditionalValue(extCond, ifExt = extIf, ifGroup = Some("g1"),
+      elseExt = extElse, elseGroup = Some("g2"))
     val reader = mock[ConsoleReader]
 
-    val helpContext = generateHelpContext(procCase, optReader = Some(reader))
+    val helpContext = generateHelpContext(extCase, optReader = Some(reader))
     val attr = helpContext.options(Key2)
     CliHelpGenerator.isInGroup(attr, "g2") shouldBe true
     verifyZeroInteractions(reader)
   }
 
-  it should "correctly handle the groups of a conditional group processor" in {
+  it should "correctly handle the groups of a conditional group extractor" in {
     val Key2 = "OtherKey"
-    val procG1 = optionValue(Key)
-    val procG2 = optionValue(Key2)
-    val procGroupSel = constantOptionValue("g1").single.mandatory
-    val groupMap = Map("g1" -> procG1, "g2" -> procG2)
-    val procCondGroup = conditionalGroupValue(procGroupSel, groupMap)
+    val extG1 = optionValue(Key)
+    val extG2 = optionValue(Key2)
+    val extGroupSel = constantOptionValue("g1").single.mandatory
+    val groupMap = Map("g1" -> extG1, "g2" -> extG2)
+    val extCondGroup = conditionalGroupValue(extGroupSel, groupMap)
 
-    val helpContext = generateHelpContext(procCondGroup)
+    val helpContext = generateHelpContext(extCondGroup)
     CliHelpGenerator.isInGroup(helpContext.options(Key), "g1") shouldBe true
     CliHelpGenerator.isInGroup(helpContext.options(Key2), "g2") shouldBe true
     CliHelpGenerator.isInGroup(helpContext.options(Key2), "g1") shouldBe false
   }
 
   it should "set the multiplicity attribute if it is defined" in {
-    val proc = optionValue(Key).multiplicity(1, 4)
+    val ext = optionValue(Key).multiplicity(1, 4)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     val attr = helpContext.options(Key)
     attr.attributes(CliHelpGenerator.AttrMultiplicity) should be("1..4")
   }
 
   it should "handle an unrestricted multiplicity" in {
-    val proc = optionValue(Key).multiplicity()
+    val ext = optionValue(Key).multiplicity()
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     val attr = helpContext.options(Key)
     attr.attributes(CliHelpGenerator.AttrMultiplicity) should be("0..*")
   }
 
   it should "set the option type attribute for a plain option" in {
-    val proc = optionValue(Key)
+    val ext = optionValue(Key)
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrOptionType) should be(CliHelpGenerator.OptionTypeOption)
   }
 
   it should "set the option type attribute for an input parameter" in {
-    val proc = inputValue(1, optKey = Some(Key))
+    val ext = inputValue(1, optKey = Some(Key))
 
-    val helpContext = generateHelpContext(proc)
+    val helpContext = generateHelpContext(ext)
     fetchAttribute(helpContext, Key, CliHelpGenerator.AttrOptionType) should be(CliHelpGenerator.OptionTypeInput)
   }
 

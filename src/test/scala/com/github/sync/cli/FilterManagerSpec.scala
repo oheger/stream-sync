@@ -21,7 +21,7 @@ import java.time.{Instant, LocalDateTime, ZoneId}
 import com.github.sync.SyncTypes._
 import com.github.sync._
 import com.github.sync.cli.FilterManager._
-import com.github.sync.cli.ParameterManager.{ParameterContext, ParameterExtractionException, Parameters}
+import com.github.sync.cli.ParameterExtractor.{ParameterContext, ParameterExtractionException, Parameters}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -81,7 +81,7 @@ object FilterManagerSpec {
     * @return the result of the parse operation
     */
   private def parseFilters(args: Parameters): Try[(SyncFilterData, ParameterContext)] =
-    ParameterManager.tryProcessor(FilterManager.filterDataProcessor, args)(DefaultConsoleReader)
+    ParameterExtractor.tryExtractor(FilterManager.filterDataExtractor, args)(DefaultConsoleReader)
 }
 
 /**

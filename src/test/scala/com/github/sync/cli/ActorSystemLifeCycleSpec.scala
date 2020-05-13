@@ -85,8 +85,8 @@ class ActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
     * implementations for methods that are not used by the tests.
     */
   private abstract class ActorSystemLifeCycleTestImpl extends ActorSystemLifeCycle[SyncConfig] {
-    override protected def cliProcessor: ParameterManager.CliProcessor[Try[SyncConfig]] =
-      SyncParameterManager.syncConfigProcessor()
+    override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =
+      SyncParameterManager.syncConfigExtractor()
 
     override protected def usageCaption(helpContext: CliHelpGenerator.CliHelpContext): String =
       "Test usage caption"

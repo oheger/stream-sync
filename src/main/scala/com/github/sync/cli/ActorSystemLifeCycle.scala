@@ -19,7 +19,7 @@ package com.github.sync.cli
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import com.github.sync.cli.CliHelpGenerator.CliHelpContext
-import com.github.sync.cli.ParameterManager.{CliProcessor, ParameterContext, ParameterExtractionException}
+import com.github.sync.cli.ParameterExtractor.{CliExtractor, ParameterContext, ParameterExtractionException}
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -37,7 +37,7 @@ import scala.util.Try
   * The trait also has some support for the handling of command line parsing:
   * errors that occurred during command line processing are detected and cause
   * a help and usage message to be printed. To make this possible, a concrete
-  * implementation has to provide the ''CliProcessor'' to extract its
+  * implementation has to provide the ''CliExtractor'' to extract its
   * configuration.
   *
   * @tparam C the type of the configuration of the application
@@ -108,13 +108,13 @@ trait ActorSystemLifeCycle[C] {
   protected def runApp(args: Array[String]): Future[String]
 
   /**
-    * Returns the main ''CliProcessor'' of this application. This is needed to
+    * Returns the main ''CliExtractor'' of this application. This is needed to
     * handle errors during command line processing properly. Based on this
-    * processor, a help message is generated.
+    * extractor, a help message is generated.
     *
-    * @return the main ''CliProcessor'' of this application
+    * @return the main ''CliExtractor'' of this application
     */
-  protected def cliProcessor: CliProcessor[Try[C]]
+  protected def cliExtractor: CliExtractor[Try[C]]
 
   /**
     * Generates the caption for the usage message of this application, which is
@@ -188,7 +188,7 @@ trait ActorSystemLifeCycle[C] {
     */
   private def generateErrorMessageFromFailures(exception: ParameterExtractionException): String = {
     import CliHelpGenerator._
-    val helpContext = ParameterManager.addFailuresToHelpContext(exception.parameterContext.helpContext,
+    val helpContext = ParameterExtractor.addFailuresToHelpContext(exception.parameterContext.helpContext,
       exception.failures)
     val errorGenerator = wrapColumnGenerator(attributeColumnGenerator(AttrErrorMessage), 70)
     val optionsFilter = attributeFilterFunc(AttrErrorMessage)
@@ -203,7 +203,7 @@ trait ActorSystemLifeCycle[C] {
     * @return the help text
     */
   private def generateCliHelp(parameterContext: ParameterContext): String = {
-    val (_, context) = ParameterManager.runProcessor(cliProcessor, parameterContext.parameters)(DummyConsoleReader)
+    val (_, context) = ParameterExtractor.runExtractor(cliExtractor, parameterContext.parameters)(DummyConsoleReader)
     val helpContext = context.helpContext
 
     import CliHelpGenerator._

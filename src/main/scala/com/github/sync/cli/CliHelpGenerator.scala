@@ -42,7 +42,7 @@ object CliHelpGenerator {
   /**
     * The attribute assigning a group to an option. Groups are used to handle
     * options that are valid only in certain constellations, e.g. when
-    * conditional processors are involved, or if a CLI supports multiple
+    * conditional extractors are involved, or if a CLI supports multiple
     * commands, each of which has its own set of options. In the help text it
     * can then be indicated that the options belonging to a group are allowed
     * only if specific conditions are fulfilled.
@@ -222,7 +222,7 @@ object CliHelpGenerator {
     * options that can be used to generate help or usage texts.
     *
     * An instance of this class is available in the context passed to
-    * ''CliProcessor'' objects. The processors update the instance with specific
+    * ''CliExtractor'' objects. The extractors update the instance with specific
     * information, so that meta data about the options supported by the
     * application is collected.
     *
@@ -268,7 +268,7 @@ object CliHelpGenerator {
 
     /**
       * Adds an attribute for the current option. This function is called by
-      * ''CliProcessor'' objects to add more detailed information about a
+      * ''CliExtractor'' objects to add more detailed information about a
       * command line option. It refers to the last option that has been added.
       *
       * @param attrKey the key of the attribute

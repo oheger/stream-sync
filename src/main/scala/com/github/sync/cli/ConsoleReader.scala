@@ -61,7 +61,7 @@ object DefaultConsoleReader extends ConsoleReader {
 /**
   * A dummy implementation of the ''ConsoleReader'' trait that does not
   * actually access the console, but always returns an empty string. This is
-  * used to process command line options if only the meta data of processors is
+  * used to process command line options if only the meta data of extractors is
   * of interest.
   */
 object DummyConsoleReader extends ConsoleReader {

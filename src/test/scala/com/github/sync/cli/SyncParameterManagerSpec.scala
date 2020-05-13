@@ -22,7 +22,7 @@ import java.time.ZoneId
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import akka.util.Timeout
-import com.github.sync.cli.ParameterManager.ParameterExtractionException
+import com.github.sync.cli.ParameterExtractor.ParameterExtractionException
 import com.github.sync.cli.SyncParameterManager.{ApplyModeNone, ApplyModeTarget, CryptConfig, CryptMode}
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.http.NoAuth
@@ -335,7 +335,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (SyncParameterManager.DestPasswordOption -> List("dstSecret"))
 
     val (_, next) = futureResult(SyncParameterManager.extractSyncConfig(argsMap))
-    ParameterManager.checkParametersConsumed(next) match {
+    ParameterExtractor.checkParametersConsumed(next) match {
       case Failure(exception: ParameterExtractionException) =>
         exception.failures.map(_.key) should contain only(SyncParameterManager.SourcePasswordOption,
           SyncParameterManager.DestPasswordOption)

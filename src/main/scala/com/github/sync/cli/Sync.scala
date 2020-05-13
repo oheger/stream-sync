@@ -26,7 +26,7 @@ import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes._
 import com.github.sync.cli.CliHelpGenerator.{OptionFilter, OptionsFilterFunc, andFilter}
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.ParameterExtractor.Parameters
 import com.github.sync.cli.Sync.{groupFilter, structureGroup}
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
@@ -83,7 +83,7 @@ object Sync {
     for {
       argsMap <- SyncParameterManager.parseParameters(args)
       (config, paramCtx) <- SyncParameterManager.extractSyncConfig(argsMap)
-      _ <- Future.fromTry(ParameterManager.checkParametersConsumed(paramCtx))
+      _ <- Future.fromTry(ParameterExtractor.checkParametersConsumed(paramCtx))
       srcFactory <- factory.createSourceComponentsFactory(config)
       dstFactory <- factory.createDestinationComponentsFactory(config)
       result <- runSync(config, srcFactory, dstFactory)
@@ -472,8 +472,8 @@ object Sync {
     * @return an ''Option'' with the name of the group
     */
   private def structureGroup(params: Parameters, roleType: RoleType): Option[String] =
-    ParameterManager.tryProcessor(
-      SyncStructureConfig.structureTypeSelectorProcessor(roleType, "uri"), params)(DefaultConsoleReader)
+    ParameterExtractor.tryExtractor(
+      SyncStructureConfig.structureTypeSelectorExtractor(roleType, "uri"), params)(DefaultConsoleReader)
       .toOption map (_._1)
 
   /**
@@ -509,13 +509,13 @@ object Sync {
 class Sync extends ActorSystemLifeCycle[SyncConfig] {
   override val name: String = "Sync"
 
-  override protected def cliProcessor: ParameterManager.CliProcessor[Try[SyncConfig]] =
-    SyncParameterManager.syncConfigProcessor()
+  override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =
+    SyncParameterManager.syncConfigExtractor()
 
   override protected def usageCaption(helpContext: CliHelpGenerator.CliHelpContext): String =
     "Usage: streamsync [options] " + CliHelpGenerator.generateInputParamsOverview(helpContext).mkString(" ")
 
-  override protected def optionsGroupFilter(context: ParameterManager.ParameterContext): OptionFilter = {
+  override protected def optionsGroupFilter(context: ParameterExtractor.ParameterContext): OptionFilter = {
     val params = context.parameters
     val srcGroup = structureGroup(params, SourceRoleType)
     val dstGroup = structureGroup(params, DestinationRoleType)

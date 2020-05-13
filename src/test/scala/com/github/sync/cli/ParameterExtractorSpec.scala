@@ -19,7 +19,7 @@ package com.github.sync.cli
 import java.io.IOException
 
 import com.github.sync.cli.CliHelpGenerator.CliHelpContext
-import com.github.sync.cli.ParameterManager.{OptionValue, ParameterContext, Parameters}
+import com.github.sync.cli.ParameterExtractor.{OptionValue, ParameterContext, Parameters}
 import com.github.sync.cli.ParameterParser.ParametersMap
 import org.mockito.Mockito
 import org.mockito.Mockito._
@@ -30,15 +30,15 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.collection.SortedSet
 import scala.util.{Failure, Random, Success, Try}
 
-object ParameterManagerSpec {
+object ParameterExtractorSpec {
   /** A test option key. */
   private val Key = "--my-test-option"
 
-  /** A result of a test CLI processor. */
-  private val ProcessorResult = 42
+  /** A result of a test CLI extractor. */
+  private val ExtractorResult = 42
 
   /** The test value list assigned to the test key.  */
-  private val ResultValues = List(ProcessorResult.toString)
+  private val ResultValues = List(ExtractorResult.toString)
 
   /** Test data for input values passed on the command line. */
   private val InputValues = List("1", "2", "3")
@@ -46,7 +46,7 @@ object ParameterManagerSpec {
   /** A test option value containing the test result. */
   private val ResultOptionValue: OptionValue[String] = Success(ResultValues)
 
-  /** A test Parameters object for testing CLI processors. */
+  /** A test Parameters object for testing CLI extractors. */
   private val TestParameters: Parameters = Map(Key -> ResultValues)
 
   /** A test parameters object that contains input parameters. */
@@ -63,14 +63,12 @@ object ParameterManagerSpec {
 }
 
 /**
-  * Test class for ''ParameterManager''. Note that the major part of the
-  * functionality provided by ''ParameterManager'' is tested together with the
-  * Sync-specific functionality.
+  * Test class for ''ParameterExtractor''.
   */
-class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class ParameterExtractorSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
-  import ParameterManager._
-  import ParameterManagerSpec._
+  import ParameterExtractor._
+  import ParameterExtractorSpec._
 
   /**
     * Tries to cast the given ''Throwable'' to a
@@ -200,51 +198,51 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   }
 
   /**
-    * Creates a generic test Cli processor that checks the context passed to it
+    * Creates a generic test Cli extractor that checks the context passed to it
     * and returns a defined result.
     *
-    * @param value          the value to be returned by the processor
+    * @param value          the value to be returned by the extractor
     * @param expParameters  the expected parameters
     * @param nextParameters the updated parameters
     * @param expReader      the expected console reader
     * @tparam A the type of the value
-    * @return the test processor
+    * @return the test extractor
     */
-  private def testProcessor[A](value: A, expParameters: Parameters = TestParameters,
+  private def testExtractor[A](value: A, expParameters: Parameters = TestParameters,
                                nextParameters: Parameters = NextParameters)
-                              (implicit expReader: ConsoleReader): CliProcessor[A] = CliProcessor(context => {
+                              (implicit expReader: ConsoleReader): CliExtractor[A] = CliExtractor(context => {
     context.parameters should be(expParameters)
     context.reader should be(expReader)
     (value, context.update(nextParameters, context.helpContext))
   }, Some(Key))
 
-  "ParametersManager" should "support running a CliProcessor" in {
+  "ParameterExtractor" should "support running a CliExtractor" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val proc = testProcessor(ProcessorResult)
+    val ext = testExtractor(ExtractorResult)
 
-    val (res, next) = ParameterManager.runProcessor(proc, TestParameters)
-    res should be(ProcessorResult)
+    val (res, next) = ParameterExtractor.runExtractor(ext, TestParameters)
+    res should be(ExtractorResult)
     next.parameters should be(NextParameters)
   }
 
-  it should "run a processor yielding a Try if execution is successful" in {
+  it should "run an extractor yielding a Try if execution is successful" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val proc = testProcessor[Try[Int]](Success(ProcessorResult))
+    val ext = testExtractor[Try[Int]](Success(ExtractorResult))
 
-    ParameterManager.tryProcessor(proc, TestParameters) match {
+    ParameterExtractor.tryExtractor(ext, TestParameters) match {
       case Success((res, next)) =>
-        res should be(ProcessorResult)
+        res should be(ExtractorResult)
         next.parameters should be(NextParameters)
       case f => fail("Unexpected result: " + f)
     }
   }
 
-  it should "run a processor yielding a Try if execution fails" in {
+  it should "run an extractor yielding a Try if execution fails" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val exception = new IllegalArgumentException("Wrong parameters")
-    val proc = testProcessor[Try[Int]](Failure(exception))
+    val ext = testExtractor[Try[Int]](Failure(exception))
 
-    ParameterManager.tryProcessor(proc, TestParameters) match {
+    ParameterExtractor.tryExtractor(ext, TestParameters) match {
       case Failure(ex) =>
         ex should be(exception)
       case s => fail("Unexpected result: " + s)
@@ -252,15 +250,15 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   }
 
   it should "wrap a function in a Try" in {
-    val triedResult = ParameterManager.paramTry(TestContext, Key)(ProcessorResult)
+    val triedResult = ParameterExtractor.paramTry(TestContext, Key)(ExtractorResult)
 
-    triedResult should be(Success(ProcessorResult))
+    triedResult should be(Success(ExtractorResult))
   }
 
   it should "catch the exception thrown by a function and wrap it" in {
     val exception = new IOException("Fatal error")
 
-    val triedResult = ParameterManager.paramTry[String](TestContext, Key)(throw exception)
+    val triedResult = ParameterExtractor.paramTry[String](TestContext, Key)(throw exception)
     checkExtractionException(expectExtractionException(triedResult),
       expParams = TestParameters.parametersMap)("java.io.IOException - " + exception.getMessage)
   }
@@ -268,225 +266,225 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   it should "handle a ParameterExtractionException thrown within a Try in a special way" in {
     val exception = ParameterExtractionException(ExtractionFailure(Key, "Some error", TestContext))
 
-    val triedResult = ParameterManager.paramTry[String](TestContext, Key)(throw exception)
+    val triedResult = ParameterExtractor.paramTry[String](TestContext, Key)(throw exception)
     expectExtractionException(triedResult) should be theSameInstanceAs exception
   }
 
-  it should "provide a constant processor" in {
+  it should "provide a constant extractor" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.constantProcessor(ProcessorResult)
+    val extractor = ParameterExtractor.constantExtractor(ExtractorResult)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
-    res should be(ProcessorResult)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
+    res should be(ExtractorResult)
     next.parameters should be(TestParameters)
   }
 
-  it should "provide a processor returning a constant option value with only a single value" in {
+  it should "provide an extractor returning a constant option value with only a single value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.constantOptionValue(ProcessorResult.toString)
+    val extractor = ParameterExtractor.constantOptionValue(ExtractorResult.toString)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(TestParameters)
-    res.get should contain only ProcessorResult.toString
+    res.get should contain only ExtractorResult.toString
   }
 
-  it should "provide a processor returning a constant option value with multiple values" in {
+  it should "provide an extractor returning a constant option value with multiple values" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val items = List("foo", "bar", "baz", "more")
-    val processor = ParameterManager.constantOptionValue(items.head, items.tail: _*)
+    val extractor = ParameterExtractor.constantOptionValue(items.head, items.tail: _*)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(TestParameters)
     res.get should be(items)
   }
 
-  it should "provide a fallback processor if the first processor yields a value" in {
+  it should "provide a fallback extractor if the first extractor yields a value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val proc1 = testProcessor(ResultOptionValue)
-    val proc2 = consoleReaderValue("someKey", password = true)
-    val processor = ParameterManager.withFallback(proc1, proc2)
+    val ext1 = testExtractor(ResultOptionValue)
+    val ext2 = consoleReaderValue("someKey", password = true)
+    val extractor = ParameterExtractor.withFallback(ext1, ext2)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res.get should be(ResultValues)
     Mockito.verifyZeroInteractions(consoleReader)
   }
 
-  it should "provide a fallback processor if the first processor yields an empty value" in {
+  it should "provide a fallback extractor if the first extractor yields an empty value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
-    val proc1 = testProcessor[OptionValue[String]](Success(List.empty))
-    val proc2 = testProcessor(ResultOptionValue, expParameters = NextParameters, nextParameters = nextNextParameters)
-    val processor = ParameterManager.withFallback(proc1, proc2)
+    val ext1 = testExtractor[OptionValue[String]](Success(List.empty))
+    val ext2 = testExtractor(ResultOptionValue, expParameters = NextParameters, nextParameters = nextNextParameters)
+    val extractor = ParameterExtractor.withFallback(ext1, ext2)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(nextNextParameters)
     res.get should be(ResultValues)
   }
 
-  it should "provide a fallback processor if the first processor yields a Failure" in {
+  it should "provide a fallback extractor if the first extractor yields a Failure" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val exception = new IllegalArgumentException("Invalid option")
     val optionValue: OptionValue[String] = Failure(exception)
-    val proc1 = testProcessor(optionValue)
-    val proc2 = constantProcessor(ResultOptionValue)
-    val processor = ParameterManager.withFallback(proc1, proc2)
+    val ext1 = testExtractor(optionValue)
+    val ext2 = constantExtractor(ResultOptionValue)
+    val extractor = ParameterExtractor.withFallback(ext1, ext2)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(optionValue)
   }
 
-  it should "provide a processor to extract a single option value if there is exactly one value" in {
+  it should "provide an extractor to extract a single option value if there is exactly one value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val proc = testProcessor(ResultOptionValue)
-    val processor = ParameterManager.asSingleOptionValue(proc)
+    val ext = testExtractor(ResultOptionValue)
+    val extractor = ParameterExtractor.asSingleOptionValue(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
-    res should be(Success(Some(ProcessorResult.toString)))
+    res should be(Success(Some(ExtractorResult.toString)))
   }
 
-  it should "provide a processor to extract a single option value if the value is undefined" in {
+  it should "provide an extractor to extract a single option value if the value is undefined" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val EmptyValue: OptionValue[String] = Success(Nil)
-    val proc = testProcessor(EmptyValue)
-    val processor = ParameterManager.asSingleOptionValue(proc)
+    val ext = testExtractor(EmptyValue)
+    val extractor = ParameterExtractor.asSingleOptionValue(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(Success(None))
   }
 
-  it should "provide a processor to extract a single option value if there are multiple values" in {
+  it should "provide an extractor to extract a single option value if there are multiple values" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val MultiValue: OptionValue[String] = Success(List("v1", "v2"))
-    val proc = testProcessor(MultiValue)
-    val processor = ParameterManager.asSingleOptionValue(proc)
+    val ext = testExtractor(MultiValue)
+    val extractor = ParameterExtractor.asSingleOptionValue(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     val paramEx = expectExtractionException(res)
     checkExtractionException(paramEx)("multiple values", MultiValue.toString)
   }
 
-  it should "provide a mapping processor that handles a failed result" in {
+  it should "provide a mapping extractor that handles a failed result" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val FailedValue: OptionValue[String] = Failure(new Exception("Failed"))
-    val proc = testProcessor(FailedValue)
-    val processor = ParameterManager.mapped(proc)(_.toInt)
+    val ext = testExtractor(FailedValue)
+    val extractor = ParameterExtractor.mapped(ext)(_.toInt)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(FailedValue)
   }
 
-  it should "provide a mapping processor that handles an empty result" in {
+  it should "provide a mapping extractor that handles an empty result" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val EmptyResult: OptionValue[String] = Success(None)
-    val proc = testProcessor(EmptyResult)
-    val processor = ParameterManager.mapped(proc)(_ => throw new IllegalArgumentException("Nope"))
+    val ext = testExtractor(EmptyResult)
+    val extractor = ParameterExtractor.mapped(ext)(_ => throw new IllegalArgumentException("Nope"))
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(EmptyResult)
   }
 
-  it should "provide a mapping processor that handles a defined result" in {
+  it should "provide a mapping extractor that handles a defined result" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val Result: OptionValue[String] = Success(Some(ProcessorResult.toString))
-    val proc = testProcessor(Result)
-    val processor = ParameterManager.mapped(proc)(_.toInt)
+    val Result: OptionValue[String] = Success(Some(ExtractorResult.toString))
+    val ext = testExtractor(Result)
+    val extractor = ParameterExtractor.mapped(ext)(_.toInt)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
-    res should be(Success(List(ProcessorResult)))
+    res should be(Success(List(ExtractorResult)))
   }
 
-  it should "provide a mapping processor that handles an exception thrown by the mapping function" in {
+  it should "provide a mapping extractor that handles an exception thrown by the mapping function" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val Result: OptionValue[String] = Success(Some("Not a number!"))
-    val proc = testProcessor(Result)
-    val processor = ParameterManager.mapped(proc)(_.toInt)
+    val ext = testExtractor(Result)
+    val extractor = ParameterExtractor.mapped(ext)(_.toInt)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     checkExtractionException(expectExtractionException(res))(classOf[NumberFormatException].getName)
   }
 
-  it should "provide a mapping processor that passes the ParameterContext to the mapping function" in {
+  it should "provide a mapping extractor that passes the ParameterContext to the mapping function" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val IntValues = List(17, 21, 44, 127)
     val StrValues = IntValues map (_.toString)
     val Result: OptionValue[Int] = Success(IntValues)
-    val proc = testProcessor(Result)
-    val processor = ParameterManager.mappedWithContext(proc) { (i, ctx) =>
+    val ext = testExtractor(Result)
+    val extractor = ParameterExtractor.mappedWithContext(ext) { (i, ctx) =>
       val res = i.toString
       val nextHelpCtx = ctx.helpContext.addOption(res, None)
       (res, ctx.copy(helpContext = nextHelpCtx))
     }
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(Success(StrValues))
     next.helpContext.options.keys should contain allOf(StrValues.head, StrValues.tail.head, StrValues.drop(2): _*)
   }
 
-  it should "provide a mapping processor that collects multiple mapping errors" in {
+  it should "provide a mapping extractor that collects multiple mapping errors" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val InvalidValues = List("xy", "noNumber", "1234abc")
     val ValidNumbers = List("17", "21", "44", "127")
     val random = new Random
     val Values = random.shuffle(ValidNumbers ::: InvalidValues)
     val Result: OptionValue[String] = Success(Values)
-    val proc = testProcessor(Result)
-    val processor = ParameterManager.mapped(proc)(_.toInt)
+    val ext = testExtractor(Result)
+    val extractor = ParameterExtractor.mapped(ext)(_.toInt)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     checkExtractionException(expectExtractionException(res))(InvalidValues: _*)
   }
 
-  it should "provide a mapping processor with fallbacks if the value is defined" in {
+  it should "provide a mapping extractor with fallbacks if the value is defined" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val Result: OptionValue[String] = Success(Some(ProcessorResult.toString))
-    val proc = testProcessor(Result)
-    val processor = ParameterManager.mappedWithFallback(proc, 1, 2, 3)(_.toInt)
+    val Result: OptionValue[String] = Success(Some(ExtractorResult.toString))
+    val ext = testExtractor(Result)
+    val extractor = ParameterExtractor.mappedWithFallback(ext, 1, 2, 3)(_.toInt)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
-    res should be(Success(List(ProcessorResult)))
+    res should be(Success(List(ExtractorResult)))
   }
 
-  it should "provide a mapping processor with fallbacks if the value is undefined" in {
+  it should "provide a mapping extractor with fallbacks if the value is undefined" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.mappedWithFallback(ParameterManager.emptyProcessor[String],
+    val extractor = ParameterExtractor.mappedWithFallback(ParameterExtractor.emptyExtractor[String],
       1, 2, 3)(_.toInt)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(TestParameters)
     res should be(Success(List(1, 2, 3)))
   }
 
-  it should "provide a processor that converts an option value to int" in {
+  it should "provide an extractor that converts an option value to int" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val StrValue: OptionValue[String] = Try(Some(ProcessorResult.toString))
-    val proc = testProcessor(StrValue)
-    val processor = ParameterManager.asIntOptionValue(proc)
+    val StrValue: OptionValue[String] = Try(Some(ExtractorResult.toString))
+    val ext = testExtractor(StrValue)
+    val extractor = ParameterExtractor.asIntOptionValue(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
-    res should be(Success(List(ProcessorResult)))
+    res should be(Success(List(ExtractorResult)))
   }
 
-  it should "provide a processor that converts an option value to int and handles errors" in {
+  it should "provide an extractor that converts an option value to int and handles errors" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val NoIntValue = "not a valid number"
     val StrValue: OptionValue[String] = Try(Some(NoIntValue))
-    val proc = testProcessor(StrValue)
-    val processor = ParameterManager.asIntOptionValue(proc)
+    val ext = testExtractor(StrValue)
+    val extractor = ParameterExtractor.asIntOptionValue(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     checkExtractionException(expectExtractionException(res))(classOf[NumberFormatException].getName, NoIntValue)
   }
@@ -500,302 +498,302 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
   private def checkBooleanConversion(value: String, expResult: Boolean): Unit = {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val StrValue: OptionValue[String] = Try(Some(value))
-    val proc = testProcessor(StrValue)
-    val processor = ParameterManager.asBooleanOptionValue(proc)
+    val ext = testExtractor(StrValue)
+    val extractor = ParameterExtractor.asBooleanOptionValue(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(Success(List(expResult)))
   }
 
-  it should "provide a processor that converts an option to boolean if the result is true" in {
+  it should "provide an extractor that converts an option to boolean if the result is true" in {
     checkBooleanConversion("true", expResult = true)
   }
 
-  it should "provide a processor that converts an option to boolean if the result is false" in {
+  it should "provide an extractor that converts an option to boolean if the result is false" in {
     checkBooleanConversion("false", expResult = false)
   }
 
-  it should "provide a processor that converts an option to boolean ignoring case" in {
+  it should "provide an extractor that converts an option to boolean ignoring case" in {
     checkBooleanConversion("TruE", expResult = true)
   }
 
-  it should "provide a processor that converts an option to boolean and handles errors" in {
+  it should "provide an extractor that converts an option to boolean and handles errors" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val StrValue = "not a valid boolean"
     val ValueOption: OptionValue[String] = Try(Some(StrValue))
-    val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.asBooleanOptionValue(proc)
+    val ext = testExtractor(ValueOption)
+    val extractor = ParameterExtractor.asBooleanOptionValue(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     checkExtractionException(expectExtractionException(res))(StrValue)
   }
 
-  it should "provide a processor that converts string values to lower case" in {
+  it should "provide an extractor that converts string values to lower case" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val ValueOption: OptionValue[String] = Try(Some("This Is a TEST String"))
-    val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.asLowerCase(proc)
+    val ext = testExtractor(ValueOption)
+    val extractor = ParameterExtractor.asLowerCase(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(Success(List("this is a test string")))
   }
 
-  it should "provide a processor that converts string values to upper case" in {
+  it should "provide an extractor that converts string values to upper case" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val ValueOption: OptionValue[String] = Try(Some("This Is a TEST String"))
-    val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.asUpperCase(proc)
+    val ext = testExtractor(ValueOption)
+    val extractor = ParameterExtractor.asUpperCase(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(Success(List("THIS IS A TEST STRING")))
   }
 
-  it should "provide a processor that does a mapping of enum values" in {
+  it should "provide an extractor that does a mapping of enum values" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val mapping = Map("foo" -> 1, "bar" -> 2, "baz" -> 3)
     val values = mapping.keys.toList
     val results = values map (mapping(_))
     val ValueOption: OptionValue[String] = Success(values)
-    val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.asEnum(proc)(mapping.get)
+    val ext = testExtractor(ValueOption)
+    val extractor = ParameterExtractor.asEnum(ext)(mapping.get)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res.get.toList should contain theSameElementsInOrderAs results
   }
 
-  it should "provide an enum processor that handles invalid literals" in {
+  it should "provide an enum extractor that handles invalid literals" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val mappingFunc: String => Option[Int] = _ => None
     val Value = "foo"
     val ValueOption: OptionValue[String] = Try(Some(Value))
-    val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.asEnum(proc)(mappingFunc)
+    val ext = testExtractor(ValueOption)
+    val extractor = ParameterExtractor.asEnum(ext)(mappingFunc)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     checkExtractionException(expectExtractionException(res))("enum", Value)
   }
 
-  it should "provide a processor that returns a mandatory value" in {
+  it should "provide an extractor that returns a mandatory value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val ValueOption: SingleOptionValue[Int] = Success(Some(ProcessorResult))
-    val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.asMandatory(proc)
+    val ValueOption: SingleOptionValue[Int] = Success(Some(ExtractorResult))
+    val ext = testExtractor(ValueOption)
+    val extractor = ParameterExtractor.asMandatory(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
-    res should be(Success(ProcessorResult))
+    res should be(Success(ExtractorResult))
   }
 
-  it should "provide a processor that fails if an option does not have a value" in {
+  it should "provide an extractor that fails if an option does not have a value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val ValueOption: SingleOptionValue[Int] = Success(None)
-    val proc = testProcessor(ValueOption)
-    val processor = ParameterManager.asMandatory(proc)
+    val ext = testExtractor(ValueOption)
+    val extractor = ParameterExtractor.asMandatory(ext)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     checkExtractionException(expectExtractionException(res))("no value")
   }
 
-  it should "provide a processor that reads from the console" in {
+  it should "provide an extractor that reads from the console" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val Result = "enteredFromUser"
     when(consoleReader.readOption(Key, password = true)).thenReturn(Result)
-    val processor = ParameterManager.consoleReaderValue(Key, password = true)
+    val extractor = ParameterExtractor.consoleReaderValue(Key, password = true)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(TestParameters)
     res.get should contain only Result
   }
 
-  it should "evaluate the password flag of the console reader processor" in {
+  it should "evaluate the password flag of the console reader extractor" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val Result = "enteredFromUser"
     when(consoleReader.readOption(Key, password = false)).thenReturn(Result)
-    val processor = ParameterManager.consoleReaderValue(Key, password = false)
+    val extractor = ParameterExtractor.consoleReaderValue(Key, password = false)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(TestParameters)
     res.get should contain only Result
   }
 
-  it should "provide a processor that yields an empty option value" in {
+  it should "provide an extractor that yields an empty option value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
 
-    val (res, next) = ParameterManager.runProcessor(ParameterManager.emptyProcessor[Int], TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(ParameterExtractor.emptyExtractor[Int], TestParameters)
     next.parameters should be(TestParameters)
-    res should be(ParameterManager.emptyOptionValue)
+    res should be(ParameterExtractor.emptyOptionValue)
     res.get should have size 0
   }
 
-  it should "provide a conditional processor that executes the if case" in {
+  it should "provide a conditional extractor that executes the if case" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
-    val condProc: CliProcessor[Try[Boolean]] = testProcessor(Success(true))
-    val ifProc = testProcessor(ResultOptionValue, expParameters = NextParameters, nextParameters = nextNextParameters)
-    val processor = ParameterManager.conditionalValue(condProc, ifProc)
+    val condExt: CliExtractor[Try[Boolean]] = testExtractor(Success(true))
+    val ifExt = testExtractor(ResultOptionValue, expParameters = NextParameters, nextParameters = nextNextParameters)
+    val extractor = ParameterExtractor.conditionalValue(condExt, ifExt)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(nextNextParameters)
     res should be(ResultOptionValue)
   }
 
-  it should "provide a condition processor that executes the else case" in {
+  it should "provide a condition extractor that executes the else case" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
-    val condProc: CliProcessor[Try[Boolean]] = testProcessor(Success(false))
-    val elseProc = testProcessor(ResultOptionValue, expParameters = NextParameters,
+    val condExt: CliExtractor[Try[Boolean]] = testExtractor(Success(false))
+    val elseExt = testExtractor(ResultOptionValue, expParameters = NextParameters,
       nextParameters = nextNextParameters)
-    val processor = ParameterManager.conditionalValue(condProc, ParameterManager.emptyProcessor, elseProc)
+    val extractor = ParameterExtractor.conditionalValue(condExt, ParameterExtractor.emptyExtractor, elseExt)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(nextNextParameters)
     res should be(ResultOptionValue)
   }
 
-  it should "provide a condition processor that handles failures" in {
+  it should "provide a condition extractor that handles failures" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val exception = new Exception("failed")
-    val condProc: CliProcessor[Try[Boolean]] = testProcessor(Failure(exception))
-    val processor = ParameterManager.conditionalValue(condProc, ifProc = ParameterManager.emptyProcessor[String],
-      elseProc = ParameterManager.emptyProcessor[String])
+    val condExt: CliExtractor[Try[Boolean]] = testExtractor(Failure(exception))
+    val extractor = ParameterExtractor.conditionalValue(condExt, ifExt = ParameterExtractor.emptyExtractor[String],
+      elseExt = ParameterExtractor.emptyExtractor[String])
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(Failure(exception))
   }
 
-  it should "provide a conditional group processor that executes the correct group" in {
+  it should "provide a conditional group extractor that executes the correct group" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val nextNextParameters = Parameters(Map("next" -> List("v4", "v5")), Set("x", "y", "z"))
-    val groupProc: CliProcessor[Try[String]] = testProcessor(Success("foo"))
-    val activeProc = testProcessor(ResultOptionValue, expParameters = NextParameters,
+    val groupExt: CliExtractor[Try[String]] = testExtractor(Success("foo"))
+    val activeExt = testExtractor(ResultOptionValue, expParameters = NextParameters,
       nextParameters = nextNextParameters)
-    val otherProc = constantOptionValue("anotherResult")
-    val groupMap = Map("foo" -> activeProc, "bar" -> otherProc)
-    val processor = conditionalGroupValue(groupProc, groupMap)
+    val otherExt = constantOptionValue("anotherResult")
+    val groupMap = Map("foo" -> activeExt, "bar" -> otherExt)
+    val extractor = conditionalGroupValue(groupExt, groupMap)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(nextNextParameters)
     res should be(ResultOptionValue)
   }
 
-  it should "provide a conditional group processor that handles a failure of the group selector" in {
+  it should "provide a conditional group extractor that handles a failure of the group selector" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val failedResult = Failure(new Exception("failure group"))
-    val groupProc: CliProcessor[Try[String]] = testProcessor(failedResult)
+    val groupExt: CliExtractor[Try[String]] = testExtractor(failedResult)
     val groupMap = Map("foo" -> constantOptionValue("ignored"))
-    val processor = conditionalGroupValue(groupProc, groupMap)
+    val extractor = conditionalGroupValue(groupExt, groupMap)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     res should be(failedResult)
   }
 
-  it should "provide a conditional group processor that fails if the group cannot be resolved" in {
+  it should "provide a conditional group extractor that fails if the group cannot be resolved" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val GroupName = "foo"
-    val groupProc: CliProcessor[Try[String]] = testProcessor(Success(GroupName))
+    val groupExt: CliExtractor[Try[String]] = testExtractor(Success(GroupName))
     val groupMap = Map("bar" -> constantOptionValue("ignored"))
-    val processor = conditionalGroupValue(groupProc, groupMap)
+    val extractor = conditionalGroupValue(groupExt, groupMap)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters should be(NextParameters)
     checkExtractionException(expectExtractionException(res),
       expParams = TestParameters.parametersMap)(s"'$GroupName''")
   }
 
-  it should "provide a processor that checks whether an option is defined if the option has a value" in {
+  it should "provide an extractor that checks whether an option is defined if the option has a value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.isDefinedProcessor(Key)
+    val extractor = ParameterExtractor.isDefinedExtractor(Key)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters.accessedParameters should contain only Key
     res should be(Success(true))
   }
 
-  it should "provide a processor that checks whether an option is defined if the option has no value" in {
+  it should "provide an extractor that checks whether an option is defined if the option has no value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val OtherKey = "undefinedOption"
-    val processor = ParameterManager.isDefinedProcessor(OtherKey)
+    val extractor = ParameterExtractor.isDefinedExtractor(OtherKey)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParameters)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParameters)
     next.parameters.accessedParameters should contain only OtherKey
     res should be(Success(false))
   }
 
-  it should "provide a processor that extracts a single input value" in {
+  it should "provide an extractor that extracts a single input value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.inputValue(0)
+    val extractor = ParameterExtractor.inputValue(0)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParametersWithInputs)
     next.parameters.accessedParameters should contain only ParameterParser.InputOption
     res.get should contain only InputValues.head
   }
 
-  it should "provide a processor that extracts multiple input values" in {
+  it should "provide an extractor that extracts multiple input values" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.inputValues(0, 1)
+    val extractor = ParameterExtractor.inputValues(0, 1)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParametersWithInputs)
     next.parameters.accessedParameters should contain only ParameterParser.InputOption
     res.get.toList should contain theSameElementsInOrderAs InputValues.take(2)
   }
 
-  it should "provide a processor that extracts multiple input values and handles the last check" in {
+  it should "provide an extractor that extracts multiple input values and handles the last check" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.inputValues(0, InputValues.size - 1, last = true)
+    val extractor = ParameterExtractor.inputValues(0, InputValues.size - 1, last = true)
 
-    val (res, next) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    val (res, next) = ParameterExtractor.runExtractor(extractor, TestParametersWithInputs)
     next.parameters.accessedParameters should contain only ParameterParser.InputOption
     res.get.toList should contain theSameElementsInOrderAs InputValues
   }
 
   it should "interpret a negative value for the to index of an input value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.inputValues(1, -1)
+    val extractor = ParameterExtractor.inputValues(1, -1)
 
-    val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    val (res, _) = ParameterExtractor.runExtractor(extractor, TestParametersWithInputs)
     res.get.toList should contain theSameElementsInOrderAs InputValues.drop(1)
   }
 
   it should "interpret a negative value for the from index of an input value" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.inputValue(-2)
+    val extractor = ParameterExtractor.inputValue(-2)
 
-    val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    val (res, _) = ParameterExtractor.runExtractor(extractor, TestParametersWithInputs)
     res.get should contain only InputValues(1)
   }
 
   it should "yield a failure if the index of an input value is too small" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.inputValue(-InputValues.size - 1)
+    val extractor = ParameterExtractor.inputValue(-InputValues.size - 1)
 
-    val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    val (res, _) = ParameterExtractor.runExtractor(extractor, TestParametersWithInputs)
     checkExtractionException(expectExtractionException(res), expKey = ParameterParser.InputOption,
       expParams = TestParametersWithInputs.parametersMap)("-1")
   }
 
   it should "yield a failure if the index of an input value is too big" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.inputValues(1, InputValues.size, optKey = Some(Key))
+    val extractor = ParameterExtractor.inputValues(1, InputValues.size, optKey = Some(Key))
 
-    val (res, _) = ParameterManager.runProcessor(processor, TestParametersWithInputs)
+    val (res, _) = ParameterExtractor.runExtractor(extractor, TestParametersWithInputs)
     checkExtractionException(expectExtractionException(res), expKey = ParameterParser.InputOption,
       expParams = TestParametersWithInputs.parametersMap)("few input arguments")
   }
 
   it should "yield a failure if too many input parameters have been specified" in {
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-    val processor = ParameterManager.inputValue(1, Some("destination"), last = true)
+    val extractor = ParameterExtractor.inputValue(1, Some("destination"), last = true)
 
-    val res = ParameterManager.tryProcessor(processor, TestParametersWithInputs)
+    val res = ParameterExtractor.tryExtractor(extractor, TestParametersWithInputs)
     checkExtractionException(expectExtractionException(res), expKey = ParameterParser.InputOption,
       expParams = TestParametersWithInputs.parametersMap)("at most 2")
   }
@@ -807,7 +805,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       (Key2 -> List("v1", "v2")) + (Key3 -> List("v3")), Set(Key, Key2, Key3))
     val context = TestContext.copy(parameters = parameters)
 
-    val validatedContext = ParameterManager.checkParametersConsumed(context)
+    val validatedContext = ParameterExtractor.checkParametersConsumed(context)
     validatedContext should be(Success(context))
   }
 
@@ -818,7 +816,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
       (Key2 -> List("v1", "v2")) + (Key3 -> List("v3")), Set(Key))
     val context = TestContext.copy(parameters = parameters)
 
-    val validatedContext = ParameterManager.checkParametersConsumed(context)
+    val validatedContext = ParameterExtractor.checkParametersConsumed(context)
     validatedContext match {
       case Failure(exception: ParameterExtractionException) =>
         exception.failures should have size 2
@@ -841,7 +839,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val failure3 = ExtractionFailure(Key3, "error3", TestContext)
     val failure4 = ExtractionFailure(Key4, "error4", TestContext)
 
-    val updHelpCtx = ParameterManager.addFailuresToHelpContext(helpContext, List(failure1, failure3, failure4))
+    val updHelpCtx = ParameterExtractor.addFailuresToHelpContext(helpContext, List(failure1, failure3, failure4))
     updHelpCtx.options(Key2) should be(helpContext.options(Key2))
     val attr1 = updHelpCtx.options(Key)
     attr1.attributes(CliHelpGenerator.AttrHelpText) should be("Help1")

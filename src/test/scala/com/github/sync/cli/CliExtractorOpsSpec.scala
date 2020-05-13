@@ -19,14 +19,14 @@ package com.github.sync.cli
 import java.io.IOException
 import java.nio.file.{Path, Paths}
 
-import com.github.sync.cli.ParameterManager._
+import com.github.sync.cli.ParameterExtractor._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.collection.SortedSet
 import scala.util.{Failure, Success, Try}
 
-object CliProcessorOpsSpec {
+object CliExtractorOpsSpec {
   /** Key for the option containing multiple numeric values. */
   private val KeyNumbers = "--numbers"
 
@@ -58,15 +58,15 @@ object CliProcessorOpsSpec {
     KeyPath -> List(PathValue.toString))
 
   /**
-    * Executes the given processor on the test parameters.
+    * Executes the given extractor on the test parameters.
     *
-    * @param proc       the processor
+    * @param ext        the extractor
     * @param parameters the parameters
-    * @tparam A the result type of the processor
-    * @return the result produced by the processor
+    * @tparam A the result type of the extractor
+    * @return the result produced by the extractor
     */
-  private def runProcessor[A](proc: CliProcessor[A], parameters: Parameters = TestParameters): A =
-    ParameterManager.runProcessor(proc, parameters)(DefaultConsoleReader)._1
+  private def runExtractor[A](ext: CliExtractor[A], parameters: Parameters = TestParameters): A =
+    ParameterExtractor.runExtractor(ext, parameters)(DefaultConsoleReader)._1
 
   /**
     * Creates a [[ParamModel]] object from the given components.
@@ -84,17 +84,17 @@ object CliProcessorOpsSpec {
     }
 
   /**
-    * Returns a processor that extracts a [[ParamModel]] object.
+    * Returns an extractor that extracts a [[ParamModel]] object.
     *
-    * @return the processor
+    * @return the extractor
     */
-  private def paramModelProcessor(): CliProcessor[Try[ParamModel]] =
+  private def paramModelExtractor(): CliExtractor[Try[ParamModel]] =
     for {
-      procNumbers <- optionValue(KeyNumbers).toInt
-      procAnswer <- optionValue(KeyAnswer).toInt.single.mandatory
-      procFlag <- optionValue(KeyFlag).toBoolean.single.mandatory
-      procPath <- optionValue(KeyPath).toPath.single
-    } yield createModel(procNumbers, procAnswer, procFlag, procPath)
+      extNumbers <- optionValue(KeyNumbers).toInt
+      extAnswer <- optionValue(KeyAnswer).toInt.single.mandatory
+      extFlag <- optionValue(KeyFlag).toBoolean.single.mandatory
+      extPath <- optionValue(KeyPath).toPath.single
+    } yield createModel(extNumbers, extAnswer, extFlag, extPath)
 
   /**
     * Creates a test component for a given index.
@@ -140,104 +140,104 @@ object CliProcessorOpsSpec {
 }
 
 /**
-  * Test class for the DSL to define complex ''CliProcessor'' objects.
+  * Test class for the DSL to define complex ''CliExtractor'' objects.
   */
-class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
+class CliExtractorOpsSpec extends AnyFlatSpec with Matchers {
 
-  import CliProcessorOpsSpec._
+  import CliExtractorOpsSpec._
 
-  "ParameterManager" should "extract numeric values" in {
-    val proc = optionValue(KeyNumbers).toInt
+  "ParameterExtractor" should "extract numeric values" in {
+    val ext = optionValue(KeyNumbers).toInt
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(NumberValues))
   }
 
   it should "extract a single numeric value" in {
-    val proc = optionValue(KeyAnswer).toInt.single
+    val ext = optionValue(KeyAnswer).toInt.single
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(Some(NumberValue)))
   }
 
   it should "extract a single mandatory numeric value" in {
-    val proc = optionValue(KeyAnswer).toInt.single.mandatory
+    val ext = optionValue(KeyAnswer).toInt.single.mandatory
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(NumberValue))
   }
 
   it should "extract a single flag value" in {
-    val proc = optionValue(KeyFlag).toBoolean.single.mandatory
+    val ext = optionValue(KeyFlag).toBoolean.single.mandatory
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(true))
   }
 
   it should "extract a single path value" in {
-    val proc = optionValue(KeyPath).toPath.single.mandatory
+    val ext = optionValue(KeyPath).toPath.single.mandatory
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(PathValue))
   }
 
   it should "convert a string value to lower case" in {
     val Key = "stringOption"
     val parameters = TestParameters.copy(parametersMap = TestParameters.parametersMap + (Key -> List("TesT")))
-    val proc = optionValue(Key).toLower.single.mandatory
+    val ext = optionValue(Key).toLower.single.mandatory
 
-    val result = runProcessor(proc, parameters)
+    val result = runExtractor(ext, parameters)
     result should be(Success("test"))
   }
 
   it should "convert a string value to upper case" in {
     val Key = "stringOption"
     val parameters = TestParameters.copy(parametersMap = TestParameters.parametersMap + (Key -> List("TesT")))
-    val proc = optionValue(Key).toUpper.single.mandatory
+    val ext = optionValue(Key).toUpper.single.mandatory
 
-    val result = runProcessor(proc, parameters)
+    val result = runExtractor(ext, parameters)
     result should be(Success("TEST"))
   }
 
-  it should "support mapping the values extracted by a processor" in {
+  it should "support mapping the values extracted by an extractor" in {
     val mapFunc: Int => Int = _ + 1
-    val intProc = optionValue(KeyNumbers).toInt
-    val proc = intProc mapTo mapFunc
+    val intExt = optionValue(KeyNumbers).toInt
+    val ext = intExt mapTo mapFunc
     val expectedValues = NumberValues map mapFunc
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(expectedValues))
   }
 
   it should "convert a value to an enum" in {
     val EnumValues = List("larry", "curly", "moe")
     val mapping = NumberValues.zip(EnumValues).toMap
-    val proc = optionValue(KeyNumbers)
+    val ext = optionValue(KeyNumbers)
       .toInt
       .toEnum(mapping.get)
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(EnumValues))
   }
 
   it should "support checking whether an option is defined" in {
-    val proc = optionValue(KeyAnswer).isDefined
+    val ext = optionValue(KeyAnswer).isDefined
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(true))
   }
 
   it should "support checking an option is defined if it is not" in {
-    val proc = optionValue(UndefinedKey).isDefined
+    val ext = optionValue(UndefinedKey).isDefined
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(false))
   }
 
   it should "report a failure for an undefined mandatory option" in {
-    val proc = optionValue(UndefinedKey).single.mandatory
+    val ext = optionValue(UndefinedKey).single.mandatory
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result match {
       case Failure(exception: ParameterExtractionException) =>
         exception.failures.head.key should be(UndefinedKey)
@@ -245,17 +245,17 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "support checking for the multiplicity of a processor" in {
-    val proc = optionValue(KeyNumbers).toInt.multiplicity(atMost = NumberValues.size)
+  it should "support checking for the multiplicity of an extractor" in {
+    val ext = optionValue(KeyNumbers).toInt.multiplicity(atMost = NumberValues.size)
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(NumberValues))
   }
 
   it should "report a failure if not enough values are present" in {
-    val proc = optionValue(KeyAnswer).multiplicity(atLeast = 2)
+    val ext = optionValue(KeyAnswer).multiplicity(atLeast = 2)
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result match {
       case Failure(exception: ParameterExtractionException) =>
         val failure = exception.failures.head
@@ -266,9 +266,9 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "report a failure if too many values are present" in {
-    val proc = optionValue(KeyNumbers).multiplicity(atMost = NumberValues.size - 1)
+    val ext = optionValue(KeyNumbers).multiplicity(atMost = NumberValues.size - 1)
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result match {
       case Failure(exception: ParameterExtractionException) =>
         val failure = exception.failures.head
@@ -279,27 +279,27 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "support setting a fallback value for an option" in {
-    val proc = optionValue(UndefinedKey).fallback(constantOptionValue(NumberValue.toString))
+    val ext = optionValue(UndefinedKey).fallback(constantOptionValue(NumberValue.toString))
       .toInt.single.mandatory
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(NumberValue))
   }
 
   it should "support setting fallback values for an option" in {
-    val proc = optionValue(UndefinedKey)
+    val ext = optionValue(UndefinedKey)
       .toInt
       .fallbackValues(NumberValues.head, NumberValues.tail: _*)
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(NumberValues))
   }
 
   it should "support combining multiple options to a data object" in {
     val ExpModel = ParamModel(NumberValues, NumberValue, flag = true, Some(PathValue))
-    val proc = paramModelProcessor()
+    val ext = paramModelExtractor()
 
-    val result = runProcessor(proc)
+    val result = runExtractor(ext)
     result should be(Success(ExpModel))
   }
 
@@ -313,9 +313,9 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
     val params: Parameters = Map(KeyNumbers -> ("noNumber" :: NumberValues.map(_.toString)),
       KeyAnswer -> List("xy"),
       KeyFlag -> List("undefined"))
-    val proc = paramModelProcessor()
+    val ext = paramModelExtractor()
 
-    val result = runProcessor(proc, params)
+    val result = runExtractor(ext, params)
     result match {
       case Failure(exception: ParameterExtractionException) =>
         checkFailureContained(exception, KeyNumbers, KeyAnswer, KeyFlag)
@@ -494,12 +494,12 @@ class CliProcessorOpsSpec extends AnyFlatSpec with Matchers {
 
   it should "support the access to input parameters" in {
     val parameters: Parameters = Map(ParameterParser.InputOption -> List("1", "2", "3"))
-    val processor = inputValue(-2)
+    val extractor = inputValue(-2)
       .toInt
       .single
       .mandatory
 
-    val result = runProcessor(processor, parameters)
+    val result = runExtractor(extractor, parameters)
     result.get should be(2)
   }
 }

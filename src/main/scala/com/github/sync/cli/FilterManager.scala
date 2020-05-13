@@ -23,7 +23,7 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 import com.github.sync.SyncTypes._
-import com.github.sync.cli.ParameterManager.{CliProcessor, OptionValue}
+import com.github.sync.cli.ParameterExtractor.{CliExtractor, OptionValue}
 
 import scala.annotation.tailrec
 import scala.util.matching.Regex
@@ -182,12 +182,12 @@ object FilterManager {
   }
 
   /**
-    * Returns a ''CliProcessor'' that extracts all command line options related
+    * Returns a ''CliExtractor'' that extracts all command line options related
     * to filters and constructs a ''SyncFilterData'' object based on this.
     *
-    * @return the ''CliProcessor'' for filter options
+    * @return the ''CliExtractor'' for filter options
     */
-  def filterDataProcessor: CliProcessor[Try[SyncFilterData]] =
+  def filterDataExtractor: CliExtractor[Try[SyncFilterData]] =
     for {
       exprCommon <- filterExpressionProcessor(ArgCommonFilter, HelpCommonFilter)
       exprCreate <- filterExpressionProcessor(ArgCreateFilter, HelpCreateFilter)
@@ -197,27 +197,27 @@ object FilterManager {
     } yield createSyncFilterData(exprCommon, exprCreate, exprOverride, exprRemove, enabledActions)
 
   /**
-    * Returns a ''CliProcessor'' that extracts the filter expressions for a
+    * Returns a ''CliExtractor'' that extracts the filter expressions for a
     * specific action type.
     *
     * @param key  the key of the action type
     * @param help the help text for this option
-    * @return the processor that extracts the filter expressions for this type
+    * @return the extractor that extracts the filter expressions for this type
     */
-  private def filterExpressionProcessor(key: String, help: String): CliProcessor[OptionValue[SyncOperationFilter]] =
-    ParameterManager.optionValue(key, help = Some(help))
+  private def filterExpressionProcessor(key: String, help: String): CliExtractor[OptionValue[SyncOperationFilter]] =
+    ParameterExtractor.optionValue(key, help = Some(help))
       .mapTo(parseExpression)
 
   /**
-    * Returns a ''CliProcessor'' that processes the action types filter. It
+    * Returns a ''CliExtractor'' that processes the action types filter. It
     * returns a set with the types of the actions that are enabled.
     *
-    * @return the processor to extract the enabled action types
+    * @return the extractor to extract the enabled action types
     */
-  private def actionFilterProcessor: CliProcessor[Try[Set[SyncAction]]] =
-    ParameterManager.optionValue(ArgActionFilter, help = Some(HelpActionFilter))
+  private def actionFilterProcessor: CliExtractor[Try[Set[SyncAction]]] =
+    ParameterExtractor.optionValue(ArgActionFilter, help = Some(HelpActionFilter))
       .mapTo(parseActionNames)
-      .fallback(ParameterManager.constantProcessor(Success(List(ActionTypeNameMapping.values.toSet))))
+      .fallback(ParameterExtractor.constantExtractor(Success(List(ActionTypeNameMapping.values.toSet))))
       .map { triedSets => triedSets.map(s => s.flatten.toSet) }
 
   /**
@@ -236,7 +236,7 @@ object FilterManager {
                                    triedOverrideFilters: OptionValue[SyncOperationFilter],
                                    triedRemoveFilters: OptionValue[SyncOperationFilter],
                                    triedActionFilter: Try[Set[SyncAction]]): Try[SyncFilterData] =
-    ParameterManager.createRepresentation(triedCommonFilters, triedCreateFilters, triedOverrideFilters,
+    ParameterExtractor.createRepresentation(triedCommonFilters, triedCreateFilters, triedOverrideFilters,
       triedRemoveFilters, triedActionFilter) {
       (commonFilters, createFilters, overrideFilters, removeFilters, actionFilter) =>
         val commonsList = commonFilters.toList

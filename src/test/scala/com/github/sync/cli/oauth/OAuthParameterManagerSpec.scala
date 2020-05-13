@@ -19,9 +19,9 @@ package com.github.sync.cli.oauth
 import java.nio.file.Paths
 
 import com.github.sync.AsyncTestHelper
-import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.ParameterExtractor.Parameters
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.cli.{ConsoleReader, ParameterManager, ParameterParser}
+import com.github.sync.cli.{ConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.sync.http.OAuthStorageConfig
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -107,7 +107,7 @@ object OAuthParameterManagerSpec {
 class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper with MockitoSugar {
 
   import OAuthParameterManagerSpec._
-  import ParameterManager._
+  import ParameterExtractor._
 
   /** The implicit console reader needed for parameter processing. */
   private implicit val consoleReader: ConsoleReader = mock[ConsoleReader]

@@ -18,8 +18,8 @@ package com.github.sync.cli.oauth
 
 import java.nio.file.Path
 
-import com.github.sync.cli.ParameterManager._
-import com.github.sync.cli.{ConsoleReader, ParameterManager}
+import com.github.sync.cli.ParameterExtractor._
+import com.github.sync.cli.{ConsoleReader, ParameterExtractor}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.OAuthConfig
@@ -30,7 +30,7 @@ import scala.util.Try
 /**
   * A service responsible for parsing parameters for OAuth commands.
   *
-  * The object defines command line processors for extracting the information
+  * The object defines command line extractors for extracting the information
   * from the command line required by the commands supported.
   */
 object OAuthParameterManager {
@@ -231,12 +231,12 @@ object OAuthParameterManager {
   case class LoginCommandConfig(override val storageConfig: OAuthStorageConfig) extends CommandConfig
 
   /**
-    * A ''CliProcessor'' for extracting the command passed in the
+    * A ''CliExtractor'' for extracting the command passed in the
     * command line. The command determines the actions to be executed. There
     * must be exactly one command.
     */
-  final val commandProcessor: CliProcessor[Try[String]] =
-    ParameterManager.inputValue(0, optKey = Some(CommandOption), optHelp = Some(HelpCommandOption), last = true)
+  final val commandExtractor: CliExtractor[Try[String]] =
+    ParameterExtractor.inputValue(0, optKey = Some(CommandOption), optHelp = Some(HelpCommandOption), last = true)
       .toLower
       .single
       .mandatory
@@ -254,25 +254,25 @@ object OAuthParameterManager {
   def extractCommandConfig(parameters: Parameters)
                           (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(CommandConfig, ParameterContext)] =
-    Future.fromTry(tryProcessor(commandConfigProcessor, parameters))
+    Future.fromTry(tryExtractor(commandConfigExtractor, parameters))
 
   /**
-    * Returns a ''CliProcessor'' for extracting a ''CommandConfig'' object.
-    * This processor extracts the command name from the first input argument.
+    * Returns a ''CliExtractor'' for extracting a ''CommandConfig'' object.
+    * This extractor extracts the command name from the first input argument.
     * Then a conditional group is applied to extract the specific arguments for
     * this command.
     *
-    * @return the ''CliProcessor'' for a ''CommandConfig''
+    * @return the ''CliExtractor'' for a ''CommandConfig''
     */
-  def commandConfigProcessor: CliProcessor[Try[CommandConfig]] = {
-    val groupMap = Map(CommandInitIDP -> commandInitProcessor,
-      CommandLoginIDP -> commandLoginProcessor,
-      CommandRemoveIDP -> commandRemoveProcessor)
-    conditionalGroupValue(commandProcessor, groupMap)
+  def commandConfigExtractor: CliExtractor[Try[CommandConfig]] = {
+    val groupMap = Map(CommandInitIDP -> commandInitExtractor,
+      CommandLoginIDP -> commandLoginExtractor,
+      CommandRemoveIDP -> commandRemoveExtractor)
+    conditionalGroupValue(commandExtractor, groupMap)
   }
 
   /**
-    * Returns a ''CliProcessor'' for extracting an ''OAuthStorageConfig''
+    * Returns a ''CliExtractor'' for extracting an ''OAuthStorageConfig''
     * object. Whether a password is required or not is determined by the given
     * boolean parameter. If it is required, but not provided, it is read from
     * the console. As the storage configuration can be used in multiple
@@ -280,10 +280,10 @@ object OAuthParameterManager {
     *
     * @param needPassword flag whether a password is required
     * @param prefix       a prefix that is added to all option names
-    * @return the ''CliProcessor'' for the ''OAuthStorageConfig''
+    * @return the ''CliExtractor'' for the ''OAuthStorageConfig''
     */
-  def storageConfigProcessor(needPassword: Boolean, prefix: String = ""):
-  CliProcessor[Try[OAuthStorageConfig]] = {
+  def storageConfigExtractor(needPassword: Boolean, prefix: String = ""):
+  CliExtractor[Try[OAuthStorageConfig]] = {
     val procPath = optionValue(prefix + StoragePathOptionName, help = Some(HelpStoragePathOption))
       .toPath
       .single
@@ -294,50 +294,50 @@ object OAuthParameterManager {
 
     for {name <- procName
          path <- procPath
-         pwd <- storagePasswordProcessor(needPassword, prefix + EncryptOptionName, prefix + PasswordOptionName)
-         crypt <- cryptFlagProcessor(prefix + EncryptOptionName, needPassword)
+         pwd <- storagePasswordExtractor(needPassword, prefix + EncryptOptionName, prefix + PasswordOptionName)
+         crypt <- cryptFlagExtractor(prefix + EncryptOptionName, needPassword)
          } yield createStorageConfig(name, path, pwd, crypt)
   }
 
   /**
-    * Returns a ''CliProcessor'' to extract the data for an IDP from the
+    * Returns a ''CliExtractor'' to extract the data for an IDP from the
     * command line.
     *
-    * @return the ''CliProcessor'' to extract IDP-related data
+    * @return the ''CliExtractor'' to extract IDP-related data
     */
-  private def commandInitProcessor: CliProcessor[Try[CommandConfig]] =
+  private def commandInitExtractor: CliExtractor[Try[CommandConfig]] =
     for {triedAuthUrl <- mandatoryStringOption(AuthEndpointOption, HelpAuthEndpointOption)
          triedTokenUrl <- mandatoryStringOption(TokenEndpointOption, HelpTokenEndpointOption)
-         triedScope <- scopeProcessor
+         triedScope <- scopeExtractor
          triedRedirect <- mandatoryStringOption(RedirectUrlOption, HelpRedirectUrlOption)
          triedID <- mandatoryStringOption(ClientIDOption, HelpClientIDOption)
-         triedSecret <- clientSecretProcessor
-         triedStorage <- storageConfigProcessor(needPassword = true)
+         triedSecret <- clientSecretExtractor
+         triedStorage <- storageConfigExtractor(needPassword = true)
          } yield createIdpConfig(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect, triedID,
       triedSecret, triedStorage)
 
   /**
-    * Returns a ''CliProcessor'' to extract the configuration for the login
+    * Returns a ''CliExtractor'' to extract the configuration for the login
     * command.
     *
-    * @return the login command processor
+    * @return the login command extractor
     */
-  private def commandLoginProcessor: CliProcessor[Try[CommandConfig]] =
-    storageConfigProcessor(needPassword = true)
+  private def commandLoginExtractor: CliExtractor[Try[CommandConfig]] =
+    storageConfigExtractor(needPassword = true)
       .map(_.map(LoginCommandConfig))
 
   /**
-    * Returns a ''CliProcessor'' to extract the configuration for the remove
+    * Returns a ''CliExtractor'' to extract the configuration for the remove
     * IDP command.
     *
-    * @return the remove command processor
+    * @return the remove command extractor
     */
-  private def commandRemoveProcessor: CliProcessor[Try[CommandConfig]] =
-    storageConfigProcessor(needPassword = false)
+  private def commandRemoveExtractor: CliExtractor[Try[CommandConfig]] =
+    storageConfigExtractor(needPassword = false)
       .map(_.map(RemoveCommandConfig))
 
   /**
-    * Returns a ''CliProcessor'' for extracting the password of the storage
+    * Returns a ''CliExtractor'' for extracting the password of the storage
     * configuration. If a password is required (as indicated by the boolean
     * parameter), it is read from the console if it has not been specified on
     * the command line.
@@ -345,26 +345,26 @@ object OAuthParameterManager {
     * @param needPassword flag whether a password is required
     * @param encOption    the key to be used for the encrypt option
     * @param pwdOption    the key to be used for the password option
-    * @return the ''CliProcessor'' for the storage password
+    * @return the ''CliExtractor'' for the storage password
     */
-  private def storagePasswordProcessor(needPassword: Boolean, encOption: String, pwdOption: String):
-  CliProcessor[SingleOptionValue[String]] = {
-    val condProc = cryptFlagProcessor(encOption, needPassword)
+  private def storagePasswordExtractor(needPassword: Boolean, encOption: String, pwdOption: String):
+  CliExtractor[SingleOptionValue[String]] = {
+    val condProc = cryptFlagExtractor(encOption, needPassword)
     optionValue(pwdOption, help = Some(HelpPasswordOption))
       .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true)))
       .single
   }
 
   /**
-    * Returns a ''CliProcessor'' for extracting the encryption flag of the
+    * Returns a ''CliExtractor'' for extracting the encryption flag of the
     * storage configuration. The flag determines whether a password is required
     * to encrypt IDP data stored locally.
     *
     * @param encOption    the name of the encrypt flag option
     * @param needPassword default value for the flag
-    * @return the ''CliProcessor'' to extract the encrypt flag
+    * @return the ''CliExtractor'' to extract the encrypt flag
     */
-  private def cryptFlagProcessor(encOption: String, needPassword: Boolean): CliProcessor[Try[Boolean]] = {
+  private def cryptFlagExtractor(encOption: String, needPassword: Boolean): CliExtractor[Try[Boolean]] = {
     optionValue(encOption, help = Some(HelpEncryptOption))
       .toBoolean
       .fallbackValues(needPassword)
@@ -373,25 +373,25 @@ object OAuthParameterManager {
   }
 
   /**
-    * Returns a ''CliProcessor'' for extracting the scope. For scope different
+    * Returns a ''CliExtractor'' for extracting the scope. For scope different
     * separators are allowed. This is handled here.
     *
-    * @return the ''CliProcessor'' for scope
+    * @return the ''CliExtractor'' for scope
     */
-  private def scopeProcessor: CliProcessor[Try[String]] =
+  private def scopeExtractor: CliExtractor[Try[String]] =
     optionValue(ScopeOption, help = Some(HelpScopeOption))
       .mapTo(_.replace(',', ' '))
       .single
       .mandatory
 
   /**
-    * Returns a ''CliProcessor'' for extracting the client secret of an IDP.
+    * Returns a ''CliExtractor'' for extracting the client secret of an IDP.
     * If the secret has not been provided as command line argument, it has to
     * be read from the console.
     *
-    * @return the ''CliProcessor'' for the client secret
+    * @return the ''CliExtractor'' for the client secret
     */
-  private def clientSecretProcessor: CliProcessor[Try[Secret]] =
+  private def clientSecretExtractor: CliExtractor[Try[Secret]] =
     optionValue(ClientSecretOption, help = Some(HelpClientSecretOption))
       .fallback(consoleReaderValue(ClientSecretOption, password = true))
       .mapTo(pwd => Secret(pwd))
@@ -439,13 +439,13 @@ object OAuthParameterManager {
 
   /**
     * Convenience function for the frequent use case to create a
-    * ''CliProcessor'' for a mandatory string value.
+    * ''CliExtractor'' for a mandatory string value.
     *
     * @param key  the key of the option
     * @param help the help text of the option
-    * @return the processor to extract this option
+    * @return the extractor to extract this option
     */
-  private def mandatoryStringOption(key: String, help: String): CliProcessor[Try[String]] =
+  private def mandatoryStringOption(key: String, help: String): CliExtractor[Try[String]] =
     optionValue(key, Some(help))
       .single
       .mandatory

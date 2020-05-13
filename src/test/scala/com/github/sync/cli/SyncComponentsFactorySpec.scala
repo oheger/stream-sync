@@ -25,7 +25,7 @@ import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterManager.Parameters
+import com.github.sync.cli.ParameterExtractor.Parameters
 import com.github.sync.cli.SyncComponentsFactory.SourceComponentsFactory
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, SyncConfig}
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}

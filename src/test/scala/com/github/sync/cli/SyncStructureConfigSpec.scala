@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import java.time.ZoneId
 
-import com.github.sync.cli.ParameterManager.{ParameterContext, Parameters}
+import com.github.sync.cli.ParameterExtractor.{ParameterContext, Parameters}
 import com.github.sync.cli.SyncStructureConfig._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.http.{AuthConfig, BasicAuthConfig, NoAuth, OAuthStorageConfig}
@@ -81,25 +81,25 @@ object SyncStructureConfigSpec {
     }
 
   /**
-    * Executes the processor for the structure config against the parameters
+    * Executes the extractor for the structure config against the parameters
     * specified and returns the result.
     *
     * @param args         the map with arguments
     * @param structureUrl the URL to be used for the structure
     * @param roleType     the role type of the structure
     * @param optReader    an optional ''ConsoleReader''
-    * @return the result returned by the processor
+    * @return the result returned by the extractor
     */
-  private def runConfigProcessor(args: Map[String, String], structureUrl: String, roleType: RoleType,
+  private def runConfigExtractor(args: Map[String, String], structureUrl: String, roleType: RoleType,
                                  optReader: Option[ConsoleReader] = None): (Try[StructureConfig], ParameterContext) = {
     val paramCtx = toParameters(args, createUrlParameter(structureUrl, roleType))
     val reader = optReader getOrElse DummyConsoleReader
-    ParameterManager.runProcessor(SyncStructureConfig.structureConfigProcessor(roleType, "uri"),
+    ParameterExtractor.runExtractor(SyncStructureConfig.structureConfigExtractor(roleType, "uri"),
       paramCtx)(reader)
   }
 
   /**
-    * Executes the processor for the structure config against the parameters
+    * Executes the extractor for the structure config against the parameters
     * specified and expects a success result. The resulting configuration is
     * returned. In case of a failure, the test fails.
     *
@@ -107,11 +107,11 @@ object SyncStructureConfigSpec {
     * @param structureUrl the URL to be used for the structure
     * @param roleType     the role type of the structure
     * @param optReader    an optional ''ConsoleReader''
-    * @return the success result returned by the processor
+    * @return the success result returned by the extractor
     */
   private def extractConfig(args: Map[String, String], structureUrl: String, roleType: RoleType,
                             optReader: Option[ConsoleReader] = None): (StructureConfig, ParameterContext) = {
-    val (triedConfig, nextContext) = runConfigProcessor(args, structureUrl, roleType, optReader)
+    val (triedConfig, nextContext) = runConfigExtractor(args, structureUrl, roleType, optReader)
     triedConfig match {
       case Success(config) => (config, nextContext)
       case Failure(exception) =>
@@ -120,7 +120,7 @@ object SyncStructureConfigSpec {
   }
 
   /**
-    * Executes the processor for the structure config against the parameters
+    * Executes the extractor for the structure config against the parameters
     * specified and expects a failure result. The exception is returned. An
     * unexpected success result causes the test to fail.
     *
@@ -131,7 +131,7 @@ object SyncStructureConfigSpec {
     */
   private def expectFailure(args: Map[String, String], structureUrl: String, roleType: RoleType):
   (Throwable, ParameterContext) = {
-    val (triedConfig, nextContext) = runConfigProcessor(args, structureUrl, roleType)
+    val (triedConfig, nextContext) = runConfigExtractor(args, structureUrl, roleType)
     triedConfig match {
       case Failure(exception) => (exception, nextContext)
       case Success(value) =>
@@ -148,7 +148,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
   import SyncStructureConfigSpec._
 
   /**
-    * Checks whether the set of parameters accessed by the processors for the
+    * Checks whether the set of parameters accessed by the extractors for the
     * structure type config contains all the option names of the passed in set.
     *
     * @param paramCtx  the parameter context
@@ -161,7 +161,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
   /**
     * Checks whether the passed in parameter keys have been accessed by the
-    * processors for the structure type config.
+    * extractors for the structure type config.
     *
     * @param paramCtx  the parameter context
     * @param roleType  the role type

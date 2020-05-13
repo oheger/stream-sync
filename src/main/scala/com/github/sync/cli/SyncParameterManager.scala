@@ -21,7 +21,7 @@ import java.util.Locale
 
 import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterManager.{CliProcessor, ParameterContext, Parameters, SingleOptionValue}
+import com.github.sync.cli.ParameterExtractor.{CliExtractor, ParameterContext, Parameters, SingleOptionValue}
 import com.github.sync.cli.ParameterParser.ParametersMap
 import com.github.sync.cli.SyncStructureConfig.StructureConfig
 
@@ -353,25 +353,25 @@ object SyncParameterManager {
   }
 
   /**
-    * Returns a processor that extracts the ''SyncConfig'' from the command
+    * Returns an extractor that extracts the ''SyncConfig'' from the command
     * line options.
     *
-    * @return the processor to extract the ''SyncConfig''
+    * @return the extractor to extract the ''SyncConfig''
     */
-  def syncConfigProcessor(): CliProcessor[Try[SyncConfig]] = for {
-    srcUri <- srcUriProcessor()
-    dstUri <- dstUriProcessor()
-    srcConfig <- SyncStructureConfig.structureConfigProcessor(SyncStructureConfig.SourceRoleType, SourceUriOption)
-    dstConfig <- SyncStructureConfig.structureConfigProcessor(SyncStructureConfig.DestinationRoleType,
+  def syncConfigExtractor(): CliExtractor[Try[SyncConfig]] = for {
+    srcUri <- srcUriExtractor()
+    dstUri <- dstUriExtractor()
+    srcConfig <- SyncStructureConfig.structureConfigExtractor(SyncStructureConfig.SourceRoleType, SourceUriOption)
+    dstConfig <- SyncStructureConfig.structureConfigExtractor(SyncStructureConfig.DestinationRoleType,
       DestinationUriOption)
-    mode <- applyModeProcessor(dstUri.getOrElse(""))
-    timeout <- timeoutProcessor()
-    logFile <- ParameterManager.optionValue(LogFileOption, Some(LogFileHelp)).toPath.single
-    syncLog <- ParameterManager.optionValue(SyncLogOption, Some(SyncLogHelp)).toPath.single
-    timeDelta <- ignoreTimeDeltaProcessor()
-    opsPerSec <- opsPerSecondProcessor()
-    cryptConf <- cryptConfigProcessor
-    filters <- FilterManager.filterDataProcessor
+    mode <- applyModeExtractor(dstUri.getOrElse(""))
+    timeout <- timeoutExtractor()
+    logFile <- ParameterExtractor.optionValue(LogFileOption, Some(LogFileHelp)).toPath.single
+    syncLog <- ParameterExtractor.optionValue(SyncLogOption, Some(SyncLogHelp)).toPath.single
+    timeDelta <- ignoreTimeDeltaExtractor()
+    opsPerSec <- opsPerSecondExtractor()
+    cryptConf <- cryptConfigExtractor
+    filters <- FilterManager.filterDataExtractor
   } yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, mode, timeout, logFile, syncLog, timeDelta,
     opsPerSec, cryptConf, filters)
 
@@ -390,7 +390,7 @@ object SyncParameterManager {
     */
   def extractSyncConfig(argsMap: Parameters)(implicit ec: ExecutionContext, consoleReader: ConsoleReader):
   Future[(SyncConfig, ParameterContext)] =
-    Future.fromTry(ParameterManager.tryProcessor(syncConfigProcessor(), argsMap))
+    Future.fromTry(ParameterExtractor.tryExtractor(syncConfigExtractor(), argsMap))
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all
@@ -424,43 +424,43 @@ object SyncParameterManager {
                                triedOpsPerSec: Try[Option[Int]],
                                triedCryptConfig: Try[CryptConfig],
                                triedFilterData: Try[SyncFilterData]): Try[SyncConfig] =
-    ParameterManager.createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
+    ParameterExtractor.createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
       triedApplyMode, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedCryptConfig,
       triedOpsPerSec, triedFilterData)(SyncConfig)
 
   /**
-    * Returns a processor that extracts the source URI from the first input
+    * Returns an extractor that extracts the source URI from the first input
     * parameter.
     *
-    * @return the processor for the source URI
+    * @return the extractor for the source URI
     */
-  private def srcUriProcessor(): CliProcessor[Try[String]] =
-    ParameterManager.inputValue(0, Some(SourceUriOption), Some(SourceUriHelp))
+  private def srcUriExtractor(): CliExtractor[Try[String]] =
+    ParameterExtractor.inputValue(0, Some(SourceUriOption), Some(SourceUriHelp))
       .multiplicity(atLeast = 1, atMost = 1)
       .single
       .mandatory
 
   /**
-    * Returns a processor that extracts the destination URI from the 2nd input
+    * Returns an extractor that extracts the destination URI from the 2nd input
     * parameter.
     *
-    * @return the processor for the destination URI
+    * @return the extractor for the destination URI
     */
-  private def dstUriProcessor(): CliProcessor[Try[String]] =
-    ParameterManager.inputValue(1, Some(DestinationUriOption), Some(DestinationUriHelp), last = true)
+  private def dstUriExtractor(): CliExtractor[Try[String]] =
+    ParameterExtractor.inputValue(1, Some(DestinationUriOption), Some(DestinationUriHelp), last = true)
       .multiplicity(atLeast = 1, atMost = 1)
       .single
       .mandatory
 
   /**
-    * Returns a processor that extracts the value of the option for the
+    * Returns an extractor that extracts the value of the option for the
     * apply mode.
     *
     * @param destUri the destination URI
-    * @return the processor to extract the apply mode
+    * @return the extractor to extract the apply mode
     */
-  private def applyModeProcessor(destUri: String): CliProcessor[Try[ApplyMode]] =
-    ParameterManager.optionValue(ApplyModeOption, Some(ApplyModeHelp))
+  private def applyModeExtractor(destUri: String): CliExtractor[Try[ApplyMode]] =
+    ParameterExtractor.optionValue(ApplyModeOption, Some(ApplyModeHelp))
       .mapTo[ApplyMode] {
         case RegApplyTargetUri(uri) =>
           ApplyModeTarget(uri)
@@ -475,14 +475,14 @@ object SyncParameterManager {
       .mandatory
 
   /**
-    * Returns a processor that extracts a crypt mode value from a command line
+    * Returns an extractor that extracts a crypt mode value from a command line
     * option.
     *
     * @param key the key of the option
-    * @return the processor to extract the crypt mode
+    * @return the extractor to extract the crypt mode
     */
-  private def cryptModeProcessor(key: String): CliProcessor[Try[CryptMode.Value]] =
-    ParameterManager.optionValue(key, Some(CryptModeHelp))
+  private def cryptModeExtractor(key: String): CliExtractor[Try[CryptMode.Value]] =
+    ParameterExtractor.optionValue(key, Some(CryptModeHelp))
       .toUpper
       .toEnum(CryptMode.Literals.get)
       .fallbackValues(CryptMode.None.asInstanceOf[CryptMode.Value])
@@ -490,51 +490,51 @@ object SyncParameterManager {
       .mandatory
 
   /**
-    * Returns a processor that extracts the value of the option for ignoring
-    * file time deltas. This processor is based on the processor for an
+    * Returns an extractor that extracts the value of the option for ignoring
+    * file time deltas. This extractor is based on the extractor for an
     * optional parameter, but the result has to be mapped to an integer.
     *
-    * @return the processor for the ignore time delta option
+    * @return the extractor for the ignore time delta option
     */
-  private def ignoreTimeDeltaProcessor(): CliProcessor[Try[Option[Int]]] =
-    ParameterManager.optionValue(IgnoreTimeDeltaOption, Some(IgnoreTimeDeltaHelp))
+  private def ignoreTimeDeltaExtractor(): CliExtractor[Try[Option[Int]]] =
+    ParameterExtractor.optionValue(IgnoreTimeDeltaOption, Some(IgnoreTimeDeltaHelp))
       .toInt
       .single
 
   /**
-    * Returns a processor that extracts he value of the option for the number
+    * Returns an extractor that extracts he value of the option for the number
     * of sync operations per second.
     *
-    * @return the processor for the ops per second option
+    * @return the extractor for the ops per second option
     */
-  private def opsPerSecondProcessor(): CliProcessor[Try[Option[Int]]] =
-    ParameterManager.optionValue(OpsPerSecondOption, Some(OpsPerSecondHelp))
+  private def opsPerSecondExtractor(): CliExtractor[Try[Option[Int]]] =
+    ParameterExtractor.optionValue(OpsPerSecondOption, Some(OpsPerSecondHelp))
       .toInt
       .single
 
   /**
-    * Returns a processor that extracts the parameters related to cryptography.
+    * Returns an extractor that extracts the parameters related to cryptography.
     *
-    * @return the processor for the ''CryptConfig''
+    * @return the extractor for the ''CryptConfig''
     */
-  private def cryptConfigProcessor: CliProcessor[Try[CryptConfig]] =
+  private def cryptConfigExtractor: CliExtractor[Try[CryptConfig]] =
     for {
-      srcPwd <- cryptPasswordProcessor(SourceCryptModeOption, SourcePasswordOption)
-      dstPwd <- cryptPasswordProcessor(DestCryptModeOption, DestPasswordOption)
-      srcCrypt <- cryptModeProcessor(SourceCryptModeOption)
-      dstCrypt <- cryptModeProcessor(DestCryptModeOption)
-      cacheSize <- cryptCacheSizeProcessor()
+      srcPwd <- cryptPasswordExtractor(SourceCryptModeOption, SourcePasswordOption)
+      dstPwd <- cryptPasswordExtractor(DestCryptModeOption, DestPasswordOption)
+      srcCrypt <- cryptModeExtractor(SourceCryptModeOption)
+      dstCrypt <- cryptModeExtractor(DestCryptModeOption)
+      cacheSize <- cryptCacheSizeExtractor()
     } yield createCryptConfig(srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
 
   /**
-    * Returns a processor that extracts the value of the option for the crypt
+    * Returns an extractor that extracts the value of the option for the crypt
     * cache size. The string value is converted to an integer, and some
     * validation is performed.
     *
-    * @return the processor for the crypt cache size
+    * @return the extractor for the crypt cache size
     */
-  private def cryptCacheSizeProcessor(): CliProcessor[Try[Int]] =
-    ParameterManager.optionValue(CryptCacheSizeOption, Some(CryptCacheSizeHelp))
+  private def cryptCacheSizeExtractor(): CliExtractor[Try[Int]] =
+    ParameterExtractor.optionValue(CryptCacheSizeOption, Some(CryptCacheSizeHelp))
       .toInt
       .mapTo { size =>
         if (size < MinCryptCacheSize)
@@ -545,21 +545,21 @@ object SyncParameterManager {
       .mandatory
 
   /**
-    * Returns a processor that obtains the encryption password for one of the
+    * Returns an extractor that obtains the encryption password for one of the
     * sync structures. The password is only obtained if required by the crypt
     * mode configured. If it is not specified in the command line options, it
     * is read from the console.
     *
     * @param keyCryptMode the option key for the crypt mode
     * @param keyPwd       the option key for the password
-    * @return the processor to extract the encryption password
+    * @return the extractor to extract the encryption password
     */
-  private def cryptPasswordProcessor(keyCryptMode: String, keyPwd: String):
-  CliProcessor[SingleOptionValue[String]] = {
-    val condProc = cryptModeProcessor(keyCryptMode).map(_.map(mode => mode.requiresPassword))
-    val pwdProc = ParameterManager.optionValue(keyPwd, Some(CryptPasswordHelp))
-      .fallback(ParameterManager.consoleReaderValue(keyPwd, password = true))
-    ParameterManager.conditionalValue(condProc, pwdProc).single
+  private def cryptPasswordExtractor(keyCryptMode: String, keyPwd: String):
+  CliExtractor[SingleOptionValue[String]] = {
+    val condExt = cryptModeExtractor(keyCryptMode).map(_.map(mode => mode.requiresPassword))
+    val pwdExt = ParameterExtractor.optionValue(keyPwd, Some(CryptPasswordHelp))
+      .fallback(ParameterExtractor.consoleReaderValue(keyPwd, password = true))
+    ParameterExtractor.conditionalValue(condExt, pwdExt).single
   }
 
   /**
@@ -575,18 +575,18 @@ object SyncParameterManager {
   private def createCryptConfig(triedSrcPwd: Try[Option[String]], triedSrcCryptMode: Try[CryptMode.Value],
                                 triedDstPwd: Try[Option[String]], triedDstCryptMode: Try[CryptMode.Value],
                                 triedCryptCacheSize: Try[Int]): Try[CryptConfig] =
-    ParameterManager.createRepresentation(triedSrcPwd, triedSrcCryptMode, triedDstPwd, triedDstCryptMode,
+    ParameterExtractor.createRepresentation(triedSrcPwd, triedSrcCryptMode, triedDstPwd, triedDstCryptMode,
       triedCryptCacheSize)(CryptConfig)
 
   /**
-    * Returns a processor that extracts the timeout from the command line.
-    * This processor extracts an int value, which is interpreted as timeout in
+    * Returns an extractor that extracts the timeout from the command line.
+    * This extractor extracts an int value, which is interpreted as timeout in
     * seconds. A default timeout is set if the option is undefined.
     *
-    * @return the processor to extract the timeout value
+    * @return the extractor to extract the timeout value
     */
-  private def timeoutProcessor(): CliProcessor[Try[Timeout]] =
-    ParameterManager.optionValue(TimeoutOption, Some(TimeoutHelp))
+  private def timeoutExtractor(): CliExtractor[Try[Timeout]] =
+    ParameterExtractor.optionValue(TimeoutOption, Some(TimeoutHelp))
       .toInt
       .mapTo(time => Timeout(time.seconds))
       .fallbackValues(DefaultTimeout)

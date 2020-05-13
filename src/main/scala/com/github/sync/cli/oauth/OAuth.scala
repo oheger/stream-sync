@@ -17,7 +17,7 @@
 package com.github.sync.cli.oauth
 
 import com.github.sync.cli.CliHelpGenerator.OptionFilter
-import com.github.sync.cli.ParameterManager.ParameterContext
+import com.github.sync.cli.ParameterExtractor.ParameterContext
 import com.github.sync.cli._
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
@@ -67,7 +67,7 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle[CommandConfig]
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
     for {params <- SyncParameterManager.parseParameters(args)
          (cmdConf, paramCtx) <- OAuthParameterManager.extractCommandConfig(params)
-         _ <- Future.fromTry(ParameterManager.checkParametersConsumed(paramCtx))
+         _ <- Future.fromTry(ParameterExtractor.checkParametersConsumed(paramCtx))
          result <- executeCommand(cmdConf)
          } yield result
   }
@@ -93,8 +93,8 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle[CommandConfig]
     }
   }
 
-  override protected def cliProcessor: ParameterManager.CliProcessor[Try[CommandConfig]] =
-    OAuthParameterManager.commandConfigProcessor
+  override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[CommandConfig]] =
+    OAuthParameterManager.commandConfigExtractor
 
   override protected def usageCaption(helpContext: CliHelpGenerator.CliHelpContext): String =
     "Usage: OAuth " +
@@ -103,7 +103,7 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle[CommandConfig]
 
   override protected def optionsGroupFilter(context: ParameterContext): OptionFilter = {
     import CliHelpGenerator._
-    val triedCmdGroup = ParameterManager.tryProcessor(OAuthParameterManager.commandProcessor,
+    val triedCmdGroup = ParameterExtractor.tryExtractor(OAuthParameterManager.commandExtractor,
       context.parameters)(DefaultConsoleReader)
     val groupFilter = triedCmdGroup match {
       case Success((command, _)) => groupFilterFunc(command)

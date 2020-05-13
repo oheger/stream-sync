@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import java.time.ZoneId
 
-import com.github.sync.cli.ParameterManager._
+import com.github.sync.cli.ParameterExtractor._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
 import com.github.sync.http.{AuthConfig, BasicAuthConfig, NoAuth}
@@ -31,12 +31,12 @@ import scala.util.{Success, Try}
   *
   * Depending on the types of structures to be synced, different parameters
   * need to be passed to the command line. This module defines configuration
-  * objects for the different structure types and ''CliProcessor'' objects to
+  * objects for the different structure types and ''CliExtractor'' objects to
   * construct them from the current command line.
   *
   * The configuration objects for the source and the destination structure are
   * part of the overall sync configuration. They are parsed dynamically from
-  * the command line; this is done via a conditional ''CliProcessor'' that
+  * the command line; this is done via a conditional ''CliExtractor'' that
   * evaluates the URI defining the structure.
   */
 object SyncStructureConfig {
@@ -299,33 +299,33 @@ object SyncStructureConfig {
     roleType.name + group
 
   /**
-    * Returns a ''CliProcessor'' to extract the configuration of the sync
-    * structure for the role specified. This processor checks the type of the
+    * Returns a ''CliExtractor'' to extract the configuration of the sync
+    * structure for the role specified. This extractor checks the type of the
     * structure (based on the sync URI parameter), and then creates a
     * corresponding ''StructureConfig'' object.
     *
     * @param roleType      the role type
     * @param uriOptionName the name of the option for the structure URI
-    * @return the ''CliProcessor'' to extract the config of this role
+    * @return the ''CliExtractor'' to extract the config of this role
     */
-  def structureConfigProcessor(roleType: RoleType, uriOptionName: String): CliProcessor[Try[StructureConfig]] = {
-    val procMap = Map(structureGroup(GroupLocalFs, roleType) -> localFsConfigProcessor(roleType),
-      structureGroup(GroupDav, roleType) -> davConfigProcessor(roleType),
-      structureGroup(GroupOneDrive, roleType) -> oneDriveConfigProcessor(roleType))
-    conditionalGroupValue(structureTypeSelectorProcessor(roleType, uriOptionName), procMap)
+  def structureConfigExtractor(roleType: RoleType, uriOptionName: String): CliExtractor[Try[StructureConfig]] = {
+    val extMap = Map(structureGroup(GroupLocalFs, roleType) -> localFsConfigExtractor(roleType),
+      structureGroup(GroupDav, roleType) -> davConfigExtractor(roleType),
+      structureGroup(GroupOneDrive, roleType) -> oneDriveConfigExtractor(roleType))
+    conditionalGroupValue(structureTypeSelectorExtractor(roleType, uriOptionName), extMap)
   }
 
   /**
-    * Returns a ''CliProcessor'' that maps the input parameter for the URI of
+    * Returns a ''CliExtractor'' that maps the input parameter for the URI of
     * the given role type to a group name, based on the concrete structure
     * type. The group name is then used to parse the correct command line
     * options to construct a corresponding structure config.
     *
     * @param roleType      the role type
     * @param uriOptionName the name of the option for the structure URI
-    * @return the processor that determines the group of the structure type
+    * @return the extractor that determines the group of the structure type
     */
-  def structureTypeSelectorProcessor(roleType: RoleType, uriOptionName: String): CliProcessor[Try[String]] =
+  def structureTypeSelectorExtractor(roleType: RoleType, uriOptionName: String): CliExtractor[Try[String]] =
     inputValue(index = roleType.parameterIndex, optKey = Some(uriOptionName))
       .mapTo {
         case RegDavUri(_) => structureGroup(GroupDav, roleType)
@@ -335,120 +335,120 @@ object SyncStructureConfig {
       .mandatory
 
   /**
-    * Returns a ''CliProcessor'' that extracts the configuration for the local
+    * Returns a ''CliExtractor'' that extracts the configuration for the local
     * file system from the current command line arguments.
     *
     * @param roleType the role type
-    * @return the ''CliProcessor'' for the file system configuration
+    * @return the ''CliExtractor'' for the file system configuration
     */
-  private def localFsConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] =
+  private def localFsConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureConfig]] =
     optionValue(roleType.configPropertyName(PropLocalFsTimeZone), help = Some(HelpLocalFsTimeZone))
       .mapTo(ZoneId.of)
       .single
       .map(_.map(optZone => FsStructureConfig(optZone)))
 
   /**
-    * Returns a ''CliProcessor'' that extracts the configuration for a WebDav
+    * Returns a ''CliExtractor'' that extracts the configuration for a WebDav
     * server from the current command line arguments.
     *
     * @param roleType the role type
-    * @return the ''CliProcessor'' for the WebDav configuration
+    * @return the ''CliExtractor'' for the WebDav configuration
     */
-  private def davConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] = {
-    val procModProp = optionValue(roleType.configPropertyName(PropDavModifiedProperty),
+  private def davConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureConfig]] = {
+    val extModProp = optionValue(roleType.configPropertyName(PropDavModifiedProperty),
       help = Some(HelpDavModifiedProperty)).single
-    val procModNs = optionValue(roleType.configPropertyName(PropDavModifiedNamespace),
+    val extModNs = optionValue(roleType.configPropertyName(PropDavModifiedNamespace),
       help = Some(HelpDavModifiedNamespace)).single
-    val procDel = optionValue(roleType.configPropertyName(PropDavDeleteBeforeOverride),
+    val extDel = optionValue(roleType.configPropertyName(PropDavDeleteBeforeOverride),
       help = Some(HelpDavDeleteBeforeOverride))
       .toBoolean
       .fallbackValues(false)
       .single
       .mandatory
     for {
-      triedModProp <- procModProp
-      triedModNs <- procModNs
-      triedDel <- procDel
-      triedAuth <- authConfigProcessor(roleType)
+      triedModProp <- extModProp
+      triedModNs <- extModNs
+      triedDel <- extDel
+      triedAuth <- authConfigExtractor(roleType)
     } yield createDavConfig(triedModProp, triedModNs, triedDel, triedAuth)
   }
 
   /**
-    * Returns a ''CliProcessor'' that extracts the configuration for a OneDrive
+    * Returns a ''CliExtractor'' that extracts the configuration for a OneDrive
     * server from the current command line arguments.
     *
     * @param roleType the structure type
-    * @return the ''CliProcessor'' for the OneDrive configuration
+    * @return the ''CliExtractor'' for the OneDrive configuration
     */
-  private def oneDriveConfigProcessor(roleType: RoleType): CliProcessor[Try[StructureConfig]] = {
-    val procPath = optionValue(roleType.configPropertyName(PropOneDrivePath), help = Some(HelpOneDrivePath))
+  private def oneDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureConfig]] = {
+    val extPath = optionValue(roleType.configPropertyName(PropOneDrivePath), help = Some(HelpOneDrivePath))
       .single
       .mandatory
-    val procChunkSize = optionValue(roleType.configPropertyName(PropOneDriveUploadChunkSize),
+    val extChunkSize = optionValue(roleType.configPropertyName(PropOneDriveUploadChunkSize),
       help = Some(HelpOneDriveUploadChunkSize))
       .toInt
       .single
-    val procServer = optionValue(roleType.configPropertyName(PropOneDriveServer),
+    val extServer = optionValue(roleType.configPropertyName(PropOneDriveServer),
       help = Some(HelpOneDriveServer)).single
     for {
-      triedPath <- procPath
-      triedChunkSize <- procChunkSize
-      triedServer <- procServer
-      triedAuth <- authConfigProcessor(roleType)
+      triedPath <- extPath
+      triedChunkSize <- extChunkSize
+      triedServer <- extServer
+      triedAuth <- authConfigExtractor(roleType)
     } yield createOneDriveConfig(triedPath, triedChunkSize, triedServer, triedAuth)
   }
 
   /**
-    * Returns a ''CliProcessor'' for obtaining the authentication
-    * configuration. The processor creates a concrete implementation of the
+    * Returns a ''CliExtractor'' for obtaining the authentication
+    * configuration. The extractor creates a concrete implementation of the
     * [[AuthConfig]] trait depending on the properties that are specified.
     *
     * @param roleType the role type
-    * @return the ''CliProcessor'' for the auth config
+    * @return the ''CliExtractor'' for the auth config
     */
-  private def authConfigProcessor(roleType: RoleType): CliProcessor[Try[AuthConfig]] = {
-    val procBasicDefined = isDefinedProcessor(roleType.configPropertyName(PropAuthUser))
-    val procOAuthDefined = isDefinedProcessor(roleType.configPropertyName(
+  private def authConfigExtractor(roleType: RoleType): CliExtractor[Try[AuthConfig]] = {
+    val extBasicDefined = isDefinedExtractor(roleType.configPropertyName(PropAuthUser))
+    val extOAuthDefined = isDefinedExtractor(roleType.configPropertyName(
       OAuthParameterManager.NameOptionName))
-    val condNoAuth = conditionalValue(procOAuthDefined,
-      ifProc = constantOptionValueWithDesc(None, GroupOAuth),
-      elseProc = constantOptionValueWithDesc(None, GroupNoAuth))
-    val groupSelector: CliProcessor[Try[String]] =
-      conditionalValue(procBasicDefined, ifProc = constantOptionValueWithDesc(None, GroupBasicAuth),
-        elseProc = condNoAuth)
+    val condNoAuth = conditionalValue(extOAuthDefined,
+      ifExt = constantOptionValueWithDesc(None, GroupOAuth),
+      elseExt = constantOptionValueWithDesc(None, GroupNoAuth))
+    val groupSelector: CliExtractor[Try[String]] =
+      conditionalValue(extBasicDefined, ifExt = constantOptionValueWithDesc(None, GroupBasicAuth),
+        elseExt = condNoAuth)
         .single.mandatory
-    val groupMap = Map[String, CliProcessor[Try[AuthConfig]]](
-      GroupBasicAuth -> basicAuthProcessor(roleType),
-      GroupOAuth -> oauthConfigProcessor(roleType),
-      GroupNoAuth -> constantProcessor(Success(NoAuth)))
+    val groupMap = Map[String, CliExtractor[Try[AuthConfig]]](
+      GroupBasicAuth -> basicAuthExtractor(roleType),
+      GroupOAuth -> oauthConfigExtractor(roleType),
+      GroupNoAuth -> constantExtractor(Success(NoAuth)))
     conditionalGroupValue(groupSelector, groupMap)
   }
 
   /**
-    * Returns a ''CliProcessor'' for obtaining the basic auth configuration.
+    * Returns a ''CliExtractor'' for obtaining the basic auth configuration.
     *
     * @param roleType the role type
-    * @return the ''CliProcessor'' for the basic auth config
+    * @return the ''CliExtractor'' for the basic auth config
     */
-  private def basicAuthProcessor(roleType: RoleType): CliProcessor[Try[AuthConfig]] = {
-    val procUser = optionValue(roleType.configPropertyName(PropAuthUser), help = Some(HelpAuthUser))
+  private def basicAuthExtractor(roleType: RoleType): CliExtractor[Try[AuthConfig]] = {
+    val extUser = optionValue(roleType.configPropertyName(PropAuthUser), help = Some(HelpAuthUser))
       .single
       .mandatory
     for {
-      triedUser <- procUser
+      triedUser <- extUser
       triedPassword <- davPasswordOption(roleType)
     } yield createBasicAuthConfig(triedUser, triedPassword)
   }
 
   /**
-    * Returns a ''CliProcessor'' for obtaining the password for Basic Auth.
+    * Returns a ''CliExtractor'' for obtaining the password for Basic Auth.
     * The password is mandatory; if it is not specified in the arguments, it is
     * read from the console.
     *
     * @param roleType the role type
-    * @return the ''CliProcessor'' for the Basic Auth password
+    * @return the ''CliExtractor'' for the Basic Auth password
     */
-  private def davPasswordOption(roleType: RoleType): CliProcessor[Try[String]] = {
+  private def davPasswordOption(roleType: RoleType): CliExtractor[Try[String]] = {
     val prop = roleType.configPropertyName(PropAuthPassword)
     optionValue(prop, help = Some(HelpAuthPassword))
       .fallback(consoleReaderValue(prop, password = true))
@@ -457,13 +457,13 @@ object SyncStructureConfig {
   }
 
   /**
-    * Returns a ''CliProcessor'' for obtaining the OAuth configuration.
+    * Returns a ''CliExtractor'' for obtaining the OAuth configuration.
     *
     * @param roleType the role type
-    * @return the ''CliProcessor'' for the OAuth configuration
+    * @return the ''CliExtractor'' for the OAuth configuration
     */
-  private def oauthConfigProcessor(roleType: RoleType): CliProcessor[Try[AuthConfig]] = {
-    OAuthParameterManager.storageConfigProcessor(needPassword = true, prefix = roleType.name)
+  private def oauthConfigExtractor(roleType: RoleType): CliExtractor[Try[AuthConfig]] = {
+    OAuthParameterManager.storageConfigExtractor(needPassword = true, prefix = roleType.name)
       .map { triedConfig =>
         triedConfig map (config => config.asInstanceOf[AuthConfig])
       }
