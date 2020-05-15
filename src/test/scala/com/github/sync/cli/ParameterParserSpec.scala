@@ -17,10 +17,10 @@
 package com.github.sync.cli
 
 import java.io.IOException
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 
 import com.github.sync.FileTestHelper
-import com.github.sync.cli.ParameterParser.OptionPrefixes
+import com.github.sync.cli.ParameterParser.{OptionPrefixes, ParameterParseException}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -252,12 +252,19 @@ class ParameterParserSpec extends AnyFlatSpec with Matchers with FileTestHelper 
     argsMap.keys should contain only("foo", "test")
   }
 
-  it should "handle a non existing parameter file" in {
+  it should "handle an exception when reading a parameter file" in {
     val FileName = "non_existing_file.txt"
-    val args = appendFileParameter(Paths.get(FileName), List("--op1", "don't care"))
+    val args = List("--op1", "don't care", "--" + FileOption, FileName)
+    val expArgs = Map("op1" -> List("don't care"))
 
     val exception = parseParametersFailure(args)
-    exception shouldBe a[IOException]
-    exception.getMessage should include(FileName)
+    exception match {
+      case e: ParameterParseException =>
+        e.getMessage should include(FileName)
+        e.getCause shouldBe a[IOException]
+        e.fileOption should be(FileOption)
+        e.currentParameters should be(expArgs)
+      case e => fail("Unexpected exception: " + e)
+    }
   }
 }

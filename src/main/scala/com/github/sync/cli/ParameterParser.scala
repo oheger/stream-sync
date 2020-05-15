@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import scala.annotation.tailrec
 import scala.io.Source
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 
 /**
   * A module for parsing command line arguments into options and input values.
@@ -129,6 +129,26 @@ object ParameterParser {
   }
 
   /**
+    * A specialized exception class to report problems during parameter
+    * parsing.
+    *
+    * The parsing process itself is lenient; failures are detected later in the
+    * extraction phase. An unrecoverable problem, however, is an exception
+    * thrown when reading a parameter file. Such exceptions are converted to
+    * exceptions of this type. They transport some more information which is
+    * useful when handling errors, e.g. printing help or error information.
+    *
+    * @param msg               an error message
+    * @param cause             the causing exception, typically an ''IOException''
+    * @param fileOption        the name of the option to read parameter files
+    * @param currentParameters the current parameters parsed so far
+    */
+  class ParameterParseException(msg: String,
+                                cause: Throwable,
+                                val fileOption: String,
+                                val currentParameters: ParametersMap) extends Exception(msg, cause)
+
+  /**
     * Type definition for an internal map type used during processing of
     * command line arguments.
     */
@@ -142,6 +162,14 @@ object ParameterParser {
     * it returns '''true''', the following argument is interpreted as the value
     * of this option. The keys of options are obtained by invoking the key
     * extractor function; it is responsible for removing option prefixes.
+    *
+    * The parsing operation normally succeeds, even if invalid parameters are
+    * passed in; this is detected and handled later in the extraction phase.
+    * The only exception that can occur is that a parameter file cannot be
+    * read (which can happen only if a name for the file option is provided).
+    * So if the ''Try'' returned by this function fails, the exception is of
+    * type [[ParameterParseException]] and contains further information about
+    * the failed read operation.
     *
     * @param args          the sequence with command line arguments
     * @param isOptionFunc  a function to determine whether a command line
@@ -168,7 +196,7 @@ object ParameterParser {
         doParseParameters(tail, appendOptionValue(argsMap, keyExtractor(opt), value))
       case h :: t if !isOptionFunc(h) =>
         doParseParameters(t, appendOptionValue(argsMap, InputOption, h))
-      case h :: t =>
+      case _ :: t =>
         doParseParameters(t, argsMap)
       case Nil =>
         argsMap
@@ -187,9 +215,10 @@ object ParameterParser {
             case None =>
               Success(argMap)
             case Some(files) =>
+              val nextArgs = argMap - fileOption
               val filesToRead = files.toSet diff processedFiles
-              readAllParameterFiles(filesToRead.toList) flatMap { argList =>
-                parseParametersWithFiles(argList, argMap - fileOption, processedFiles ++ filesToRead)
+              readAllParameterFiles(filesToRead.toList, fileOption, nextArgs) flatMap { argList =>
+                parseParametersWithFiles(argList, nextArgs, processedFiles ++ filesToRead)
               }
           }
 
@@ -231,14 +260,36 @@ object ParameterParser {
 
   /**
     * Reads all parameter files referenced by the provided list. The arguments
-    * they contain are combined to a single sequence of strings.
+    * they contain are combined to a single sequence of strings. If a read
+    * operation fails, the resulting ''Try'' fails with a meaningful exception.
     *
-    * @param files list with the files to be read
+    * @param files             list with the files to be read
+    * @param fileOption        the name of the option referencing files
+    * @param currentParameters the parameters parsed so far
     * @return a ''Try'' with the result of the combined read operation
     */
-  private def readAllParameterFiles(files: List[String]): Try[List[String]] = {
-    val triedReads = files map readParameterFile
-    val triedList = Try(triedReads.map(_.get))
-    triedList map (_.flatten)
+  private def readAllParameterFiles(files: List[String], fileOption: String, currentParameters: ParametersMap):
+  Try[List[String]] = {
+    val triedReads = files map (path => (path, readParameterFile(path)))
+    val optError = triedReads.find(_._2.isFailure)
+    optError.fold(convertSuccessReads(triedReads)) { t =>
+      t._2 recoverWith {
+        case e: Exception =>
+          Failure(new ParameterParseException(s"Failed to load parameter file ${t._1}", e, fileOption,
+            currentParameters))
+      }
+    }
   }
+
+  /**
+    * Converts the list with tried reads to the final result, a ''Try'' of a
+    * list of arguments. This function is called if all parameter files could
+    * be read successfully.
+    *
+    * @param triedReads the list with tried reads and file names
+    * @return the resulting ''Try'' with a list of arguments
+    */
+  private def convertSuccessReads(triedReads: List[(String, Try[List[String]])]): Try[List[String]] =
+    Try(triedReads.map(_._2.get))
+      .map(_.flatten)
 }
