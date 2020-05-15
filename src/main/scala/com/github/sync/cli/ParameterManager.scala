@@ -17,7 +17,7 @@
 package com.github.sync.cli
 
 import com.github.sync.cli.ParameterExtractor._
-import com.github.sync.cli.ParameterParser.{KeyExtractor, OptionPredicate, ParametersMap}
+import com.github.sync.cli.ParameterParser.{KeyExtractor, OptionPredicate, ParameterParseException, ParametersMap}
 
 import scala.util.{Failure, Success, Try}
 
@@ -99,10 +99,31 @@ object ParameterManager {
                             checkUnconsumedParameters: Boolean = true): Try[(A, ParameterContext)] = {
     val theParsingFunc = getOrDefault(parser, parsingFunc())
     for {
-      parsedArgs <- theParsingFunc(args)
+      parsedArgs <- parse(args, extractor, theParsingFunc)
       extResult <- extract(parsedArgs, extractor, checkUnconsumedParameters)
     } yield extResult
   }
+
+  /**
+    * Implements the parsing step of parameter processing. This function
+    * invokes the ''ParsingFunc'' to do the actual parsing. It then does a
+    * special exception handling for parse exceptions: Such exceptions are
+    * mapped to [[ParameterExtractionException]] exceptions that have a fully
+    * initialized parameter context. To obtain the latter, the meta data of
+    * the ''CliExtractor'' is retrieved.
+    *
+    * @param args      the sequence of command line arguments
+    * @param extractor the current ''CliExtractor''
+    * @param parseFunc the function to handle the parsing
+    * @return a ''Try'' with the result of the parse operation
+    */
+  private def parse(args: Seq[String], extractor: CliExtractor[_], parseFunc: ParsingFunc): Try[ParametersMap] =
+    parseFunc(args) recoverWith {
+      case e: ParameterParseException =>
+        val context = gatherMetaData(extractor, parameters = e.currentParameters)
+        val failure = ExtractionFailure(e.fileOption, e.getMessage, context)
+        Failure(updateHelpContextWithFailures(List(failure), context))
+    }
 
   /**
     * Handles the extraction of data objects from the command line and
@@ -125,7 +146,7 @@ object ParameterManager {
       (_, _)
     } recoverWith {
       case e: ParameterExtractionException =>
-        Failure(updateHelpContextWithFailures(e, context))
+        Failure(updateHelpContextWithFailures(e.failures, context))
     }
   }
 
@@ -144,22 +165,30 @@ object ParameterManager {
 
   /**
     * Generates an updated help context that contains all the failures of the
-    * passed in exception. Then the failures are updated to reference the
+    * passed in list. Then the failures are updated to reference the
     * parameter context with the updated help context, and a new exception with
     * these failures is created.
     *
-    * @param exception the original exception
-    * @param context   the most recent parameter context
+    * @param failures the original list of failures
+    * @param context  the most recent parameter context
     * @return an updated exception referencing the new help context
     */
-  private def updateHelpContextWithFailures(exception: ParameterExtractionException, context: ParameterContext):
+  private def updateHelpContextWithFailures(failures: List[ExtractionFailure], context: ParameterContext):
   ParameterExtractionException = {
-    val helpContext = addFailuresToHelpContext(context.helpContext, exception.failures)
+    val helpContext = addFailuresToHelpContext(context.helpContext, failures)
     val newContext = context.copy(helpContext = helpContext)
-    val newFailures = exception.failures.map(_.copy(context = newContext))
+    val newFailures = failures.map(_.copy(context = newContext))
     ParameterExtractionException(newFailures)
   }
 
+  /**
+    * Helper function to replace a '''null''' value by a default value.
+    *
+    * @param value   the value, which can be '''null'''
+    * @param default the lazy default value
+    * @tparam A the type of the value
+    * @return the value if defined; the default value otherwise
+    */
   private def getOrDefault[A](value: A, default: => A): A =
     Option(value) getOrElse default
 }

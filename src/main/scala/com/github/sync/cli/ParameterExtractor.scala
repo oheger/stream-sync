@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import java.nio.file.{Path, Paths}
 
-import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, InputParameterRef}
+import com.github.sync.cli.CliHelpGenerator.CliHelpContext
 import com.github.sync.cli.ParameterParser.ParametersMap
 
 import scala.collection.SortedSet
@@ -49,13 +49,15 @@ object ParameterExtractor {
   /** A mapping storing the boolean literals for conversion. */
   private final val BooleanMapping = Map("true" -> true, "false" -> false)
 
+  /** Constant for an initial, empty help context. */
+  private val EmptyHelpContext = new CliHelpContext(Map.empty, SortedSet.empty, None, Nil)
+
   /**
     * A dummy parameter context object that is used if no current context is
     * available. It contains only dummy values.
     */
   private val DummyParameterContext = ParameterContext(Parameters(Map.empty, Set.empty),
-    new CliHelpContext(Map.empty, SortedSet.empty, None, Nil),
-    DummyConsoleReader)
+    EmptyHelpContext, DummyConsoleReader)
 
   /**
     * Type definition for the base type of a command line option. The option
@@ -749,9 +751,9 @@ object ParameterExtractor {
     * options belonging to specific groups or to indicate that some options are
     * valid only under specific conditions.
     *
-    * @param condExt  the extractor that defines the condition
-    * @param ifExt    the extractor to run if the condition is fulfilled
-    * @param elseExt  the extractor to run if the condition is not fulfilled
+    * @param condExt   the extractor that defines the condition
+    * @param ifExt     the extractor to run if the condition is fulfilled
+    * @param elseExt   the extractor to run if the condition is not fulfilled
     * @param ifGroup   name of the group for the if extractor
     * @param elseGroup name of the group for the else extractor
     * @return the conditional extractor
@@ -799,7 +801,7 @@ object ParameterExtractor {
     * application's help text.
     *
     * @param groupExt the ''CliExtractor'' that selects the active group
-    * @param groupMap  a map with extractors for the supported groups
+    * @param groupMap a map with extractors for the supported groups
     * @tparam A the result type of the resulting extractor
     * @return the extractor returning the group value
     */
@@ -892,7 +894,7 @@ object ParameterExtractor {
     * many values have been provided. Otherwise, no changes on the values are
     * made.
     *
-    * @param ext    the extractor providing the original value
+    * @param ext     the extractor providing the original value
     * @param atLeast the minimum number of values
     * @param atMost  the maximum number of values (less than 0 for unlimited)
     * @tparam A the result type
@@ -921,7 +923,7 @@ object ParameterExtractor {
     * exception; this is handled automatically by causing the result to fail.
     *
     * @param ext the extractor to be decorated
-    * @param f    the mapping function to be applied
+    * @param f   the mapping function to be applied
     * @tparam A the original result type
     * @tparam B the mapped result type
     * @return the extractor applying the mapping function
@@ -940,7 +942,7 @@ object ParameterExtractor {
     * returns an updated one.
     *
     * @param ext the extractor to be decorated
-    * @param f    the mapping function to be applied
+    * @param f   the mapping function to be applied
     * @tparam A the original result type
     * @tparam B the mapped result type
     * @return the extractor applying the mapping function
@@ -977,7 +979,7 @@ object ParameterExtractor {
     * the mapping function is applied to all values. Otherwise, a constant
     * extractor is returned that yields the specified fallback values.
     *
-    * @param ext               the extractor to be mapped
+    * @param ext                the extractor to be mapped
     * @param firstFallback      the first fallback value
     * @param moreFallbackValues further fallback values
     * @param f                  the mapping function to be applied
@@ -1051,7 +1053,7 @@ object ParameterExtractor {
     * in extractor to a mapping function. If the function yields a result, it
     * is used as resulting value; otherwise, the extractor returns a failure.
     *
-    * @param ext the extractor providing the original option value
+    * @param ext  the extractor providing the original option value
     * @param fMap the function that maps enum values
     * @tparam A the value type of the original extractor
     * @tparam B the value type of the resulting extractor
@@ -1560,8 +1562,7 @@ object ParameterExtractor {
     */
   def runExtractor[T](extractor: CliExtractor[T], parameters: Parameters)
                      (implicit consoleReader: ConsoleReader): (T, ParameterContext) = {
-    val context = ParameterContext(parameters,
-      new CliHelpContext(Map.empty, SortedSet.empty[InputParameterRef], None, Nil), consoleReader)
+    val context = ParameterContext(parameters, EmptyHelpContext, consoleReader)
     val (result, nextContext) = extractor.run(context)
     (result, nextContext)
   }
@@ -1638,6 +1639,22 @@ object ParameterExtractor {
     }
 
   /**
+    * Runs the given ''CliExtractor'' against a dummy parameter context to
+    * obtain meta data from it. This run will populate a ''CliHelpContext''
+    * with information about all the options accessed by the extractor.
+    *
+    * @param extractor   the ''CliExtractor'' in question
+    * @param parameters  the parameters to store in the context
+    * @param helpContext the initial help context for the context
+    * @return the ''ParameterContext'' with updated meta data
+    */
+  def gatherMetaData(extractor: CliExtractor[_], parameters: ParametersMap = Map.empty,
+                     helpContext: CliHelpContext = EmptyHelpContext): ParameterContext = {
+    val paramCtx = contextForMetaDataRun(parameters, helpContext)
+    extractor.run(paramCtx)._2
+  }
+
+  /**
     * Returns a collection containing all extraction failures from the given
     * components. This is used to create an object representation of a group of
     * command line arguments. Only if all components could be extracted
@@ -1692,8 +1709,7 @@ object ParameterExtractor {
     extractorsAndGroups
       .foldLeft(helpContext) { (helpCtx, p) =>
         val helpCtxWithGroup = helpCtx startGroupConditionally p._2
-        val paramCtx = contextForMetaDataRun(helpCtxWithGroup)
-        val (_, nextContext) = p._1.run(paramCtx)
+        val nextContext = gatherMetaData(p._1, helpContext = helpCtxWithGroup)
         nextContext.helpContext.endGroupConditionally(p._2)
       }
 
@@ -1732,9 +1748,10 @@ object ParameterExtractor {
     * context has no parameter values and dummy helper objects. Only the help
     * context is set and will be updated during the run.
     *
+    * @param params      the parameters for the context
     * @param helpContext the ''CliHelpContext''
     * @return the ''ParameterContext'' for the meta data run
     */
-  private def contextForMetaDataRun(helpContext: CliHelpContext): ParameterContext =
-    ParameterContext(Parameters(Map.empty, Set.empty), helpContext, DummyConsoleReader)
+  private def contextForMetaDataRun(params: ParametersMap, helpContext: CliHelpContext): ParameterContext =
+    ParameterContext(Parameters(params, Set.empty), helpContext, DummyConsoleReader)
 }
