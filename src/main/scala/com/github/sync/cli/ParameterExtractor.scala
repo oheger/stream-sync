@@ -1552,7 +1552,9 @@ object ParameterExtractor {
 
   /**
     * Executes the given ''CliExtractor'' on the parameters specified and
-    * returns its result and the updated ''Parameters'' object.
+    * returns its result and the updated ''ParameterContext'' object. Notice
+    * that, thanks to an implicit conversion function, it is sufficient to
+    * only parse in a ''ParametersMap'' object.
     *
     * @param extractor     the extractor to be executed
     * @param parameters    the current ''Parameters''
@@ -1570,7 +1572,7 @@ object ParameterExtractor {
   /**
     * Executes the given ''CliExtractor'' that may fail on the parameters
     * specified. Result is a ''Try'' with the extractor's result and the
-    * updated ''Parameters'' object. This function is useful if a failed
+    * updated ''ParameterContext'' object. This function is useful if a failed
     * extractor should cause the whole operation to fail.
     *
     * @param extractor     the extractor to be executed
