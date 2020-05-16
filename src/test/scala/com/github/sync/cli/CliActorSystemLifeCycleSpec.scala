@@ -32,23 +32,27 @@ import scala.util.Try
 /**
   * Test class for ''ActorSystemLifeCycle''.
   */
-class ActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
+class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
   "ActorSystemLifeCycle" should "manage the life-cycle of an actor system" in {
-    val CommandLine = Array("1", "2", "3")
-    val myApp = new ActorSystemLifeCycleTestImpl {
+    val SrcPath = "/src/sync/data"
+    val DstPath = "/dst/sync/target"
+    val CommandLine = Array(SrcPath, DstPath)
+    val myApp = new CliActorSystemLifeCycleTestImpl {
       override val name: String = "TestApp"
 
-      override protected def runApp(args: Array[String]): Future[String] = {
-        args should be(CommandLine)
+      override protected def runApp(futConfig: Future[SyncConfig]): Future[String] = {
         val actor = actorSystem.actorOf(Props(new Actor {
           override def receive: Receive = {
-            case x: Int => sender() ! x + 1
+            case conf: SyncConfig =>
+              sender() ! conf.srcUri + "," + conf.dstUri
           }
         }))
 
         implicit val timeout: Timeout = Timeout(3.seconds)
-        val futResult = actor ? 41
-        futResult.map(_.toString)
+        for {
+          config <- futConfig
+          result <- (actor ? config).mapTo[String]
+        } yield result
       }
     }
 
@@ -56,17 +60,17 @@ class ActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
     Console.withOut(outStream) {
       myApp.run(CommandLine)
       val output = new String(outStream.toByteArray)
-      output should be("42" + System.getProperty("line.separator"))
+      output should be(SrcPath + "," + DstPath + System.getProperty("line.separator"))
     }
     myApp.actorSystem.whenTerminated.isCompleted shouldBe true
   }
 
   it should "handle a failed Future returned by the application logic" in {
     val exception = new IllegalStateException("App crashed!")
-    val myApp = new ActorSystemLifeCycleTestImpl {
+    val myApp = new CliActorSystemLifeCycleTestImpl {
       override val name: String = "failingApp"
 
-      override protected def runApp(args: Array[String]): Future[String] =
+      override protected def runApp(futConfig: Future[SyncConfig]): Future[String] =
         Future.failed(exception)
     }
 
@@ -84,7 +88,7 @@ class ActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
     * A test implementation of ''ActorSystemLifeCycle'' that provides dummy
     * implementations for methods that are not used by the tests.
     */
-  private abstract class ActorSystemLifeCycleTestImpl extends ActorSystemLifeCycle[SyncConfig] {
+  private abstract class CliActorSystemLifeCycleTestImpl extends CliActorSystemLifeCycle[SyncConfig] {
     override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =
       SyncParameterManager.syncConfigExtractor()
 

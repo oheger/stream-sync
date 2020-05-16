@@ -51,11 +51,11 @@ object OAuth {
 }
 
 /**
-  * The implementation class of the CLI extending [[ActorSystemLifeCycle]].
+  * The implementation class of the CLI extending [[CliActorSystemLifeCycle]].
   *
   * @param commands the service to execute the CLI commands
   */
-class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle[CommandConfig] {
+class OAuth(commands: OAuthCommands) extends CliActorSystemLifeCycle[CommandConfig] {
 
   override val name: String = "OAuthCLI"
 
@@ -63,10 +63,10 @@ class OAuth(commands: OAuthCommands) extends ActorSystemLifeCycle[CommandConfig]
     * @inheritdoc This implementation determines the command to be executed and
     *             runs it.
     */
-  override protected def runApp(args: Array[String]): Future[String] = {
+  override protected def runApp(futConfig: Future[CommandConfig]): Future[String] = {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
     for {
-         cmdConf <- SyncParameterManager.processCommandLine(args, OAuthParameterManager.commandConfigExtractor)
+         cmdConf <- futConfig
          result <- executeCommand(cmdConf)
          } yield result
   }

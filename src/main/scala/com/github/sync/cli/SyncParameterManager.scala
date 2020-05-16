@@ -24,7 +24,6 @@ import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.ParameterExtractor.{CliExtractor, SingleOptionValue}
 import com.github.sync.cli.SyncStructureConfig.StructureConfig
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.implicitConversions
 import scala.util.Try
@@ -44,12 +43,6 @@ import scala.util.Try
   * option key.
   */
 object SyncParameterManager {
-  /**
-    * The name of the command line option that references a file with further
-    * command line arguments.
-    */
-  final val FileOption = "file"
-
   /** Name of the input option for the URI of the source structure. */
   final val SourceUriOption = "sourceURI"
 
@@ -336,31 +329,6 @@ object SyncParameterManager {
     */
   private val RegApplyLog =
     """(?i)NONE""".r
-
-  /**
-    * Invokes the ''ParameterManager'' to parse and process the command line
-    * options with the correct settings.
-    *
-    * @param args the sequence with command line arguments
-    *             @param extractor the ''CliExtractor''
-    *                              @tparam A the result type of the ''CliExtractor''
-    * @return a ''Future'' with the ''SyncConfig'' object that was extracted
-    */
-  def processCommandLine[A](args: Seq[String], extractor: CliExtractor[Try[A]]): Future[A] = {
-    val extractorFunc = ParameterParser.DefaultOptionPrefixes.extractorFunc andThen toLowerCase
-    val parseFunc = ParameterManager.parsingFunc(keyExtractor = extractorFunc, optFileOption = Some(FileOption))
-    Future.fromTry(ParameterManager.processCommandLine(args, extractor, parseFunc)
-      .map(_._1))
-  }
-
-  /**
-    * Helper function to process the command line of the ''Sync'' application.
-    * Uses the correct ''CliExtractor'' and parsing settings.
-    * @param args the sequence with command line arguments
-    * @return a ''Future'' with the ''SyncConfig'' object that was extracted
-    */
-  def processSyncCommandLine(args: Seq[String]): Future[SyncConfig] =
-    processCommandLine(args, syncConfigExtractor())
 
   /**
     * Returns an extractor that extracts the ''SyncConfig'' from the command

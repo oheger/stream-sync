@@ -25,6 +25,7 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.{ImplicitSender, TestKit}
 import akka.util.ByteString
+import com.github.sync.cli.Sync.SyncResult
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage}
 import com.github.sync.{AsyncTestHelper, DelegateSourceComponentsFactory, FileTestHelper, SourceFileProvider}
@@ -185,6 +186,18 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     */
   protected def decryptName(key: String, name: String): String =
     futureResult(CryptService.decryptName(CryptStage.keyFromString(key), name))
+
+  /**
+    * Executes a sync process with the given command line options.
+    *
+    * @param args    the array with command line options
+    * @param factory the factory for sync components
+    * @return the future result of the sync process
+    */
+  protected def runSync(args: Array[String], factory: SyncComponentsFactory = new SyncComponentsFactory):
+  Future[SyncResult] =
+    Sync.syncProcess(factory,
+      CliActorSystemLifeCycle.processCommandLine(args, SyncParameterManager.syncConfigExtractor()))
 
   /**
     * Creates a new ''Sync'' instance that is configured to use the actor

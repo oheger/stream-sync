@@ -40,7 +40,6 @@ class LocalSyncSpec extends BaseSyncSpec {
   import system.dispatcher
 
   "Sync" should "synchronize two directory structures" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     createTestFile(srcFolder, "test1.txt")
@@ -50,7 +49,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--filter", "exclude:*.tmp")
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.totalOperations should be(result.successfulOperations)
     checkFile(dstFolder, "test1.txt")
     checkFileNotPresent(dstFolder, "toBeRemoved.txt")
@@ -101,7 +100,6 @@ class LocalSyncSpec extends BaseSyncSpec {
   }
 
   it should "apply operations to an alternative target" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val dstFolder2 = Files.createDirectory(createPathInDirectory("dest2"))
@@ -111,14 +109,13 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--apply", "target:" + dstFolder2.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(factory, options))
+    futureResult(runSync(options))
     checkFile(dstFolder2, "new.txt")
     checkFile(dstFolder, "obsolete.dat")
     checkFileNotPresent(dstFolder2, "obsolete.dat")
   }
 
   it should "store sync operations in a log file" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val logFile = createFileReference()
@@ -128,7 +125,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--filter", "exclude:*.tmp", "--log", logFile.toAbsolutePath.toString)
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.totalOperations should be(2)
     result.successfulOperations should be(2)
     val lines = Files.readAllLines(logFile)
@@ -138,7 +135,6 @@ class LocalSyncSpec extends BaseSyncSpec {
   }
 
   it should "append an existing log file" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val LogHeader = "This is my log." + System.lineSeparator()
@@ -147,12 +143,11 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--apply", "none", "--log", logFile.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(factory, options))
+    futureResult(runSync(options))
     readDataFile(logFile) should startWith(LogHeader)
   }
 
   it should "support an apply mode 'None'" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     createTestFile(srcFolder, "file1.txt")
@@ -161,7 +156,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--apply", "NonE")
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.successfulOperations should be(3)
     result.totalOperations should be(result.successfulOperations)
     checkFile(dstFolder, "removed.txt")
@@ -169,7 +164,6 @@ class LocalSyncSpec extends BaseSyncSpec {
   }
 
   it should "execute sync operations from a sync log file" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val NewFolderName = "newFolder"
@@ -187,7 +181,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString)
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.successfulOperations should be(operations.size)
     result.totalOperations should be(result.successfulOperations)
     checkFile(dstFolder, "syncFile.txt")
@@ -251,7 +245,6 @@ class LocalSyncSpec extends BaseSyncSpec {
   }
 
   it should "skip operations in the sync log that are contained in the processed log" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val ProcessedFile = "done.txt"
@@ -266,7 +259,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString)
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     checkFile(dstFolder, NewFile)
     checkFileNotPresent(dstFolder, ProcessedFile)
@@ -286,19 +279,18 @@ class LocalSyncSpec extends BaseSyncSpec {
     createTestFile(srcFolder, "test.txt")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(factory, options))
+    futureResult(runSync(options, factory))
     shutdownCount.get() should be(1)
   }
 
   it should "stop the actor for local sync operations after stream processing" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val identifyId = 20190817
     createTestFile(srcFolder, "test.txt")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString)
 
-    futureResult(Sync.syncProcess(factory, options))
+    futureResult(runSync(options))
     val selection = system.actorSelection(s"/user/${LocalFsDestinationComponentsFactory.LocalSyncOpActorName}")
     selection ! Identify(identifyId)
     val identity = expectMsgType[ActorIdentity]
@@ -308,7 +300,6 @@ class LocalSyncSpec extends BaseSyncSpec {
 
   it should "take the time zone of a local files source into account" in {
     val DeltaHours = 2
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val UnchangedFile = "notChanged.txt"
@@ -324,7 +315,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--log", logFile.toAbsolutePath.toString, "--dst-time-zone", s"UTC+0$DeltaHours:00")
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     val operations = Files.readAllLines(logFile)
     operations.get(0) should include(ChangedFile)
@@ -334,7 +325,6 @@ class LocalSyncSpec extends BaseSyncSpec {
 
   it should "ignore a time difference below the configured threshold" in {
     val TimeDeltaThreshold = 10
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val Time1 = Instant.parse("2018-11-19T21:18:04.34Z")
@@ -349,12 +339,11 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--ignore-time-delta", TimeDeltaThreshold.toString)
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.totalOperations should be(0)
   }
 
   it should "support encryption of files in a destination structure" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val TestFileName = "TestFileToBeEncrypted.txt"
@@ -362,13 +351,12 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", "!encryptDest!", "--dst-crypt-mode", "files")
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.totalOperations should be(result.successfulOperations)
     readBinaryFileInPath(srcFolder, TestFileName) should not be readBinaryFileInPath(dstFolder, TestFileName)
   }
 
   it should "support a round-trip with encryption and decryption of files" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder1 = Files.createDirectory(createPathInDirectory("destEnc"))
     val dstFolder2 = Files.createDirectory(createPathInDirectory("destPlain"))
@@ -377,17 +365,16 @@ class LocalSyncSpec extends BaseSyncSpec {
     createTestFile(srcFolder, TestFileName)
     val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "files")
-    futureResult(Sync.syncProcess(factory, options1))
+    futureResult(runSync(options1))
 
     val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
       "--src-encrypt-password", Password, "--src-crypt-mode", "files")
-    val result = futureResult(Sync.syncProcess(factory, options2))
+    val result = futureResult(runSync(options2))
     result.totalOperations should be(result.successfulOperations)
     readFileInPath(srcFolder, TestFileName) should be(readFileInPath(dstFolder2, TestFileName))
   }
 
   it should "correctly calculate the sizes of encrypted files" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val TestFileName = "TestFileToBeEncrypted.txt"
@@ -397,16 +384,15 @@ class LocalSyncSpec extends BaseSyncSpec {
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "files")
     val options2 = Array(dstFolder.toAbsolutePath.toString, srcFolder.toAbsolutePath.toString,
       "--src-encrypt-password", Password, "--src-crypt-mode", "files")
-    futureResult(Sync.syncProcess(factory, options1))
+    futureResult(runSync(options1))
 
-    val result1 = futureResult(Sync.syncProcess(factory, options1))
+    val result1 = futureResult(runSync(options1))
     result1.totalOperations should be(0)
-    val result2 = futureResult(Sync.syncProcess(factory, options2))
+    val result2 = futureResult(runSync(options2))
     result2.totalOperations should be(0)
   }
 
   it should "support encrypted file names in a destination structure" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val TestFileName = "TestFileToBeEncryptedAndScrambled.txt"
@@ -414,7 +400,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", "crYptiC", "--dst-crypt-mode", "FilesAndNames")
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.totalOperations should be(result.successfulOperations)
     val destFiles = dstFolder.toFile.list()
     destFiles should have length 1
@@ -422,7 +408,6 @@ class LocalSyncSpec extends BaseSyncSpec {
   }
 
   it should "support other operations on encrypted file names" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val Password = "foo-bar;"
@@ -437,7 +422,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "filesAndNames")
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.totalOperations should be(result.successfulOperations)
     Files.exists(delFolder) shouldBe false
     val overrideData = ByteString(Files.readAllBytes(pathOverride))
@@ -456,14 +441,14 @@ class LocalSyncSpec extends BaseSyncSpec {
     val Password = "test-privacy"
     val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "filesAndNames")
-    futureResult(Sync.syncProcess(factory, options1))
+    futureResult(runSync(options1, factory))
 
     val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
       "--src-encrypt-password", Password, "--src-crypt-mode", "filesAndNames")
-    futureResult(Sync.syncProcess(factory, options2))
+    futureResult(runSync(options2, factory))
     checkFile(dstFolder2, "top.txt")
     val options3 = Array(srcFolder.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString)
-    val result = futureResult(Sync.syncProcess(factory, options3))
+    val result = futureResult(runSync(options3, factory))
     result.totalOperations should be(0)
   }
 
@@ -479,10 +464,10 @@ class LocalSyncSpec extends BaseSyncSpec {
     val Password = "Complex?"
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "filesAndNames")
-    futureResult(Sync.syncProcess(factory, options)).successfulOperations should be(5)
+    futureResult(runSync(options, factory)).successfulOperations should be(5)
 
     createTestFile(subSubDir, "deep2.txt")
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options, factory))
     result.successfulOperations should be(1)
 
     def findDirectory(content: Array[File]): File = {
@@ -507,7 +492,6 @@ class LocalSyncSpec extends BaseSyncSpec {
   }
 
   it should "support restricting the number of operations per second" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     createTestFile(srcFolder, "smallFile1.txt")
@@ -518,7 +502,7 @@ class LocalSyncSpec extends BaseSyncSpec {
       "--ops-per-second", "1")
 
     intercept[TimeoutException] {
-      val syncFuture = Sync.syncProcess(factory, options)
+      val syncFuture = runSync(options)
       Await.ready(syncFuture, 2.seconds)
     }
   }

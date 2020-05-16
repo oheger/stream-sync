@@ -69,19 +69,19 @@ object Sync {
     * of sync operations that have been executed; the second element is the
     * number of successful sync operations.
     *
-    * @param factory the factory for the sync stream
-    * @param args    the array with command line arguments
-    * @param system  the actor system
-    * @param ec      the execution context
+    * @param factory   the factory for the sync stream
+    * @param futConfig the future with the configuration
+    * @param system    the actor system
+    * @param ec        the execution context
     * @return a future with information about the result of the process
     */
-  def syncProcess(factory: SyncComponentsFactory, args: Array[String])
+  def syncProcess(factory: SyncComponentsFactory, futConfig: Future[SyncConfig])
                  (implicit system: ActorSystem, ec: ExecutionContext):
   Future[SyncResult] = {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
 
     for {
-      config <- SyncParameterManager.processSyncCommandLine(args)
+      config <- futConfig
       srcFactory <- factory.createSourceComponentsFactory(config)
       dstFactory <- factory.createDestinationComponentsFactory(config)
       result <- runSync(config, srcFactory, dstFactory)
@@ -444,16 +444,16 @@ object Sync {
     * this function never fails; if the sync process fails, it is completed
     * with a corresponding error message.
     *
-    * @param factory the factory for creating stream components
-    * @param args    the array with command line arguments
-    * @param system  the actor system
-    * @param ec      the execution context
+    * @param factory   the factory for creating stream components
+    * @param futConfig the future with the configuration
+    * @param system    the actor system
+    * @param ec        the execution context
     * @return a ''Future'' with a result message
     */
-  private def syncWithResultMessage(factory: SyncComponentsFactory, args: Array[String])
+  private def syncWithResultMessage(factory: SyncComponentsFactory, futConfig: Future[SyncConfig])
                                    (implicit system: ActorSystem, ec: ExecutionContext):
   Future[String] =
-    syncProcess(factory, args)
+    syncProcess(factory, futConfig)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
 
   /**
@@ -501,10 +501,10 @@ object Sync {
   * The main class to execute sync processes.
   *
   * An instance of this class is created and invoked by the ''main()'' function
-  * in the companion object. By extending [[ActorSystemLifeCycle]], this class
+  * in the companion object. By extending [[CliActorSystemLifeCycle]], this class
   * has access to an actor system and can therefore initiate the sync process.
   */
-class Sync extends ActorSystemLifeCycle[SyncConfig] {
+class Sync extends CliActorSystemLifeCycle[SyncConfig] {
   override val name: String = "Sync"
 
   override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =
@@ -524,8 +524,8 @@ class Sync extends ActorSystemLifeCycle[SyncConfig] {
     * @inheritdoc This implementation starts the sync process using the actor
     *             system in implicit scope.
     */
-  override protected[cli] def runApp(args: Array[String]): Future[String] = {
+  override protected[cli] def runApp(futConfig: Future[SyncConfig]): Future[String] = {
     val factory = new SyncComponentsFactory
-    Sync.syncWithResultMessage(factory, args)
+    Sync.syncWithResultMessage(factory, futConfig)
   }
 }

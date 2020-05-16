@@ -50,7 +50,6 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
   }
 
   "Sync" should "support a OneDrive URI for the source structure with OAuth" in {
-    val factory = new SyncComponentsFactory
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
     val FileName = "file (5).mp3"
@@ -68,14 +67,13 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
       "onedrive:" + DriveID, dstFolder.toAbsolutePath.toString, "--src-path", ServerPath,
       "--src-server-uri", serverUri("/"))
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     result.totalOperations should be(1)
     readFileInPath(dstFolder, FileName) should be(FileTestHelper.TestData)
   }
 
   it should "support a OneDrive URI for the source structure with basic auth" in {
-    val factory = new SyncComponentsFactory
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
     val FileName = "file (5).mp3"
@@ -86,14 +84,13 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
     val options = Array("onedrive:" + DriveID, dstFolder.toAbsolutePath.toString, "--src-path", ServerPath,
       "--src-server-uri", serverUri("/"), "--src-user", UserId, "--src-password", Password)
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     result.totalOperations should be(1)
     readFileInPath(dstFolder, FileName) should be(FileTestHelper.TestData)
   }
 
   it should "support a OneDrive URI for the destination structure with OAuth" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
     val FileNameEnc = "file%20(5).mp3"
@@ -113,14 +110,13 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
       srcFolder.toAbsolutePath.toString, "onedrive:" + DriveID, "--dst-path", ServerPath,
       "--dst-server-uri", serverUri("/"))
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     result.totalOperations should be(1)
     verify(deleteRequestedFor(urlPathEqualTo(path(ExpUri))))
   }
 
   it should "support a OneDrive URI for the destination structure with basic auth" in {
-    val factory = new SyncComponentsFactory
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
     val FileNameEnc = "file%20(5).mp3"
@@ -131,14 +127,13 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
     val options = Array(srcFolder.toAbsolutePath.toString, "onedrive:" + DriveID, "--dst-path", ServerPath,
       "--dst-server-uri", serverUri("/"), "--dst-user", UserId, "--dst-password", Password)
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     result.totalOperations should be(1)
     verify(deleteRequestedFor(urlPathEqualTo(path(ExpUri))))
   }
 
   it should "support a OneDrive source with encrypted file names" in {
-    val factory = new SyncComponentsFactory
     val CryptPassword = Password
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val ServerPath = "/encrypted"
@@ -158,7 +153,7 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
       "--src-server-uri", serverUri("/"), "--src-user", UserId, "--src-password", Password,
       "--src-encrypt-password", CryptPassword, "--src-crypt-mode", "filesAndNames")
 
-    val result = futureResult(Sync.syncProcess(factory, options))
+    val result = futureResult(runSync(options))
     result.successfulOperations should be(result.totalOperations)
     val rootFiles = dstFolder.toFile.listFiles()
     rootFiles.map(_.getName) should contain only("foo.txt", "bar.txt", "sub")
