@@ -18,13 +18,12 @@ package com.github.sync.cli.oauth
 
 import java.nio.file.Path
 
+import com.github.sync.cli.ParameterExtractor
 import com.github.sync.cli.ParameterExtractor._
-import com.github.sync.cli.{ConsoleReader, ParameterExtractor}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.OAuthConfig
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 /**
@@ -240,21 +239,6 @@ object OAuthParameterManager {
       .toLower
       .single
       .mandatory
-
-  /**
-    * Extracts a ''CommandConfig'' object from the parsed parameters. This
-    * function is called first during command processing to determine which
-    * command is to be executed and fetch a set of its properties.
-    *
-    * @param parameters    the object with parsed parameters
-    * @param ec            the execution context
-    * @param consoleReader the console reader
-    * @return a ''Future'' with the config and updated parameters
-    */
-  def extractCommandConfig(parameters: Parameters)
-                          (implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(CommandConfig, ParameterContext)] =
-    Future.fromTry(tryExtractor(commandConfigExtractor, parameters))
 
   /**
     * Returns a ''CliExtractor'' for extracting a ''CommandConfig'' object.

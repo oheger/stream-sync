@@ -81,9 +81,7 @@ object Sync {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
 
     for {
-      argsMap <- SyncParameterManager.parseParameters(args)
-      (config, paramCtx) <- SyncParameterManager.extractSyncConfig(argsMap)
-      _ <- Future.fromTry(ParameterExtractor.checkParametersConsumed(paramCtx))
+      config <- SyncParameterManager.processSyncCommandLine(args)
       srcFactory <- factory.createSourceComponentsFactory(config)
       dstFactory <- factory.createDestinationComponentsFactory(config)
       result <- runSync(config, srcFactory, dstFactory)

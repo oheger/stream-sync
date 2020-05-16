@@ -21,12 +21,11 @@ import java.util.Locale
 
 import akka.util.Timeout
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterExtractor.{CliExtractor, ParameterContext, Parameters, SingleOptionValue}
-import com.github.sync.cli.ParameterParser.ParametersMap
+import com.github.sync.cli.ParameterExtractor.{CliExtractor, SingleOptionValue}
 import com.github.sync.cli.SyncStructureConfig.StructureConfig
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
 import scala.util.Try
 
@@ -339,18 +338,29 @@ object SyncParameterManager {
     """(?i)NONE""".r
 
   /**
-    * A helper function for parsing the command line. This function invokes the
-    * parsing function from [[ParameterParser]] with the correct properties and
-    * wraps the result in a ''Future''.
+    * Invokes the ''ParameterManager'' to parse and process the command line
+    * options with the correct settings.
     *
     * @param args the sequence with command line arguments
-    * @return a ''Future'' with the result of the parse operation
+    *             @param extractor the ''CliExtractor''
+    *                              @tparam A the result type of the ''CliExtractor''
+    * @return a ''Future'' with the ''SyncConfig'' object that was extracted
     */
-  def parseParameters(args: Seq[String]): Future[ParametersMap] = {
+  def processCommandLine[A](args: Seq[String], extractor: CliExtractor[Try[A]]): Future[A] = {
     val extractorFunc = ParameterParser.DefaultOptionPrefixes.extractorFunc andThen toLowerCase
-    Future.fromTry(ParameterParser.parseParameters(args, optFileOption = Some(FileOption),
-      keyExtractor = extractorFunc))
+    val parseFunc = ParameterManager.parsingFunc(keyExtractor = extractorFunc, optFileOption = Some(FileOption))
+    Future.fromTry(ParameterManager.processCommandLine(args, extractor, parseFunc)
+      .map(_._1))
   }
+
+  /**
+    * Helper function to process the command line of the ''Sync'' application.
+    * Uses the correct ''CliExtractor'' and parsing settings.
+    * @param args the sequence with command line arguments
+    * @return a ''Future'' with the ''SyncConfig'' object that was extracted
+    */
+  def processSyncCommandLine(args: Seq[String]): Future[SyncConfig] =
+    processCommandLine(args, syncConfigExtractor())
 
   /**
     * Returns an extractor that extracts the ''SyncConfig'' from the command
@@ -374,23 +384,6 @@ object SyncParameterManager {
     filters <- FilterManager.filterDataExtractor
   } yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, mode, timeout, logFile, syncLog, timeDelta,
     opsPerSec, cryptConf, filters)
-
-  /**
-    * Extracts an object with configuration options for the sync process from
-    * the map with command line arguments. This object contains all relevant
-    * options. The options are validated (the future fails if invalid arguments
-    * are detected). All options that have been consumed are removed from the
-    * updated map; that way it can be found out whether the user has provided
-    * unknown options.
-    *
-    * @param argsMap       the map with arguments
-    * @param ec            the execution context
-    * @param consoleReader the object for reading from the console
-    * @return a future with the extracted config and the updated arguments map
-    */
-  def extractSyncConfig(argsMap: Parameters)(implicit ec: ExecutionContext, consoleReader: ConsoleReader):
-  Future[(SyncConfig, ParameterContext)] =
-    Future.fromTry(ParameterExtractor.tryExtractor(syncConfigExtractor(), argsMap))
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all
