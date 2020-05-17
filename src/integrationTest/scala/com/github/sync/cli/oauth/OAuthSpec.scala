@@ -20,7 +20,7 @@ import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.util.Locale
 
-import com.github.sync.cli.DefaultConsoleReader
+import com.github.sync.cli.{CliActorSystemLifeCycle, DefaultConsoleReader}
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
@@ -188,6 +188,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
     }
     output should not include OAuthParameterManager.StoragePathOptionName
     output should not include OAuthParameterManager.AuthEndpointOption
+    output should include("--" + CliActorSystemLifeCycle.FileOption)
   }
 
   it should "print a help text for the login command" in {
@@ -223,5 +224,6 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
     output should include(OAuthParameterManager.ScopeOption)
     output should include(OAuthParameterManager.ClientIDOption)
     output should include(OAuthParameterManager.ClientSecretOption)
+    output should include("--" + CliActorSystemLifeCycle.FileOption)
   }
 }

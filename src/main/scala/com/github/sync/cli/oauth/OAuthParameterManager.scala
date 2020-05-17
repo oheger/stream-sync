@@ -18,7 +18,7 @@ package com.github.sync.cli.oauth
 
 import java.nio.file.Path
 
-import com.github.sync.cli.ParameterExtractor
+import com.github.sync.cli.{CliActorSystemLifeCycle, ParameterExtractor}
 import com.github.sync.cli.ParameterExtractor._
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
@@ -252,7 +252,12 @@ object OAuthParameterManager {
     val groupMap = Map(CommandInitIDP -> commandInitExtractor,
       CommandLoginIDP -> commandLoginExtractor,
       CommandRemoveIDP -> commandRemoveExtractor)
-    conditionalGroupValue(commandExtractor, groupMap)
+    val cmdConfExt = conditionalGroupValue(commandExtractor, groupMap)
+
+    for {
+      config <- cmdConfExt
+      _ <- CliActorSystemLifeCycle.FileExtractor
+    } yield config
   }
 
   /**

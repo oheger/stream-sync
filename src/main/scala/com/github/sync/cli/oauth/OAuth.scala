@@ -66,9 +66,9 @@ class OAuth(commands: OAuthCommands) extends CliActorSystemLifeCycle[CommandConf
   override protected def runApp(futConfig: Future[CommandConfig]): Future[String] = {
     implicit val consoleReader: ConsoleReader = DefaultConsoleReader
     for {
-         cmdConf <- futConfig
-         result <- executeCommand(cmdConf)
-         } yield result
+      cmdConf <- futConfig
+      result <- executeCommand(cmdConf)
+    } yield result
   }
 
   /**
@@ -105,7 +105,7 @@ class OAuth(commands: OAuthCommands) extends CliActorSystemLifeCycle[CommandConf
     val triedCmdGroup = ParameterExtractor.tryExtractor(OAuthParameterManager.commandExtractor,
       context.parameters)(DefaultConsoleReader)
     val groupFilter = triedCmdGroup match {
-      case Success((command, _)) => groupFilterFunc(command)
+      case Success((command, _)) => orFilter(groupFilterFunc(command), UnassignedGroupFilterFunc)
       case Failure(_) => UnassignedGroupFilterFunc
     }
     andFilter(groupFilter, OptionsFilterFunc)

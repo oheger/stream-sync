@@ -21,15 +21,14 @@ import java.nio.file.Paths
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.ParameterExtractor.{ParameterContext, Parameters, tryExtractor}
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.cli.{ConsoleReader, ParameterExtractor, ParameterParser}
+import com.github.sync.cli.{CliActorSystemLifeCycle, ConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.sync.http.OAuthStorageConfig
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import scala.language.implicitConversions
 
 object OAuthParameterManagerSpec {
@@ -164,7 +163,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     }
     nextCtx.parameters.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
-      OAuthParameterManager.EncryptOption, ParameterParser.InputOption)
+      OAuthParameterManager.EncryptOption, ParameterParser.InputOption, CliActorSystemLifeCycle.FileOption)
   }
 
   it should "extract a valid login command config" in {
@@ -179,7 +178,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     }
     nextCtx.parameters.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
-      OAuthParameterManager.EncryptOption, ParameterParser.InputOption)
+      OAuthParameterManager.EncryptOption, ParameterParser.InputOption, CliActorSystemLifeCycle.FileOption)
   }
 
   it should "report missing mandatory parameters when creating a storage config" in {

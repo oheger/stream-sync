@@ -96,7 +96,7 @@ object FilterManager {
       |modification that is before a reference date; e.g. date-before:2020-01-01""".stripMargin
 
   /** Command line option for the filter to disable specific sync actions. */
-  final val ArgActionFilter = "--actions"
+  final val ArgActionFilter = "actions"
 
   /** Help text for the actions filter option. */
   final val HelpActionFilter =

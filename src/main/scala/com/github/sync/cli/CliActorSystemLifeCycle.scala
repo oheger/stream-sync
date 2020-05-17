@@ -32,6 +32,22 @@ object CliActorSystemLifeCycle {
     */
   final val FileOption = "file"
 
+  /** Help text for the file option. */
+  final val HelpFileOption =
+    """Allows specifying paths to text files that contain additional command line options. \
+      |The files must contain one argument per line, empty lines are ignored. The option \
+      |can be repeated to include multiple parameter files. This is useful for instance if \
+      |there are standard arguments (e.g. to define servers) that need to be set for
+      |multiple sync processes.""".stripMargin
+
+  /**
+    * An extractor for the option that references parameter files to be
+    * included during CLI processing. Note that the result of this extractor is
+    * not actually evaluated; it is declared, to have the option listed in the
+    * help text.
+    */
+  final val FileExtractor = ParameterExtractor.optionValue(FileOption, Some(HelpFileOption))
+
   /**
     * Invokes the ''ParameterManager'' to parse and process the command line
     * options with the correct settings.

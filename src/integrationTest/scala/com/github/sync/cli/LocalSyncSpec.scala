@@ -78,7 +78,8 @@ class LocalSyncSpec extends BaseSyncSpec {
 
     val output = checkSyncOutput(options, "<sourceURI>", "<destinationURI>",
       SyncParameterManager.ApplyModeOption, SyncParameterManager.TimeoutOption,
-      SyncParameterManager.LogFileOption, FilterManager.ArgCommonFilter, FilterManager.ArgCreateFilter)
+      SyncParameterManager.LogFileOption, FilterManager.ArgCommonFilter, FilterManager.ArgCreateFilter,
+      "--" + CliActorSystemLifeCycle.FileOption)
     output should not include "src-" + SyncStructureConfig.PropOneDrivePath
     output should not include "src-" + SyncStructureConfig.PropDavDeleteBeforeOverride
   }

@@ -350,6 +350,7 @@ object SyncParameterManager {
     opsPerSec <- opsPerSecondExtractor()
     cryptConf <- cryptConfigExtractor
     filters <- FilterManager.filterDataExtractor
+    _ <- CliActorSystemLifeCycle.FileExtractor
   } yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, mode, timeout, logFile, syncLog, timeDelta,
     opsPerSec, cryptConf, filters)
 
