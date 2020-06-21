@@ -21,6 +21,7 @@ import java.nio.file.Path
 
 import com.github.sync.FileTestHelper
 import com.github.sync.cli.ParameterParser.{OptionPrefixes, ParameterParseException}
+import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -34,9 +35,14 @@ object ParameterParserSpec {
 /**
   * Test class for ''ParameterParser''.
   */
-class ParameterParserSpec extends AnyFlatSpec with Matchers with FileTestHelper {
+class ParameterParserSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with FileTestHelper {
 
   import ParameterParserSpec._
+
+  override protected def afterEach(): Unit = {
+    tearDownTestFile()
+    super.afterEach()
+  }
 
   /**
     * Extracts the map with parameters from the given tried result; fails for
