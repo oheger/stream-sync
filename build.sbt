@@ -55,6 +55,7 @@ lazy val StreamSync = (project in file("."))
     scalaVersion := VersionScala,
     libraryDependencies ++= akkaDependencies,
     libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
+    libraryDependencies += "com.github.oheger" %% "scli" % "1.0.0",
     libraryDependencies ++= testDependencies,
     name := "stream-sync",
     IntegrationTest / parallelExecution := false,
