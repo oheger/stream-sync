@@ -22,7 +22,9 @@ import java.time.ZoneId
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import akka.util.Timeout
-import com.github.sync.cli.ParameterExtractor.{ParameterContext, ParameterExtractionException, Parameters}
+import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
+import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractionException}
+import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.SyncParameterManager._
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.http.NoAuth
@@ -48,7 +50,7 @@ object SyncParameterManagerSpec {
   private val TimeoutValue = 44
 
   /** A map with test parameter values. */
-  private val ArgsMap = Map(ParameterParser.InputOption -> List(SourceUri, DestinationUri),
+  private val ArgsMap = Map(ParameterParser.InputParameter.key -> List(SourceUri, DestinationUri),
     SyncParameterManager.TimeoutOption -> List(TimeoutValue.toString))
 
   /**
@@ -57,11 +59,14 @@ object SyncParameterManagerSpec {
     *
     * @param argsMap       the map with arguments
     * @param consoleReader the object for reading from the console
-    * @return a future with the extracted config and the updated arguments map
+    * @return a future with the extracted config and the updated context
     */
-  private def extractSyncConfig(argsMap: Parameters)(implicit consoleReader: ConsoleReader):
-  Future[(SyncConfig, ParameterContext)] =
-    Future.fromTry(ParameterExtractor.tryExtractor(syncConfigExtractor(), argsMap))
+  private def extractSyncConfig(argsMap: Map[String, Iterable[String]],
+                                consoleReader: ConsoleReader = DummyConsoleReader):
+  Future[(SyncConfig, ExtractionContext)] = {
+    val context = toExtractionContext(toParameters(argsMap), consoleReader)
+    Future.fromTry(ParameterExtractor.tryExtractor(syncConfigExtractor(), context))
+  }
 }
 
 /**
@@ -83,8 +88,6 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   import SyncParameterManagerSpec._
 
-  private implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
-
   /**
     * Expects a failed future from a parsing operation. It is checked whether
     * the future is actually failed with an ''IllegalArgumentException'' that
@@ -104,34 +107,34 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val (config, params) = futureResult(extractSyncConfig(ArgsMap))
     config.srcUri should be(SourceUri)
     config.dstUri should be(DestinationUri)
-    params.parameters.accessedParameters should contain allElementsOf ArgsMap.keySet
+    ExtractorTestHelper.accessedKeys(params) should contain allElementsOf ArgsMap.keySet
   }
 
   it should "reject URI parameters if there are more than 2" in {
-    val argsMap = ArgsMap + (ParameterParser.InputOption -> List("u1", "u2", "u3"))
+    val argsMap = ArgsMap + (ParameterParser.InputParameter.key -> List("u1", "u2", "u3"))
 
     expectFailedFuture(extractSyncConfig(argsMap), "Too many input arguments")
   }
 
   it should "reject URI parameters if no destination URI is provided" in {
-    val argsMap = ArgsMap + (ParameterParser.InputOption -> List("u1"))
+    val argsMap = ArgsMap + (ParameterParser.InputParameter.key -> List("u1"))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      "Too few input arguments", "destinationURI")
+      "Mandatory parameter has no value", "destinationURI")
   }
 
   it should "reject URI parameters if no URIs are provided" in {
-    val argsMap = ArgsMap + (ParameterParser.InputOption -> List.empty[String])
+    val argsMap = ArgsMap + (ParameterParser.InputParameter.key -> List.empty[String])
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      "Too few input arguments", "'sourceURI'", "'destinationURI'")
+      "Mandatory parameter has no value", "sourceURI", "destinationURI")
   }
 
   it should "reject URI parameters if no non-option parameters are provided" in {
-    val argsMap = ArgsMap - ParameterParser.InputOption
+    val argsMap = ArgsMap - ParameterParser.InputParameter.key
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      "Too few input arguments", "'sourceURI'", "'destinationURI'")
+      "Mandatory parameter has no value", "sourceURI", "destinationURI")
   }
 
   it should "construct a correct source config for the local file system" in {
@@ -151,7 +154,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap +
       (role.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> List(ModifiedProp)) +
       (role.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> List(ModifiedNs)) +
-      (ParameterParser.InputOption -> List(SourceUri, DavDestUri))
+      (ParameterParser.InputParameter.key -> List(SourceUri, DavDestUri))
     val ExpDavConfig = DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
       authConfig = NoAuth, deleteBeforeOverride = false)
 
@@ -163,7 +166,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.TimeoutOption -> List("100", "200"))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      SyncParameterManager.TimeoutOption, "has multiple values")
+      SyncParameterManager.TimeoutOption, "Single value expected")
   }
 
   it should "return a default apply mode" in {
@@ -231,7 +234,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.LogFileOption -> List("log1", "log2"))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      SyncParameterManager.LogFileOption, "have a single value")
+      SyncParameterManager.LogFileOption, "Single value expected")
   }
 
   it should "have an undefined sync log option if none is specified" in {
@@ -251,7 +254,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.SyncLogOption -> List("log1", "log2"))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      SyncParameterManager.SyncLogOption, "should have a single value")
+      SyncParameterManager.SyncLogOption, "Single value expected")
   }
 
   it should "handle an undefined option for the file times threshold" in {
@@ -348,7 +351,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val (_, next) = futureResult(extractSyncConfig(argsMap))
     ParameterExtractor.checkParametersConsumed(next) match {
       case Failure(exception: ParameterExtractionException) =>
-        exception.failures.map(_.key) should contain only(SyncParameterManager.SourcePasswordOption,
+        exception.failures.map(_.key.key) should contain only(SyncParameterManager.SourcePasswordOption,
           SyncParameterManager.DestPasswordOption)
       case r => fail("Unexpected result: " + r)
     }
@@ -365,7 +368,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     when(reader.readOption(SyncParameterManager.DestPasswordOption, password = true))
       .thenReturn(DstPwd)
 
-    val (config, _) = futureResult(extractSyncConfig(argsMap)(consoleReader = reader))
+    val (config, _) = futureResult(extractSyncConfig(argsMap, consoleReader = reader))
     config.cryptConfig.srcPassword should be(Some(SrcPwd))
     config.cryptConfig.dstPassword should be(Some(DstPwd))
   }
@@ -385,8 +388,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap ++ otherOptions +
       (SyncParameterManager.IgnoreTimeDeltaOption -> List("1"))
 
-    val (_, updArgs) = futureResult(extractSyncConfig(argsMap))
-    updArgs.parameters.accessedParameters should contain allOf(SyncParameterManager.ApplyModeOption,
+    val (_, updCtx) = futureResult(extractSyncConfig(argsMap))
+    accessedKeys(updCtx) should contain allOf(SyncParameterManager.ApplyModeOption,
       SyncParameterManager.TimeoutOption, SyncParameterManager.LogFileOption, SyncParameterManager.SyncLogOption,
       SyncParameterManager.IgnoreTimeDeltaOption, SyncParameterManager.OpsPerSecondOption,
       SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption,
@@ -394,13 +397,13 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "combine multiple error messages when parsing the sync config" in {
-    val argsMap = Map(ParameterParser.InputOption -> List(SourceUri),
+    val argsMap = Map(ParameterParser.InputParameter.key -> List(SourceUri),
       SyncParameterManager.ApplyModeOption -> List("invalidApplyMode"),
       SyncParameterManager.TimeoutOption -> List("invalidTimeout"),
       SyncParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      "undefined argument 'destinationURI'", "apply mode", SyncParameterManager.TimeoutOption,
+      "destinationURI: Mandatory parameter", "Invalid apply mode", SyncParameterManager.TimeoutOption,
       SyncParameterManager.CryptCacheSizeOption)
   }
 }

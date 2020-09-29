@@ -19,7 +19,7 @@ package com.github.sync.cli
 import java.io.IOException
 import java.nio.file.{Path, Paths}
 
-import com.github.sync.cli.ParameterExtractor._
+import com.github.sync.cli.ParameterExtractorOld._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -66,7 +66,7 @@ object CliExtractorOpsSpec {
     * @return the result produced by the extractor
     */
   private def runExtractor[A](ext: CliExtractor[A], parameters: Parameters = TestParameters): A =
-    ParameterExtractor.runExtractor(ext, parameters)(DefaultConsoleReader)._1
+    ParameterExtractorOld.runExtractor(ext, parameters)(DefaultConsoleReaderOld)._1
 
   /**
     * Creates a [[ParamModel]] object from the given components.
@@ -335,7 +335,7 @@ class CliExtractorOpsSpec extends AnyFlatSpec with Matchers {
 
   it should "handle failures when creating a representation from components" in {
     val helpCtx = new CliHelpGenerator.CliHelpContext(Map.empty, SortedSet.empty, None, Nil)
-    val context = ParameterContext(TestParameters, helpCtx, DummyConsoleReader)
+    val context = ParameterContext(TestParameters, helpCtx, DummyConsoleReaderOld)
     val failure1 = ExtractionFailure(KeyFlag, "Flag failure", context)
     val failure2 = ExtractionFailure(KeyAnswer, "Answer failure", context)
     val exception1 = ParameterExtractionException(failure1)
@@ -493,7 +493,7 @@ class CliExtractorOpsSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "support the access to input parameters" in {
-    val parameters: Parameters = Map(ParameterParser.InputOption -> List("1", "2", "3"))
+    val parameters: Parameters = Map(ParameterParserOld.InputOption -> List("1", "2", "3"))
     val extractor = inputValue(-2)
       .toInt
       .single

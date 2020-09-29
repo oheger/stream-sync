@@ -16,8 +16,8 @@
 
 package com.github.sync.cli
 
-import com.github.sync.cli.ParameterExtractor._
-import com.github.sync.cli.ParameterParser.{KeyExtractor, OptionPredicate, ParameterParseException, ParametersMap}
+import com.github.sync.cli.ParameterExtractorOld._
+import com.github.sync.cli.ParameterParserOld.{KeyExtractor, OptionPredicate, ParameterParseException, ParametersMap}
 
 import scala.util.{Failure, Success, Try}
 
@@ -32,7 +32,7 @@ import scala.util.{Failure, Success, Try}
   * if there are special requirements, the underlying services can be used
   * directly, which enables a higher degree of customization.
   */
-object ParameterManager {
+object ParameterManagerOld {
   /**
     * Type definition for a function that does the initial parsing of the
     * command line arguments. The function expects the sequence of arguments as
@@ -54,10 +54,10 @@ object ParameterManager {
   def parsingFunc(optionFunc: OptionPredicate = null,
                   keyExtractor: KeyExtractor = null,
                   optFileOption: Option[String] = None): ParsingFunc = {
-    val theOptionFunc = getOrDefault(optionFunc, ParameterParser.DefaultOptionPrefixes.isOptionFunc)
-    val theExtractorFunc = getOrDefault(keyExtractor, ParameterParser.DefaultOptionPrefixes.extractorFunc)
+    val theOptionFunc = getOrDefault(optionFunc, ParameterParserOld.DefaultOptionPrefixes.isOptionFunc)
+    val theExtractorFunc = getOrDefault(keyExtractor, ParameterParserOld.DefaultOptionPrefixes.extractorFunc)
     args =>
-      ParameterParser.parseParameters(args, isOptionFunc = theOptionFunc, keyExtractor = theExtractorFunc,
+      ParameterParserOld.parseParameters(args, isOptionFunc = theOptionFunc, keyExtractor = theExtractorFunc,
         optFileOption = optFileOption)
   }
 
@@ -80,7 +80,7 @@ object ParameterManager {
     * ''Try'' with the result of this extractor and the parameter context is
     * returned. If the extraction process fails, result is a ''Failure'' that
     * contains a
-    * [[com.github.sync.cli.ParameterExtractor#ParameterExtractionException]].
+    * [[com.github.sync.cli.ParameterExtractorOld#ParameterExtractionException]].
     * From this exception, all information is available to generate a
     * meaningful error message and usage information. Specifically, the failure
     * messages have already been added to the help context in the parameter
@@ -140,7 +140,7 @@ object ParameterManager {
     */
   private def extract[A](params: ParametersMap, extractor: CliExtractor[Try[A]], checkUnconsumedParameters: Boolean):
   Try[(A, ParameterContext)] = {
-    val (res, context) = runExtractor(extractor, params)(DefaultConsoleReader)
+    val (res, context) = runExtractor(extractor, params)(DefaultConsoleReaderOld)
     val triedContext = checkParametersConsumedConditionally(context, checkUnconsumedParameters)
     createRepresentation(res, triedContext) {
       (_, _)

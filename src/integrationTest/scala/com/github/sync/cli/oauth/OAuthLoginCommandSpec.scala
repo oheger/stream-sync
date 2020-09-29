@@ -25,7 +25,7 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
 import akka.testkit.TestKit
-import com.github.sync.cli.ConsoleReader
+import com.github.sync.cli.ConsoleReaderOld
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
@@ -201,7 +201,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
   it should "handle the redirect for localhost redirect URIs" in {
     val port = fetchFreePort()
     val config = createTestOAuthConfig().copy(redirectUri = s"http://localhost:$port")
-    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    implicit val consoleReader: ConsoleReaderOld = mock[ConsoleReaderOld]
     val helper = new CommandTestHelper(config)
 
     val result = futureResult(helper.prepareBrowserHandlerToCallRedirectUri(config.redirectUri + "?code=" + Code)
@@ -214,7 +214,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
   it should "handle a local redirect URI if no code parameter is passed" in {
     val port = fetchFreePort()
     val config = createTestOAuthConfig().copy(redirectUri = s"http://localhost:$port")
-    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    implicit val consoleReader: ConsoleReaderOld = mock[ConsoleReaderOld]
     val helper = new CommandTestHelper(config)
 
     val exception = expectFailedFuture[IllegalStateException] {
@@ -250,7 +250,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @param consoleReader the console reader to be used
       * @return the ''Future'' returned by the command
       */
-    def runCommand()(implicit consoleReader: ConsoleReader): Future[String] =
+    def runCommand()(implicit consoleReader: ConsoleReaderOld): Future[String] =
       OAuthCommandsImpl.login(LoginConfig, storageService, tokenService, browserHandler, consoleReader,
         str => outputBuf.append(str))
 
@@ -262,7 +262,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @return the ''Future'' returned by the command
       */
     def runCommandWithCodeInput(): Future[String] = {
-      implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+      implicit val consoleReader: ConsoleReaderOld = mock[ConsoleReaderOld]
       when(consoleReader.readOption("Enter authorization code", password = true)).thenReturn(Code)
       runCommand()
     }

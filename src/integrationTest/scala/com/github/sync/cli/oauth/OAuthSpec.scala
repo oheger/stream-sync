@@ -20,7 +20,7 @@ import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.util.Locale
 
-import com.github.sync.cli.{CliActorSystemLifeCycle, DefaultConsoleReader}
+import com.github.sync.cli.{CliActorSystemLifeCycle, DefaultConsoleReaderOld}
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
@@ -166,7 +166,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
     oauth.run(args)
     val captor = ArgumentCaptor.forClass(classOf[LoginCommandConfig])
     verify(commands).login(captor.capture(), argEq(OAuthStorageServiceImpl),
-      argEq(OAuthTokenRetrieverServiceImpl), any(), argEq(DefaultConsoleReader), any())(any(), any())
+      argEq(OAuthTokenRetrieverServiceImpl), any(), argEq(DefaultConsoleReaderOld), any())(any(), any())
     captor.getValue.storageConfig.baseName should be(storageConfig.baseName)
   }
 

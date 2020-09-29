@@ -97,7 +97,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val options = Array("src/directory", "dst/targetFolder", "--unknown", "yes",
       "--filter", "exclude:*.tmp", "--foo", "bar")
 
-    checkSyncOutput(options, "unknown", "foo", "Unexpected")
+    checkSyncOutput(options, "unknown", "foo", "Invalid command line options")
   }
 
   it should "apply operations to an alternative target" in {

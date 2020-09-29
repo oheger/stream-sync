@@ -18,10 +18,11 @@ package com.github.sync.cli.oauth
 
 import java.nio.file.Paths
 
+import com.github.scli.ParameterExtractor.{ExtractionContext, Parameters, tryExtractor}
+import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterParser}
 import com.github.sync.AsyncTestHelper
-import com.github.sync.cli.ParameterExtractor.{ParameterContext, Parameters, tryExtractor}
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.cli.{CliActorSystemLifeCycle, ConsoleReader, ParameterExtractor, ParameterParser}
+import com.github.sync.cli.{CliActorSystemLifeCycle, ExtractorTestHelper}
 import com.github.sync.http.OAuthStorageConfig
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -60,16 +61,6 @@ object OAuthParameterManagerSpec {
   private val Scopes = Set("read", "write", "draw", "pull", "exec")
 
   /**
-    * Implicit conversion from a simple map to a ''Parameters'' object. As we
-    * use single values in most cases, this simplifies tests.
-    *
-    * @param map the map with single values
-    * @return the resulting ''Parameters'' object
-    */
-  implicit def toParametersMap(map: Map[String, String]): Parameters =
-    map map { e => (e._1, List(e._2)) }
-
-  /**
     * Creates a map with default values for the basic command line options.
     *
     * @param command the name of the command
@@ -79,19 +70,35 @@ object OAuthParameterManagerSpec {
     Map(OAuthParameterManager.StoragePathOption -> StoragePath,
       OAuthParameterManager.NameOption -> ProviderName,
       OAuthParameterManager.PasswordOption -> Password,
-      ParameterParser.InputOption -> command)
+      ParameterParser.InputParameter.key -> command)
 
   /**
     * Helper function to check the OAuth command config extractor. This
     * extractor is executed on the passed in arguments.
     *
-    * @param parameters    the object with parsed parameters
-    * @param consoleReader the console reader
-    * @return a ''Future'' with the config and updated parameters
+    * @param parameters the object with parsed parameters
+    * @param reader     an optional console reader
+    * @return a ''Future'' with the config and updated extraction context
     */
-  private def extractCommandConfig(parameters: Parameters)
-                                  (implicit consoleReader: ConsoleReader): Future[(CommandConfig, ParameterContext)] =
-    Future.fromTry(tryExtractor(OAuthParameterManager.commandConfigExtractor, parameters))
+  private def extractCommandConfigParams(parameters: Parameters, reader: ConsoleReader = DummyConsoleReader):
+  Future[(CommandConfig, ExtractionContext)] = {
+    val context = ExtractorTestHelper.toExtractionContext(parameters, reader)
+    Future.fromTry(tryExtractor(OAuthParameterManager.commandConfigExtractor, context))
+  }
+
+  /**
+    * Convenience function to run the OAuth command config extractor on a map
+    * with single-valued parameters.
+    *
+    * @param paramsMap the map with parameters
+    * @param reader    an optional console reader
+    * @return a ''Future'' with the config and updated extraction context
+    */
+  private def extractCommandConfig(paramsMap: Map[String, String], reader: ConsoleReader = DummyConsoleReader):
+  Future[(CommandConfig, ExtractionContext)] = {
+    val params = ExtractorTestHelper.toParameters(ExtractorTestHelper.toParametersMap(paramsMap))
+    extractCommandConfigParams(params, reader)
+  }
 
   /**
     * Creates a map with command line options for an init command.
@@ -118,10 +125,7 @@ object OAuthParameterManagerSpec {
 class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper with MockitoSugar {
 
   import OAuthParameterManagerSpec._
-  import ParameterExtractor._
-
-  /** The implicit console reader needed for parameter processing. */
-  private implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+  import com.github.scli.ParameterExtractor._
 
   /**
     * Expects a failed future from a parsing operation. It is checked whether
@@ -161,9 +165,9 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       case c =>
         fail("Unexpected result: " + c)
     }
-    nextCtx.parameters.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
+    ExtractorTestHelper.accessedKeys(nextCtx) should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
-      OAuthParameterManager.EncryptOption, ParameterParser.InputOption, CliActorSystemLifeCycle.FileOption)
+      OAuthParameterManager.EncryptOption, ParameterParser.InputParameter.key, CliActorSystemLifeCycle.FileOption)
   }
 
   it should "extract a valid login command config" in {
@@ -176,14 +180,14 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       case c =>
         fail("Unexpected result: " + c)
     }
-    nextCtx.parameters.accessedParameters should contain only(OAuthParameterManager.StoragePathOption,
+    ExtractorTestHelper.accessedKeys(nextCtx) should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
-      OAuthParameterManager.EncryptOption, ParameterParser.InputOption, CliActorSystemLifeCycle.FileOption)
+      OAuthParameterManager.EncryptOption, ParameterParser.InputParameter.key, CliActorSystemLifeCycle.FileOption)
   }
 
   it should "report missing mandatory parameters when creating a storage config" in {
     val args = Map(OAuthParameterManager.PasswordOption -> Password,
-      ParameterParser.InputOption -> OAuthParameterManager.CommandLoginIDP)
+      ParameterParser.InputParameter.key -> OAuthParameterManager.CommandLoginIDP)
 
     expectFailedFuture(extractCommandConfig(args),
       OAuthParameterManager.NameOption, OAuthParameterManager.StoragePathOption)
@@ -198,12 +202,11 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
   }
 
   it should "reject a command line with multiple commands" in {
-    val parameters: Parameters = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP)
-    val wrongParameters = parameters.copy(parametersMap =
-      parameters.parametersMap + (ParameterParser.InputOption ->
-        List(OAuthParameterManager.CommandLoginIDP, OAuthParameterManager.CommandRemoveIDP)))
+    val parameters = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP)
+    val wrongParameters = ExtractorTestHelper.toParametersMap(parameters) + (ParameterParser.InputParameter.key ->
+      List(OAuthParameterManager.CommandLoginIDP, OAuthParameterManager.CommandRemoveIDP))
 
-    expectFailedFuture(extractCommandConfig(wrongParameters),
+    expectFailedFuture(extractCommandConfigParams(ExtractorTestHelper.toParameters(wrongParameters)),
       "Too many input arguments")
   }
 
@@ -213,32 +216,35 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       .thenReturn(Password)
     val args = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP) - OAuthParameterManager.PasswordOption
 
-    val (config, _) = futureResult(extractCommandConfig(args)(consoleReader = reader))
+    val (config, _) = futureResult(extractCommandConfig(args, reader))
     config.storageConfig.optPassword.get.secret should be(Password)
   }
 
   it should "support an undefined password for the storage configuration" in {
+    val consoleReader = mock[ConsoleReader]
     val args = createBasicParametersMap(OAuthParameterManager.CommandRemoveIDP) - OAuthParameterManager.PasswordOption
 
-    val (config, _) = futureResult(extractCommandConfig(args))
+    val (config, _) = futureResult(extractCommandConfig(args, consoleReader))
     config.storageConfig.optPassword should be(None)
     verifyZeroInteractions(consoleReader)
   }
 
   it should "evaluate a negative encrypt option when creating a storage configuration" in {
+    val consoleReader = mock[ConsoleReader]
     val args = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP) -
       OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "false")
 
-    val (config, _) = futureResult(extractCommandConfig(args))
+    val (config, _) = futureResult(extractCommandConfig(args, consoleReader))
     config.storageConfig.optPassword should be(None)
     verifyZeroInteractions(consoleReader)
   }
 
   it should "detect an invalid encryption option" in {
+    val consoleReader = mock[ConsoleReader]
     val args = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP) -
       OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "?")
 
-    expectFailedFuture(extractCommandConfig(args), OAuthParameterManager.EncryptOption)
+    expectFailedFuture(extractCommandConfig(args, consoleReader), OAuthParameterManager.EncryptOption)
     verifyZeroInteractions(consoleReader)
   }
 
@@ -257,7 +263,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     val args = createInitParametersMap(initArgs)
 
     val (config, next) = futureResult(extractCommandConfig(args))
-    next.parameters.accessedParameters should contain allOf(OAuthParameterManager.AuthEndpointOption,
+    ExtractorTestHelper.accessedKeys(next) should contain allOf(OAuthParameterManager.AuthEndpointOption,
       OAuthParameterManager.TokenEndpointOption, OAuthParameterManager.RedirectUrlOption,
       OAuthParameterManager.ScopeOption, OAuthParameterManager.ClientIDOption,
       OAuthParameterManager.ClientSecretOption)
@@ -294,8 +300,8 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       OAuthParameterManager.ClientIDOption -> ClientID)
     val args = createInitParametersMap(initArgs)
 
-    val (config, next) = futureResult(extractCommandConfig(args)(reader))
-    next.parameters.accessedParameters should contain(OAuthParameterManager.ClientSecretOption)
+    val (config, next) = futureResult(extractCommandConfig(args, reader))
+    ExtractorTestHelper.accessedKeys(next) should contain(OAuthParameterManager.ClientSecretOption)
     config match {
       case InitCommandConfig(oauthConfig, clientSecret, storageConfig) =>
         oauthConfig.clientID should be(ClientID)

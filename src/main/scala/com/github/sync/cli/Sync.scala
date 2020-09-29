@@ -22,15 +22,15 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream._
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
+import com.github.scli.HelpGenerator.ParameterFilter
+import com.github.scli.ParameterManager.ProcessingContext
+import com.github.scli.{HelpGenerator, ParameterExtractor}
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes._
-import com.github.sync.cli.CliHelpGenerator.{OptionFilter, OptionsFilterFunc, andFilter}
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterExtractor.Parameters
-import com.github.sync.cli.Sync.{groupFilter, structureGroup}
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
-import com.github.sync.cli.SyncStructureConfig.{DestinationRoleType, RoleType, SourceRoleType}
+import com.github.sync.cli.SyncStructureConfig.{DestinationRoleType, SourceRoleType}
 import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.crypt.{CryptService, CryptStage}
 import com.github.sync.impl._
@@ -69,19 +69,18 @@ object Sync {
     * of sync operations that have been executed; the second element is the
     * number of successful sync operations.
     *
-    * @param factory   the factory for the sync stream
-    * @param futConfig the future with the configuration
-    * @param system    the actor system
-    * @param ec        the execution context
+    * @param factory the factory for the sync stream
+    * @param config  the sync configuration
+    * @param system  the actor system
+    * @param ec      the execution context
     * @return a future with information about the result of the process
     */
-  def syncProcess(factory: SyncComponentsFactory, futConfig: Future[SyncConfig])
+  def syncProcess(factory: SyncComponentsFactory, config: SyncConfig)
                  (implicit system: ActorSystem, ec: ExecutionContext):
   Future[SyncResult] = {
-    implicit val consoleReader: ConsoleReader = DefaultConsoleReader
+    implicit val consoleReader: ConsoleReaderOld = DefaultConsoleReaderOld
 
     for {
-      config <- futConfig
       srcFactory <- factory.createSourceComponentsFactory(config)
       dstFactory <- factory.createDestinationComponentsFactory(config)
       result <- runSync(config, srcFactory, dstFactory)
@@ -444,57 +443,17 @@ object Sync {
     * this function never fails; if the sync process fails, it is completed
     * with a corresponding error message.
     *
-    * @param factory   the factory for creating stream components
-    * @param futConfig the future with the configuration
-    * @param system    the actor system
-    * @param ec        the execution context
+    * @param factory the factory for creating stream components
+    * @param config  the sync configuration
+    * @param system  the actor system
+    * @param ec      the execution context
     * @return a ''Future'' with a result message
     */
-  private def syncWithResultMessage(factory: SyncComponentsFactory, futConfig: Future[SyncConfig])
+  private def syncWithResultMessage(factory: SyncComponentsFactory, config: SyncConfig)
                                    (implicit system: ActorSystem, ec: ExecutionContext):
   Future[String] =
-    syncProcess(factory, futConfig)
+    syncProcess(factory, config)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
-
-  /**
-    * Returns a group name for the structure with the given role type. This
-    * function is used to determine the groups to be filtered for. The options
-    * to be displayed depend on the URIs that have been provided on the command
-    * line: If a URI for a role type is defined, the options related to the
-    * structure type of this role are displayed. Otherwise, no help for
-    * structure options is shown. That way, the user sees only help for options
-    * in the current context.
-    *
-    * @param params   the parsed command line arguments
-    * @param roleType the role type
-    * @return an ''Option'' with the name of the group
-    */
-  private def structureGroup(params: Parameters, roleType: RoleType): Option[String] =
-    ParameterExtractor.tryExtractor(
-      SyncStructureConfig.structureTypeSelectorExtractor(roleType, "uri"), params)(DefaultConsoleReader)
-      .toOption map (_._1)
-
-  /**
-    * Combines the given optional group filters to a combined filter function.
-    *
-    * @param srcGroup optional source group filter
-    * @param dstGroup optional destination group filter
-    * @return the combined group filter
-    */
-  private def groupFilter(srcGroup: Option[String], dstGroup: Option[String]): OptionFilter = {
-    // Adds options without a group to the given group filter
-    def noGroupOr(groupFilter: OptionFilter): OptionFilter =
-      CliHelpGenerator.orFilter(CliHelpGenerator.UnassignedGroupFilterFunc, groupFilter)
-
-    (srcGroup, dstGroup) match {
-      case (Some(g1), Some(g2)) =>
-        noGroupOr(CliHelpGenerator.orFilter(CliHelpGenerator.groupFilterFunc(g1),
-          CliHelpGenerator.groupFilterFunc(g2)))
-      case (Some(g), None) => noGroupOr(CliHelpGenerator.groupFilterFunc(g))
-      case (None, Some(g)) => noGroupOr(CliHelpGenerator.groupFilterFunc(g))
-      case (None, None) => CliHelpGenerator.UnassignedGroupFilterFunc
-    }
-  }
 }
 
 /**
@@ -510,22 +469,24 @@ class Sync extends CliActorSystemLifeCycle[SyncConfig] {
   override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =
     SyncParameterManager.syncConfigExtractor()
 
-  override protected def usageCaption(helpContext: CliHelpGenerator.CliHelpContext): String =
-    "Usage: streamsync [options] " + CliHelpGenerator.generateInputParamsOverview(helpContext).mkString(" ")
+  override protected def usageCaption(processingContext: ProcessingContext): String =
+    "Usage: streamsync [options] " +
+      HelpGenerator.generateInputParamsOverview(processingContext.parameterContext.modelContext).mkString(" ")
 
-  override protected def optionsGroupFilter(context: ParameterExtractor.ParameterContext): OptionFilter = {
-    val params = context.parameters
-    val srcGroup = structureGroup(params, SourceRoleType)
-    val dstGroup = structureGroup(params, DestinationRoleType)
-    andFilter(OptionsFilterFunc, groupFilter(srcGroup, dstGroup))
+  override protected def optionsGroupFilter(context: ProcessingContext): ParameterFilter = {
+    val srcExt = SyncStructureConfig.structureTypeSelectorExtractor(SourceRoleType, "uri")
+    val dstExt = SyncStructureConfig.structureTypeSelectorExtractor(DestinationRoleType, "uri")
+    val contextFilter = HelpGenerator.contextGroupFilterForExtractors(context.parameterContext,
+      List(srcExt, dstExt))
+    HelpGenerator.andFilter(HelpGenerator.negate(HelpGenerator.InputParamsFilterFunc), contextFilter)
   }
 
   /**
     * @inheritdoc This implementation starts the sync process using the actor
     *             system in implicit scope.
     */
-  override protected[cli] def runApp(futConfig: Future[SyncConfig]): Future[String] = {
+  override protected[cli] def runApp(config: SyncConfig): Future[String] = {
     val factory = new SyncComponentsFactory
-    Sync.syncWithResultMessage(factory, futConfig)
+    Sync.syncWithResultMessage(factory, config)
   }
 }

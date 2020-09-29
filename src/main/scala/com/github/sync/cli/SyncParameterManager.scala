@@ -20,8 +20,8 @@ import java.nio.file.Path
 import java.util.Locale
 
 import akka.util.Timeout
+import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterExtractor.{CliExtractor, SingleOptionValue}
 import com.github.sync.cli.SyncStructureConfig.StructureConfig
 
 import scala.concurrent.duration._
@@ -344,8 +344,8 @@ object SyncParameterManager {
       DestinationUriOption)
     mode <- applyModeExtractor(dstUri.getOrElse(""))
     timeout <- timeoutExtractor()
-    logFile <- ParameterExtractor.optionValue(LogFileOption, Some(LogFileHelp)).toPath.single
-    syncLog <- ParameterExtractor.optionValue(SyncLogOption, Some(SyncLogHelp)).toPath.single
+    logFile <- optionValue(LogFileOption, Some(LogFileHelp)).toPath
+    syncLog <- optionValue(SyncLogOption, Some(SyncLogHelp)).toPath
     timeDelta <- ignoreTimeDeltaExtractor()
     opsPerSec <- opsPerSecondExtractor()
     cryptConf <- cryptConfigExtractor
@@ -386,7 +386,7 @@ object SyncParameterManager {
                                triedOpsPerSec: Try[Option[Int]],
                                triedCryptConfig: Try[CryptConfig],
                                triedFilterData: Try[SyncFilterData]): Try[SyncConfig] =
-    ParameterExtractor.createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
+    createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
       triedApplyMode, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedCryptConfig,
       triedOpsPerSec, triedFilterData)(SyncConfig)
 
@@ -397,9 +397,7 @@ object SyncParameterManager {
     * @return the extractor for the source URI
     */
   private def srcUriExtractor(): CliExtractor[Try[String]] =
-    ParameterExtractor.inputValue(0, Some(SourceUriOption), Some(SourceUriHelp))
-      .multiplicity(atLeast = 1, atMost = 1)
-      .single
+    inputValue(0, Some(SourceUriOption), Some(SourceUriHelp))
       .mandatory
 
   /**
@@ -409,9 +407,7 @@ object SyncParameterManager {
     * @return the extractor for the destination URI
     */
   private def dstUriExtractor(): CliExtractor[Try[String]] =
-    ParameterExtractor.inputValue(1, Some(DestinationUriOption), Some(DestinationUriHelp), last = true)
-      .multiplicity(atLeast = 1, atMost = 1)
-      .single
+    inputValue(1, Some(DestinationUriOption), Some(DestinationUriHelp), last = true)
       .mandatory
 
   /**
@@ -422,7 +418,7 @@ object SyncParameterManager {
     * @return the extractor to extract the apply mode
     */
   private def applyModeExtractor(destUri: String): CliExtractor[Try[ApplyMode]] =
-    ParameterExtractor.optionValue(ApplyModeOption, Some(ApplyModeHelp))
+    optionValue(ApplyModeOption, Some(ApplyModeHelp))
       .mapTo[ApplyMode] {
         case RegApplyTargetUri(uri) =>
           ApplyModeTarget(uri)
@@ -432,8 +428,7 @@ object SyncParameterManager {
           ApplyModeNone
         case s =>
           throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
-      }.fallbackValuesWithDesc(Some("TARGET"), ApplyModeTarget(destUri))
-      .single
+      }.fallbackValueWithDesc(Some("TARGET"), ApplyModeTarget(destUri))
       .mandatory
 
   /**
@@ -444,11 +439,10 @@ object SyncParameterManager {
     * @return the extractor to extract the crypt mode
     */
   private def cryptModeExtractor(key: String): CliExtractor[Try[CryptMode.Value]] =
-    ParameterExtractor.optionValue(key, Some(CryptModeHelp))
+    optionValue(key, Some(CryptModeHelp))
       .toUpper
       .toEnum(CryptMode.Literals.get)
-      .fallbackValues(CryptMode.None.asInstanceOf[CryptMode.Value])
-      .single
+      .fallbackValue(CryptMode.None.asInstanceOf[CryptMode.Value])
       .mandatory
 
   /**
@@ -459,9 +453,8 @@ object SyncParameterManager {
     * @return the extractor for the ignore time delta option
     */
   private def ignoreTimeDeltaExtractor(): CliExtractor[Try[Option[Int]]] =
-    ParameterExtractor.optionValue(IgnoreTimeDeltaOption, Some(IgnoreTimeDeltaHelp))
+    optionValue(IgnoreTimeDeltaOption, Some(IgnoreTimeDeltaHelp))
       .toInt
-      .single
 
   /**
     * Returns an extractor that extracts he value of the option for the number
@@ -470,9 +463,8 @@ object SyncParameterManager {
     * @return the extractor for the ops per second option
     */
   private def opsPerSecondExtractor(): CliExtractor[Try[Option[Int]]] =
-    ParameterExtractor.optionValue(OpsPerSecondOption, Some(OpsPerSecondHelp))
+    optionValue(OpsPerSecondOption, Some(OpsPerSecondHelp))
       .toInt
-      .single
 
   /**
     * Returns an extractor that extracts the parameters related to cryptography.
@@ -496,14 +488,13 @@ object SyncParameterManager {
     * @return the extractor for the crypt cache size
     */
   private def cryptCacheSizeExtractor(): CliExtractor[Try[Int]] =
-    ParameterExtractor.optionValue(CryptCacheSizeOption, Some(CryptCacheSizeHelp))
+    optionValue(CryptCacheSizeOption, Some(CryptCacheSizeHelp))
       .toInt
       .mapTo { size =>
         if (size < MinCryptCacheSize)
           throw new IllegalArgumentException(s"Crypt cache size must be greater or equal $MinCryptCacheSize.")
         else size
-      }.fallbackValues(DefaultCryptCacheSize)
-      .single
+      }.fallbackValue(DefaultCryptCacheSize)
       .mandatory
 
   /**
@@ -519,9 +510,10 @@ object SyncParameterManager {
   private def cryptPasswordExtractor(keyCryptMode: String, keyPwd: String):
   CliExtractor[SingleOptionValue[String]] = {
     val condExt = cryptModeExtractor(keyCryptMode).map(_.map(mode => mode.requiresPassword))
-    val pwdExt = ParameterExtractor.optionValue(keyPwd, Some(CryptPasswordHelp))
-      .fallback(ParameterExtractor.consoleReaderValue(keyPwd, password = true))
-    ParameterExtractor.conditionalValue(condExt, pwdExt).single
+    val pwdExt = optionValue(keyPwd, Some(CryptPasswordHelp))
+      .fallback(consoleReaderValue(keyPwd, password = true))
+    val elseExt = constantExtractor(Try(Option[String](null)))
+    conditionalValue(condExt, pwdExt, elseExt)
   }
 
   /**
@@ -537,7 +529,7 @@ object SyncParameterManager {
   private def createCryptConfig(triedSrcPwd: Try[Option[String]], triedSrcCryptMode: Try[CryptMode.Value],
                                 triedDstPwd: Try[Option[String]], triedDstCryptMode: Try[CryptMode.Value],
                                 triedCryptCacheSize: Try[Int]): Try[CryptConfig] =
-    ParameterExtractor.createRepresentation(triedSrcPwd, triedSrcCryptMode, triedDstPwd, triedDstCryptMode,
+    createRepresentation(triedSrcPwd, triedSrcCryptMode, triedDstPwd, triedDstCryptMode,
       triedCryptCacheSize)(CryptConfig)
 
   /**
@@ -548,10 +540,9 @@ object SyncParameterManager {
     * @return the extractor to extract the timeout value
     */
   private def timeoutExtractor(): CliExtractor[Try[Timeout]] =
-    ParameterExtractor.optionValue(TimeoutOption, Some(TimeoutHelp))
+    optionValue(TimeoutOption, Some(TimeoutHelp))
       .toInt
       .mapTo(time => Timeout(time.seconds))
-      .fallbackValues(DefaultTimeout)
-      .single
+      .fallbackValue(DefaultTimeout)
       .mandatory
 }

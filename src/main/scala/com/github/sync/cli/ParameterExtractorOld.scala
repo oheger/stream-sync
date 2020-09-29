@@ -19,7 +19,7 @@ package com.github.sync.cli
 import java.nio.file.{Path, Paths}
 
 import com.github.sync.cli.CliHelpGenerator.CliHelpContext
-import com.github.sync.cli.ParameterParser.ParametersMap
+import com.github.sync.cli.ParameterParserOld.ParametersMap
 
 import scala.collection.SortedSet
 import scala.language.implicitConversions
@@ -37,15 +37,15 @@ import scala.util.{Failure, Success, Try}
   * present and that no unsupported options have been specified.
   *
   * This service operates on a map of parameters as produced by the
-  * [[ParameterParser]] service. While the initial parsing step is pretty
+  * [[ParameterParserOld]] service. While the initial parsing step is pretty
   * simple, here the interpretation of command line options takes place. This
-  * is done in form of [[com.github.sync.cli.ParameterExtractor.CliExtractor]]
+  * is done in form of [[com.github.sync.cli.ParameterExtractorOld.CliExtractor]]
   * objects. A basic extractor obtains a single value from the command line.
   * The value can then be processed, e.g. checked or converted. Extractors can
   * be composed in monadic ways to construct more complex objects out of the
   * input values passed to the application.
   */
-object ParameterExtractor {
+object ParameterExtractorOld {
   /** A mapping storing the boolean literals for conversion. */
   private final val BooleanMapping = Map("true" -> true, "false" -> false)
 
@@ -57,7 +57,7 @@ object ParameterExtractor {
     * available. It contains only dummy values.
     */
   private val DummyParameterContext = ParameterContext(Parameters(Map.empty, Set.empty),
-    EmptyHelpContext, DummyConsoleReader)
+    EmptyHelpContext, DummyConsoleReaderOld)
 
   /**
     * Type definition for the base type of a command line option. The option
@@ -144,7 +144,7 @@ object ParameterExtractor {
     */
   case class ParameterContext(parameters: Parameters,
                               helpContext: CliHelpContext,
-                              reader: ConsoleReader) {
+                              reader: ConsoleReaderOld) {
     /**
       * Returns a new ''ParameterContext'' object that was updated with the
       * given ''Parameters'' and help context. All other properties remain
@@ -309,7 +309,7 @@ object ParameterExtractor {
     * construction of more complex ''CliExtractor'' objects is simplified.
     * Specific functionality can be added to an extractor by invoking one of
     * the functions offered by this class rather than using the functions of
-    * [[ParameterExtractor]].
+    * [[ParameterExtractorOld]].
     *
     * @param ext the ''CliExtractor'' decorated by this class
     * @tparam A the result type of the ''CliExtractor''
@@ -669,14 +669,14 @@ object ParameterExtractor {
   def inputValues(fromIdx: Int, toIdx: Int, optKey: Option[String] = None, optHelp: Option[String] = None,
                   last: Boolean = false): CliExtractor[OptionValue[String]] =
     CliExtractor(context => {
-      val inputs = context.parameters.parametersMap.getOrElse(ParameterParser.InputOption, Nil)
+      val inputs = context.parameters.parametersMap.getOrElse(ParameterParserOld.InputOption, Nil)
 
       // handles special negative index values and checks the index range
       def adjustAndCheckIndex(index: Int): Try[Int] = {
         val adjustedIndex = if (index < 0) inputs.size + index
         else index
         if (adjustedIndex >= 0 && adjustedIndex < inputs.size) Success(adjustedIndex)
-        else Failure(paramException(context, ParameterParser.InputOption, tooFewErrorText(adjustedIndex)))
+        else Failure(paramException(context, ParameterParserOld.InputOption, tooFewErrorText(adjustedIndex)))
       }
 
       def tooFewErrorText(index: Int): String = {
@@ -685,7 +685,7 @@ object ParameterExtractor {
       }
 
       val result = if (last && inputs.size > toIdx + 1)
-        Failure(paramException(context, ParameterParser.InputOption,
+        Failure(paramException(context, ParameterParserOld.InputOption,
           s"Too many input arguments; expected at most ${toIdx + 1}"))
       else
         for {
@@ -693,7 +693,7 @@ object ParameterExtractor {
           lastIndex <- adjustAndCheckIndex(toIdx)
         } yield inputs.slice(firstIndex, lastIndex + 1)
       val helpContext = context.helpContext.addInputParameter(fromIdx, optKey, optHelp)
-      (result, context.update(context.parameters keyAccessed ParameterParser.InputOption, helpContext))
+      (result, context.update(context.parameters keyAccessed ParameterParserOld.InputOption, helpContext))
     })
 
   /**
@@ -719,7 +719,7 @@ object ParameterExtractor {
 
   /**
     * Returns an extractor that prompts the user for entering the value of an
-    * option. This is done by delegating to the [[ConsoleReader]] in the
+    * option. This is done by delegating to the [[ConsoleReaderOld]] in the
     * parameter context passed to the extractor. This function can be used for
     * instance together with ''withFallback()'' to let the user enter a value
     * if it has not been provided on the command line.
@@ -1563,7 +1563,7 @@ object ParameterExtractor {
     * @return a tuple with the result and the resulting ''ParameterContext''
     */
   def runExtractor[T](extractor: CliExtractor[T], parameters: Parameters)
-                     (implicit consoleReader: ConsoleReader): (T, ParameterContext) = {
+                     (implicit consoleReader: ConsoleReaderOld): (T, ParameterContext) = {
     val context = ParameterContext(parameters, EmptyHelpContext, consoleReader)
     val (result, nextContext) = extractor.run(context)
     (result, nextContext)
@@ -1583,7 +1583,7 @@ object ParameterExtractor {
     *         ''ParameterContext''
     */
   def tryExtractor[T](extractor: CliExtractor[Try[T]], parameters: Parameters)
-                     (implicit consoleReader: ConsoleReader): Try[(T, ParameterContext)] = {
+                     (implicit consoleReader: ConsoleReaderOld): Try[(T, ParameterContext)] = {
     val (triedRes, next) = runExtractor(extractor, parameters)
     triedRes map ((_, next))
   }
@@ -1755,5 +1755,5 @@ object ParameterExtractor {
     * @return the ''ParameterContext'' for the meta data run
     */
   private def contextForMetaDataRun(params: ParametersMap, helpContext: CliHelpContext): ParameterContext =
-    ParameterContext(Parameters(params, Set.empty), helpContext, DummyConsoleReader)
+    ParameterContext(Parameters(params, Set.empty), helpContext, DummyConsoleReaderOld)
 }

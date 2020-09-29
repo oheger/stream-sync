@@ -25,7 +25,7 @@ import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterExtractor.Parameters
+import com.github.sync.cli.ParameterExtractorOld.Parameters
 import com.github.sync.cli.SyncComponentsFactory.SourceComponentsFactory
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, SyncConfig}
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
@@ -114,7 +114,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   import system.dispatcher
 
   /** A mock for a console reader; needed as implicit parameter. */
-  implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+  implicit val consoleReader: ConsoleReaderOld = mock[ConsoleReaderOld]
 
   /**
     * Returns the local file system config from a source factory.

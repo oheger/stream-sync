@@ -18,13 +18,13 @@ package com.github.sync.cli
 
 import java.util.Locale
 
-import com.github.sync.cli.ParameterExtractor.{CliExtractor, ParameterExtractionException}
+import com.github.sync.cli.ParameterExtractorOld.{CliExtractor, ParameterExtractionException}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.util.{Failure, Success, Try}
 
-object ParameterManagerSpec {
+object ParameterManagerOldSpec {
   /** A key for a test option. */
   private val TestOptionKey = "theTestOption"
 
@@ -39,8 +39,8 @@ object ParameterManagerSpec {
     * the current parameters map as result. It also adds the test option to the
     * map of accessed options and to the help context.
     */
-  private val TestExtractor = ParameterManager.wrapTryExtractor(CliExtractor(context => {
-    if (context.reader == DefaultConsoleReader) {
+  private val TestExtractor = ParameterManagerOld.wrapTryExtractor(CliExtractor(context => {
+    if (context.reader == DefaultConsoleReaderOld) {
       val nextContext = context.update(context.parameters.keyAccessed(TestOptionKey),
         context.helpContext.addOption(TestOptionKey, Some(HelpTestOption)))
       (context.parameters.parametersMap, nextContext)
@@ -51,9 +51,9 @@ object ParameterManagerSpec {
 /**
   * Test class for ''ParameterManager''.
   */
-class ParameterManagerSpec extends AnyFlatSpec with Matchers {
+class ParameterManagerOldSpec extends AnyFlatSpec with Matchers {
 
-  import ParameterManagerSpec._
+  import ParameterManagerOldSpec._
 
   /**
     * Checks whether the given ''Try'' has a success result and returns it.
@@ -87,7 +87,7 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers {
       "foo" -> List("bar", "baz"))
 
     import scala.language.existentials
-    val (res, context) = triedResult(ParameterManager.processCommandLine(args, TestExtractor,
+    val (res, context) = triedResult(ParameterManagerOld.processCommandLine(args, TestExtractor,
       checkUnconsumedParameters = false))
     res should be(ExpParamsMap)
     context.parameters.parametersMap should be(ExpParamsMap)
@@ -98,17 +98,17 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers {
   it should "check for unconsumed parameters" in {
     val args = List("--" + TestOptionKey, TestOptionValue, "--foo", "value")
 
-    val exception = failedResult(ParameterManager.processCommandLine(args, TestExtractor))
+    val exception = failedResult(ParameterManagerOld.processCommandLine(args, TestExtractor))
     exception.failures should have size 1
     exception.failures.head.key should be("foo")
   }
 
   it should "handle a failed extractor" in {
     val args = List("--" + TestOptionKey, TestOptionValue)
-    val extractor = ParameterExtractor.optionValue(TestOptionKey)
+    val extractor = ParameterExtractorOld.optionValue(TestOptionKey)
       .toInt
 
-    val exception = failedResult(ParameterManager.processCommandLine(args, extractor))
+    val exception = failedResult(ParameterManagerOld.processCommandLine(args, extractor))
     exception.failures should have size 1
     exception.failures.head.key should be(TestOptionKey)
     exception.failures.head.message should include("NumberFormatException")
@@ -119,24 +119,24 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers {
 
   it should "combine failures of the extractor with failures for unconsumed parameters" in {
     val args = List("--" + TestOptionKey, TestOptionValue, "--unknownOption", "shouldFail")
-    val ext1 = ParameterExtractor.optionValue(TestOptionKey).toInt
-    val ext2 = ParameterExtractor.optionValue("missing").single.mandatory
+    val ext1 = ParameterExtractorOld.optionValue(TestOptionKey).toInt
+    val ext2 = ParameterExtractorOld.optionValue("missing").single.mandatory
     val extractor = for {
       v1 <- ext1
       v2 <- ext2
-    } yield ParameterExtractor.createRepresentation(v1, v2) {
+    } yield ParameterExtractorOld.createRepresentation(v1, v2) {
       (_, _)
     }
 
-    val exception = failedResult(ParameterManager.processCommandLine(args, extractor))
+    val exception = failedResult(ParameterManagerOld.processCommandLine(args, extractor))
     exception.failures.map(_.key) should contain only(TestOptionKey, "missing", "unknownOption")
   }
 
   it should "add all failures to the help context in the resulting exception" in {
     val args = List("--" + TestOptionKey, TestOptionValue, "--unknownOption", "shouldFail")
-    val extractor = ParameterExtractor.optionValue(TestOptionKey).toInt
+    val extractor = ParameterExtractorOld.optionValue(TestOptionKey).toInt
 
-    val exception = failedResult(ParameterManager.processCommandLine(args, extractor))
+    val exception = failedResult(ParameterManagerOld.processCommandLine(args, extractor))
     val helpContext = exception.parameterContext.helpContext
     helpContext.options(TestOptionKey).attributes.keys should contain(CliHelpGenerator.AttrErrorMessage)
   }
@@ -144,13 +144,13 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers {
   it should "support customizing the parsing function" in {
     val args = List("/" + TestOptionKey, TestOptionValue)
     val key = TestOptionKey.toLowerCase(Locale.ROOT)
-    val extractor = ParameterExtractor.optionValue(key).single.mandatory
-    val prefixes = ParameterParser.OptionPrefixes("/")
+    val extractor = ParameterExtractorOld.optionValue(key).single.mandatory
+    val prefixes = ParameterParserOld.OptionPrefixes("/")
     val keyExtractor = prefixes.extractorFunc andThen (s => s.toLowerCase(Locale.ROOT))
 
-    val parseFunc = ParameterManager.parsingFunc(optionFunc = prefixes.isOptionFunc,
+    val parseFunc = ParameterManagerOld.parsingFunc(optionFunc = prefixes.isOptionFunc,
       keyExtractor = keyExtractor)
-    val (res, _) = triedResult(ParameterManager.processCommandLine(args, extractor, parser = parseFunc))
+    val (res, _) = triedResult(ParameterManagerOld.processCommandLine(args, extractor, parser = parseFunc))
     res should be(TestOptionValue)
   }
 
@@ -158,10 +158,10 @@ class ParameterManagerSpec extends AnyFlatSpec with Matchers {
     val FileOption = "file"
     val FileName = "someFile.txt"
     val args = List("--" + TestOptionKey, TestOptionValue, "--" + FileOption, FileName)
-    val extractor = ParameterExtractor.optionValue(TestOptionKey, help = Some(HelpTestOption))
+    val extractor = ParameterExtractorOld.optionValue(TestOptionKey, help = Some(HelpTestOption))
 
-    val parseFunc = ParameterManager.parsingFunc(optFileOption = Some(FileOption))
-    val exception = failedResult(ParameterManager.processCommandLine(args, extractor, parseFunc,
+    val parseFunc = ParameterManagerOld.parsingFunc(optFileOption = Some(FileOption))
+    val exception = failedResult(ParameterManagerOld.processCommandLine(args, extractor, parseFunc,
       checkUnconsumedParameters = false))
     exception.failures should have size 1
     val failure = exception.failures.head

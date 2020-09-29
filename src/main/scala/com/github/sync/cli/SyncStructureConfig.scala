@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import java.time.ZoneId
 
-import com.github.sync.cli.ParameterExtractor._
+import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.Secret
 import com.github.sync.http.{AuthConfig, BasicAuthConfig, NoAuth}
@@ -331,8 +331,7 @@ object SyncStructureConfig {
         case RegDavUri(_) => structureGroup(GroupDav, roleType)
         case RegOneDriveID(_) => structureGroup(GroupOneDrive, roleType)
         case _ => structureGroup(GroupLocalFs, roleType)
-      }.single
-      .mandatory
+      }.mandatory
 
   /**
     * Returns a ''CliExtractor'' that extracts the configuration for the local
@@ -344,7 +343,6 @@ object SyncStructureConfig {
   private def localFsConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureConfig]] =
     optionValue(roleType.configPropertyName(PropLocalFsTimeZone), help = Some(HelpLocalFsTimeZone))
       .mapTo(ZoneId.of)
-      .single
       .map(_.map(optZone => FsStructureConfig(optZone)))
 
   /**
@@ -356,14 +354,13 @@ object SyncStructureConfig {
     */
   private def davConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureConfig]] = {
     val extModProp = optionValue(roleType.configPropertyName(PropDavModifiedProperty),
-      help = Some(HelpDavModifiedProperty)).single
+      help = Some(HelpDavModifiedProperty))
     val extModNs = optionValue(roleType.configPropertyName(PropDavModifiedNamespace),
-      help = Some(HelpDavModifiedNamespace)).single
+      help = Some(HelpDavModifiedNamespace))
     val extDel = optionValue(roleType.configPropertyName(PropDavDeleteBeforeOverride),
       help = Some(HelpDavDeleteBeforeOverride))
       .toBoolean
-      .fallbackValues(false)
-      .single
+      .fallbackValue(false)
       .mandatory
     for {
       triedModProp <- extModProp
@@ -382,14 +379,12 @@ object SyncStructureConfig {
     */
   private def oneDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureConfig]] = {
     val extPath = optionValue(roleType.configPropertyName(PropOneDrivePath), help = Some(HelpOneDrivePath))
-      .single
       .mandatory
     val extChunkSize = optionValue(roleType.configPropertyName(PropOneDriveUploadChunkSize),
       help = Some(HelpOneDriveUploadChunkSize))
       .toInt
-      .single
     val extServer = optionValue(roleType.configPropertyName(PropOneDriveServer),
-      help = Some(HelpOneDriveServer)).single
+      help = Some(HelpOneDriveServer))
     for {
       triedPath <- extPath
       triedChunkSize <- extChunkSize
@@ -432,7 +427,6 @@ object SyncStructureConfig {
     */
   private def basicAuthExtractor(roleType: RoleType): CliExtractor[Try[AuthConfig]] = {
     val extUser = optionValue(roleType.configPropertyName(PropAuthUser), help = Some(HelpAuthUser))
-      .single
       .mandatory
     for {
       triedUser <- extUser
@@ -452,7 +446,6 @@ object SyncStructureConfig {
     val prop = roleType.configPropertyName(PropAuthPassword)
     optionValue(prop, help = Some(HelpAuthPassword))
       .fallback(consoleReaderValue(prop, password = true))
-      .single
       .mandatory
   }
 

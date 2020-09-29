@@ -18,10 +18,12 @@ package com.github.sync.cli
 
 import java.time.{Instant, LocalDateTime, ZoneId}
 
+import com.github.scli.ParameterExtractor
+import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractionException, Parameters}
+import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes._
-import com.github.sync._
+import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.FilterManager._
-import com.github.sync.cli.ParameterExtractor.{ParameterContext, ParameterExtractionException, Parameters}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -80,8 +82,8 @@ object FilterManagerSpec {
     * @param args the command line arguments
     * @return the result of the parse operation
     */
-  private def parseFilters(args: Parameters): Try[(SyncFilterData, ParameterContext)] =
-    ParameterExtractor.tryExtractor(FilterManager.filterDataExtractor, args)(DefaultConsoleReader)
+  private def parseFilters(args: Parameters): Try[(SyncFilterData, ExtractionContext)] =
+    ParameterExtractor.tryExtractor(FilterManager.filterDataExtractor, toExtractionContext(args))
 }
 
 /**
@@ -98,7 +100,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * @param args the command line arguments
     * @return the result of the parse operation
     */
-  private def parseFiltersSuccess(args: Parameters): (SyncFilterData, ParameterContext) =
+  private def parseFiltersSuccess(args: Parameters): (SyncFilterData, ExtractionContext) =
     parseFilters(args) match {
       case Success(value) => value
       case r => fail("Unexpected parse result: " + r)
@@ -144,8 +146,8 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     */
   private def expectInvalidFilterExpression(expression: String): Unit = {
     val args = Map(FilterManager.ArgOverrideFilter -> List(expression))
-    val exception = expectAndCheckParsingFailure(parseFilters(args))
-    exception.failures.head.key should be(FilterManager.ArgOverrideFilter)
+    val exception = expectAndCheckParsingFailure(parseFilters(toParameters(args)))
+    exception.failures.head.key.key should be(FilterManager.ArgOverrideFilter)
   }
 
   /**
@@ -176,15 +178,15 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * @param acceptedOps options expected to be accepted
     * @param rejectedOps options expected to be rejected
     */
-  private def checkParseFilterArguments(filterArgs: ParameterParser.ParametersMap,
+  private def checkParseFilterArguments(filterArgs: ParameterParserOld.ParametersMap,
                                         acceptedOps: List[SyncOperation],
                                         rejectedOps: List[SyncOperation]): Unit = {
     val otherParam = "foo" -> List("bar")
     val args = filterArgs + otherParam
-    val (filterData, nextContext) = parseFiltersSuccess(args)
+    val (filterData, nextContext) = parseFiltersSuccess(toParameters(args))
     acceptedOps foreach (op => FilterManager.applyFilter(op, filterData) shouldBe true)
     rejectedOps foreach (op => FilterManager.applyFilter(op, filterData) shouldBe false)
-    nextContext.parameters.accessedParameters should contain only(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter,
+    accessedKeys(nextContext) should contain only(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter,
       ArgCommonFilter, ArgActionFilter)
   }
 
@@ -305,7 +307,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val args = Map(FilterManager.ArgCommonFilter -> List("min-level:2", "max-level:4"),
       FilterManager.ArgRemoveFilter -> List(InvalidExpression, "max-level=3"))
 
-    val triedResult = parseFilters(args)
+    val triedResult = parseFilters(toParameters(args))
     expectAndCheckParsingFailure(triedResult, InvalidExpression)
   }
 
@@ -341,14 +343,18 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val expMessages = invalidTypes.map(t => "action type: " + t)
     val args = Map(FilterManager.ArgActionFilter -> ("actionCreate" :: invalidTypes))
 
-    expectAndCheckParsingFailure(parseFilters(args), expMessages: _*)
+    val exception = expectParsingFailure(parseFilters(toParameters(args)))
+    exception.failures should have size expMessages.size
+    exception.failures.zip(expMessages) foreach { t =>
+      t._1.cause.getMessage should include(t._2)
+    }
   }
 
   it should "handle invalid action type names in a single action type filter expression" in {
     val invalidTypes = "unknown_type,other_unknown_type"
     val args = Map(FilterManager.ArgActionFilter -> List("actionCreate, " + invalidTypes))
 
-    expectAndCheckParsingFailure(parseFilters(args), "action types: " + invalidTypes)
+    expectAndCheckParsingFailure(parseFilters(toParameters(args)), "action types: " + invalidTypes)
   }
 
   it should "parse a simple exclude filter expression" in {
@@ -465,7 +471,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     val Expression = "date-before:9999-99-99T99:99:99"
     val args = Map(FilterManager.ArgCommonFilter -> List(Expression))
 
-    expectAndCheckParsingFailure(parseFilters(args), Expression)
+    expectAndCheckParsingFailure(parseFilters(toParameters(args)), Expression)
   }
 
   it should "collect all invalid filter expressions" in {
@@ -476,8 +482,12 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
       FilterManager.ArgOverrideFilter -> List(InvalidEx2, "max-level:5", InvalidEx3),
       FilterManager.ArgRemoveFilter -> List("min-level:15"))
 
-    val exception = expectParsingFailure(parseFilters(params))
-    val failuresMap = exception.failures.map(f => (f.key, f.message)).toMap
+    val exception = expectParsingFailure(parseFilters(toParameters(params)))
+    exception.failures should have size 3
+    val failuresMap = exception.failures.foldLeft(Map.empty[String, String]) { (map, failure) =>
+      val err = map.getOrElse(failure.key.key, "")
+      map + (failure.key.key -> (err + failure.cause.getMessage))
+    }
     failuresMap.keys should contain only(FilterManager.ArgCreateFilter, FilterManager.ArgOverrideFilter)
     failuresMap(FilterManager.ArgCreateFilter) should include(InvalidEx1)
     failuresMap(FilterManager.ArgOverrideFilter) should include(InvalidEx2)

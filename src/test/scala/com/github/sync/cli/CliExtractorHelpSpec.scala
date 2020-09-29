@@ -19,7 +19,7 @@ package com.github.sync.cli
 import java.util.Locale
 
 import com.github.sync.cli.CliHelpGenerator.{CliHelpContext, ColumnGenerator, InputParamOverviewSymbols, InputParameterRef, OptionAttributes, OptionFilter, OptionMetaData, OptionSortFunc}
-import com.github.sync.cli.ParameterExtractor._
+import com.github.sync.cli.ParameterExtractorOld._
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -64,9 +64,9 @@ object CliExtractorHelpSpec {
     * @return the resulting help context
     */
   private def generateHelpContext(ext: CliExtractor[_], params: Parameters = EmptyParameters,
-                                  optReader: Option[ConsoleReader] = None): CliHelpContext = {
-    implicit val reader: ConsoleReader = optReader getOrElse DefaultConsoleReader
-    val (_, ctx) = ParameterExtractor.runExtractor(ext, params)
+                                  optReader: Option[ConsoleReaderOld] = None): CliHelpContext = {
+    implicit val reader: ConsoleReaderOld = optReader getOrElse DefaultConsoleReaderOld
+    val (_, ctx) = ParameterExtractorOld.runExtractor(ext, params)
     ctx.helpContext
   }
 
@@ -424,7 +424,7 @@ class CliExtractorHelpSpec extends AnyFlatSpec with Matchers with MockitoSugar {
     val extElse = optionValue(Key2)
     val extCase = conditionalValue(extCond, ifExt = extIf, ifGroup = Some("g1"),
       elseExt = extElse, elseGroup = Some("g2"))
-    val reader = mock[ConsoleReader]
+    val reader = mock[ConsoleReaderOld]
 
     val helpContext = generateHelpContext(extCase, optReader = Some(reader))
     val attr = helpContext.options(Key2)

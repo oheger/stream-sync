@@ -31,7 +31,7 @@ import scala.util.{Failure, Success, Try}
   * processing of the command line, e.g. to extract configuration objects out
   * of it.
   */
-object ParameterParser {
+object ParameterParserOld {
   /**
     * Name of an option that collects the input strings that are no values of
     * options.

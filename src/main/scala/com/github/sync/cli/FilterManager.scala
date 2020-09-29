@@ -23,7 +23,7 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 import com.github.sync.SyncTypes._
-import com.github.sync.cli.ParameterExtractor.{CliExtractor, OptionValue}
+import com.github.scli.ParameterExtractor._
 
 import scala.annotation.tailrec
 import scala.util.matching.Regex
@@ -205,7 +205,7 @@ object FilterManager {
     * @return the extractor that extracts the filter expressions for this type
     */
   private def filterExpressionProcessor(key: String, help: String): CliExtractor[OptionValue[SyncOperationFilter]] =
-    ParameterExtractor.optionValue(key, help = Some(help))
+    optionValues(key, help = Some(help))
       .mapTo(parseExpression)
 
   /**
@@ -215,9 +215,9 @@ object FilterManager {
     * @return the extractor to extract the enabled action types
     */
   private def actionFilterProcessor: CliExtractor[Try[Set[SyncAction]]] =
-    ParameterExtractor.optionValue(ArgActionFilter, help = Some(HelpActionFilter))
+    optionValues(ArgActionFilter, help = Some(HelpActionFilter))
       .mapTo(parseActionNames)
-      .fallback(ParameterExtractor.constantExtractor(Success(List(ActionTypeNameMapping.values.toSet))))
+      .fallback(constantExtractor(Success(List(ActionTypeNameMapping.values.toSet))))
       .map { triedSets => triedSets.map(s => s.flatten.toSet) }
 
   /**
@@ -236,7 +236,7 @@ object FilterManager {
                                    triedOverrideFilters: OptionValue[SyncOperationFilter],
                                    triedRemoveFilters: OptionValue[SyncOperationFilter],
                                    triedActionFilter: Try[Set[SyncAction]]): Try[SyncFilterData] =
-    ParameterExtractor.createRepresentation(triedCommonFilters, triedCreateFilters, triedOverrideFilters,
+    createRepresentation(triedCommonFilters, triedCreateFilters, triedOverrideFilters,
       triedRemoveFilters, triedActionFilter) {
       (commonFilters, createFilters, overrideFilters, removeFilters, actionFilter) =>
         val commonsList = commonFilters.toList

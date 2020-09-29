@@ -25,7 +25,7 @@ package com.github.sync.cli
   * arguments when invoking the CLI. Rather, the user is prompted for them if
   * necessary.
   */
-trait ConsoleReader {
+trait ConsoleReaderOld {
   /**
     * Prompts the user to enter the value for the given key. A typical
     * implementation prints the key and then waits for the user to enter a
@@ -49,7 +49,7 @@ trait ConsoleReader {
   * user input, with and without echo (as needed for passwords). Unfortunately,
   * the class is final which makes testing rather difficult.
   */
-object DefaultConsoleReader extends ConsoleReader {
+object DefaultConsoleReaderOld extends ConsoleReaderOld {
   override def readOption(key: String, password: Boolean): String = {
     val prompt = s"$key: "
     val console = System.console()
@@ -64,6 +64,6 @@ object DefaultConsoleReader extends ConsoleReader {
   * used to process command line options if only the meta data of extractors is
   * of interest.
   */
-object DummyConsoleReader extends ConsoleReader {
+object DummyConsoleReaderOld extends ConsoleReaderOld {
   override def readOption(key: String, password: Boolean): String = ""
 }

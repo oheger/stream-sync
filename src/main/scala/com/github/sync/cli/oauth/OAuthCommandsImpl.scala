@@ -20,7 +20,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.stream.scaladsl.Sink
-import com.github.sync.cli.ConsoleReader
+import com.github.sync.cli.ConsoleReaderOld
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.crypt.Secret
 import com.github.sync.http.HttpRequestActor
@@ -54,7 +54,7 @@ object OAuthCommandsImpl extends OAuthCommands {
     * information a token pair is retrieved from the IDP.
     */
   override def login(loginConfig: LoginCommandConfig, storageService: StorageService, tokenService: TokenService,
-                     browserHandler: BrowserHandler, consoleReader: ConsoleReader,
+                     browserHandler: BrowserHandler, consoleReader: ConsoleReaderOld,
                      printFunc: PrintFunc = ConsolePrintFunc)
                     (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     for {config <- storageService.loadConfig(loginConfig.storageConfig)
@@ -91,7 +91,7 @@ object OAuthCommandsImpl extends OAuthCommands {
     * @param system         the actor system
     * @return a ''Future'' with the code
     */
-  private def obtainCode(config: OAuthConfig, authUri: Uri, browserHandler: BrowserHandler, reader: ConsoleReader,
+  private def obtainCode(config: OAuthConfig, authUri: Uri, browserHandler: BrowserHandler, reader: ConsoleReaderOld,
                          printFunc: PrintFunc)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     checkLocalRedirectUri(config) match {
       case Some(port) =>

@@ -20,14 +20,14 @@ import java.io.IOException
 import java.nio.file.Path
 
 import com.github.sync.FileTestHelper
-import com.github.sync.cli.ParameterParser.{OptionPrefixes, ParameterParseException}
+import com.github.sync.cli.ParameterParserOld.{OptionPrefixes, ParameterParseException}
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.util.{Failure, Success, Try}
 
-object ParameterParserSpec {
+object ParameterParserOldSpec {
   /** Name of an option that references parameter files. */
   private val FileOption = "param-file"
 }
@@ -35,9 +35,9 @@ object ParameterParserSpec {
 /**
   * Test class for ''ParameterParser''.
   */
-class ParameterParserSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with FileTestHelper {
+class ParameterParserOldSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with FileTestHelper {
 
-  import ParameterParserSpec._
+  import ParameterParserOldSpec._
 
   override protected def afterEach(): Unit = {
     tearDownTestFile()
@@ -51,7 +51,7 @@ class ParameterParserSpec extends AnyFlatSpec with BeforeAndAfterEach with Match
     * @param result the result
     * @return the map with parameters
     */
-  private def extractParametersMap(result: Try[ParameterParser.ParametersMap]): ParameterParser.ParametersMap =
+  private def extractParametersMap(result: Try[ParameterParserOld.ParametersMap]): ParameterParserOld.ParametersMap =
     result match {
       case Success(value) => value
       case r => fail("Unexpected result: " + r)
@@ -64,8 +64,8 @@ class ParameterParserSpec extends AnyFlatSpec with BeforeAndAfterEach with Match
     * @param args the sequence with arguments
     * @return the resulting parameters map
     */
-  private def parseParametersSuccess(args: Seq[String]): ParameterParser.ParametersMap =
-    extractParametersMap(ParameterParser.parseParameters(args, optFileOption = Some(FileOption)))
+  private def parseParametersSuccess(args: Seq[String]): ParameterParserOld.ParametersMap =
+    extractParametersMap(ParameterParserOld.parseParameters(args, optFileOption = Some(FileOption)))
 
   /**
     * Invokes the parameter parser on the given sequence with arguments and
@@ -75,7 +75,7 @@ class ParameterParserSpec extends AnyFlatSpec with BeforeAndAfterEach with Match
     * @return the exception causing the failure
     */
   private def parseParametersFailure(args: Seq[String]): Throwable =
-    ParameterParser.parseParameters(args, optFileOption = Some(FileOption)) match {
+    ParameterParserOld.parseParameters(args, optFileOption = Some(FileOption)) match {
       case Failure(exception) => exception
       case r => fail("Unexpected result: " + r)
     }
@@ -154,7 +154,7 @@ class ParameterParserSpec extends AnyFlatSpec with BeforeAndAfterEach with Match
 
   it should "correctly parse non-option parameters" in {
     val args = List("uri1", "uri2")
-    val expArgMap = Map(ParameterParser.InputOption -> args)
+    val expArgMap = Map(ParameterParserOld.InputOption -> args)
 
     val params = parseParametersSuccess(args)
     params should be(expArgMap)
@@ -192,10 +192,10 @@ class ParameterParserSpec extends AnyFlatSpec with BeforeAndAfterEach with Match
     val args = List("/TestOption", "TestValue", "--FOO", "BAR", "testUri")
     val expArgMap = Map("TestOption" -> List("TestValue"),
       "FOO" -> List("BAR"),
-      ParameterParser.InputOption -> List("testUri"))
+      ParameterParserOld.InputOption -> List("testUri"))
     val optionPrefixes = OptionPrefixes("/", "--")
 
-    val params = extractParametersMap(ParameterParser.parseParameters(args,
+    val params = extractParametersMap(ParameterParserOld.parseParameters(args,
       isOptionFunc = optionPrefixes.isOptionFunc, keyExtractor = optionPrefixes.extractorFunc))
     params should be(expArgMap)
   }

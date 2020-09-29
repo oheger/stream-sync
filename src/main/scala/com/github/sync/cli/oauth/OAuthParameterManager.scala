@@ -18,8 +18,8 @@ package com.github.sync.cli.oauth
 
 import java.nio.file.Path
 
-import com.github.sync.cli.{CliActorSystemLifeCycle, ParameterExtractor}
-import com.github.sync.cli.ParameterExtractor._
+import com.github.scli.ParameterExtractor._
+import com.github.sync.cli.CliActorSystemLifeCycle
 import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.OAuthConfig
@@ -235,9 +235,8 @@ object OAuthParameterManager {
     * must be exactly one command.
     */
   final val commandExtractor: CliExtractor[Try[String]] =
-    ParameterExtractor.inputValue(0, optKey = Some(CommandOption), optHelp = Some(HelpCommandOption), last = true)
+    inputValue(0, optKey = Some(CommandOption), optHelp = Some(HelpCommandOption), last = true)
       .toLower
-      .single
       .mandatory
 
   /**
@@ -275,10 +274,8 @@ object OAuthParameterManager {
   CliExtractor[Try[OAuthStorageConfig]] = {
     val procPath = optionValue(prefix + StoragePathOptionName, help = Some(HelpStoragePathOption))
       .toPath
-      .single
       .mandatory
     val procName = optionValue(prefix + NameOptionName, help = Some(HelpNameOption))
-      .single
       .mandatory
 
     for {name <- procName
@@ -339,9 +336,9 @@ object OAuthParameterManager {
   private def storagePasswordExtractor(needPassword: Boolean, encOption: String, pwdOption: String):
   CliExtractor[SingleOptionValue[String]] = {
     val condProc = cryptFlagExtractor(encOption, needPassword)
+    val elseExt = constantExtractor(Try(Option[String](null)))
     optionValue(pwdOption, help = Some(HelpPasswordOption))
-      .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true)))
-      .single
+      .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true), elseExt))
   }
 
   /**
@@ -356,8 +353,7 @@ object OAuthParameterManager {
   private def cryptFlagExtractor(encOption: String, needPassword: Boolean): CliExtractor[Try[Boolean]] = {
     optionValue(encOption, help = Some(HelpEncryptOption))
       .toBoolean
-      .fallbackValues(needPassword)
-      .single
+      .fallbackValue(needPassword)
       .mandatory
   }
 
@@ -370,7 +366,6 @@ object OAuthParameterManager {
   private def scopeExtractor: CliExtractor[Try[String]] =
     optionValue(ScopeOption, help = Some(HelpScopeOption))
       .mapTo(_.replace(',', ' '))
-      .single
       .mandatory
 
   /**
@@ -384,7 +379,6 @@ object OAuthParameterManager {
     optionValue(ClientSecretOption, help = Some(HelpClientSecretOption))
       .fallback(consoleReaderValue(ClientSecretOption, password = true))
       .mapTo(pwd => Secret(pwd))
-      .single
       .mandatory
 
   /**
@@ -436,6 +430,5 @@ object OAuthParameterManager {
     */
   private def mandatoryStringOption(key: String, help: String): CliExtractor[Try[String]] =
     optionValue(key, Some(help))
-      .single
       .mandatory
 }

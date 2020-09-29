@@ -21,6 +21,8 @@ import java.io.ByteArrayOutputStream
 import akka.actor.{Actor, Props}
 import akka.pattern.ask
 import akka.util.Timeout
+import com.github.scli.ParameterExtractor
+import com.github.scli.ParameterManager.ProcessingContext
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -40,7 +42,7 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
     val myApp = new CliActorSystemLifeCycleTestImpl {
       override val name: String = "TestApp"
 
-      override protected def runApp(futConfig: Future[SyncConfig]): Future[String] = {
+      override protected def runApp(config: SyncConfig): Future[String] = {
         val actor = actorSystem.actorOf(Props(new Actor {
           override def receive: Receive = {
             case conf: SyncConfig =>
@@ -49,10 +51,7 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
         }))
 
         implicit val timeout: Timeout = Timeout(3.seconds)
-        for {
-          config <- futConfig
-          result <- (actor ? config).mapTo[String]
-        } yield result
+        (actor ? config).mapTo[String]
       }
     }
 
@@ -70,13 +69,13 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
     val myApp = new CliActorSystemLifeCycleTestImpl {
       override val name: String = "failingApp"
 
-      override protected def runApp(futConfig: Future[SyncConfig]): Future[String] =
+      override protected def runApp(config: SyncConfig): Future[String] =
         Future.failed(exception)
     }
 
     val outStream = new ByteArrayOutputStream
     Console.withOut(outStream) {
-      myApp.run(Array.empty)
+      myApp.run(Array("/src", "/dst"))
       val output = new String(outStream.toByteArray)
       output should include(exception.getClass.getName)
       output should include(exception.getMessage)
@@ -92,7 +91,7 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
     override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =
       SyncParameterManager.syncConfigExtractor()
 
-    override protected def usageCaption(helpContext: CliHelpGenerator.CliHelpContext): String =
+    override protected def usageCaption(processingContext: ProcessingContext): String =
       "Test usage caption"
   }
 

@@ -18,7 +18,9 @@ package com.github.sync.cli
 
 import java.time.ZoneId
 
-import com.github.sync.cli.ParameterExtractor.{ParameterContext, Parameters}
+import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor}
+import com.github.scli.ParameterExtractor.{ExtractionContext, Parameters}
+import com.github.sync.cli.ExtractorTestHelper.toExtractionContext
 import com.github.sync.cli.SyncStructureConfig._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.http.{AuthConfig, BasicAuthConfig, NoAuth, OAuthStorageConfig}
@@ -60,8 +62,10 @@ object SyncStructureConfigSpec {
     * @param urlParams the list with URLs passed as input parameters
     * @return the ''Parameters'' object
     */
-  private def toParameters(argsMap: Map[String, String], urlParams: List[String]): Parameters =
-    argsMap.map(e => (e._1, List(e._2))) + (ParameterParser.InputOption -> urlParams)
+  private def toParameters(argsMap: Map[String, String], urlParams: List[String]): Parameters = {
+    val allArgs = ExtractorTestHelper.toParametersMap(argsMap) + (ParameterParserOld.InputOption -> urlParams)
+    ExtractorTestHelper.toParameters(allArgs)
+  }
 
   /**
     * Generates the values of the input parameters option. The option contains
@@ -91,11 +95,13 @@ object SyncStructureConfigSpec {
     * @return the result returned by the extractor
     */
   private def runConfigExtractor(args: Map[String, String], structureUrl: String, roleType: RoleType,
-                                 optReader: Option[ConsoleReader] = None): (Try[StructureConfig], ParameterContext) = {
-    val paramCtx = toParameters(args, createUrlParameter(structureUrl, roleType))
+                                 optReader: Option[ConsoleReader] = None):
+  (Try[StructureConfig], ExtractionContext) = {
     val reader = optReader getOrElse DummyConsoleReader
+    val paramCtx = toExtractionContext(toParameters(args, createUrlParameter(structureUrl, roleType)),
+      reader = reader)
     ParameterExtractor.runExtractor(SyncStructureConfig.structureConfigExtractor(roleType, "uri"),
-      paramCtx)(reader)
+      paramCtx)
   }
 
   /**
@@ -110,7 +116,7 @@ object SyncStructureConfigSpec {
     * @return the success result returned by the extractor
     */
   private def extractConfig(args: Map[String, String], structureUrl: String, roleType: RoleType,
-                            optReader: Option[ConsoleReader] = None): (StructureConfig, ParameterContext) = {
+                            optReader: Option[ConsoleReader] = None): (StructureConfig, ExtractionContext) = {
     val (triedConfig, nextContext) = runConfigExtractor(args, structureUrl, roleType, optReader)
     triedConfig match {
       case Success(config) => (config, nextContext)
@@ -127,10 +133,10 @@ object SyncStructureConfigSpec {
     * @param args         the map with arguments
     * @param structureUrl the URL to be used for the structure
     * @param roleType     the role type of the structure
-    * @return the exception and the updated parameters
+    * @return the exception and the updated extraction context
     */
   private def expectFailure(args: Map[String, String], structureUrl: String, roleType: RoleType):
-  (Throwable, ParameterContext) = {
+  (Throwable, ExtractionContext) = {
     val (triedConfig, nextContext) = runConfigExtractor(args, structureUrl, roleType)
     triedConfig match {
       case Failure(exception) => (exception, nextContext)
@@ -151,25 +157,25 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     * Checks whether the set of parameters accessed by the extractors for the
     * structure type config contains all the option names of the passed in set.
     *
-    * @param paramCtx  the parameter context
+    * @param context   the extraction context
     * @param expParams the set with expected option names
     */
-  private def checkAccessedParameters(paramCtx: ParameterContext, expParams: Set[String]): Unit = {
-    val accessedParams = expParams + ParameterParser.InputOption
-    paramCtx.parameters.accessedParameters should contain theSameElementsAs accessedParams
+  private def checkAccessedParameters(context: ExtractionContext, expParams: Set[String]): Unit = {
+    val accessedParams = expParams + ParameterParserOld.InputOption
+    ExtractorTestHelper.accessedKeys(context) should contain theSameElementsAs accessedParams
   }
 
   /**
     * Checks whether the passed in parameter keys have been accessed by the
     * extractors for the structure type config.
     *
-    * @param paramCtx  the parameter context
+    * @param context   the extraction context
     * @param roleType  the role type
     * @param expParams the names of the expected parameters
     */
-  private def checkAccessedParameters(paramCtx: ParameterContext, roleType: RoleType, expParams: String*): Unit = {
+  private def checkAccessedParameters(context: ExtractionContext, roleType: RoleType, expParams: String*): Unit = {
     val accessedParams = expParams.map(roleType.configPropertyName).toSet
-    checkAccessedParameters(paramCtx, accessedParams)
+    checkAccessedParameters(context, accessedParams)
   }
 
   /**
@@ -277,12 +283,12 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
       SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
     )
-    val expAccessedKeys = args.keySet + ParameterParser.InputOption +
+    val expAccessedKeys = args.keySet + ParameterParserOld.InputOption +
       SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
       SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser)
 
     val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
-    processedArgs.parameters.accessedParameters should be(expAccessedKeys)
+    ExtractorTestHelper.accessedKeys(processedArgs) should be(expAccessedKeys)
     val oauthConfig = config.asInstanceOf[DavStructureConfig].authConfig.asInstanceOf[OAuthStorageConfig]
     oauthConfig.baseName should be(IdpName)
     oauthConfig.optPassword.get.secret should be(Password)
@@ -301,8 +307,9 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword) -> Password
     )
 
-    val (_, params) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
-    params.parameters.notAccessedKeys should contain allOf(SourceRoleType.configPropertyName(
+    val (_, context) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
+    val notAccessedKeys = context.parameters.notAccessedKeys map (_.key)
+    notAccessedKeys should contain allOf(SourceRoleType.configPropertyName(
       OAuthParameterManager.NameOptionName), SourceRoleType.configPropertyName(
       OAuthParameterManager.PasswordOptionName))
   }
@@ -336,9 +343,9 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     val propPwd = SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword)
     when(reader.readOption(propPwd, password = true)).thenReturn(Password)
 
-    val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType,
+    val (config, processedCtx) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType,
       optReader = Some(reader))
-    processedArgs.parameters.accessedParameters should contain(propPwd)
+    ExtractorTestHelper.accessedKeys(processedCtx) should contain(propPwd)
     val davConfig = config.asInstanceOf[DavStructureConfig]
     val authConfig = davConfig.authConfig.asInstanceOf[BasicAuthConfig]
     authConfig.password.secret should be(Password)
