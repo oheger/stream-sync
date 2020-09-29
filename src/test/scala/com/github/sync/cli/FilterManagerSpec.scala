@@ -178,7 +178,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * @param acceptedOps options expected to be accepted
     * @param rejectedOps options expected to be rejected
     */
-  private def checkParseFilterArguments(filterArgs: ParameterParserOld.ParametersMap,
+  private def checkParseFilterArguments(filterArgs: Map[String, Iterable[String]],
                                         acceptedOps: List[SyncOperation],
                                         rejectedOps: List[SyncOperation]): Unit = {
     val otherParam = "foo" -> List("bar")

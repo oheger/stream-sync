@@ -78,8 +78,6 @@ object Sync {
   def syncProcess(factory: SyncComponentsFactory, config: SyncConfig)
                  (implicit system: ActorSystem, ec: ExecutionContext):
   Future[SyncResult] = {
-    implicit val consoleReader: ConsoleReaderOld = DefaultConsoleReaderOld
-
     for {
       srcFactory <- factory.createSourceComponentsFactory(config)
       dstFactory <- factory.createDestinationComponentsFactory(config)

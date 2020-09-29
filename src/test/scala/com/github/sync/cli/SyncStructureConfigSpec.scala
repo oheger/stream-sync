@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import java.time.ZoneId
 
-import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor}
+import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.scli.ParameterExtractor.{ExtractionContext, Parameters}
 import com.github.sync.cli.ExtractorTestHelper.toExtractionContext
 import com.github.sync.cli.SyncStructureConfig._
@@ -63,7 +63,7 @@ object SyncStructureConfigSpec {
     * @return the ''Parameters'' object
     */
   private def toParameters(argsMap: Map[String, String], urlParams: List[String]): Parameters = {
-    val allArgs = ExtractorTestHelper.toParametersMap(argsMap) + (ParameterParserOld.InputOption -> urlParams)
+    val allArgs = ExtractorTestHelper.toParametersMap(argsMap) + (ParameterParser.InputParameter.key -> urlParams)
     ExtractorTestHelper.toParameters(allArgs)
   }
 
@@ -161,7 +161,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     * @param expParams the set with expected option names
     */
   private def checkAccessedParameters(context: ExtractionContext, expParams: Set[String]): Unit = {
-    val accessedParams = expParams + ParameterParserOld.InputOption
+    val accessedParams = expParams + ParameterParser.InputParameter.key
     ExtractorTestHelper.accessedKeys(context) should contain theSameElementsAs accessedParams
   }
 
@@ -283,7 +283,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
       SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
     )
-    val expAccessedKeys = args.keySet + ParameterParserOld.InputOption +
+    val expAccessedKeys = args.keySet + ParameterParser.InputParameter.key +
       SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
       SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser)
 

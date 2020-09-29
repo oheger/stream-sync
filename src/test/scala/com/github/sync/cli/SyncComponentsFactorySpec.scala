@@ -25,7 +25,6 @@ import akka.testkit.TestKit
 import akka.util.Timeout
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.ParameterExtractorOld.Parameters
 import com.github.sync.cli.SyncComponentsFactory.SourceComponentsFactory
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, SyncConfig}
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
@@ -60,16 +59,6 @@ object SyncComponentsFactorySpec {
 
   /** A test OneDrive drive ID. */
   private val OneDriveID = "my-drive"
-
-  /**
-    * A conversion function for parameter maps. This makes it possible to use
-    * simple maps (with only one value per parameter).
-    *
-    * @param argsMap the simple map with arguments
-    * @return the parameters map
-    */
-  implicit def toParameters(argsMap: Map[String, String]): Parameters =
-    argsMap map (e => (e._1, List(e._2)))
 
   /**
     * Creates a ''SyncConfig'' with default values, but allows adjusting the
@@ -112,9 +101,6 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   import SyncComponentsFactorySpec._
   import system.dispatcher
-
-  /** A mock for a console reader; needed as implicit parameter. */
-  implicit val consoleReader: ConsoleReaderOld = mock[ConsoleReaderOld]
 
   /**
     * Returns the local file system config from a source factory.
