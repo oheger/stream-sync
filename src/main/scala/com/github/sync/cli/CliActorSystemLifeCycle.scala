@@ -268,7 +268,7 @@ trait CliActorSystemLifeCycle[C] {
     import HelpGenerator._
 
     val modelContext = processingContext.parameterContext.modelContext
-    val keyGenerator = parameterNameColumnGenerator()
+    val keyGenerator = parameterKeyWithAliasesColumnGenerator(maxLength = 24)
     val helpGenerator = composeColumnGenerator(
       wrapColumnGenerator(attributeColumnGenerator(AttrHelpText), 70),
       prefixTextColumnGenerator(attributeColumnGenerator(AttrFallbackValue), prefixText = "Default value: ")

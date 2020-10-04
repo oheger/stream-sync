@@ -344,7 +344,7 @@ object SyncParameterManager {
       DestinationUriOption)
     mode <- applyModeExtractor(dstUri.getOrElse(""))
     timeout <- timeoutExtractor()
-    logFile <- optionValue(LogFileOption, Some(LogFileHelp)).toPath
+    logFile <- optionValue(LogFileOption, Some(LogFileHelp)).alias("l").toPath
     syncLog <- optionValue(SyncLogOption, Some(SyncLogHelp)).toPath
     timeDelta <- ignoreTimeDeltaExtractor()
     opsPerSec <- opsPerSecondExtractor()
@@ -419,6 +419,7 @@ object SyncParameterManager {
     */
   private def applyModeExtractor(destUri: String): CliExtractor[Try[ApplyMode]] =
     optionValue(ApplyModeOption, Some(ApplyModeHelp))
+      .alias("a")
       .mapTo[ApplyMode] {
         case RegApplyTargetUri(uri) =>
           ApplyModeTarget(uri)
@@ -541,6 +542,7 @@ object SyncParameterManager {
     */
   private def timeoutExtractor(): CliExtractor[Try[Timeout]] =
     optionValue(TimeoutOption, Some(TimeoutHelp))
+      .alias("t")
       .toInt
       .mapTo(time => Timeout(time.seconds))
       .fallbackValue(DefaultTimeout)

@@ -284,7 +284,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
-      "--src-user", UserId, "--src-password", Password, "--timeout", timeout.toSeconds.toString)
+      "--src-user", UserId, "--src-password", Password, "-t", timeout.toSeconds.toString)
 
     expectFailedFuture[AskTimeoutException](runSync(options))
   }

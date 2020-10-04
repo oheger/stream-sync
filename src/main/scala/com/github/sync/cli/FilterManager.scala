@@ -189,7 +189,7 @@ object FilterManager {
     */
   def filterDataExtractor: CliExtractor[Try[SyncFilterData]] =
     for {
-      exprCommon <- filterExpressionProcessor(ArgCommonFilter, HelpCommonFilter)
+      exprCommon <- filterExpressionProcessor(ArgCommonFilter, HelpCommonFilter).alias("f")
       exprCreate <- filterExpressionProcessor(ArgCreateFilter, HelpCreateFilter)
       exprOverride <- filterExpressionProcessor(ArgOverrideFilter, HelpOverrideFilter)
       exprRemove <- filterExpressionProcessor(ArgRemoveFilter, HelpRemoveFilter)

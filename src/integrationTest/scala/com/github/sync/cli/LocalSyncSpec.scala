@@ -64,7 +64,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     createTestFile(srcFolder, "ignored.tmp")
     createTestFile(dstFolder, "toBeRemoved.txt")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--filter", "exclude:*.tmp")
+      "-f", "exclude:*.tmp")
     val sync = createSync()
 
     sync.run(options)
@@ -98,6 +98,12 @@ class LocalSyncSpec extends BaseSyncSpec {
       "--filter", "exclude:*.tmp", "--foo", "bar")
 
     checkSyncOutput(options, "unknown", "foo", "Invalid command line options")
+  }
+
+  it should "display parameter alias names in the usage message" in {
+    val options = Array("src/directory", "--unknown", "yes")
+
+    checkSyncOutput(options, "--filter, -f")
   }
 
   it should "apply operations to an alternative target" in {
@@ -142,7 +148,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val logFile = createDataFile(content = LogHeader)
     createTestFile(srcFolder, "fileToSync.dat")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--apply", "none", "--log", logFile.toAbsolutePath.toString)
+      "-a", "none", "-l", logFile.toAbsolutePath.toString)
 
     futureResult(runSync(options))
     readDataFile(logFile) should startWith(LogHeader)
