@@ -42,11 +42,8 @@ object OAuthParameterManager {
   /** The command to perform a login into an IDP. */
   final val CommandLoginIDP = "login"
 
-  /** Name of the option that defines the storage path for OAuth data. */
-  final val StoragePathOptionName = "idp-storage-path"
-
   /** The option that defines the storage path for OAuth data. */
-  final val StoragePathOption: String = StoragePathOptionName
+  final val StoragePathOption = "idp-storage-path"
 
   /** Help text for the storage path option. */
   final val HelpStoragePathOption =
@@ -54,11 +51,8 @@ object OAuthParameterManager {
       |The init command stores the data about the new IDP in this path; other commands retrieve \
       |the data from there.""".stripMargin
 
-  /** Name of the option that defines the (base) name of an IDP. */
-  final val NameOptionName = "idp-name"
-
   /** The option that defines the (base) name of an IDP. */
-  final val NameOption: String = NameOptionName
+  final val NameOption = "idp-name"
 
   /** Help text for the IDP name option. */
   final val HelpNameOption =
@@ -66,29 +60,23 @@ object OAuthParameterManager {
       |stored in the folder defined by the storage path option in a couple of files whose names are \
       |derived from the IDP name.""".stripMargin
 
-  /** Name of the option that defines a password for the data of an IDP. */
-  final val PasswordOptionName = "idp-password"
-
   /**
     * The option that defines a password for the data of an IDP. If a
     * password is provided, sensitive information is encrypted with it.
     */
-  final val PasswordOption: String = PasswordOptionName
+  final val PasswordOption = "idp-password"
 
   /** Help test for the password option. */
   final val HelpPasswordOption =
     """Sets a password for the identity provider affected by this command. The password is used \
       |to encrypt sensitive data about the IDP in the storage folder.""".stripMargin
 
-  /** Name of the option that defines whether encryption is used. */
-  final val EncryptOptionName = "encrypt-idp-data"
-
   /**
     * The boolean option that defines whether sensitive data of an IDP needs
     * to be encrypted. If this is '''true''' (which is also the default), a
     * password must be present (and is read from the console if necessary).
     */
-  final val EncryptOption: String = EncryptOptionName
+  final val EncryptOption = "encrypt-idp-data"
 
   /** Help text for the encrypt IDP option. */
   final val HelpEncryptOption =
@@ -272,16 +260,16 @@ object OAuthParameterManager {
     */
   def storageConfigExtractor(needPassword: Boolean, prefix: String = ""):
   CliExtractor[Try[OAuthStorageConfig]] = {
-    val procPath = optionValue(prefix + StoragePathOptionName, help = Some(HelpStoragePathOption))
+    val procPath = optionValue(prefix + StoragePathOption, help = Some(HelpStoragePathOption))
       .toPath
       .mandatory
-    val procName = optionValue(prefix + NameOptionName, help = Some(HelpNameOption))
+    val procName = optionValue(prefix + NameOption, help = Some(HelpNameOption))
       .mandatory
 
     for {name <- procName
          path <- procPath
-         pwd <- storagePasswordExtractor(needPassword, prefix + EncryptOptionName, prefix + PasswordOptionName)
-         crypt <- cryptFlagExtractor(prefix + EncryptOptionName, needPassword)
+         pwd <- storagePasswordExtractor(needPassword, prefix + EncryptOption, prefix + PasswordOption)
+         crypt <- cryptFlagExtractor(prefix + EncryptOption, needPassword)
          } yield createStorageConfig(name, path, pwd, crypt)
   }
 

@@ -391,6 +391,6 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     checkSyncOutput(options, "dst-" + SyncStructureConfig.PropDavDeleteBeforeOverride,
       "dst-" + SyncStructureConfig.PropDavModifiedNamespace, "dst-" + SyncStructureConfig.PropDavModifiedProperty,
       "dst-" + SyncStructureConfig.PropAuthUser, "dst-" + SyncStructureConfig.PropAuthPassword,
-      "dst-" + OAuthParameterManager.PasswordOptionName, "dst-" + OAuthParameterManager.StoragePathOptionName)
+      "dst-" + OAuthParameterManager.PasswordOption, "dst-" + OAuthParameterManager.StoragePathOption)
   }
 }

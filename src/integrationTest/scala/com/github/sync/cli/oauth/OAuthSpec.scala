@@ -187,7 +187,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
     SupportedCommands foreach { cmd =>
       output should include(cmd)
     }
-    output should not include OAuthParameterManager.StoragePathOptionName
+    output should not include OAuthParameterManager.StoragePathOption
     output should not include OAuthParameterManager.AuthEndpointOption
     output should include("--" + CliActorSystemLifeCycle.FileOption)
   }
@@ -196,20 +196,20 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
     val args = Array(OAuthParameterManager.CommandLoginIDP, "--encrypt-idp-data", "false")
     val output = outputOfFailedRun(args)
 
-    output should include(OAuthParameterManager.StoragePathOptionName)
-    output should include(OAuthParameterManager.NameOptionName)
-    output should include(OAuthParameterManager.PasswordOptionName)
-    output should include(OAuthParameterManager.EncryptOptionName)
+    output should include(OAuthParameterManager.StoragePathOption)
+    output should include(OAuthParameterManager.NameOption)
+    output should include(OAuthParameterManager.PasswordOption)
+    output should include(OAuthParameterManager.EncryptOption)
     output should not include OAuthParameterManager.AuthEndpointOption
   }
 
   it should "print a help text for the remove command" in {
     val output = outputOfFailedRun(Array(OAuthParameterManager.CommandRemoveIDP))
 
-    output should include(OAuthParameterManager.StoragePathOptionName)
-    output should include(OAuthParameterManager.NameOptionName)
-    output should include(OAuthParameterManager.PasswordOptionName)
-    output should include(OAuthParameterManager.EncryptOptionName)
+    output should include(OAuthParameterManager.StoragePathOption)
+    output should include(OAuthParameterManager.NameOption)
+    output should include(OAuthParameterManager.PasswordOption)
+    output should include(OAuthParameterManager.EncryptOption)
     output should not include OAuthParameterManager.AuthEndpointOption
   }
 
@@ -218,7 +218,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
       "--client-secret", "some-secret")
     val output = outputOfFailedRun(args)
 
-    output should include(OAuthParameterManager.StoragePathOptionName)
+    output should include(OAuthParameterManager.StoragePathOption)
     output should include(OAuthParameterManager.AuthEndpointOption)
     output should include(OAuthParameterManager.TokenEndpointOption)
     output should include(OAuthParameterManager.RedirectUrlOption)

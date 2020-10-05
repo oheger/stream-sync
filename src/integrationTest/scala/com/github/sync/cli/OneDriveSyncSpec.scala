@@ -169,6 +169,6 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
     checkSyncOutput(options, "src-" + SyncStructureConfig.PropOneDrivePath,
       "src-" + SyncStructureConfig.PropOneDriveServer, "src-" + SyncStructureConfig.PropOneDriveUploadChunkSize,
       "src-" + SyncStructureConfig.PropAuthUser, "src-" + SyncStructureConfig.PropAuthPassword,
-      "src-" + OAuthParameterManager.PasswordOptionName, "src-" + OAuthParameterManager.StoragePathOptionName)
+      "src-" + OAuthParameterManager.PasswordOption, "src-" + OAuthParameterManager.StoragePathOption)
   }
 }

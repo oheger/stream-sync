@@ -279,12 +279,12 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> LastModifiedProperty,
       SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace,
       SourceRoleType.configPropertyName(SyncStructureConfig.PropDavDeleteBeforeOverride) -> "true",
-      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
-      SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
-      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
+      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOption) -> StoragePath,
+      SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
+      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password
     )
     val expAccessedKeys = args.keySet + ParameterParser.InputParameter.key +
-      SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
+      SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption) +
       SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser)
 
     val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
@@ -300,9 +300,9 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> LastModifiedProperty,
       SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace,
       SourceRoleType.configPropertyName(SyncStructureConfig.PropDavDeleteBeforeOverride) -> "true",
-      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
-      SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
-      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password,
+      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOption) -> StoragePath,
+      SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
+      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password,
       SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser) -> User,
       SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword) -> Password
     )
@@ -310,8 +310,8 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     val (_, context) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     val notAccessedKeys = context.parameters.notAccessedKeys map (_.key)
     notAccessedKeys should contain allOf(SourceRoleType.configPropertyName(
-      OAuthParameterManager.NameOptionName), SourceRoleType.configPropertyName(
-      OAuthParameterManager.PasswordOptionName))
+      OAuthParameterManager.NameOption), SourceRoleType.configPropertyName(
+      OAuthParameterManager.PasswordOption))
   }
 
   it should "create a correct DavConfig for the destination structure" in {
@@ -394,12 +394,12 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     val args = Map(
       SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDrivePath) -> "/a-path",
       SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDriveUploadChunkSize) -> "4",
-      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOptionName) -> StoragePath,
-      SourceRoleType.configPropertyName(OAuthParameterManager.NameOptionName) -> IdpName,
-      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOptionName) -> Password
+      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOption) -> StoragePath,
+      SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
+      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password
     )
     val expAccessedKeys = args.keySet +
-      SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOptionName) +
+      SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption) +
       SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDriveServer) +
       SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser)
 

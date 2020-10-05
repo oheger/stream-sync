@@ -404,7 +404,7 @@ object SyncStructureConfig {
   private def authConfigExtractor(roleType: RoleType): CliExtractor[Try[AuthConfig]] = {
     val extBasicDefined = isDefinedExtractor(roleType.configPropertyName(PropAuthUser))
     val extOAuthDefined = isDefinedExtractor(roleType.configPropertyName(
-      OAuthParameterManager.NameOptionName))
+      OAuthParameterManager.NameOption))
     val condNoAuth = conditionalValue(extOAuthDefined,
       ifExt = constantOptionValueWithDesc(None, GroupOAuth),
       elseExt = constantOptionValueWithDesc(None, GroupNoAuth))
