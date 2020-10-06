@@ -130,11 +130,11 @@ trait OAuthMockSupport {
     */
   protected def withOAuthOptions(storageConfig: OAuthStorageConfig, prefix: String, options: String*):
   Array[String] = {
-    val (pwdOpt, value) = storageConfig.optPassword match {
-      case Some(pwd) => ("idp-password", pwd.secret)
-      case None => ("encrypt-idp-data", "false")
+    val pwdOptions = storageConfig.optPassword match {
+      case Some(pwd) => Array(prefix + "idp-password", pwd.secret)
+      case None => Array(prefix + "store-unencrypted")
     }
-    options.toArray ++ Array(prefix + pwdOpt, value, prefix + "idp-name", storageConfig.baseName,
+    options.toArray ++ pwdOptions ++ Array(prefix + "idp-name", storageConfig.baseName,
       prefix + "idp-storage-path", testDirectory.toAbsolutePath.toString)
   }
 }

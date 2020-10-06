@@ -101,7 +101,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
       cmdOpt(OAuthParameterManager.ScopeOption), "test_scope",
       cmdOpt(OAuthParameterManager.RedirectUrlOption), "https://redirect.org",
       cmdOpt(OAuthParameterManager.ClientSecretOption), "secret",
-      cmdOpt(OAuthParameterManager.EncryptOption), "false",
+      cmdOpt(OAuthParameterManager.EncryptOption),
       cmdOpt(OAuthParameterManager.StoragePathOption), testDirectory.toAbsolutePath.toString,
       cmdOpt(OAuthParameterManager.NameOption.toUpperCase(Locale.ROOT)), IdpName)
 
@@ -193,7 +193,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
   }
 
   it should "print a help text for the login command" in {
-    val args = Array(OAuthParameterManager.CommandLoginIDP, "--encrypt-idp-data", "false")
+    val args = Array(OAuthParameterManager.CommandLoginIDP, "--store-unencrypted")
     val output = outputOfFailedRun(args)
 
     output should include(OAuthParameterManager.StoragePathOption)
@@ -208,13 +208,12 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
 
     output should include(OAuthParameterManager.StoragePathOption)
     output should include(OAuthParameterManager.NameOption)
-    output should include(OAuthParameterManager.PasswordOption)
     output should include(OAuthParameterManager.EncryptOption)
     output should not include OAuthParameterManager.AuthEndpointOption
   }
 
   it should "print a help text for the init command" in {
-    val args = Array(OAuthParameterManager.CommandInitIDP, "--encrypt-idp-data", "false",
+    val args = Array(OAuthParameterManager.CommandInitIDP, "--store-unencrypted",
       "--client-secret", "some-secret")
     val output = outputOfFailedRun(args)
 

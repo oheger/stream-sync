@@ -398,11 +398,11 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
       SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password
     )
-    val expAccessedKeys = args.keySet +
-      SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption) +
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDriveServer) +
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser)
-
+    val expAccessedKeys = args.keySet ++
+      Set(SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption),
+        SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDriveServer),
+        SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser),
+        SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption))
     val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, expAccessedKeys)
     val oauthConfig = config.asInstanceOf[OneDriveStructureConfig].authConfig.asInstanceOf[OAuthStorageConfig]

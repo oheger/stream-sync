@@ -72,11 +72,13 @@ object OAuthParameterManager {
       |to encrypt sensitive data about the IDP in the storage folder.""".stripMargin
 
   /**
-    * The boolean option that defines whether sensitive data of an IDP needs
-    * to be encrypted. If this is '''true''' (which is also the default), a
-    * password must be present (and is read from the console if necessary).
+    * The switch that defines whether sensitive data of an IDP should not be
+    * encrypted. If the switch is absent, data is stored encrypted. Then a
+    * password must be present (and is read from the console if necessary). By
+    * specifying this switch, encryption can be disabled, and sensitive IDP
+    * information is stored as plain text.
     */
-  final val EncryptOption = "encrypt-idp-data"
+  final val EncryptOption = "store-unencrypted"
 
   /** Help text for the encrypt IDP option. */
   final val HelpEncryptOption =
@@ -269,7 +271,7 @@ object OAuthParameterManager {
     for {name <- procName
          path <- procPath
          pwd <- storagePasswordExtractor(needPassword, prefix + EncryptOption, prefix + PasswordOption)
-         crypt <- cryptFlagExtractor(prefix + EncryptOption, needPassword)
+         crypt <- cryptFlagExtractor(prefix + EncryptOption)
          } yield createStorageConfig(name, path, pwd, crypt)
   }
 
@@ -314,7 +316,8 @@ object OAuthParameterManager {
     * Returns a ''CliExtractor'' for extracting the password of the storage
     * configuration. If a password is required (as indicated by the boolean
     * parameter), it is read from the console if it has not been specified on
-    * the command line.
+    * the command line. Otherwise, a dummy extractor returning an undefined
+    * password is returned.
     *
     * @param needPassword flag whether a password is required
     * @param encOption    the key to be used for the encrypt option
@@ -323,10 +326,12 @@ object OAuthParameterManager {
     */
   private def storagePasswordExtractor(needPassword: Boolean, encOption: String, pwdOption: String):
   CliExtractor[SingleOptionValue[String]] = {
-    val condProc = cryptFlagExtractor(encOption, needPassword)
     val elseExt = constantExtractor(Try(Option[String](null)))
-    optionValue(pwdOption, help = Some(HelpPasswordOption))
-      .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true), elseExt))
+    if (needPassword) {
+      val condProc = cryptFlagExtractor(encOption)
+      optionValue(pwdOption, help = Some(HelpPasswordOption))
+        .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true), elseExt))
+    } else elseExt
   }
 
   /**
@@ -334,16 +339,11 @@ object OAuthParameterManager {
     * storage configuration. The flag determines whether a password is required
     * to encrypt IDP data stored locally.
     *
-    * @param encOption    the name of the encrypt flag option
-    * @param needPassword default value for the flag
+    * @param encOption the name of the encrypt flag option
     * @return the ''CliExtractor'' to extract the encrypt flag
     */
-  private def cryptFlagExtractor(encOption: String, needPassword: Boolean): CliExtractor[Try[Boolean]] = {
-    optionValue(encOption, help = Some(HelpEncryptOption))
-      .toBoolean
-      .fallbackValue(needPassword)
-      .mandatory
-  }
+  private def cryptFlagExtractor(encOption: String): CliExtractor[Try[Boolean]] =
+    switchValue(encOption, optHelp = Some(HelpEncryptOption), presentValue = false)
 
   /**
     * Returns a ''CliExtractor'' for extracting the scope. For scope different

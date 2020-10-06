@@ -148,26 +148,32 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     * been extracted.
     *
     * @param storageConfig the configuration to be checked
+    * @param withPwd       flag whether a password is expected in the configuration
     */
-  private def checkStorageConfig(storageConfig: OAuthStorageConfig): Unit = {
+  private def checkStorageConfig(storageConfig: OAuthStorageConfig, withPwd: Boolean = true): Unit = {
     storageConfig.rootDir should be(Paths.get(StoragePath))
     storageConfig.baseName should be(ProviderName)
-    storageConfig.optPassword.get.secret should be(Password)
+    if (withPwd) {
+      storageConfig.optPassword.get.secret should be(Password)
+    } else {
+      storageConfig.optPassword should be(None)
+    }
   }
 
   "OAuthParameterManager" should "extract a valid remove command config" in {
-    val params = createBasicParametersMap(OAuthParameterManager.CommandRemoveIDP)
+    val params = createBasicParametersMap(OAuthParameterManager.CommandRemoveIDP) -
+      OAuthParameterManager.PasswordOption
     val (config, nextCtx) = futureResult(extractCommandConfig(params))
 
     config match {
       case RemoveCommandConfig(storageConfig) =>
-        checkStorageConfig(storageConfig)
+        checkStorageConfig(storageConfig, withPwd = false)
       case c =>
         fail("Unexpected result: " + c)
     }
     ExtractorTestHelper.accessedKeys(nextCtx) should contain only(OAuthParameterManager.StoragePathOption,
-      OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
-      OAuthParameterManager.EncryptOption, ParameterParser.InputParameter.key, CliActorSystemLifeCycle.FileOption)
+      OAuthParameterManager.NameOption, OAuthParameterManager.EncryptOption,
+      ParameterParser.InputParameter.key, CliActorSystemLifeCycle.FileOption)
   }
 
   it should "extract a valid login command config" in {

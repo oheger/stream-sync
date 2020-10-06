@@ -102,6 +102,6 @@ class OAuth(commands: OAuthCommands) extends CliActorSystemLifeCycle[CommandConf
     import HelpGenerator._
     val groupFilter = contextGroupFilterForExtractors(context.parameterContext,
       List(OAuthParameterManager.commandExtractor))
-    andFilter(groupFilter, OptionsFilterFunc)
+    andFilter(groupFilter, negate(InputParamsFilterFunc))
   }
 }
