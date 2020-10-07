@@ -116,6 +116,19 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
     verify(deleteRequestedFor(urlPathEqualTo(path(ExpUri))))
   }
 
+  it should "not support short alias names for storage configuration options" in {
+    val options = Array("-n", "someIDP", "-d", testDirectory.toAbsolutePath.toString, "-U", "some/src/path",
+      "onedrive:" + DriveID, "--dst-path", "ServerPath", "--dst-server-uri", serverUri("/"))
+
+    val output = checkSyncOutput(options, "Invalid")
+    val usagePos = output.indexOf("Usage:")
+    usagePos should be > 0
+    val errorMsg = output.substring(0, usagePos)
+    errorMsg should include("-d ")
+    errorMsg should include("-n ")
+    errorMsg should include("-U ")
+  }
+
   it should "support a OneDrive URI for the destination structure with basic auth" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"

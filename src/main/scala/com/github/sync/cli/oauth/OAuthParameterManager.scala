@@ -262,16 +262,17 @@ object OAuthParameterManager {
     */
   def storageConfigExtractor(needPassword: Boolean, prefix: String = ""):
   CliExtractor[Try[OAuthStorageConfig]] = {
-    val procPath = optionValue(prefix + StoragePathOption, help = Some(HelpStoragePathOption))
+    val addAlias = prefix.isEmpty
+    val procPath = withAlias(optionValue(prefix + StoragePathOption, help = Some(HelpStoragePathOption))
       .toPath
-      .mandatory
-    val procName = optionValue(prefix + NameOption, help = Some(HelpNameOption))
-      .mandatory
+      .mandatory, "d", addAlias)
+    val procName = withAlias(optionValue(prefix + NameOption, help = Some(HelpNameOption))
+      .mandatory, "n", addAlias)
 
     for {name <- procName
          path <- procPath
-         pwd <- storagePasswordExtractor(needPassword, prefix + EncryptOption, prefix + PasswordOption)
-         crypt <- cryptFlagExtractor(prefix + EncryptOption)
+         pwd <- storagePasswordExtractor(needPassword, prefix + EncryptOption, prefix + PasswordOption, addAlias)
+         crypt <- cryptFlagExtractor(prefix + EncryptOption, addAlias)
          } yield createStorageConfig(name, path, pwd, crypt)
   }
 
@@ -322,14 +323,15 @@ object OAuthParameterManager {
     * @param needPassword flag whether a password is required
     * @param encOption    the key to be used for the encrypt option
     * @param pwdOption    the key to be used for the password option
+    * @param addAlias     flag whether an alias is to be Added
     * @return the ''CliExtractor'' for the storage password
     */
-  private def storagePasswordExtractor(needPassword: Boolean, encOption: String, pwdOption: String):
+  private def storagePasswordExtractor(needPassword: Boolean, encOption: String, pwdOption: String, addAlias: Boolean):
   CliExtractor[SingleOptionValue[String]] = {
     val elseExt = constantExtractor(Try(Option[String](null)))
     if (needPassword) {
-      val condProc = cryptFlagExtractor(encOption)
-      optionValue(pwdOption, help = Some(HelpPasswordOption))
+      val condProc = cryptFlagExtractor(encOption, addAlias = false)
+      withAlias(optionValue(pwdOption, help = Some(HelpPasswordOption)), "p", addAlias)
         .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true), elseExt))
     } else elseExt
   }
@@ -340,10 +342,12 @@ object OAuthParameterManager {
     * to encrypt IDP data stored locally.
     *
     * @param encOption the name of the encrypt flag option
+    * @param addAlias  flag whether an alias is to be Added
     * @return the ''CliExtractor'' to extract the encrypt flag
     */
-  private def cryptFlagExtractor(encOption: String): CliExtractor[Try[Boolean]] =
-    switchValue(encOption, optHelp = Some(HelpEncryptOption), presentValue = false)
+  private def cryptFlagExtractor(encOption: String, addAlias: Boolean): CliExtractor[Try[Boolean]] =
+    withAlias(switchValue(encOption, optHelp = Some(HelpEncryptOption), presentValue = false),
+      "U", addAlias)
 
   /**
     * Returns a ''CliExtractor'' for extracting the scope. For scope different
@@ -419,4 +423,17 @@ object OAuthParameterManager {
   private def mandatoryStringOption(key: String, help: String): CliExtractor[Try[String]] =
     optionValue(key, Some(help))
       .mandatory
+
+  /**
+    * Optionally adds an alias to an extractor.
+    *
+    * @param extractor the extractor affected
+    * @param alias     the alias to be added
+    * @param addAlias  flag whether the alias is to be added
+    * @tparam A the result type of the extractor
+    * @return the modified extractor
+    */
+  private def withAlias[A](extractor: CliExtractor[A], alias: String, addAlias: Boolean): CliExtractor[A] =
+    if (addAlias) extractor.alias(alias)
+    else extractor
 }

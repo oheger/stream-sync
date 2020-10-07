@@ -113,12 +113,47 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
     }
   }
 
+  /**
+    * Helper function to check whether the command to remove the data of an IDP
+    * can be executed. The whole command line can be passed in to check
+    * alternative option names.
+    *
+    * @param storageConfig the test storage configuration
+    * @param args          the array with command line arguments
+    */
+  private def checkExecIdpRemoveCommand(storageConfig: OAuthStorageConfig, args: Array[String]): Unit = {
+    val configFile = storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile)
+    writeFileContent(configFile, FileTestHelper.TestData)
+
+    val output = runAndCaptureOut(args)
+    output should include(configFile.toString)
+    output should include(storageConfig.baseName)
+    Files.exists(configFile) shouldBe false
+  }
+
   "OAuth" should "execute a command to create an IDP" in {
     checkExecIdpInitCommand(OAuthParameterManager.CommandInitIDP)
   }
 
   it should "ignore case in command names" in {
     checkExecIdpInitCommand(OAuthParameterManager.CommandInitIDP.toUpperCase(Locale.ROOT))
+  }
+
+  it should "store IDP data unencrypted if the switch is provided" in {
+    val IdpName = "idp"
+    val args = Array(OAuthParameterManager.CommandInitIDP, cmdOpt(OAuthParameterManager.AuthEndpointOption),
+      "https://auth.org", cmdOpt(OAuthParameterManager.TokenEndpointOption), "https://token.org",
+      cmdOpt(OAuthParameterManager.ClientIDOption), "testIDP",
+      cmdOpt(OAuthParameterManager.ScopeOption), "test_scope",
+      cmdOpt(OAuthParameterManager.RedirectUrlOption), "https://redirect.org",
+      cmdOpt(OAuthParameterManager.ClientSecretOption), "secret",
+      "-U", cmdOpt(OAuthParameterManager.StoragePathOption), testDirectory.toAbsolutePath.toString,
+      cmdOpt(OAuthParameterManager.NameOption.toUpperCase(Locale.ROOT)), IdpName)
+
+    val output = runAndCaptureOut(args)
+    output should include("success")
+    val secFile = testDirectory.resolve(IdpName + ".sec")
+    readDataFile(secFile) should include("secret")
   }
 
   it should "handle an unknown command" in {
@@ -132,15 +167,10 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
 
   it should "execute a command to remove an IDP" in {
     val storageConfig = OAuthStorageConfig(testDirectory, "testIdp", None)
-    val configFile = storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile)
-    writeFileContent(configFile, FileTestHelper.TestData)
     val args = Array(OAuthParameterManager.CommandRemoveIDP, cmdOpt(OAuthParameterManager.StoragePathOption),
       storageConfig.rootDir.toString, cmdOpt(OAuthParameterManager.NameOption), storageConfig.baseName)
 
-    val output = runAndCaptureOut(args)
-    output should include(configFile.toString)
-    output should include(storageConfig.baseName)
-    Files.exists(configFile) shouldBe false
+    checkExecIdpRemoveCommand(storageConfig, args)
   }
 
   it should "handle a remove command that does not remove any files" in {
@@ -151,6 +181,14 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
     val output = runAndCaptureOut(args)
     output should include(storageConfig.baseName)
     output should include("no files")
+  }
+
+  it should "support short aliases for the options of the storage configuration" in {
+    val storageConfig = OAuthStorageConfig(testDirectory, "testIdp", None)
+    val args = Array(OAuthParameterManager.CommandRemoveIDP, "-d",
+      storageConfig.rootDir.toString, "-n", storageConfig.baseName)
+
+    checkExecIdpRemoveCommand(storageConfig, args)
   }
 
   it should "handle a command to log into an IDP" in {
@@ -198,7 +236,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
 
     output should include(OAuthParameterManager.StoragePathOption)
     output should include(OAuthParameterManager.NameOption)
-    output should include(OAuthParameterManager.PasswordOption)
+    output should include(OAuthParameterManager.PasswordOption + ", -p")
     output should include(OAuthParameterManager.EncryptOption)
     output should not include OAuthParameterManager.AuthEndpointOption
   }
