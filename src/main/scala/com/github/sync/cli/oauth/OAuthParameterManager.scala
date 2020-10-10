@@ -83,9 +83,10 @@ object OAuthParameterManager {
   /** Help text for the encrypt IDP option. */
   final val HelpEncryptOption =
     """A flag that controls whether sensitive data about the identity provider affected by this \
-      |command needs to be encrypted by a password. If set to true, a password is obtained either \
+      |command needs to be encrypted by a password. This is true by default, and a password is obtained either \
       |from the corresponding command line option or read from the console. When the data files \
-      |for the IDP are read or written this password is used for encryption.""".stripMargin
+      |for the IDP are read or written this password is used for encryption. By passing this switch on \
+      |the command line, encryption can be disabled.""".stripMargin
 
   /**
     * Name of the option that defines the authorization endpoint for an IDP.

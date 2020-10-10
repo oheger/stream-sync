@@ -191,6 +191,12 @@ object SyncParameterManager {
       |encrypted; this can reduce the number of encrypt operations.
       |""".stripMargin
 
+  /** The name of the switch to request help explicitly. */
+  final val HelpOption = "help"
+
+  /** The short alias for the help option. */
+  final val HelpAlias = "h"
+
   /** The default timeout for sync operations. */
   val DefaultTimeout: Timeout = Timeout(1.minute)
 

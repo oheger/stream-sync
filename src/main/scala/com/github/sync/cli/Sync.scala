@@ -45,6 +45,13 @@ import scala.util.Try
   * Main object to start the sync process.
   */
 object Sync {
+  /** The help text for the switch to display help information. */
+  private val HelpOptionHelp =
+    """Displays a help screen for the Sync application. Note that the content of this help screen \
+      |depends on the parameters passed on the command line. If no URLs for the structures to sync \
+      |are provided, the usage message lists only the basic options that are supported by all kinds \
+      |of structures. If a specific source or destination URL is available, the parameters \
+      |supported by this structure type are listed as well.""".stripMargin
 
   /**
     * A class representing the result of a sync process.
@@ -470,6 +477,8 @@ class Sync extends CliActorSystemLifeCycle[SyncConfig] {
   override protected def usageCaption(processingContext: ProcessingContext): String =
     "Usage: streamsync [options] " +
       HelpGenerator.generateInputParamsOverview(processingContext.parameterContext.modelContext).mkString(" ")
+
+  override protected def helpOptionHelp: String = Sync.HelpOptionHelp
 
   override protected def optionsGroupFilter(context: ProcessingContext): ParameterFilter = {
     val srcExt = SyncStructureConfig.structureTypeSelectorExtractor(SourceRoleType, "uri")

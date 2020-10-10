@@ -196,7 +196,8 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     */
   protected def runSync(args: Array[String], factory: SyncComponentsFactory = new SyncComponentsFactory):
   Future[SyncResult] = {
-    CliActorSystemLifeCycle.processCommandLine(args, SyncParameterManager.syncConfigExtractor()) match {
+    CliActorSystemLifeCycle.processCommandLine(args, SyncParameterManager.syncConfigExtractor(),
+      "HelpHelp") match {
       case Left(_) =>
         Future.failed(new AssertionError("Could not parse command line."))
       case Right(value) =>

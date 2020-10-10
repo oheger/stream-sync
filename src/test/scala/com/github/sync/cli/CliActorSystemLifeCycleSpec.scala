@@ -93,6 +93,8 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
 
     override protected def usageCaption(processingContext: ProcessingContext): String =
       "Test usage caption"
+
+    override protected def helpOptionHelp: String = "Test help option help"
   }
 
 }

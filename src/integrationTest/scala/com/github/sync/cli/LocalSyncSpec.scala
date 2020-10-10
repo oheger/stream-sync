@@ -85,12 +85,13 @@ class LocalSyncSpec extends BaseSyncSpec {
   }
 
   it should "generate a usage message with the options for the local file system" in {
-    val options = Array("src/directory", "--filter", "exclude:*.tmp", "--foo", "bar")
+    val options = Array("src/directory", "dav:directory", "--filter", "exclude:*.tmp", "--help")
 
     val output = checkSyncOutput(options, "src-" + SyncStructureConfig.PropLocalFsTimeZone)
     output should not include "dst-" + SyncStructureConfig.PropLocalFsTimeZone
     output should not include "src-" + SyncStructureConfig.PropOneDrivePath
     output should not include "src-" + SyncStructureConfig.PropDavDeleteBeforeOverride
+    output should not include "Invalid"
   }
 
   it should "generate a usage and error message if unsupported options are passed in" in {
@@ -101,9 +102,9 @@ class LocalSyncSpec extends BaseSyncSpec {
   }
 
   it should "display parameter alias names in the usage message" in {
-    val options = Array("src/directory", "--unknown", "yes")
+    val options = Array("src/directory", "dst/folder", "-h")
 
-    checkSyncOutput(options, "--filter, -f")
+    checkSyncOutput(options, "--filter, -f", "--help, -h")
   }
 
   it should "apply operations to an alternative target" in {
