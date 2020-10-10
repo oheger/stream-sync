@@ -107,14 +107,32 @@ It is then listed for each structure type which additional options it supports.
 
 A number of options is supported to customize a sync process. Options are
 distinguished from the source and destination URIs by the fact that they have
-to start with the prefix `--`. Each option has a value that is obtained from
+to start with the prefix `--`. Most options have a value that is obtained from
 the parameter that follows the option key. So a sequence of command line
 options looks like
 
  --option1 option1_value --option2 option2_value
 
-Options without a value or unrecognized option keys cause the program to fail
-with a corresponding error message.
+There are also a few options acting like switches: these options do not have a
+value, but their presence or absence on the command line determines their
+value - *true* or *false*.
+
+For some options the application defines short alias names consisting of only a
+single letter. Such aliases use only a single `-` as prefix. So for instance,
+the following parameter lists are equivalent:
+
+ Sync --log path/to/log
+
+and:
+
+ Sync -l path/to/log
+
+Unrecognized option keys cause the program to fail with a corresponding error
+message. In case of an error, the application shows a help screen describing
+all the parameters it supports. The user can also request help explicitly by
+specifying the `--help` flag or its short alias `-h`, such as:
+
+ Sync srcUri destUri --help
 
 The options supported are described in detail below. There is one special
 option, `--file`, that expects as value a path to a local file. This file is
@@ -147,7 +165,7 @@ then be the case that the URIs swap their position, and the sync process is
 done in the opposite direction!
 
 Option keys are not case-sensitive; so `--actions` has the same meaning as
-`--ACTIONS` or `--Actions`.
+`--ACTIONS` or `--Actions`. However, for short alias names case matters.
 
 === Filtering options
 
@@ -652,11 +670,12 @@ part of some kind of on-boarding process.
 | client-secret | A secret assigned to the client. Like the client ID, the
 secret is provided by the IDP.
 | No; if missing the secret is read from the console.
-| encrypt-idp-data | This is a boolean option that determines whether some
-sensitive information related to the IDP should be encrypted. Affected are the
-client secret and the token information obtained from the IDP. With an access
-token - as long as it is valid - an attacker can access the target server on
-behalf of the user; therefore, it makes sense to protect this data.
+| store-unencrypted | This is a switch that determines whether some sensitive
+information related to the IDP should be encrypted. Affected are the client
+secret and the token information obtained from the IDP. With an access token -
+as long as it is valid - an attacker can access the target server on behalf of
+the user; therefore, it makes sense to protect this data, and encryption is
+active per default. It can be explicitly disabled by specifying this switch.
 | No, defaults to **true**.
 | idp-password | The password to be used to encrypt sensitive information
 related to the IDP. This property is relevant if the _encrypt-idp-data_ option
@@ -730,6 +749,17 @@ $ java -cp stream-sync-assembly-<version>.jar com.github.sync.cli.oauth.OAuth re
 
 This command deletes all files for the selected IDP in the path specified. As
 the files are just deleted, no encryption password is required here.
+
+As is true for the main Sync application, the OAuth application offers the
+switch `--help` (or its short form `-h`) to explicitly request usage
+information. To get a general help screen, just enter:
+
+ $ java -cp stream-sync-assembly-<version>.jar com.github.sync.cli.oauth.OAuth --help
+
+To request help information specific to a concrete command, also provide this
+command, for instance:
+
+ $ java -cp stream-sync-assembly-<version>.jar com.github.sync.cli.oauth.OAuth init --help
 
 === Throttling sync streams
 
