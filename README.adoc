@@ -831,6 +831,65 @@ an encrypted WebDav server. Then a password is needed to connect to the server,
 and another one for the encryption. Either of them can be omitted from the
 command line; the user is prompted for all missing passwords.
 
+=== Switching source and destination structures
+
+The typical use case for Stream Sync is transferring data from one system - the
+leading system - to another data structure; the destination structure gets
+modified to become a clone of the original system. From time to time you may
+need to run a sync process in the inverse direction.
+
+Consider for example that you use Stream Sync as a backup tool. If you mess up
+with your original data, you will probably want to replace it from the backup
+storage. This is of course easily possible: you just have to rewrite the sync
+command you use for your backup to work in the opposite direction. This can be
+done rather mechanically; the source and destination URIs have be exchanged, as
+well as the `src-` and `dst-` prefixes of the parameters that configure your
+data structures.
+
+Sync commands tend to be become complex; you often need a bunch of parameters
+to configure authentication and fine-tune the transfer process. Maybe you have
+therefore written shell scripts that contain your sync commands. In the backup
+scenario, you would have a shell script that triggers your backup. To restore
+your data from the backup structure, you could create a restore script using
+the replacements outlined above. This solution is not ideal, however, because
+you now have to maintain two scripts that need to be kept in sync.
+
+For such use cases, Stream Sync offers an easier solution: it supports the
+`--switch` parameter, which swaps the source and destination structures,
+effectively reversing the sync direction. This means, you do not have to
+duplicate your commands or scripts, but simply add a parameter to switch the
+sync direction.
+
+If you use shell scripts to store your sync commands, you should write them in
+a way that they support additional parameters. For instance, if your backup
+script looks as follows:
+
+.backup.sh
+[source,shell script]
+----
+#!/bin/sh
+./stream-sync.sh /data/documents dav:https://webdav.my-storage.com/backup/ \
+  --dst-user backup-user --timeout 600 --dst-crypt-mode filesAndNames \
+  --log ~/logs/backup.log
+----
+
+Add the special parameter `"$@"` at the end, which represents all the
+parameters entered by the user:
+
+.backup.sh supporting additional parameters
+[source,shell script]
+----
+#!/bin/sh
+./stream-sync.sh /data/documents dav:https://webdav.my-storage.com/backup/ \
+  --dst-user backup-user --timeout 600 --dst-crypt-mode filesAndNames \
+  --log ~/logs/backup.log "$@"
+----
+
+You can now transform your backup script to a restore script by simply adding
+the `--switch` parameter:
+
+ ./backup.sh --switch
+
 === Examples and use cases
 
 ==== Sync a local directory to an external USB hard disk
