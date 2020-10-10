@@ -131,6 +131,42 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     lines.get(0) should be("REMOVE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
   }
 
+  it should "support the --switch parameter to switch source and destination structures" in {
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
+    stubFolderRequest(WebDavPath, "folder3.xml")
+    val logFile = createFileReference()
+    val options = Array(dstFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--dst-user", UserId,
+      "--dst-password", Password, "--switch")
+
+    val result = futureResult(runSync(options))
+    result.successfulOperations should be(1)
+    val lines = Files.readAllLines(logFile)
+    lines.size() should be(1)
+    lines.get(0) should be("CREATE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+  }
+
+  it should "support switching source and destination parameters with complex authentication" in {
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
+    val storageConfig = prepareIdpConfig()
+    stubFolderRequest(WebDavPath, "folder3.xml", status = StatusCodes.Unauthorized.intValue,
+      authFunc = TokenAuthFunc(CurrentTokenData.accessToken))
+    stubFolderRequest(WebDavPath, "folder3.xml", authFunc = TokenAuthFunc(RefreshedTokenData.accessToken))
+    stubTokenRefresh()
+    val logFile = createFileReference()
+    val options = withOAuthOptions(storageConfig, "--dst-",
+      dstFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "-S", "--log", logFile.toAbsolutePath.toString, "--apply", "None")
+
+    val result = futureResult(runSync(options))
+    result.successfulOperations should be(1)
+    val lines = Files.readAllLines(logFile)
+    lines.size() should be(1)
+    lines.get(0) should be("CREATE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+  }
+
   it should "do proper cleanup for a Dav source when using a log file source and apply mode NONE" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val procLog = createPathInDirectory("processed.log")
@@ -340,6 +376,35 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     decryptName(CryptPassword, fileUri) should be(FileName)
     val bodyPlain = crypt(CryptPassword, DecryptOpHandler, ByteString(putRequest.getBody))
     bodyPlain.utf8String should be(Content)
+  }
+
+  it should "support a WebDav destination with encrypted file names together with the switch parameter" in {
+    val CryptPassword = Password
+    val WebDavPath = "/encrypted"
+    stubFolderRequest(WebDavPath, "root_encrypted.xml")
+    stubFolderRequest(WebDavPath + "/Q8Xcluxx2ADWaUAtUHLurqSmvw==/", "folder_encrypted.xml")
+    stubFileRequest(WebDavPath + "/HLL2gCNjWKvwRnp4my1U2ex0QLKWpZs=", "encrypted1.dat")
+    stubFileRequest(WebDavPath + "/uBQQYWockOWLuCROIHviFhU2XayMtps=", "encrypted2.dat")
+    stubFileRequest(WebDavPath + "/Q8Xcluxx2ADWaUAtUHLurqSmvw==/Oe3_2W9y1fFSrTj15xaGdt9_rovvGSLPY7NN",
+      "encrypted3.dat")
+    stubFileRequest(WebDavPath + "/Q8Xcluxx2ADWaUAtUHLurqSmvw==/Z3BDvmY89rQwUqJ3XzMUWgtBE9bcOCYxiTq-Zfo-sNlIGA==",
+      "encrypted4.dat")
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    createTestFile(dstFolder, "foo.txt", content = Some("Test file content"))
+    val pathDeleted = createTestFile(dstFolder, "toDelete.txt")
+    val options = Array(dstFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
+      "--dst-encrypt-password", CryptPassword, "--dst-crypt-mode", "filesAndNames", "--dst-user", UserId,
+      "--dst-password", Password, "-S")
+
+    val result = futureResult(runSync(options))
+    result.successfulOperations should be(result.totalOperations)
+    Files.exists(pathDeleted) shouldBe false
+    val rootFiles = dstFolder.toFile.listFiles()
+    rootFiles.map(_.getName) should contain only("foo.txt", "bar.txt", "sub")
+    checkFile(dstFolder, "foo.txt")
+    val subFolder = dstFolder.resolve("sub")
+    checkFile(subFolder, "subFile.txt")
+    checkFile(subFolder, "anotherSubFile.dat")
   }
 
   it should "support an encrypted WebDav destination with a complex structure" in {

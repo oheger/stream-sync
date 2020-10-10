@@ -191,8 +191,22 @@ object SyncParameterManager {
       |encrypted; this can reduce the number of encrypt operations.
       |""".stripMargin
 
+  /**
+    * Name of the option that switches the source and destination structures.
+    * This offers an easy means to let the sync happen in the opposite
+    * direction.
+    */
+  final val SwitchOption = "switch"
+
   /** The name of the switch to request help explicitly. */
   final val HelpOption = "help"
+
+  /** Help text for the switch option. */
+  final val SwitchOptionHelp =
+    """If this flag is provided, the source and destination structures are switched, so that the sync \
+      |process basically runs in the opposite direction. This is useful if you occasionally need to \
+      |fetch data from the destination; then you do not have to write another sync command, but just \
+      |add this flag to the existing one and revert the sync direction.""".stripMargin
 
   /** The short alias for the help option. */
   final val HelpAlias = "h"
@@ -301,6 +315,8 @@ object SyncParameterManager {
     * @param opsPerSecond    optional restriction for the number of sync
     *                        operations per second
     * @param filterData      an object with information about filters
+    * @param switched        a flag whether src and dst configs should be
+    *                        switched
     */
   case class SyncConfig(srcUri: String,
                         dstUri: String,
@@ -313,7 +329,35 @@ object SyncParameterManager {
                         ignoreTimeDelta: Option[Int],
                         cryptConfig: CryptConfig,
                         opsPerSecond: Option[Int],
-                        filterData: SyncFilterData)
+                        filterData: SyncFilterData,
+                        switched: Boolean) {
+    /**
+      * Returns a normalized ''SyncConfig'' for this instance. If the
+      * ''switched'' flag is '''false''', the normalized instance is the same
+      * as this instance; otherwise, the source and destination URIs and
+      * configurations have to be switched.
+      *
+      * @return the normalized ''SyncConfig''
+      */
+    def normalized: SyncConfig =
+      if (switched)
+        copy(srcUri = dstUri, dstUri = srcUri, srcConfig = dstConfig, dstConfig = srcConfig,
+          applyMode = switchedApplyMode, cryptConfig = switchCryptConfig(cryptConfig), switched = false)
+      else this
+
+    /**
+      * Returns a switched apply mode. The apply mode contains the target URI.
+      * If the configuration needs to be switched, and the target URI is the
+      * destination URI, it has to be replaced by the source URI.
+      *
+      * @return the switched apply mode
+      */
+    private def switchedApplyMode: ApplyMode =
+      applyMode match {
+        case ApplyModeTarget(`dstUri`) => ApplyModeTarget(srcUri)
+        case _ => applyMode
+      }
+  }
 
   /** Prefix for regular expressions related to the target apply mode. */
   private val RegApplyTargetPrefix = "(?i)TARGET"
@@ -356,9 +400,10 @@ object SyncParameterManager {
     opsPerSec <- opsPerSecondExtractor()
     cryptConf <- cryptConfigExtractor
     filters <- FilterManager.filterDataExtractor
+    switched <- switchValue(SwitchOption, optHelp = Some(SwitchOptionHelp)).alias("S")
     _ <- CliActorSystemLifeCycle.FileExtractor
   } yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, mode, timeout, logFile, syncLog, timeDelta,
-    opsPerSec, cryptConf, filters)
+    opsPerSec, cryptConf, filters, switched) map (_.normalized)
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all
@@ -378,6 +423,7 @@ object SyncParameterManager {
     * @param triedOpsPerSec   the ops per second component
     * @param triedCryptConfig the component with the crypt config
     * @param triedFilterData  the component with the filter data
+    * @param triedSwitch      the component for the switch flag
     * @return a ''Try'' with the config
     */
   private def createSyncConfig(triedSrcUri: Try[String],
@@ -391,10 +437,11 @@ object SyncParameterManager {
                                triedTimeDelta: Try[Option[Int]],
                                triedOpsPerSec: Try[Option[Int]],
                                triedCryptConfig: Try[CryptConfig],
-                               triedFilterData: Try[SyncFilterData]): Try[SyncConfig] =
+                               triedFilterData: Try[SyncFilterData],
+                               triedSwitch: Try[Boolean]): Try[SyncConfig] =
     createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
       triedApplyMode, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedCryptConfig,
-      triedOpsPerSec, triedFilterData)(SyncConfig)
+      triedOpsPerSec, triedFilterData, triedSwitch)(SyncConfig)
 
   /**
     * Returns an extractor that extracts the source URI from the first input
@@ -553,4 +600,16 @@ object SyncParameterManager {
       .mapTo(time => Timeout(time.seconds))
       .fallbackValue(DefaultTimeout)
       .mandatory
+
+  /**
+    * Switches the fields related to source and destination structures in the
+    * ''CryptConfig'' provided. This is used for the implementation of the
+    * ''--switch'' parameter.
+    *
+    * @param config the ''CryptConfig'' to be switched
+    * @return the resulting ''CryptConfig''
+    */
+  private def switchCryptConfig(config: CryptConfig): CryptConfig =
+    config.copy(srcCryptMode = config.dstCryptMode, dstCryptMode = config.srcCryptMode,
+      srcPassword = config.dstPassword, dstPassword = config.srcPassword)
 }

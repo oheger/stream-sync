@@ -25,8 +25,9 @@ import akka.util.Timeout
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractionException}
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
+import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncParameterManager._
-import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig}
+import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, StructureConfig}
 import com.github.sync.http.NoAuth
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito._
@@ -405,5 +406,22 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     expectFailedFuture(extractSyncConfig(argsMap),
       "destinationURI: Mandatory parameter", "Invalid apply mode", SyncParameterManager.TimeoutOption,
       SyncParameterManager.CryptCacheSizeOption)
+  }
+
+  "SyncConfig" should "return a normalized instance if the switched flag is set" in {
+    val orgCryptConfig = CryptConfig(srcPassword = Some("pwd-src"), srcCryptMode = CryptMode.FilesAndNames,
+      dstPassword = Some("pwd-dst"), dstCryptMode = CryptMode.Files, cryptCacheSize = 55)
+    val expCryptConfig = CryptConfig(dstPassword = Some("pwd-src"), dstCryptMode = CryptMode.FilesAndNames,
+      srcPassword = Some("pwd-dst"), srcCryptMode = CryptMode.Files, cryptCacheSize = 55)
+    val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureConfig],
+      dstConfig = mock[StructureConfig], applyMode = SyncParameterManager.ApplyModeTarget("test"),
+      timeout = 1.minute, logFilePath = None, syncLogPath = None, ignoreTimeDelta = Some(100),
+      cryptConfig = orgCryptConfig, opsPerSecond = Some(100), filterData = mock[SyncFilterData],
+      switched = true)
+    val expNormalized = orgConfig.copy(srcUri = orgConfig.dstUri, dstUri = orgConfig.srcUri,
+      srcConfig = orgConfig.dstConfig, dstConfig = orgConfig.srcConfig, cryptConfig = expCryptConfig,
+      switched = false)
+
+    orgConfig.normalized should be(expNormalized)
   }
 }

@@ -81,7 +81,7 @@ object SyncComponentsFactorySpec {
       dstUri = optDstUri.getOrElse("/target"), dstConfig = optDstConfig.getOrElse(TestStructureConfig),
       applyMode = SyncParameterManager.ApplyModeTarget("uri"), timeout = TestTimeout, logFilePath = None,
       syncLogPath = None, ignoreTimeDelta = None, opsPerSecond = None, cryptConfig = cryptConfig,
-      filterData = SyncFilterData(Map.empty))
+      filterData = SyncFilterData(Map.empty), switched = false)
   }
 }
 
