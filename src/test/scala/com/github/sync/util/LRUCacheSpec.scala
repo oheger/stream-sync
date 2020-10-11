@@ -95,7 +95,7 @@ class LRUCacheSpec extends AnyFlatSpec with Matchers {
     val cache = addEntries(LRUCache[String, Int](CacheCapacity), pairs)
     cache.size should be(CacheCapacity)
     cache contains pairs.head._1 shouldBe false
-    cache get pairs.head._1 shouldBe 'empty
+    cache get pairs.head._1 shouldBe None
     assertContains(cache, pairs.drop(CacheCapacity): _*)
     cache.keySet should contain theSameElementsAs pairs.drop(CacheCapacity).map(_._1)
   }

@@ -16,7 +16,7 @@
 
 package com.github.sync.util
 
-import com.github.sync.util.LRUCache.CacheEntry
+import com.github.sync.util.LRUCache.{CacheEntry, removeKey}
 
 import scala.collection.SortedMap
 
@@ -42,6 +42,17 @@ object LRUCache {
     */
   private case class CacheEntry[V](value: V, index: Int)
 
+  /**
+    * Helper function to remove a key from a sorted map. The ''-'' method has
+    * been deprecated in Scala 2.13.
+    *
+    * @param map the sorted map
+    * @param key the key to be removed
+    * @tparam K the key type of the cache
+    * @return the sorted map with the key removed
+    */
+  private def removeKey[K](map: SortedMap[Int, K], key: Int): SortedMap[Int, K] =
+    map.filterNot(e => e._1 == key)
 }
 
 /**
@@ -105,7 +116,8 @@ class LRUCache[K, V] private(val capacity: Int,
       val index = maps._3 + 1
       val optOldValue = maps._1 get e._1
       val nextEntries = maps._1 + (e._1 -> CacheEntry(e._2, index))
-      val nextLru = optOldValue.map(ce => maps._2 - ce.index).getOrElse(maps._2) + (index -> e._1)
+      val nextLru = optOldValue.map(ce => removeKey(maps._2, ce.index))
+        .getOrElse(maps._2).concat(List(index -> e._1))
       (nextEntries, nextLru, index)
     }
 
@@ -145,6 +157,6 @@ class LRUCache[K, V] private(val capacity: Int,
   (Map[K, CacheEntry[V]], SortedMap[Int, K]) =
     if (map.size > capacity) {
       val oldestKey = lru.firstKey
-      ensureCapacity(map - lru(oldestKey), lru - oldestKey)
+      ensureCapacity(map - lru(oldestKey), removeKey(lru, oldestKey))
     } else (map, lru)
 }

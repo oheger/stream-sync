@@ -15,12 +15,12 @@
  */
 
 /** Definition of versions. */
-lazy val AkkaVersion = "2.6.5"
-lazy val AkkaHttpVersion = "10.1.12"
-lazy val VersionScala = "2.12.11"
-lazy val VersionScalaXml = "1.1.0"
-lazy val VersionScalaTest = "3.1.1"
-lazy val VersionWireMock = "2.26.3"
+lazy val AkkaVersion = "2.6.10"
+lazy val AkkaHttpVersion = "10.2.1"
+lazy val VersionScala = "2.13.3"
+lazy val VersionScalaXml = "1.3.0"
+lazy val VersionScalaTest = "3.2.0"
+lazy val VersionWireMock = "2.27.2"
 lazy val VersionMockito = "1.9.5"
 lazy val VersionScalaTestMockito = "1.0.0-M2"
 lazy val VersionJunit = "4.13"  // needed by mockito
