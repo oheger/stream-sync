@@ -52,7 +52,7 @@ class HttpBasicAuthActor(override val httpActor: ActorRef,
   override def customReceive: Receive = {
     case req: SendRequest =>
       modifyAndForward(req) { request =>
-        request.copy(headers = req.request.headers :+ authHeader)
+        request.withHeaders(req.request.headers :+ authHeader)
       }
   }
 

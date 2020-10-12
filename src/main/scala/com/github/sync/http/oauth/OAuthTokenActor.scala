@@ -232,7 +232,7 @@ class OAuthTokenActor(override val httpActor: ActorRef,
     */
   private def addAuthorization(request: SendRequest): SendRequest = {
     val auth = Authorization(OAuth2BearerToken(currentTokenData.accessToken))
-    val httpReq = request.request.copy(headers = auth :: request.request.headers.toList)
+    val httpReq = request.request.withHeaders(auth :: request.request.headers.toList)
     request.copy(request = httpReq)
   }
 

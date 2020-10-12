@@ -106,7 +106,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
 
   it should "deserialize a folder element" in {
     val folder = FsFolder("some/test/folder", 9)
-    val parts = ElementSerializer.serializeElement(folder).utf8String.split("\\s")
+    val parts = ElementSerializer.serializeElement(folder).utf8String.split("\\s").toSeq
 
     val folder2 = ElementSerializer.deserializeElement(parts).get
     folder2 should be(folder)
@@ -115,14 +115,14 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
   it should "deserialize a file element" in {
     val file = FsFile("my/test/file.txt", 2, Instant.parse("2018-09-06T19:14:36.189Z"),
       20180906191501L)
-    val parts = ElementSerializer.serializeElement(file).utf8String.split("\\s")
+    val parts = ElementSerializer.serializeElement(file).utf8String.split("\\s").toSeq
 
     val file2 = ElementSerializer.deserializeElement(parts).get
     file2 should be(file)
   }
 
   it should "handle a deserialization of an unknown element tag" in {
-    val parts = Array("FOLDER_FILE", "/test/data", "1")
+    val parts = Seq("FOLDER_FILE", "/test/data", "1")
 
     ElementSerializer.deserializeElement(parts) match {
       case Failure(exception) =>
@@ -133,13 +133,13 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "handle a deserialization of an element with not enough parts" in {
-    val triedElement = ElementSerializer.deserializeElement(Array.empty[String])
+    val triedElement = ElementSerializer.deserializeElement(Seq.empty[String])
 
     triedElement.isFailure shouldBe true
   }
 
   it should "handle a deserialization of an element with invalid properties" in {
-    val parts = Array("FOLDER", "/uri", "notAValidLevel")
+    val parts = Seq("FOLDER", "/uri", "notAValidLevel")
 
     val triedElement = ElementSerializer.deserializeElement(parts)
     triedElement.isFailure shouldBe true

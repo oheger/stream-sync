@@ -200,7 +200,7 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
       folderFunc().get should be(f)
     }
     folderFunc() should be(Some(RootFolder))
-    folderFunc() shouldBe 'empty
+    folderFunc() shouldBe None
   }
 
   it should "order the elements of a single directory" in {

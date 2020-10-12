@@ -57,7 +57,7 @@ private class SyncFolderQueue[T] private(data: SortedSet[SyncFolderData[T]]) {
     * @return the updated instance with this element
     */
   def +(elem: SyncFolderData[T]): SyncFolderQueue[T] =
-    new SyncFolderQueue(data + elem)
+    new SyncFolderQueue(data.union(Set(elem)))
 
   /**
     * Returns a new instance that contains the specified elements.
@@ -78,7 +78,7 @@ private class SyncFolderQueue[T] private(data: SortedSet[SyncFolderData[T]]) {
     */
   def dequeue(): (SyncFolderData[T], SyncFolderQueue[T]) = {
     val firstElem = data.firstKey
-    (firstElem, new SyncFolderQueue(data - firstElem))
+    (firstElem, new SyncFolderQueue(data.diff(Set(firstElem))))
   }
 
   /**

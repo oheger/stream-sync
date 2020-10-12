@@ -175,8 +175,8 @@ object UriEncodingHelper {
     * @param uri the URI to be split
     * @return an array with the single components
     */
-  def splitComponents(uri: String): Array[String] =
-    removeLeadingSeparator(uri) split UriSeparator
+  def splitComponents(uri: String): Seq[String] =
+    removeLeadingSeparator(uri).split(UriSeparator).toSeq
 
   /**
     * Creates a URI string from the given components. The components are

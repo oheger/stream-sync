@@ -190,7 +190,7 @@ class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(test
     val syncRes = runSync(List(op), config, fileProvider)
     syncRes should contain only op
 
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     getAllServeEvents.asScala foreach { event =>
       println(event.getRequest)
     }

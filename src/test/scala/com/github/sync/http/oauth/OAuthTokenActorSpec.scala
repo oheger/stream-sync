@@ -98,7 +98,7 @@ object OAuthTokenActorSpec {
     val optAuth = req.header[Authorization]
     if (optAuth.isDefined) {
       val noAuthHeaders = req.headers filterNot (_ == optAuth.get)
-      val baseReq = req.copy(headers = noAuthHeaders)
+      val baseReq = req.withHeaders(noAuthHeaders)
       TestRequest == baseReq
     } else false
   }
@@ -111,7 +111,7 @@ object OAuthTokenActorSpec {
   private def createAuthorizedTestRequest(): HttpRequest = {
     val headerAuth = Authorization(OAuth2BearerToken(TestTokens.accessToken))
     val newHeaders = headerAuth :: TestRequest.headers.toList
-    TestRequest.copy(headers = newHeaders)
+    TestRequest.withHeaders(newHeaders)
   }
 
   /**
@@ -357,14 +357,14 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     private val killSwitch = mock[KillSwitch]
 
     /** The target HTTP actor. */
-    private val targetHttpActor = system.actorOf(Props[HttpStubActor])
+    private val targetHttpActor = system.actorOf(Props[HttpStubActor]())
 
     /**
       * The actor for interacting with the IDP. Note that this actor is not
       * actually invoked; the reference is just passed to the mock token
       * service.
       */
-    private val idpHttpActor = system.actorOf(Props[HttpStubActor])
+    private val idpHttpActor = system.actorOf(Props[HttpStubActor]())
 
     /** The actor to be tested. */
     private val tokenActor = createTokenActor()

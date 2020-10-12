@@ -162,7 +162,7 @@ object OAuthCommandsImpl extends OAuthCommands {
       HttpResponse(status)
     }
 
-    val serverSource = Http().bind(interface = "localhost", port = port)
+    val serverSource = Http().newServerAt(interface = "localhost", port = port).connectionSource()
     val bindFuture = serverSource.to(Sink.foreach { con =>
       con handleWithSyncHandler handler
     }).run()

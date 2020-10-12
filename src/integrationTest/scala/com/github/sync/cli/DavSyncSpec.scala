@@ -109,7 +109,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     lines.size() should be(1)
     lines.get(0) should be("CREATE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
 
-    import scala.collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     getAllServeEvents.asScala foreach { event =>
       event.getRequest.containsHeader("Authorization") shouldBe false
     }
@@ -368,7 +368,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
       "--dst-password", Password)
 
     futureResult(runSync(options)).successfulOperations should be(1)
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     val events = getAllServeEvents.asScala
     val putRequest = events.find(event => event.getRequest.getMethod == RequestMethod.PUT).get.getRequest
     val (parent, fileUri) = UriEncodingHelper.splitParent(putRequest.getUrl)

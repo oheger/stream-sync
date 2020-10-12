@@ -139,7 +139,7 @@ object ElementSerializer {
     */
   private def deserializeAction(raw: String): Try[(SyncAction, Int, Option[String], Option[String], Seq[String])] =
     Try {
-      val parts = raw.split("\\s")
+      val parts = raw.split("\\s").toSeq
       val indexTag = parts.indexWhere(p => TagFile == p || TagFolder == p)
       if (indexTag <= 2)
         (TagActionMapping(parts.head), parts(1).toInt, None, None, parts drop 2)

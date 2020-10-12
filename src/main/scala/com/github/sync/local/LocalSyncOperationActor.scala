@@ -98,11 +98,11 @@ class OperationExecutorActor(sourceFileProvider: SourceFileProvider,
 
     case op@SyncOperation(_, ActionCreate, _, _, dstUri) =>
       Files.createDirectory(resolveInDestination(dstUri))
-      sender ! op
+      sender() ! op
 
     case op@SyncOperation(_, ActionRemove, _, _, dstUri) =>
       Files delete resolveInDestination(dstUri)
-      sender ! op
+      sender() ! op
   }
 
   /**

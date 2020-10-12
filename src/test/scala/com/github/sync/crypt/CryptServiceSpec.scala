@@ -302,7 +302,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
       cryptCount.get()
     }
 
-    def pathPrefix(parts: Array[String], length: Int): String =
+    def pathPrefix(parts: Seq[String], length: Int): String =
       UriEncodingHelper.UriSeparator + parts.take(length).mkString(UriEncodingHelper.UriSeparator)
 
     def populateCache(partCount: Int): LRUCache[String, String] = {
