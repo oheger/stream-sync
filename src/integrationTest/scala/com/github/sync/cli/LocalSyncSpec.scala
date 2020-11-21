@@ -56,6 +56,28 @@ class LocalSyncSpec extends BaseSyncSpec {
     checkFileNotPresent(dstFolder, "ignored.tmp")
   }
 
+  it should "read parameters from files" in {
+    val filterFileContent =
+      """
+        |--filter
+        |exclude:*.tmp""".stripMargin
+    val filterFile = createDataFile(content = filterFileContent)
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    createTestFile(srcFolder, "test1.txt")
+    createTestFile(srcFolder, "test2.txt")
+    createTestFile(srcFolder, "ignored.tmp")
+    createTestFile(dstFolder, "toBeRemoved.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--file", filterFile.toAbsolutePath.toString)
+
+    val result = futureResult(runSync(options))
+    result.totalOperations should be(result.successfulOperations)
+    checkFile(dstFolder, "test1.txt")
+    checkFileNotPresent(dstFolder, "toBeRemoved.txt")
+    checkFileNotPresent(dstFolder, "ignored.tmp")
+  }
+
   it should "start a sync process via its run() function" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))

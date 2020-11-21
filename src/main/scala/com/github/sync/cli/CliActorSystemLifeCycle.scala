@@ -74,7 +74,12 @@ object CliActorSystemLifeCycle {
       fileOptions = List(ParameterKey(FileOption, shortAlias = false)))
     val classifierFunc = ParameterManager.classifierFunc(spec)
     val parseFunc = ParameterManager.parsingFuncForClassifier(spec)(classifierFunc)
-    ParameterManager.evaluate(ParameterManager.processCommandLineSpec(args, spec, parser = parseFunc))
+
+    val result = for {
+      processedArgs <- ParameterManager.processParameterFiles(args, spec)(classifierFunc)
+      result <- ParameterManager.processCommandLineSpec(processedArgs, spec, parser = parseFunc)
+    } yield result
+    ParameterManager.evaluate(result)
   }
 }
 
