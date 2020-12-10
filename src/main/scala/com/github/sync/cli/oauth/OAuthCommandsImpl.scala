@@ -153,10 +153,10 @@ object OAuthCommandsImpl extends OAuthCommands {
     val handler: HttpRequest => HttpResponse = request => {
       val status = request.uri.query().get("code") match {
         case Some(code) =>
-          promiseCode.success(code)
+          promiseCode.trySuccess(code)
           StatusCodes.OK
         case None =>
-          promiseCode.failure(new IllegalStateException("No authorization code passed to redirect URI."))
+          promiseCode.tryFailure(new IllegalStateException("No authorization code passed to redirect URI."))
           StatusCodes.BadRequest
       }
       HttpResponse(status)
