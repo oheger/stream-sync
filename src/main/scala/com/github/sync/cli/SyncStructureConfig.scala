@@ -16,13 +16,12 @@
 
 package com.github.sync.cli
 
-import java.time.ZoneId
-
+import com.github.cloudfiles.core.http.Secret
 import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.crypt.Secret
 import com.github.sync.http.{AuthConfig, BasicAuthConfig, NoAuth}
 
+import java.time.ZoneId
 import scala.util.{Success, Try}
 
 /**

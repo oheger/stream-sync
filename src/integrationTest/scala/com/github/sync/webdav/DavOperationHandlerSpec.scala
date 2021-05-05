@@ -18,7 +18,6 @@ package com.github.sync.webdav
 
 import java.nio.file.Paths
 import java.time.Instant
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.StatusCodes
@@ -26,10 +25,10 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{ActorAttributes, Supervision}
 import akka.testkit.TestKit
 import akka.util.{ByteString, Timeout}
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.SyncTypes._
 import com.github.sync.WireMockSupport.{Password, PriorityDefault, PrioritySpecific, UserId}
 import com.github.sync._
-import com.github.sync.crypt.Secret
 import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpRequestActor}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.matching.UrlPathPattern

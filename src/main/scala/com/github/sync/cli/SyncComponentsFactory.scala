@@ -17,15 +17,14 @@
 package com.github.sync.cli
 
 import java.nio.file.Paths
-
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.stream.scaladsl.{Flow, Source}
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
-import com.github.sync.crypt.Secret
 import com.github.sync.http._
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl, OAuthTokenData}
 import com.github.sync.local.LocalFsConfig

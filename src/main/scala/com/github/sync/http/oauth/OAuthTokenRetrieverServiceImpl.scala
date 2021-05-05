@@ -18,14 +18,13 @@ package com.github.sync.http.oauth
 
 import java.io.IOException
 import java.util.regex.Pattern
-
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.{FormData, HttpMethods, HttpRequest, Uri}
 import akka.pattern.ask
 import akka.stream.scaladsl.Sink
 import akka.util.{ByteString, Timeout}
-import com.github.sync.crypt.Secret
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.http.HttpRequestActor
 
 import scala.concurrent.duration._

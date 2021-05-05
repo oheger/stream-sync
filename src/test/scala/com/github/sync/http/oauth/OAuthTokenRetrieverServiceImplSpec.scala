@@ -17,7 +17,6 @@
 package com.github.sync.http.oauth
 
 import java.io.IOException
-
 import akka.Done
 import akka.actor.{Actor, ActorRef, ActorSystem, Props, Status}
 import akka.http.scaladsl.model.Uri.Query
@@ -26,8 +25,8 @@ import akka.http.scaladsl.model.headers.`Content-Type`
 import akka.stream.scaladsl.Sink
 import akka.testkit.TestKit
 import akka.util.ByteString
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.AsyncTestHelper
-import com.github.sync.crypt.Secret
 import com.github.sync.http.HttpRequestActor
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike

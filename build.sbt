@@ -19,6 +19,7 @@ lazy val AkkaVersion = "2.6.14"
 lazy val AkkaHttpVersion = "10.2.4"
 lazy val VersionScala = "2.13.5"
 lazy val VersionScalaXml = "1.3.0"
+lazy val VersionCloudFile = "0.1"
 lazy val VersionScalaTest = "3.2.7"
 lazy val VersionWireMock = "2.27.2"
 lazy val VersionMockito = "1.9.5"
@@ -36,6 +37,11 @@ lazy val akkaDependencies = Seq(
   "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
   "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
   "org.scala-lang" % "scala-reflect" % VersionScala
+)
+
+lazy val cloudFilesDependencies = Seq(
+  "com.github.oheger" %% "cloud-files-core" % VersionCloudFile,
+  "com.github.oheger" %% "cloud-files-crypt" % VersionCloudFile
 )
 
 lazy val testDependencies = Seq(
@@ -56,6 +62,7 @@ lazy val StreamSync = (project in file("."))
     libraryDependencies ++= akkaDependencies,
     libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
     libraryDependencies += "com.github.oheger" %% "scli" % "1.0.0",
+    libraryDependencies ++= cloudFilesDependencies,
     libraryDependencies ++= testDependencies,
     name := "stream-sync",
     IntegrationTest / parallelExecution := false,

@@ -20,7 +20,7 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props, Terminated}
 import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
-import com.github.sync.crypt.Secret
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.http.HttpExtensionActor.{RegisterClient, Release}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike

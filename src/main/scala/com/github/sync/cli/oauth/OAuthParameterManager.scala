@@ -16,14 +16,13 @@
 
 package com.github.sync.cli.oauth
 
-import java.nio.file.Path
-
+import com.github.cloudfiles.core.http.Secret
 import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.CliActorSystemLifeCycle
-import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.OAuthConfig
 
+import java.nio.file.Path
 import scala.util.Try
 
 /**

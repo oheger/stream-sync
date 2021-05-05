@@ -18,14 +18,14 @@ package com.github.sync.cli
 
 import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicInteger
-
 import akka.http.scaladsl.model.StatusCodes
 import akka.pattern.AskTimeoutException
 import akka.testkit.TestProbe
 import akka.util.{ByteString, Timeout}
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.WireMockSupport.{BasicAuthFunc, Password, TokenAuthFunc, UserId}
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.crypt.{DecryptOpHandler, Secret}
+import com.github.sync.crypt.DecryptOpHandler
 import com.github.sync.http.{BasicAuthConfig, HttpRequestActor}
 import com.github.sync.util.UriEncodingHelper
 import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, DavStubbingSupport}

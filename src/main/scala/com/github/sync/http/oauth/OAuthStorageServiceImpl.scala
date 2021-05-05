@@ -17,13 +17,13 @@
 package com.github.sync.http.oauth
 
 import java.nio.file.{Files, Path}
-
 import akka.Done
 import akka.actor.ActorSystem
 import akka.stream.IOResult
 import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.util.ByteString
-import com.github.sync.crypt._
+import com.github.cloudfiles.core.http.Secret
+import com.github.sync.crypt.{CryptOpHandler, CryptStage, DecryptOpHandler, EncryptOpHandler}
 import com.github.sync.http.OAuthStorageConfig
 
 import scala.concurrent.{ExecutionContext, Future}

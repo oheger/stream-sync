@@ -17,15 +17,14 @@
 package com.github.sync.webdav
 
 import java.util.concurrent.atomic.AtomicInteger
-
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.model.Uri
 import akka.stream.scaladsl.Source
 import akka.testkit.TestKit
 import akka.util.Timeout
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.SyncTypes._
 import com.github.sync._
-import com.github.sync.crypt.Secret
 import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpExtensionActor, HttpRequestActor}
 import com.github.sync.util.UriEncodingHelper
 import com.github.tomakehurst.wiremock.client.WireMock._

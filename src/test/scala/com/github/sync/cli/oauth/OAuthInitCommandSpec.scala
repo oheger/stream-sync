@@ -18,12 +18,11 @@ package com.github.sync.cli.oauth
 
 import java.io.IOException
 import java.nio.file.Paths
-
 import akka.Done
 import akka.actor.ActorSystem
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.oauth.OAuthParameterManager.InitCommandConfig
-import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
 import org.mockito.ArgumentCaptor

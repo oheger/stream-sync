@@ -18,13 +18,12 @@ package com.github.sync.http.oauth
 
 import java.io.IOException
 import java.nio.file.Paths
-
 import akka.actor.{Actor, ActorRef, ActorSystem, Props, Status}
 import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
 import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse, StatusCodes}
 import akka.stream.KillSwitch
 import akka.testkit.{ImplicitSender, TestKit}
-import com.github.sync.crypt.Secret
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.http.{HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.webdav.DepthHeader
 import org.mockito.Matchers.{any, eq => argEq}

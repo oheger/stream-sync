@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.{KillSwitches, SharedKillSwitch}
-import com.github.sync.crypt.Secret
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.http.oauth._
 import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpConfig, HttpNoOpExtensionActor, HttpRequestActor, OAuthStorageConfig}
 

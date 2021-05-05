@@ -18,17 +18,16 @@ package com.github.sync.cli
 
 import java.nio.file.Paths
 import java.time.ZoneId
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
 import akka.testkit.TestKit
 import akka.util.Timeout
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncComponentsFactory.SourceComponentsFactory
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, SyncConfig}
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
-import com.github.sync.crypt.Secret
 import com.github.sync.http._
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig

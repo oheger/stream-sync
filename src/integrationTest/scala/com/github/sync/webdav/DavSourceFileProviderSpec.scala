@@ -17,16 +17,15 @@
 package com.github.sync.webdav
 
 import java.time.Instant
-
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.stream.scaladsl.Sink
 import akka.testkit.{TestKit, TestProbe}
 import akka.util.{ByteString, Timeout}
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.SyncTypes.FsFile
 import com.github.sync.WireMockSupport._
-import com.github.sync.crypt.Secret
 import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpExtensionActor, HttpRequestActor}
 import com.github.sync.{AsyncTestHelper, FileTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._

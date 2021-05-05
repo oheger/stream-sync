@@ -19,15 +19,14 @@ package com.github.sync.cli.oauth
 import java.io.IOException
 import java.net.{ServerSocket, Socket}
 import java.nio.file.Paths
-
 import akka.Done
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
 import akka.testkit.TestKit
+import com.github.cloudfiles.core.http.Secret
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.crypt.Secret
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.http.oauth._
 import com.github.sync.{AsyncTestHelper, WireMockSupport}

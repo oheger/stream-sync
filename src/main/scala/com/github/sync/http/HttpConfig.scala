@@ -17,10 +17,9 @@
 package com.github.sync.http
 
 import java.nio.file.Path
-
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
-import com.github.sync.crypt.Secret
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.util.UriEncodingHelper
 
 /**
