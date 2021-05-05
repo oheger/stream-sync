@@ -46,7 +46,7 @@ object SyncStageSpec {
     */
   private def createFile(uri: String, lastModified: Instant = FileTime, level: Int = 0,
                          optOrgUri: Option[String] = None): FsFile =
-    FsFile(relativeUri = uri, size = uri.length, level = level, lastModified = lastModified,
+    FsFile(null, relativeUri = uri, size = uri.length, level = level, lastModified = lastModified,
       optOriginalUri = optOrgUri)
 
   /**
@@ -59,7 +59,7 @@ object SyncStageSpec {
     * @return the folder element
     */
   private def createFolder(uri: String, level: Int = 0, optOrgUri: Option[String] = None): FsFolder =
-    FsFolder(uri, level)
+    FsFolder(null, uri, level)
 
   /**
     * Convenience function to create a sync operation. The function applies

@@ -34,7 +34,7 @@ object FilterManagerSpec {
     * Constant for an element that can be used when no element-specific checks
     * are executed.
     */
-  private val Element = FsFolder("", 0)
+  private val Element = FsFolder(null, "", 0)
 
   /** Regular expression to parse a date time string. */
   private val RegTime =
@@ -62,7 +62,7 @@ object FilterManagerSpec {
     * @return the element
     */
   private def elementWithTime(name: String, time: Instant): FsElement =
-    FsFile(name, 0, time, 42)
+    FsFile(null, name, 0, time, 42)
 
   /**
     * Convenience function to create a sync operation with some default values.
@@ -359,48 +359,48 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
 
   it should "parse a simple exclude filter expression" in {
     val Expression = "exclude:/foo"
-    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/bar", 0))
-    val opRejected = createOperation(ActionCreate, 1, FsFolder("/foo", 0))
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder(null, "/bar", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder(null, "/foo", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "support ? characters in exclusion filters" in {
     val Expression = "exclude:/?oo"
-    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/fof", 0))
-    val opRejected = createOperation(ActionCreate, 1, FsFolder("/hoo", 0))
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder(null, "/fof", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder(null, "/hoo", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "support * characters in exclusion filters" in {
     val Expression = "exclude:*/target/*"
-    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/target-folder/test", 0))
-    val opRejected = createOperation(ActionCreate, 1, FsFolder("/test/target/sub", 0))
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder(null, "/target-folder/test", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder(null, "/test/target/sub", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "quote regular glob patterns in filter expressions" in {
     val Expression = "exclude:/foo(1)-(2)"
-    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/foo(1)-(3)", 0))
-    val opRejected = createOperation(ActionCreate, 1, FsFolder("/foo(1)-(2)", 0))
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder(null, "/foo(1)-(3)", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder(null, "/foo(1)-(2)", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "match exclusions case insensitive" in {
     val Expression = "exclude:*/target/*"
-    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/test/targetTest/test", 0))
-    val opRejected = createOperation(ActionCreate, 1, FsFolder("/test/TARGET/test", 0))
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder(null, "/test/targetTest/test", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder(null, "/test/TARGET/test", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }
 
   it should "support inclusion filters" in {
     val Expression = "include:*/tar?et/*-bak"
-    val opAccepted = createOperation(ActionCreate, 1, FsFolder("/foo/TARSET/more/test-bak", 0))
-    val opRejected = createOperation(ActionCreate, 1, FsFolder("/hoo/targetDir/test-bak", 0))
+    val opAccepted = createOperation(ActionCreate, 1, FsFolder(null, "/foo/TARSET/more/test-bak", 0))
+    val opRejected = createOperation(ActionCreate, 1, FsFolder(null, "/hoo/targetDir/test-bak", 0))
 
     checkParsedFilterExpression(Expression, opAccepted, opRejected)
   }

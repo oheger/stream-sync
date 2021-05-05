@@ -83,7 +83,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     stubFor(BasicAuthFunc(get(urlPathEqualTo(RootPath + "/my%20data/request.txt")))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
-    val file = FsFile("/my data/request.txt", 2, Instant.now(), 42)
+    val file = FsFile(null, "/my data/request.txt", 2, Instant.now(), 42)
     val config = createConfig()
     val provider = DavSourceFileProvider(config, createRequestActor(config))
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
@@ -97,7 +97,7 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     val elemUri = "/test"
     stubFor(BasicAuthFunc(get(urlPathEqualTo(RootPath + elemUri)))
       .willReturn(aResponse().withStatus(StatusCodes.InternalServerError.intValue)))
-    val file = FsFile(elemUri, 0, Instant.now(), 5)
+    val file = FsFile(null, elemUri, 0, Instant.now(), 5)
     val config = createConfig()
     val provider = DavSourceFileProvider(config, createRequestActor(config))
 
@@ -118,12 +118,12 @@ class DavSourceFileProviderSpec(testSystem: ActorSystem) extends TestKit(testSys
     stubFor(BasicAuthFunc(get(urlPathEqualTo(RootPath + fileUri)).atPriority(PrioritySpecific))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
-    val file = FsFile(fileUri, 1, Instant.now(), 100)
+    val file = FsFile(null, fileUri, 1, Instant.now(), 100)
     val config = createConfig()
     val provider = DavSourceFileProvider(config, createRequestActor(config))
 
     val testFuture = Future {
-      (1 to 32).map(i => FsFile(s"/test$i.txt", 1, Instant.now(), 13))
+      (1 to 32).map(i => FsFile(null, s"/test$i.txt", 1, Instant.now(), 13))
         .foreach { f =>
           expectFailedFuture[HttpRequestActor.RequestException](provider fileSource f.relativeUri)
           val source = futureResult(provider fileSource file.relativeUri)

@@ -299,7 +299,7 @@ object FilterManager {
       val instant = localDate.atZone(ZoneId.systemDefault()).toInstant
       op =>
         op.element match {
-          case FsFile(_, _, modTime, _, _) =>
+          case FsFile(_, _, _, modTime, _, _) =>
             comp(instant.compareTo(modTime))
           case _ => true
         }

@@ -45,7 +45,7 @@ class FolderSortStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     * @param uri the URI
     * @return the element with this URI
     */
-  private def createElem(uri: String): FsElement = FsFolder(uri, 1)
+  private def createElem(uri: String): FsElement = FsFolder(null, uri, 1)
 
   /**
     * Generates a test ''FsElement'' that represents a file in a directory.

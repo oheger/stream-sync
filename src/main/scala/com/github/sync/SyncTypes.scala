@@ -43,6 +43,17 @@ object SyncTypes {
     */
   sealed trait FsElement {
     /**
+      * Returns an alphanumeric ID that uniquely identifies this element in the
+      * file system it belongs to. This ID enables direct access to this
+      * element. The concrete value depends on the file system of this element.
+      * The file system can use non-string values, such as ''Path''s or URIs;
+      * in this case, conversions to and from string are necessary.
+      *
+      * @return the ID of this element
+      */
+    def id: String
+
+    /**
       * Returns the URI of this file system element relative to the root URI of
       * the source that is synced.
       *
@@ -89,13 +100,15 @@ object SyncTypes {
     *
     * This class defines some additional attributes relevant for files.
     *
+    * @param id             the ID of this file
     * @param relativeUri    the relative URI of this file
     * @param level          the level of this file
     * @param lastModified   the time of the last modification
     * @param size           the file size (in bytes)
     * @param optOriginalUri an ''Option'' for the original URI of this element
     */
-  case class FsFile(override val relativeUri: String,
+  case class FsFile(override val id: String,
+                    override val relativeUri: String,
                     override val level: Int,
                     lastModified: Instant,
                     size: Long,
@@ -104,11 +117,13 @@ object SyncTypes {
   /**
     * A class representing a folder in a file system to be synced.
     *
+    * @param id             the ID of this folder
     * @param relativeUri    the relative URI of this folder
     * @param level          the level of this folder
     * @param optOriginalUri an ''Option'' for the original URI of this element
     */
-  case class FsFolder(override val relativeUri: String,
+  case class FsFolder(override val id: String,
+                      override val relativeUri: String,
                       override val level: Int,
                       override val optOriginalUri: Option[String] = None) extends FsElement
 

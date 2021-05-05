@@ -155,11 +155,12 @@ object DavFsElementSource extends HttpFsElementSource[DavConfig] {
     val uri = extractElementUri(state, ref)
     val propNode = node \ ElemPropStat \ ElemProp
     val isFolder = isCollection(propNode)
-    if (isFolder) ElemData(ref, FsFolder(uri, level))
+    //TODO Set ID correctly.
+    if (isFolder) ElemData(ref, FsFolder(null, uri, level))
     else {
       val modifiedTime = obtainModifiedTime(propNode, state.config)
       val fileSize = elemText(propNode, ElemContentLength).toLong
-      ElemData(ref, FsFile(uri, level, modifiedTime, fileSize))
+      ElemData(ref, FsFile(null, uri, level, modifiedTime, fileSize))
     }
   }
 

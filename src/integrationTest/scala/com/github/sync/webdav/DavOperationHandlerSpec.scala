@@ -59,7 +59,7 @@ object DavOperationHandlerSpec {
     * @return the test folder instance
     */
   private def createFolder(name: String): FsFolder =
-    FsFolder(name, 1)
+    FsFolder(null, name, 1)
 
   /**
     * Creates a test file instance.
@@ -73,7 +73,7 @@ object DavOperationHandlerSpec {
   private def createFile(parent: FsFolder, name: String,
                          modified: Instant = Instant.now(), size: Option[Long] = None): FsFile = {
     val uri = parent.relativeUri + name
-    FsFile(uri, parent.level + 1, modified, size getOrElse uri.length)
+    FsFile(null, uri, parent.level + 1, modified, size getOrElse uri.length)
   }
 
   /**

@@ -117,7 +117,8 @@ object LocalFsElementSource {
     * @return the folder data object for the initial folder
     */
   private def createInitFolder(config: LocalFsConfig, startDirectory: String): SyncFolderData[Path] = {
-    val rootFolder = FsFolder(startDirectory, UriEncodingHelper.componentCount(startDirectory) - 1)
+    //TODO: Set correct element ID.
+    val rootFolder = FsFolder(null, startDirectory, UriEncodingHelper.componentCount(startDirectory) - 1)
     val rootPath = if (startDirectory.nonEmpty)
       config.rootPath.resolve(UriEncodingHelper removeLeadingSeparator startDirectory)
     else config.rootPath
@@ -195,8 +196,9 @@ object LocalFsElementSource {
   private def createElement(config: LocalFsConfig, path: Path, parent: FsElement, isDir: Boolean):
   FsElement = {
     val uri = generateElementUri(parent, path)
-    if (isDir) FsFolder(uri, parent.level + 1)
-    else FsFile(uri, parent.level + 1,
+    //TODO: Set correct element ID.
+    if (isDir) FsFolder(null, uri, parent.level + 1)
+    else FsFile(null, uri, parent.level + 1,
       FileTimeUtils.getLastModifiedTimeInTimeZone(path, config.optTimeZone),
       Files.size(path))
   }

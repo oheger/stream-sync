@@ -47,7 +47,7 @@ object CryptServiceSpec {
     * @return the resulting file
     */
   private def createTestFile(prefix: String, index: Int): FsFile =
-    FsFile(UriEncodingHelper.withTrailingSeparator(prefix) + "test" + index + ".tst", 3, Instant.now(),
+    FsFile(null, UriEncodingHelper.withTrailingSeparator(prefix) + "test" + index + ".tst", 3, Instant.now(),
       20190407 + index)
 
   /**
@@ -58,7 +58,7 @@ object CryptServiceSpec {
     * @return the resulting folder
     */
   private def createTestFolder(prefix: String, index: Int): FsFolder =
-    FsFolder(UriEncodingHelper.withTrailingSeparator(prefix) + "subFolder" + index, 3)
+    FsFolder(null, UriEncodingHelper.withTrailingSeparator(prefix) + "subFolder" + index, 3)
 
   /**
     * Creates a test folder data object based on the given parameters.
@@ -197,13 +197,13 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     folder.copy(relativeUri = encryptElementUri(directory, folder))
 
   "CryptService" should "return a transformation function that adapts file sizes" in {
-    val files = List(FsFile("/f1.txt", 2, Instant.now(), 180106),
-      FsFile("/f2.doc", 2, Instant.now(), 180209),
-      FsFile("/f3.dat", 2, Instant.now(), 180228))
+    val files = List(FsFile(null, "/f1.txt", 2, Instant.now(), 180106),
+      FsFile(null, "/f2.doc", 2, Instant.now(), 180209),
+      FsFile(null, "/f3.dat", 2, Instant.now(), 180228))
     val expFiles = files.map { f =>
       f.copy(size = DecryptOpHandler.processedSize(f.size))
     }
-    val result = IterateResult(FsFolder("/aFolder", 2), files, List.empty[SyncFolderData[Unit]])
+    val result = IterateResult(FsFolder(null, "/aFolder", 2), files, List.empty[SyncFolderData[Unit]])
 
     val transformer = CryptService.cryptTransformer(None, 128)
     val transResult = futureResult(transformer.transform(result, transformer.initialState))._1
@@ -250,7 +250,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val encryptedDir = encryptPath(directory)
     val encryptedFiles = files.map(encryptedFile(encryptedDir, _))
     val encryptedFolderData = folderData.map(f => f.copy(folder = encryptedFolder(encryptedDir, f.folder)))
-    IterateResult(FsFolder(encryptedDir, 2, Some(encryptedDir)), encryptedFiles, encryptedFolderData)
+    IterateResult(FsFolder(null, encryptedDir, 2, Some(encryptedDir)), encryptedFiles, encryptedFolderData)
   }
 
   /**
@@ -279,7 +279,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
 
     val transformer = CryptService.cryptTransformer(Some(SecretKey), 128)
     val transResult = futureResult(transformer.transform(result, transformer.initialState))._1
-    transResult.currentFolder should be(FsFolder(directory, 2, Some(result.currentFolder.relativeUri)))
+    transResult.currentFolder should be(FsFolder(null, directory, 2, Some(result.currentFolder.relativeUri)))
     transResult.files should be(files)
     transResult.folders should be(folderData)
   }
@@ -350,9 +350,9 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
       refData.get() match {
         case h :: t if h._1 == uri =>
           refData set t
-          val file = FsFile(UriEncodingHelper.withTrailingSeparator(uri) + encrypt(TestFileName), 1,
+          val file = FsFile(null, UriEncodingHelper.withTrailingSeparator(uri) + encrypt(TestFileName), 1,
             Instant.now(), 12345)
-          Future.successful(Source(file :: h._2.map(p => FsFolder(p, 2))))
+          Future.successful(Source(file :: h._2.map(p => FsFolder(null, p, 2))))
 
         case _ => fail("Unexpected source request for " + uri)
       }
@@ -437,7 +437,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val ParentUri = "/plain/parent"
     val OrgParentUri = "/enc/top"
     val Name = "theFolder"
-    val folder = FsFolder(UriEncodingHelper.withTrailingSeparator(ParentUri) + Name, 2)
+    val folder = FsFolder(null, UriEncodingHelper.withTrailingSeparator(ParentUri) + Name, 2)
     val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "overridden")
     val cache = LRUCache[String, String](8).put(ParentUri -> OrgParentUri)
 
@@ -450,7 +450,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
 
   it should "encrypt the name for a create operation on the first level" in {
     val Name = "foo"
-    val folder = FsFolder("/" + Name, 1)
+    val folder = FsFolder(null, "/" + Name, 1)
     val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "overridden")
 
     val (mappedOp, nextCache) = invokeMapOpFunc(Nil, op, LRUCache(4))
@@ -479,7 +479,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     }
 
     val srcData = generateSrcData("", cryptComponents)
-    val folder = FsFolder(UriEncodingHelper.fromComponents(plainComponents) + "/" + Name, 2)
+    val folder = FsFolder(null, UriEncodingHelper.fromComponents(plainComponents) + "/" + Name, 2)
     val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "overridden")
 
     val (mappedOp, nextCache) = invokeMapOpFunc(srcData, op, LRUCache(4))
@@ -495,7 +495,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
   }
 
   it should "filter out files from the source function" in {
-    val folder = FsFolder(s"/$TestFileName/someUri", 2)
+    val folder = FsFolder(null, s"/$TestFileName/someUri", 2)
     val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "irrelevant")
     val cache = LRUCache[String, String](4)
     val srcData = List(("", List("/" + encrypt("foo"))))
@@ -508,7 +508,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
   it should "stop the iteration of the source function when leaving the current folder" in {
     val Name = "/parent"
     val encName = encryptPath(Name)
-    val folder = FsFolder(Name + "/someUri", 2)
+    val folder = FsFolder(null, Name + "/someUri", 2)
     val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "irrelevant")
     val cache = LRUCache[String, String](4)
     val srcData = List(("", List("/" + encrypt("wrong"), encryptPath(Name + "/sub/other"), encName)))
@@ -523,7 +523,7 @@ class CryptServiceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     val encRoot = encryptPath(Root)
     val Parent = "/sub"
     val encParent = encRoot + encryptPath(Parent)
-    val folder = FsFolder(Root + Parent + "/someUri", 2)
+    val folder = FsFolder(null, Root + Parent + "/someUri", 2)
     val op = SyncOperation(folder, ActionCreate, 0, "irrelevant", "irrelevant")
     val cache = LRUCache[String, String](4).put(Root -> encRoot)
     val srcData = List((encRoot, List(encRoot + "/" + encrypt("other"),

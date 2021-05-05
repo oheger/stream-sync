@@ -67,7 +67,7 @@ class OneDriveFsElementSourceSpec extends BaseHttpFsElementSourceSpec(ActorSyste
     val pagedFolder = folderName(1)
     stubOneDriveFolderRequest(config, "", "root.json")
     ExpectedElements.filterNot(_.relativeUri.contains(pagedFolder)) foreach {
-      case FsFolder(relativeUri, _, _) =>
+      case FsFolder(null, relativeUri, _, _) =>
         val fileName = folderFileName(relativeUri, ".json", "")
         stubOneDriveFolderRequest(config, relativeUri, fileName)
       case _ => // ignore other elements

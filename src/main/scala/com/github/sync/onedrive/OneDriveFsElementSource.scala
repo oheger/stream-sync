@@ -124,9 +124,11 @@ object OneDriveFsElementSource extends HttpFsElementSource[OneDriveConfig] {
     val ref = state.config.resolveRelativeUri(elemUri).toString()
     val elem = item.file match {
       case None =>
-        FsFolder(elemUri, parent.level + 1)
+        //TODO: Set correct element ID.
+        FsFolder(null, elemUri, parent.level + 1)
       case Some(_) =>
-        FsFile(elemUri, parent.level + 1, Instant.parse(item.fileSystemInfo.get.lastModifiedDateTime), item.size)
+        //TODO: Set correct element ID.
+        FsFile(null, elemUri, parent.level + 1, Instant.parse(item.fileSystemInfo.get.lastModifiedDateTime), item.size)
     }
     HttpFsElementSource.ElemData(ref, elem)
   }

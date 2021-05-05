@@ -36,7 +36,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
   private def lineEnd: String = System.lineSeparator()
 
   "ElementSerializer" should "serialize a folder" in {
-    val folder = FsFolder("test_folder", 11)
+    val folder = FsFolder(null, "test_folder", 11)
 
     val s = ElementSerializer.serializeElement(folder).utf8String
     s should be(s"FOLDER ${folder.relativeUri} ${folder.level}")
@@ -44,14 +44,14 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
 
   it should "serialize a file" in {
     val fileTime = "2018-09-06T17:25:28.103Z"
-    val file = FsFile("test_data.txt", 21, Instant.parse(fileTime), 123456)
+    val file = FsFile(null, "test_data.txt", 21, Instant.parse(fileTime), 123456)
 
     val s = ElementSerializer.serializeElement(file).utf8String
     s should be(s"FILE ${file.relativeUri} ${file.level} $fileTime ${file.size}")
   }
 
   it should "encode element URIs on serialization" in {
-    val folder = FsFolder("/my data/sub/cool stuff (42)", 10, Some("/org/encoded name"))
+    val folder = FsFolder(null, "/my data/sub/cool stuff (42)", 10, Some("/org/encoded name"))
 
     val s = ElementSerializer.serializeElement(folder).utf8String
     s should be(s"FOLDER %2Fmy%20data%2Fsub%2Fcool%20stuff%20%2842%29 ${folder.level}")
@@ -65,7 +65,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
     * @param strAction the string representation of this action
     */
   private def checkSerializedOperation(action: SyncAction, strAction: String): Unit = {
-    val elem = FsFolder("my_folder", 8)
+    val elem = FsFolder(null, "my_folder", 8)
     val op = SyncOperation(elem, action, 4, elem.relativeUri, elem.relativeUri)
 
     val s = ElementSerializer.serializeOperation(op).utf8String
@@ -85,7 +85,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "serialize an action if the source URI differs from the element URI" in {
-    val elem = FsFolder("/test folder/uri", 7)
+    val elem = FsFolder(null, "/test folder/uri", 7)
     val EncUri = "%2Ftest%20folder%2Furi"
     val srcUri = "/folder/the org/test uri"
     val op = SyncOperation(elem, ActionCreate, 2, srcUri, elem.relativeUri)
@@ -95,7 +95,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "serialize an action if the destination URI differs from the element URI" in {
-    val elem = FsFolder("/test folder/uri", 7)
+    val elem = FsFolder(null, "/test folder/uri", 7)
     val EncUri = "%2Ftest%20folder%2Furi"
     val dstUri = "/folder/dest org/test uri"
     val op = SyncOperation(elem, ActionOverride, 2, elem.relativeUri, dstUri)
@@ -105,7 +105,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "deserialize a folder element" in {
-    val folder = FsFolder("some/test/folder", 9)
+    val folder = FsFolder(null, "some/test/folder", 9)
     val parts = ElementSerializer.serializeElement(folder).utf8String.split("\\s").toSeq
 
     val folder2 = ElementSerializer.deserializeElement(parts).get
@@ -113,7 +113,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "deserialize a file element" in {
-    val file = FsFile("my/test/file.txt", 2, Instant.parse("2018-09-06T19:14:36.189Z"),
+    val file = FsFile(null, "my/test/file.txt", 2, Instant.parse("2018-09-06T19:14:36.189Z"),
       20180906191501L)
     val parts = ElementSerializer.serializeElement(file).utf8String.split("\\s").toSeq
 
@@ -155,7 +155,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
     */
   private def checkDeserializeOperation(action: SyncAction, optSrcUri: Option[String] = None,
                                         optDstUri: Option[String] = None): Unit = {
-    val file = FsFile("my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
+    val file = FsFile(null, "my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
       20180906193152L)
     val operation = SyncOperation(file, action, 22, optSrcUri getOrElse file.relativeUri,
       optDstUri getOrElse file.relativeUri)

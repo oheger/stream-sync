@@ -67,7 +67,7 @@ object ElementSerializer {
     elem match {
       case folder: FsFolder =>
         serializeBaseProperties(TagFolder, folder)
-      case file@FsFile(_, _, lastModified, size, _) =>
+      case file@FsFile(_, _, _, lastModified, size, _) =>
         s"${serializeBaseProperties(TagFile, file)} $lastModified $size"
     }
   }
@@ -96,9 +96,11 @@ object ElementSerializer {
     lazy val elemUri = UriEncodingHelper decode parts(1)
     parts.head match {
       case TagFolder =>
-        FsFolder(elemUri, parts(2).toInt)
+        //TODO: Set correct element ID.
+        FsFolder(null, elemUri, parts(2).toInt)
       case TagFile =>
-        FsFile(elemUri, parts(2).toInt, Instant.parse(parts(3)), parts(4).toLong)
+        //TODO: Set correct element ID.
+        FsFile(null, elemUri, parts(2).toInt, Instant.parse(parts(3)), parts(4).toLong)
       case tag =>
         throw new IllegalArgumentException("Unknown element tag: " + tag)
     }

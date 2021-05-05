@@ -95,7 +95,7 @@ class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(test
   }
 
   "OneDriveOperationHandler" should "delete a file" in {
-    val file = FsFile("/someFile.txt", 1, Instant.now(), 1000)
+    val file = FsFile(null, "/someFile.txt", 1, Instant.now(), 1000)
     val dstUri = "/dest/delete/file.txt"
     val op = SyncOperation(file, ActionRemove, 0, null, dstUri)
     stubSuccess(NoAuthFunc)
@@ -107,7 +107,7 @@ class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(test
   }
 
   it should "delete a folder" in {
-    val folder = FsFolder("/delFolder", 1)
+    val folder = FsFolder(null, "/delFolder", 1)
     val dstUri = "/dest/delete/folder"
     val op = SyncOperation(folder, ActionRemove, 0, null, dstUri)
     stubSuccess(NoAuthFunc)
@@ -120,7 +120,7 @@ class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(test
 
   it should "create a new folder" in {
     val newName = "new folder"
-    val folder = FsFolder("/some/path/" + newName, 3)
+    val folder = FsFolder(null, "/some/path/" + newName, 3)
     val dstUri = "/the/parent/folder/" + newName
     val op = SyncOperation(folder, ActionCreate, 0, null, dstUri)
     val expRequest =
@@ -154,7 +154,7 @@ class OneDriveOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(test
     val FileUri = "/upload/file/data.txt"
     val UploadUri = "/1234567890/foo/bar.xyz"
     val ModifiedTime = "2019-11-09T19:14:35Z"
-    val file = FsFile("/some/file.txt", 3, Instant.parse(ModifiedTime), 42)
+    val file = FsFile(null, "/some/file.txt", 3, Instant.parse(ModifiedTime), 42)
     val op = SyncOperation(file, action, 0, SourceUri, FileUri)
     val config = createConfig().copy(uploadChunkSize = uploadChunkSize)
     val UploadSessionRequest =

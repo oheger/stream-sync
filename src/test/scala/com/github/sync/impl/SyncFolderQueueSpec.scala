@@ -51,7 +51,7 @@ object SyncFolderQueueSpec {
     * @return the resulting ''SyncFolderData''
     */
   private def folderData(uri: String, level: Int): SyncFolderData[Int] = {
-    val theFolder = FsFolder(uri, level)
+    val theFolder = FsFolder(null, uri, level)
     SyncFolderData(theFolder, level + 1)
   }
 }

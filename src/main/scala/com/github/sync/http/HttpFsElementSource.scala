@@ -195,7 +195,8 @@ trait HttpFsElementSource[C <: HttpConfig] {
   private def createInitialFolder(config: C, startFolderUri: String): SyncFolderData[HttpFolder] = {
     val rootUri = UriEncodingHelper.withTrailingSeparator(config.rootUri.toString()) +
       UriEncodingHelper.removeLeadingSeparator(UriEncodingHelper.encodeComponents(startFolderUri))
-    SyncFolderData(FsFolder(startFolderUri, UriEncodingHelper.componentCount(startFolderUri) - 1), HttpFolder(rootUri))
+    SyncFolderData(FsFolder(null, startFolderUri, UriEncodingHelper.componentCount(startFolderUri) - 1),
+      HttpFolder(rootUri))
   }
 
   /**

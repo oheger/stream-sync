@@ -92,7 +92,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
   private def createFile(dir: FsFolder, name: String): (FsFile, Path) = {
     val uri = childUri(dir, name)
     val path = writeFileContent(pathForUri(uri), name)
-    (FsFile(uri, dir.level + 1, Files.getLastModifiedTime(path).toInstant, name.length), path)
+    (FsFile(null, uri, dir.level + 1, Files.getLastModifiedTime(path).toInstant, name.length), path)
   }
 
   /**
@@ -104,7 +104,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     */
   private def createDir(parent: FsFolder, name: String): (FsFolder, Path) = {
     val uri = childUri(parent, name)
-    (FsFolder(uri, parent.level + 1), Files.createDirectory(pathForUri(uri)))
+    (FsFolder(null, uri, parent.level + 1), Files.createDirectory(pathForUri(uri)))
   }
 
   /**
@@ -113,7 +113,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @return a map with the elements created and their associated paths
     */
   private def setUpDirectoryStructure(): Map[FsElement, Path] = {
-    val rootFolder = FsFolder("", -1)
+    val rootFolder = FsFolder(null, "", -1)
     val rootFiles = List(createFile(rootFolder, "test.txt"),
       createFile(rootFolder, "noMedium1.mp3"))
     val dir1 = createDir(rootFolder, "Medium1")
@@ -255,7 +255,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "support canceling stream processing" in {
     val Count = 32
-    val root = FsFolder("", 0)
+    val root = FsFolder(null, "", 0)
     (1 to Count).foreach(i => createFile(root, s"test$i.txt"))
     val (queue, factory) = createStreamWrapperFactory()
     val source = LocalFsElementSource(sourceConfig(), streamFactory = factory)(sourceFactory)
@@ -313,7 +313,7 @@ class LocalFsElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSyst
     }
 
     setUpDirectoryStructure()
-    val (otherMedium, _) = createDir(FsFolder("", -1), "anotherDir")
+    val (otherMedium, _) = createDir(FsFolder(null, "", -1), "anotherDir")
     createFile(otherMedium, "data1.txt")
     createFile(otherMedium, "data2.txt")
     val source = LocalFsElementSource(sourceConfig())(sourceFactory)

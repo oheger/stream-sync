@@ -99,7 +99,7 @@ class DavFsElementSourceSpec() extends BaseHttpFsElementSourceSpec(ActorSystem("
   private def stubTestFolders(format: String, suffix: String = ""): Unit = {
     stubFolderRequest(RootPath, "root" + suffix + format)
     ExpectedElements foreach {
-      case FsFolder(relativeUri, _, _) =>
+      case FsFolder(_, relativeUri, _, _) =>
         val fileName = folderFileName(relativeUri, format, suffix)
         val httpUri = Uri(RootPath + encodedFolderUri(relativeUri))
         stubFolderRequest(httpUri.toString(), fileName)

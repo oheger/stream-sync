@@ -33,7 +33,7 @@ import scala.concurrent.Future
 
 object ElementSourceSpec {
   /** Constant for the top-level folder. */
-  private val RootFolder = SyncFolderData(FsFolder("root", 1), "root")
+  private val RootFolder = SyncFolderData(FsFolder(null, "root", 1), "root")
 
   /** The initial state value. */
   private val InitState = 1
@@ -49,7 +49,7 @@ object ElementSourceSpec {
     * @return the file
     */
   private def createFile(uri: String, level: Int): FsFile =
-    FsFile(uri, level, Instant.now(), uri.length * 100)
+    FsFile(null, uri, level, Instant.now(), uri.length * 100)
 
   /**
     * Helper function to create a file element that is a child of the given
@@ -162,7 +162,7 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
 
   it should "return folders received from the iterate function as well" in {
     val file = createFile("/a.txt", 2)
-    val folder = FsFolder("/f", 2)
+    val folder = FsFolder(null, "/f", 2)
     val results = List(createSimpleResult(file),
       (2, Some(IterateResult(RootFolder.folder, Nil, List(SyncFolderData(folder, "foo")))), None))
     val helper = new SourceTestHelper(results)
@@ -173,7 +173,7 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
   it should "handle the content of a folder at once" in {
     val file1 = createFile("/a.dat", 2)
     val file2 = createFile("/b.txt", 2)
-    val subFolder = FsFolder("/sub", 2)
+    val subFolder = FsFolder(null, "/sub", 2)
     val subFile1 = createFile(subFolder, "sub1.txt")
     val subFile2 = createFile(subFolder, "sub2.doc")
     val results = List(
@@ -186,9 +186,9 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
   }
 
   it should "manage pending folders in a SyncFolderQueue" in {
-    val folder1 = SyncFolderData(FsFolder("/folder1", 2), "1")
-    val folder2 = SyncFolderData(FsFolder("/folder2", 2), "2")
-    val folder3 = SyncFolderData(FsFolder("/folder3", 2), "3")
+    val folder1 = SyncFolderData(FsFolder(null, "/folder1", 2), "1")
+    val folder2 = SyncFolderData(FsFolder(null, "/folder2", 2), "2")
+    val folder3 = SyncFolderData(FsFolder(null, "/folder3", 2), "3")
     val results = List((11, Some(IterateResult(RootFolder.folder,
       List(createFile("/file1.txt", 2), createFile("/otherFile.dat", 2)),
       List(folder2, folder3, folder1))), None))
@@ -207,9 +207,9 @@ class ElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) wit
     val file1 = createFile("/aFile", 2)
     val file2 = createFile("/bFile", 2)
     val file3 = createFile("/xFile", 2)
-    val folder1 = FsFolder("/aFolder", 2)
-    val folder2 = FsFolder("/anotherFolder", 2)
-    val folder3 = FsFolder("/oneMoreFolder", 2)
+    val folder1 = FsFolder(null, "/aFolder", 2)
+    val folder2 = FsFolder(null, "/anotherFolder", 2)
+    val folder3 = FsFolder(null, "/oneMoreFolder", 2)
     val results = List((0, Some(IterateResult(RootFolder.folder, List(file2, file1, file3),
       List(SyncFolderData(folder3, "f3"), SyncFolderData(folder2, "f2"), SyncFolderData(folder1, "f1")))), None))
     val expElements = List(file1, folder1, folder2, file2, folder3, file3)
