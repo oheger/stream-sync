@@ -21,6 +21,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.stream.scaladsl.Sink
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.http.HttpRequestActor

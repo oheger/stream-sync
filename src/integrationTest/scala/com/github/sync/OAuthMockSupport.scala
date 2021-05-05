@@ -20,8 +20,9 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.`Content-Type`
 import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.http.OAuthStorageConfig
-import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageServiceImpl, OAuthTokenData}
+import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageServiceImpl}
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, post, stubFor, urlPathEqualTo}
 
 import scala.concurrent.ExecutionContext

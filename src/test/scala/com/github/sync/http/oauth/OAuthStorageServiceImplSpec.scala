@@ -20,6 +20,7 @@ import java.nio.file.Files
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest.flatspec.AnyFlatSpecLike

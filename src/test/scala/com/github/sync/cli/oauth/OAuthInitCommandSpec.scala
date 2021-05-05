@@ -21,10 +21,11 @@ import java.nio.file.Paths
 import akka.Done
 import akka.actor.ActorSystem
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.oauth.OAuthParameterManager.InitCommandConfig
 import com.github.sync.http.OAuthStorageConfig
-import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData}
+import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService}
 import org.mockito.ArgumentCaptor
 import org.mockito.Matchers.{any, eq => eqArg}
 import org.mockito.Mockito._

@@ -25,6 +25,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
 import akka.testkit.TestKit
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
 import com.github.sync.http.OAuthStorageConfig

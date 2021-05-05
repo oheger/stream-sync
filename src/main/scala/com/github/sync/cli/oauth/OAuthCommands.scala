@@ -18,10 +18,11 @@ package com.github.sync.cli.oauth
 
 import akka.actor.ActorSystem
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.http.OAuthStorageConfig
-import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenData, OAuthTokenRetrieverService}
+import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenRetrieverService}
 
 import scala.concurrent.{ExecutionContext, Future}
 

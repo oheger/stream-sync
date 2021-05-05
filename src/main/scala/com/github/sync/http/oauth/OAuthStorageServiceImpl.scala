@@ -23,6 +23,7 @@ import akka.stream.IOResult
 import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.crypt.{CryptOpHandler, CryptStage, DecryptOpHandler, EncryptOpHandler}
 import com.github.sync.http.OAuthStorageConfig
 

@@ -35,12 +35,3 @@ case class OAuthConfig(authorizationEndpoint: String,
                        scope: String,
                        redirectUri: String,
                        clientID: String)
-
-/**
-  * A data class representing the token material to be stored for a single
-  * OAuth identity provider.
-  *
-  * @param accessToken  the access token
-  * @param refreshToken the refresh token
-  */
-case class OAuthTokenData(accessToken: String, refreshToken: String)

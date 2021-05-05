@@ -24,6 +24,7 @@ import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse, StatusC
 import akka.stream.KillSwitch
 import akka.testkit.{ImplicitSender, TestKit}
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.http.{HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.webdav.DepthHeader
 import org.mockito.Matchers.{any, eq => argEq}

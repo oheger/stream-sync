@@ -26,6 +26,7 @@ import akka.stream.scaladsl.Sink
 import akka.testkit.TestKit
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.AsyncTestHelper
 import com.github.sync.http.HttpRequestActor
 import org.scalatest.BeforeAndAfterAll
