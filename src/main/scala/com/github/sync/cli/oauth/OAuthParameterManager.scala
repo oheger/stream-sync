@@ -17,10 +17,11 @@
 package com.github.sync.cli.oauth
 
 import com.github.cloudfiles.core.http.Secret
+import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.CliActorSystemLifeCycle
 import com.github.sync.http.OAuthStorageConfig
-import com.github.sync.http.oauth.OAuthConfig
+import com.github.sync.http.oauth.IDPConfig
 
 import java.nio.file.Path
 import scala.util.Try
@@ -195,7 +196,7 @@ object OAuthParameterManager {
     * @param clientSecret  the client secret
     * @param storageConfig the ''OAuthStorageConfig''
     */
-  case class InitCommandConfig(oauthConfig: OAuthConfig,
+  case class InitCommandConfig(oauthConfig: IDPConfig,
                                clientSecret: Secret,
                                override val storageConfig: OAuthStorageConfig) extends CommandConfig
 
@@ -407,9 +408,10 @@ object OAuthParameterManager {
                               triedStorage: Try[OAuthStorageConfig]): Try[InitCommandConfig] =
     createRepresentation(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect,
       triedID, triedSecret, triedStorage) { (authUrl, tokenUrl, scope, redirect, id, secret, storage) =>
-      val oauthConfig = OAuthConfig(authorizationEndpoint = authUrl, tokenEndpoint = tokenUrl,
-        scope = scope, redirectUri = redirect, clientID = id)
-      InitCommandConfig(oauthConfig, secret, storage)
+      val oauthConfig = OAuthConfig(tokenEndpoint = tokenUrl, redirectUri = redirect, clientID = id,
+        clientSecret = secret, initTokenData = OAuthTokenData(null, null))
+      val idpConfig = IDPConfig(authorizationEndpoint = authUrl,  scope = scope, oauthConfig = oauthConfig)
+      InitCommandConfig(idpConfig, secret, storage)
     }
 
   /**

@@ -25,7 +25,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
 import akka.testkit.TestKit
 import com.github.cloudfiles.core.http.Secret
-import com.github.cloudfiles.core.http.auth.OAuthTokenData
+import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
 import com.github.sync.http.OAuthStorageConfig
@@ -56,20 +56,20 @@ object OAuthLoginCommandSpec {
   /** The configuration for the login command. */
   private val LoginConfig = LoginCommandConfig(TestStorageConfig)
 
-  /**
-    * A basic OAuth configuration. The URL for the token endpoint has to be
-    * generated dynamically.
-    */
-  private val BaseOAuthConfig = OAuthConfig(authorizationEndpoint = AuthorizationUri,
-    tokenEndpoint = "TBD", redirectUri = "https://redirect.org", scope = "foo bar",
-    clientID = "test-client-1234")
-
   /** Client secret of the test IDP. */
   private val ClientSecret = Secret("the-secret")
 
   /** Test token material. */
   private val TestTokenData = OAuthTokenData(accessToken = "test_access_token",
     refreshToken = "test_refresh_token")
+
+  /**
+    * A basic OAuth configuration. The URL for the token endpoint has to be
+    * generated dynamically.
+    */
+  private val BaseOAuthConfig = IDPConfig(authorizationEndpoint = AuthorizationUri, scope = "foo bar",
+    oauthConfig = OAuthConfig(tokenEndpoint = "TBD", redirectUri = "https://redirect.org",
+      clientID = "test-client-1234", clientSecret = ClientSecret, initTokenData = TestTokenData))
 
   /** The test authorization code. */
   private val Code = "authorizationCode"
@@ -141,7 +141,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
   private def stubTokenRequest(): Unit = {
     stubFor(post(urlPathEqualTo(TokenEndpoint))
       .withHeader("Content-Type", equalTo("application/x-www-form-urlencoded"))
-      .withRequestBody(containing(s"client_id=${BaseOAuthConfig.clientID}"))
+      .withRequestBody(containing(s"client_id=${BaseOAuthConfig.oauthConfig.clientID}"))
       .withRequestBody(containing(s"client_secret=${ClientSecret.secret}"))
       .withRequestBody(containing(s"code=$Code"))
       .willReturn(aResponse().withStatus(200)
@@ -154,8 +154,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     *
     * @return the test OAuth configuration
     */
-  private def createTestOAuthConfig(): OAuthConfig =
-    BaseOAuthConfig.copy(tokenEndpoint = serverUri(TokenEndpoint))
+  private def createTestOAuthConfig(): IDPConfig =
+    BaseOAuthConfig.copy(oauthConfig = BaseOAuthConfig.oauthConfig.copy(tokenEndpoint = serverUri(TokenEndpoint)))
 
   /**
     * Checks whether the HTTP server at the given port has been properly
@@ -200,12 +200,13 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
 
   it should "handle the redirect for localhost redirect URIs" in {
     val port = fetchFreePort()
-    val config = createTestOAuthConfig().copy(redirectUri = s"http://localhost:$port")
+    val orgConfig = createTestOAuthConfig()
+    val config = orgConfig.copy(oauthConfig = orgConfig.oauthConfig.copy(redirectUri = s"http://localhost:$port"))
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val helper = new CommandTestHelper(config)
 
-    val result = futureResult(helper.prepareBrowserHandlerToCallRedirectUri(config.redirectUri + "?code=" + Code)
-      .runCommand())
+    val result = futureResult(helper.prepareBrowserHandlerToCallRedirectUri(config.oauthConfig.redirectUri +
+      "?code=" + Code).runCommand())
     result should include("successful")
     helper.verifyTokenStored()
     checkHttpServerClosed(port)
@@ -213,12 +214,13 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
 
   it should "handle a local redirect URI if no code parameter is passed" in {
     val port = fetchFreePort()
-    val config = createTestOAuthConfig().copy(redirectUri = s"http://localhost:$port")
+    val orgConfig = createTestOAuthConfig()
+    val config = orgConfig.copy(oauthConfig = orgConfig.oauthConfig.copy(redirectUri = s"http://localhost:$port"))
     implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
     val helper = new CommandTestHelper(config)
 
     val exception = expectFailedFuture[IllegalStateException] {
-      helper.prepareBrowserHandlerToCallRedirectUri(config.redirectUri, StatusCodes.BadRequest)
+      helper.prepareBrowserHandlerToCallRedirectUri(config.oauthConfig.redirectUri, StatusCodes.BadRequest)
         .runCommand()
     }
     exception.getMessage should include("authorization code")
@@ -231,7 +233,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     *
     * @param testOAutConfig the OAuth configuration to be used
     */
-  private class CommandTestHelper(val testOAutConfig: OAuthConfig = createTestOAuthConfig()) {
+  private class CommandTestHelper(val testOAutConfig: IDPConfig = createTestOAuthConfig()) {
     /** Mock for the token retriever service. */
     private val tokenService = createTokenService()
 
@@ -402,7 +404,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @param service   the mock for the service
       * @param uriFuture the ''Future'' with the URI
       */
-    private def initTokenServiceAuthorizationUri(service: OAuthTokenRetrieverService[OAuthConfig, Secret,
+    private def initTokenServiceAuthorizationUri(service: OAuthTokenRetrieverService[IDPConfig, Secret,
       OAuthTokenData], uriFuture: Future[Uri]): Unit = {
       when(service.authorizeUrl(testOAutConfig)).thenReturn(uriFuture)
     }
@@ -414,14 +416,14 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return the mock token service
       */
-    private def createTokenService(): OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData] = {
-      val service = mock[OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData]]
+    private def createTokenService(): OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData] = {
+      val service = mock[OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]]
       initTokenServiceAuthorizationUri(service, Future.successful(AuthorizationUri))
       when(service.fetchTokens(any(), any(), any(), any())(any(), any()))
         .thenAnswer((invocation: InvocationOnMock) => {
           val args = invocation.getArguments
           OAuthTokenRetrieverServiceImpl.fetchTokens(args.head.asInstanceOf[ActorRef],
-            args(1).asInstanceOf[OAuthConfig], args(2).asInstanceOf[Secret],
+            args(1).asInstanceOf[IDPConfig], args(2).asInstanceOf[Secret],
             args(3).asInstanceOf[String])(args(4).asInstanceOf[ExecutionContext],
             args(5).asInstanceOf[ActorSystem])
         })
@@ -434,8 +436,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return the mock for the storage service
       */
-    private def createStorageService(): OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData] = {
-      val service = mock[OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData]]
+    private def createStorageService(): OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] = {
+      val service = mock[OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
       when(service.loadConfig(TestStorageConfig)).thenReturn(Future.successful(testOAutConfig))
       when(service.loadClientSecret(TestStorageConfig)).thenReturn(Future.successful(ClientSecret))
       when(service.saveTokens(TestStorageConfig, TestTokenData))

@@ -120,12 +120,12 @@ class BasicAuthHttpActorFactory(override val httpRequestActorProps: Props) exten
   */
 class OAuthHttpActorFactory(override val httpRequestActorProps: Props,
                             storageConfig: OAuthStorageConfig,
-                            oauthConfig: OAuthConfig,
+                            oauthConfig: IDPConfig,
                             clientSecret: Secret,
                             initTokenData: OAuthTokenData) extends HttpActorFactory {
   override protected def authActorProps(config: HttpConfig, system: ActorSystem, clientCount: Int, name: String,
                                         withKillSwitch: Boolean, httpActor: ActorRef): Props = {
-    val idpActor = system.actorOf(HttpRequestActor(oauthConfig.tokenEndpoint), name + "_idp")
+    val idpActor = system.actorOf(HttpRequestActor(oauthConfig.oauthConfig.tokenEndpoint), name + "_idp")
     val optKillSwitch = if (withKillSwitch) Some(killSwitch) else None
     OAuthTokenActor(httpActor, clientCount, idpActor, storageConfig, oauthConfig, clientSecret,
       initTokenData, OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, optKillSwitch)

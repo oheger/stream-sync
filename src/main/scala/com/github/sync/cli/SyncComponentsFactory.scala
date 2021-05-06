@@ -27,7 +27,7 @@ import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
 import com.github.sync.http._
-import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthStorageServiceImpl}
+import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService, OAuthStorageServiceImpl}
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.webdav.DavConfig
@@ -231,7 +231,7 @@ object SyncComponentsFactory {
     * @return a ''Future'' with the factory for HTTP actors
     */
   private def createHttpActorFactory(requestActorProps: Props, httpConfig: HttpConfig,
-                                     storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+                                     storageService: OAuthStorageService[OAuthStorageConfig, IDPConfig,
                                        Secret, OAuthTokenData])
                                     (implicit ec: ExecutionContext, system: ActorSystem):
   Future[HttpActorFactory] =
@@ -294,7 +294,7 @@ object SyncComponentsFactory {
   *
   * @param oauthStorageService the service for storing OAuth data
   */
-class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorageConfig, IDPConfig,
   Secret, OAuthTokenData]) {
   /**
     * Creates a new instance of ''SyncComponentsFactory'' with default

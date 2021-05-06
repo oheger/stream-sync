@@ -22,7 +22,7 @@ import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.http.OAuthStorageConfig
-import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService, OAuthTokenRetrieverService}
+import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService, OAuthTokenRetrieverService}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -31,13 +31,13 @@ object OAuthCommands {
     * A short cut type definition for a fully parameterized
     * ''OAuthStorageService''.
     */
-  type StorageService = OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData]
+  type StorageService = OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]
 
   /**
     * A short cut type definition for a full parametrized
     * ''OAuthTokenRetrieverService''
     */
-  type TokenService = OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData]
+  type TokenService = OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]
 
   /**
     * A function to be used for printing out text to the console. This is used

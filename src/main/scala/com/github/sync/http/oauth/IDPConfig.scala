@@ -16,22 +16,21 @@
 
 package com.github.sync.http.oauth
 
+import com.github.cloudfiles.core.http.auth.OAuthConfig
+
 /**
   * A data class collecting the properties required for an OAuth client
-  * application.
+  * application to interact with an identity provider (IDP) server.
   *
   * An instance of this class stores the major part of the information required
   * for the implementation of an OAuth code flow against a specific OAuth2
   * identity provider.
   *
+  * @param oauthConfig           the part of the OAuth configuration related to
+  *                              access and refresh tokens
   * @param authorizationEndpoint the URI of the authorization endpoint
-  * @param tokenEndpoint         the URI of the token endpoint
   * @param scope                 the scope value
-  * @param redirectUri           the redirect URI
-  * @param clientID              the client ID
   */
-case class OAuthConfig(authorizationEndpoint: String,
-                       tokenEndpoint: String,
-                       scope: String,
-                       redirectUri: String,
-                       clientID: String)
+case class IDPConfig(oauthConfig: OAuthConfig,
+                     authorizationEndpoint: String,
+                     scope: String)

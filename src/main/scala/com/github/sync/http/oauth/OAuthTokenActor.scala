@@ -86,9 +86,9 @@ object OAuthTokenActor {
     * @return the ''Props'' for creating a new actor instance
     */
   def apply(httpActor: ActorRef, clientCount: Int, idpHttpActor: ActorRef, storageConfig: OAuthStorageConfig,
-            oauthConfig: OAuthConfig, clientSecret: Secret, initTokenData: OAuthTokenData,
-            storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData],
-            tokenService: OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData],
+            oauthConfig: IDPConfig, clientSecret: Secret, initTokenData: OAuthTokenData,
+            storageService: OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData],
+            tokenService: OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData],
             optKillSwitch: Option[KillSwitch]): Props =
     Props(classOf[OAuthTokenActor], httpActor, clientCount, idpHttpActor, storageConfig, oauthConfig,
       clientSecret, initTokenData, storageService, tokenService, optKillSwitch)
@@ -125,12 +125,12 @@ class OAuthTokenActor(override val httpActor: ActorRef,
                       override val clientCount: Int,
                       idpHttpActor: ActorRef,
                       storageConfig: OAuthStorageConfig,
-                      oauthConfig: OAuthConfig,
+                      oauthConfig: IDPConfig,
                       clientSecret: Secret,
                       initTokenData: OAuthTokenData,
-                      storageService: OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+                      storageService: OAuthStorageService[OAuthStorageConfig, IDPConfig,
                         Secret, OAuthTokenData],
-                      tokenService: OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData],
+                      tokenService: OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData],
                       optKillSwitch: Option[KillSwitch])
   extends Actor with ActorLogging with HttpExtensionActor {
   /** Execution context in implicit scope. */

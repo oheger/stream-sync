@@ -23,7 +23,7 @@ import akka.stream.IOResult
 import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.Secret
-import com.github.cloudfiles.core.http.auth.OAuthTokenData
+import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.crypt.{CryptOpHandler, CryptStage, DecryptOpHandler, EncryptOpHandler}
 import com.github.sync.http.OAuthStorageConfig
 
@@ -37,7 +37,7 @@ import scala.xml.{Elem, XML}
   * in files with the same base name, but different suffixes. Sensitive
   * information can be encrypted if a password is provided.
   */
-object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData] {
+object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] {
   /** Constant for the suffix used for the file with the OAuth config. */
   val SuffixConfigFile = ".xml"
 
@@ -71,23 +71,23 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, O
   /** The separator character used within the token file. */
   private val TokenSeparator = "\t"
 
-  override def saveConfig(storageConfig: OAuthStorageConfig, config: OAuthConfig)
+  override def saveConfig(storageConfig: OAuthStorageConfig, config: IDPConfig)
                          (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
     val xml = <oauth-config>
       <client-id>
-        {config.clientID}
+        {config.oauthConfig.clientID}
       </client-id>
       <authorization-endpoint>
         {config.authorizationEndpoint}
       </authorization-endpoint>
       <token-endpoint>
-        {config.tokenEndpoint}
+        {config.oauthConfig.tokenEndpoint}
       </token-endpoint>
       <scope>
         {config.scope}
       </scope>
       <redirect-uri>
-        {config.redirectUri}
+        {config.oauthConfig.redirectUri}
       </redirect-uri>
     </oauth-config>
 
@@ -96,14 +96,16 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, O
   }
 
   override def loadConfig(storageConfig: OAuthStorageConfig)
-                         (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthConfig] =
+                         (implicit ec: ExecutionContext, system: ActorSystem): Future[IDPConfig] =
     loadAndMapFile(storageConfig, SuffixConfigFile) { buf =>
       val nodeSeq = XML.loadString(buf.utf8String)
-      OAuthConfig(clientID = extractElem(nodeSeq, PropClientId),
-        authorizationEndpoint = extractElem(nodeSeq, PropAuthorizationEndpoint),
+      val oauthConfig = OAuthConfig(clientID = extractElem(nodeSeq, PropClientId),
         tokenEndpoint = extractElem(nodeSeq, PropTokenEndpoint),
-        scope = extractElem(nodeSeq, PropScope),
-        redirectUri = extractElem(nodeSeq, PropRedirectUri))
+        redirectUri = extractElem(nodeSeq, PropRedirectUri), clientSecret = null,
+        initTokenData = OAuthTokenData(null, null))
+      IDPConfig(
+        authorizationEndpoint = extractElem(nodeSeq, PropAuthorizationEndpoint),
+        scope = extractElem(nodeSeq, PropScope), oauthConfig = oauthConfig)
     }
 
   override def saveClientSecret(storageConfig: OAuthStorageConfig, secret: Secret)

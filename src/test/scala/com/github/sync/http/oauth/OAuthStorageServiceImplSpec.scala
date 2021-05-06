@@ -20,7 +20,7 @@ import java.nio.file.Files
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.github.cloudfiles.core.http.Secret
-import com.github.cloudfiles.core.http.auth.OAuthTokenData
+import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.http.OAuthStorageConfig
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -30,11 +30,6 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import scala.xml.SAXParseException
 
 object OAuthStorageServiceImplSpec {
-  /** A test OAuth configuration. */
-  private val TestConfig = OAuthConfig(authorizationEndpoint = "https://test-idp.org/auth",
-    tokenEndpoint = "https://test.idp.org/token", scope = "foo bar baz",
-    redirectUri = "http://my-endpoint/get_code", clientID = "my-client")
-
   /** Constant for the base name of a provider configuration. */
   private val BaseName = "myTestProvider"
 
@@ -43,6 +38,12 @@ object OAuthStorageServiceImplSpec {
 
   /** Test token data. */
   private val TestTokens = OAuthTokenData(accessToken = "testAccessToken", refreshToken = "testRefreshToken")
+
+  /** A test OAuth configuration. */
+  private val TestConfig = IDPConfig(authorizationEndpoint = "https://test-idp.org/auth", scope = "foo bar baz",
+    oauthConfig = OAuthConfig(tokenEndpoint = "https://test.idp.org/token", clientSecret = null,
+      redirectUri = "http://my-endpoint/get_code", clientID = "my-client",
+      initTokenData = OAuthTokenData(null, null)))
 }
 
 /**
@@ -110,19 +111,19 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
   it should "handle whitespace in XML correctly" in {
     val xml = <oauth-config>
       <client-id>
-        {TestConfig.clientID}
+        {TestConfig.oauthConfig.clientID}
       </client-id>
       <authorization-endpoint>
         {TestConfig.authorizationEndpoint}
       </authorization-endpoint>
       <token-endpoint>
-        {TestConfig.tokenEndpoint}
+        {TestConfig.oauthConfig.tokenEndpoint}
       </token-endpoint>
       <scope>
         {TestConfig.scope}
       </scope>
       <redirect-uri>
-        {TestConfig.redirectUri}
+        {TestConfig.oauthConfig.redirectUri}
       </redirect-uri>
     </oauth-config>
     val storageConfig = createStorageConfig("formatted")

@@ -21,11 +21,11 @@ import java.nio.file.Paths
 import akka.Done
 import akka.actor.ActorSystem
 import com.github.cloudfiles.core.http.Secret
-import com.github.cloudfiles.core.http.auth.OAuthTokenData
+import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.oauth.OAuthParameterManager.InitCommandConfig
 import com.github.sync.http.OAuthStorageConfig
-import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageService}
+import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService}
 import org.mockito.ArgumentCaptor
 import org.mockito.Matchers.{any, eq => eqArg}
 import org.mockito.Mockito._
@@ -40,15 +40,17 @@ object OAuthInitCommandSpec {
   /** A name for the test IDP. */
   private val IdpName = "myTestIDP"
 
-  /** Test configuration for an IDP. */
-  private val TestConfig = OAuthConfig("authEndpoint", "tokenEndpoint", "scope", "redirect", "clientID")
-
   /** A test storage configuration. */
   private val StorageConfig = OAuthStorageConfig(baseName = IdpName, rootDir = Paths.get("/foo"),
     optPassword = None)
 
   /** The content of the client secret. */
   private val ClientSecret = "<very secret client>"
+
+  /** Test configuration for an IDP. */
+  private val TestConfig = IDPConfig(authorizationEndpoint =  "authEndpoint", scope = "scope",
+    oauthConfig = OAuthConfig(tokenEndpoint = "tokenEndpoint", redirectUri =  "redirect", clientID = "clientID",
+      clientSecret = Secret(ClientSecret), initTokenData = OAuthTokenData(null, null)))
 
   /** The default configuration for the init command. */
   private val InitConfig = InitCommandConfig(oauthConfig = TestConfig, clientSecret = Secret(ClientSecret),
@@ -98,7 +100,7 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
     private implicit val actorSystem: ActorSystem = mock[ActorSystem]
 
     /** Mock for the storage service. */
-    private val storageService = mock[OAuthStorageService[OAuthStorageConfig, OAuthConfig,
+    private val storageService = mock[OAuthStorageService[OAuthStorageConfig, IDPConfig,
       Secret, OAuthTokenData]]
 
     /**

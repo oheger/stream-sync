@@ -20,9 +20,9 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.`Content-Type`
 import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
 import com.github.cloudfiles.core.http.Secret
-import com.github.cloudfiles.core.http.auth.OAuthTokenData
+import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.http.OAuthStorageConfig
-import com.github.sync.http.oauth.{OAuthConfig, OAuthStorageServiceImpl}
+import com.github.sync.http.oauth.{IDPConfig, OAuthStorageServiceImpl}
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, post, stubFor, urlPathEqualTo}
 
 import scala.concurrent.ExecutionContext
@@ -64,9 +64,12 @@ trait OAuthMockSupport {
     *
     * @return the test OAuth configuration
     */
-  protected def createOAuthConfig(): OAuthConfig =
-    OAuthConfig(authorizationEndpoint = "https://auth.org", tokenEndpoint = serverUri(TokenEndpoint),
-      scope = "test", redirectUri = "https://redirect.org", clientID = "testClient")
+  protected def createOAuthConfig(): IDPConfig = {
+    val oauthConfig = OAuthConfig(tokenEndpoint = serverUri(TokenEndpoint), redirectUri = "https://redirect.org",
+      clientID = "testClient", clientSecret = ClientSecret, initTokenData = CurrentTokenData)
+  IDPConfig(authorizationEndpoint = "https://auth.org", scope = "test", oauthConfig = oauthConfig)
+  }
+
 
   /**
     * Creates an OAuth storage configuration that can be used in tests.
@@ -86,7 +89,7 @@ trait OAuthMockSupport {
     * @param secret        the client secret
     * @param tokens        the current token pair
     */
-  protected def saveIdpData(storageConfig: OAuthStorageConfig, oauthConfig: OAuthConfig, secret: Secret,
+  protected def saveIdpData(storageConfig: OAuthStorageConfig, oauthConfig: IDPConfig, secret: Secret,
                             tokens: OAuthTokenData): Unit = {
     futureResult(for {
       _ <- OAuthStorageServiceImpl.saveConfig(storageConfig, oauthConfig)

@@ -24,7 +24,7 @@ import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse, StatusC
 import akka.stream.KillSwitch
 import akka.testkit.{ImplicitSender, TestKit}
 import com.github.cloudfiles.core.http.Secret
-import com.github.cloudfiles.core.http.auth.OAuthTokenData
+import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.http.{HttpRequestActor, OAuthStorageConfig}
 import com.github.sync.webdav.DepthHeader
 import org.mockito.Matchers.{any, eq => argEq}
@@ -42,11 +42,6 @@ object OAuthTokenActorSpec {
   /** The URI of the test token endpoint. */
   private val TokenUri = "https://test.idp.org/tokens"
 
-  /** OAuth configuration of the test client. */
-  private val TestConfig = OAuthConfig(authorizationEndpoint = "https://auth.idp.org/auth",
-    scope = "test run", redirectUri = "https://redirect.uri.org/", clientID = "testClient",
-    tokenEndpoint = TokenUri)
-
   /** Secret of the test client. */
   private val ClientSecret = Secret("theSecretOfTheTestClient")
 
@@ -59,6 +54,11 @@ object OAuthTokenActorSpec {
 
   /** Test token data. */
   private val TestTokens = OAuthTokenData(accessToken = "<access_token>", refreshToken = "<refresh_token>")
+
+  /** OAuth configuration of the test client. */
+  private val TestConfig = IDPConfig(authorizationEndpoint = "https://auth.idp.org/auth", scope = "test run",
+    oauthConfig = OAuthConfig(redirectUri = "https://redirect.uri.org/", clientID = "testClient",
+      tokenEndpoint = TokenUri, clientSecret = ClientSecret, initTokenData = TestTokens))
 
   /** Token data representing refreshed tokens. */
   private val RefreshedTokens = OAuthTokenData(accessToken = "<new_access>", refreshToken = "<new_refresh>")
@@ -348,10 +348,10 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     */
   private class TokenActorTestHelper {
     /** Mock for the storage service. */
-    private val storageService = mock[OAuthStorageService[OAuthStorageConfig, OAuthConfig, Secret, OAuthTokenData]]
+    private val storageService = mock[OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
 
     /** Mock for the token service. */
-    private val tokenService = mock[OAuthTokenRetrieverService[OAuthConfig, Secret, OAuthTokenData]]
+    private val tokenService = mock[OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]]
 
     /** Mock for the kill switch to handle token refresh failures. */
     private val killSwitch = mock[KillSwitch]

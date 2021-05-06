@@ -26,7 +26,7 @@ import akka.stream.scaladsl.Sink
 import akka.testkit.TestKit
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.Secret
-import com.github.cloudfiles.core.http.auth.OAuthTokenData
+import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.http.HttpRequestActor
 import org.scalatest.BeforeAndAfterAll
@@ -52,27 +52,27 @@ object OAuthTokenRetrieverServiceImplSpec {
   /** The client secret used by tests. */
   private val ClientSecret = "test_client_secret"
 
-  /** A test configuration object. */
-  private val TestConfig = OAuthConfig(authorizationEndpoint = s"https://$Host$AuthPath",
-    tokenEndpoint = s"https://$Host$TokenPath", scope = "foo bar", clientID = "testClient",
-    redirectUri = "http://localhost:12345")
-
   /** Test token data. */
   private val TestTokens = OAuthTokenData("testAccessToken", "testRefreshToken")
+
+  /** A test configuration object. */
+  private val TestConfig = IDPConfig(authorizationEndpoint = s"https://$Host$AuthPath", scope = "foo bar",
+    oauthConfig = OAuthConfig(tokenEndpoint = s"https://$Host$TokenPath", clientID = "testClient",
+    redirectUri = "http://localhost:12345", clientSecret = Secret(ClientSecret), initTokenData = TestTokens))
 
   /**
     * A map with the expected parameters for a request to fetch new tokens.
     */
-  private val FetchTokenParams = Map("client_id" -> TestConfig.clientID,
-    "redirect_uri" -> TestConfig.redirectUri, "client_secret" -> ClientSecret,
+  private val FetchTokenParams = Map("client_id" -> TestConfig.oauthConfig.clientID,
+    "redirect_uri" -> TestConfig.oauthConfig.redirectUri, "client_secret" -> ClientSecret,
     "grant_type" -> "authorization_code", "code" -> AuthCode)
 
   /**
     * A map with the expected parameters for a request to refresh the access
     * token.
     */
-  private val RefreshTokenParams = Map("client_id" -> TestConfig.clientID,
-    "redirect_uri" -> TestConfig.redirectUri, "client_secret" -> ClientSecret,
+  private val RefreshTokenParams = Map("client_id" -> TestConfig.oauthConfig.clientID,
+    "redirect_uri" -> TestConfig.oauthConfig.redirectUri, "client_secret" -> ClientSecret,
     "refresh_token" -> TestTokens.refreshToken, "grant_type" -> "refresh_token")
 
   /** A valid response of the IDP for a token request. */
@@ -222,9 +222,9 @@ class OAuthTokenRetrieverServiceImplSpec(testSystem: ActorSystem) extends TestKi
     uri.authority.host.toString() should be(Host)
     uri.path.toString() should be(AuthPath)
     val query = uri.query().toMap
-    query("client_id") should be(TestConfig.clientID)
+    query("client_id") should be(TestConfig.oauthConfig.clientID)
     query("scope") should be(TestConfig.scope)
-    query("redirect_uri") should be(TestConfig.redirectUri)
+    query("redirect_uri") should be(TestConfig.oauthConfig.redirectUri)
     query("response_type") should be("code")
   }
 

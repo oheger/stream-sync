@@ -92,7 +92,7 @@ object OAuthCommandsImpl extends OAuthCommands {
     * @param system         the actor system
     * @return a ''Future'' with the code
     */
-  private def obtainCode(config: OAuthConfig, authUri: Uri, browserHandler: BrowserHandler, reader: ConsoleReader,
+  private def obtainCode(config: IDPConfig, authUri: Uri, browserHandler: BrowserHandler, reader: ConsoleReader,
                          printFunc: PrintFunc)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     checkLocalRedirectUri(config) match {
       case Some(port) =>
@@ -113,9 +113,9 @@ object OAuthCommandsImpl extends OAuthCommands {
     * @param config the OAuth configuration
     * @return an ''Option'' with the extracted local redirect port
     */
-  private def checkLocalRedirectUri(config: OAuthConfig): Option[Int] = {
+  private def checkLocalRedirectUri(config: IDPConfig): Option[Int] = {
     val RegLocalPort = "http://localhost:(\\d+).*".r
-    config.redirectUri match {
+    config.oauthConfig.redirectUri match {
       case RegLocalPort(sPort) => Some(sPort.toInt)
       case _ => None
     }
@@ -185,10 +185,10 @@ object OAuthCommandsImpl extends OAuthCommands {
     * @param system       the actor system
     * @return a ''Future'' with the token pair
     */
-  private def fetchTokens(config: OAuthConfig, secret: Secret, code: String, tokenService: TokenService)
+  private def fetchTokens(config: IDPConfig, secret: Secret, code: String, tokenService: TokenService)
                          (implicit ec: ExecutionContext, system: ActorSystem):
   Future[OAuthTokenData] = {
-    val httpActor = system.actorOf(HttpRequestActor(config.tokenEndpoint), "httpRequestActor")
+    val httpActor = system.actorOf(HttpRequestActor(config.oauthConfig.tokenEndpoint), "httpRequestActor")
     tokenService.fetchTokens(httpActor, config, secret, code) andThen {
       case _ => system stop httpActor
     }
