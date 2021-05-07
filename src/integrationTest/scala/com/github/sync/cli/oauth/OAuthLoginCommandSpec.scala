@@ -438,10 +438,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       */
     private def createStorageService(): OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] = {
       val service = mock[OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
-      when(service.loadConfig(TestStorageConfig)).thenReturn(Future.successful(testOAutConfig))
-      when(service.loadClientSecret(TestStorageConfig)).thenReturn(Future.successful(ClientSecret))
-      when(service.saveTokens(TestStorageConfig, TestTokenData))
-        .thenReturn(Future.successful(Done))
+      when(service.loadIdpConfig(TestStorageConfig)).thenReturn(Future.successful(testOAutConfig))
+      when(service.saveTokens(TestStorageConfig, TestTokenData)).thenReturn(Future.successful(Done))
       service
     }
   }

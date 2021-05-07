@@ -20,7 +20,6 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.stream.scaladsl.Sink
-import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
@@ -58,11 +57,10 @@ object OAuthCommandsImpl extends OAuthCommands {
                      browserHandler: BrowserHandler, consoleReader: ConsoleReader,
                      printFunc: PrintFunc = ConsolePrintFunc)
                     (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
-    for {config <- storageService.loadConfig(loginConfig.storageConfig)
+    for {config <- storageService.loadIdpConfig(loginConfig.storageConfig)
          authUri <- tokenService.authorizeUrl(config)
          code <- obtainCode(config, authUri, browserHandler, consoleReader, printFunc)
-         secret <- storageService.loadClientSecret(loginConfig.storageConfig)
-         tokens <- fetchTokens(config, secret, code, tokenService)
+         tokens <- fetchTokens(config, code, tokenService)
          _ <- storageService.saveTokens(loginConfig.storageConfig, tokens)
          } yield "Login into identity provider was successful. Token data has been stored."
 
@@ -178,18 +176,17 @@ object OAuthCommandsImpl extends OAuthCommands {
     * authorization code.
     *
     * @param config       the OAuth configuration
-    * @param secret       the client secret
     * @param code         the authorization code
     * @param tokenService the service to retrieve a token
     * @param ec           the execution context
     * @param system       the actor system
     * @return a ''Future'' with the token pair
     */
-  private def fetchTokens(config: IDPConfig, secret: Secret, code: String, tokenService: TokenService)
+  private def fetchTokens(config: IDPConfig, code: String, tokenService: TokenService)
                          (implicit ec: ExecutionContext, system: ActorSystem):
   Future[OAuthTokenData] = {
     val httpActor = system.actorOf(HttpRequestActor(config.oauthConfig.tokenEndpoint), "httpRequestActor")
-    tokenService.fetchTokens(httpActor, config, secret, code) andThen {
+    tokenService.fetchTokens(httpActor, config, config.oauthConfig.clientSecret, code) andThen {
       case _ => system stop httpActor
     }
   }
