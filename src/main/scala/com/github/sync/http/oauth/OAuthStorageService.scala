@@ -37,6 +37,35 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS] {
   /**
+    * Saves all data stored in the given OAuth configuration in a way as
+    * defined by the storage configuration. The data contained in the OAuth
+    * configuration is written into multiple files; as some of them store
+    * sensitive information (tokens or secrets), they are encrypted if the
+    * storage configuration defines a password.
+    *
+    * @param storageConfig the storage configuration
+    * @param config        the OAuth configuration to be stored
+    * @param ec            the execution context
+    * @param system        the actor system
+    * @return a future indicating the success of this operation
+    */
+  def saveIdpConfig(storageConfig: STORAGE_CONFIG, config: CONFIG)
+                   (implicit ec: ExecutionContext, system: ActorSystem): Future[Done]
+
+  /**
+    * Loads the OAuth configuration defined by the given storage configuration.
+    * This includes all the information required for the interaction with the
+    * IDP.
+    *
+    * @param storageConfig the storage configuration
+    * @param ec            the execution context
+    * @param system        the actor system
+    * @return a ''Future'' with the OAuth configuration
+    */
+  def loadIdpConfig(storageConfig: STORAGE_CONFIG)
+                   (implicit ec: ExecutionContext, system: ActorSystem): Future[CONFIG]
+
+  /**
     * Saves the given OAuth configuration according to the given storage
     * configuration.
     *

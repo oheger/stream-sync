@@ -39,37 +39,64 @@ import scala.xml.{Elem, XML}
   */
 object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] {
   /** Constant for the suffix used for the file with the OAuth config. */
-  val SuffixConfigFile = ".xml"
+  final val SuffixConfigFile = ".xml"
 
   /** Constant for the suffix used for the file with the client secret. */
-  val SuffixSecretFile = ".sec"
+  final val SuffixSecretFile = ".sec"
 
   /** Constant for the suffix of the file with token information. */
-  val SuffixTokenFile = ".toc"
+  final val SuffixTokenFile = ".toc"
 
   /** Property for the client ID in the persistent config representation. */
-  val PropClientId = "client-id"
+  final val PropClientId = "client-id"
 
   /**
     * Property for the authorization endpoint in the persistent config
     * representation.
     */
-  val PropAuthorizationEndpoint = "authorization-endpoint"
+  final val PropAuthorizationEndpoint = "authorization-endpoint"
 
   /**
     * Property for the token endpoint in the persistent config
     * representation.
     */
-  val PropTokenEndpoint = "token-endpoint"
+  final val PropTokenEndpoint = "token-endpoint"
 
   /** Property for the scope in the persistent config representation. */
-  val PropScope = "scope"
+  final val PropScope = "scope"
 
   /** Property for the redirect URI in the persistent config representation. */
-  val PropRedirectUri = "redirect-uri"
+  final val PropRedirectUri = "redirect-uri"
+
+  /**
+    * Constant for a secret with an empty value. This is set as the client
+    * secret by ''loadIdpConfig()'' if no secret file is present.
+    */
+  final val UndefinedSecret = Secret("")
+
+  /**
+    * Constant for token data with empty tokens. This is set as initial tokens
+    * by ''loadIdpConfig()'' if no tokens file is present.
+    */
+  final val UndefinedTokens = OAuthTokenData("", "")
 
   /** The separator character used within the token file. */
   private val TokenSeparator = "\t"
+
+  override def saveIdpConfig(storageConfig: OAuthStorageConfig, config: IDPConfig)
+                            (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
+    for {
+      _ <- saveConfig(storageConfig, config)
+      _ <- saveClientSecret(storageConfig, config.oauthConfig.clientSecret)
+      _ <- saveTokens(storageConfig, config.oauthConfig.initTokenData)
+    } yield Done
+
+  override def loadIdpConfig(storageConfig: OAuthStorageConfig)(implicit ec: ExecutionContext, system: ActorSystem):
+  Future[IDPConfig] = for {
+    config <- loadConfig(storageConfig)
+    secret <- loadClientSecret(storageConfig)
+    tokens <- loadTokens(storageConfig)
+  } yield config.copy(oauthConfig = config.oauthConfig.copy(clientSecret = secret, initTokenData = tokens))
 
   override def saveConfig(storageConfig: OAuthStorageConfig, config: IDPConfig)
                          (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
@@ -117,7 +144,8 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
 
   override def loadClientSecret(storageConfig: OAuthStorageConfig)
                                (implicit ec: ExecutionContext, system: ActorSystem): Future[Secret] =
-    loadAndMapFile(storageConfig, SuffixSecretFile, storageConfig.optPassword)(buf => Secret(buf.utf8String))
+    loadAndMapFile(storageConfig, SuffixSecretFile, storageConfig.optPassword,
+      optDefault = Some(UndefinedSecret))(buf => Secret(buf.utf8String))
 
   override def saveTokens(storageConfig: OAuthStorageConfig, tokens: OAuthTokenData)
                          (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
@@ -128,7 +156,8 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
 
   override def loadTokens(storageConfig: OAuthStorageConfig)
                          (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] =
-    loadAndMapFile(storageConfig, SuffixTokenFile, optPwd = storageConfig.optPassword) { buf =>
+    loadAndMapFile(storageConfig, SuffixTokenFile, optPwd = storageConfig.optPassword,
+      optDefault = Some(UndefinedTokens)) { buf =>
       val parts = buf.utf8String.split(TokenSeparator)
       if (parts.length < 2)
         throw new IllegalArgumentException(s"Token file for ${storageConfig.baseName} contains too few tokens.")
@@ -174,7 +203,15 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     * @return the source for loading this file
     */
   private def fileSource(storageConfig: OAuthStorageConfig, suffix: String): Source[ByteString, Future[IOResult]] =
-    FileIO.fromPath(storageConfig.resolveFileName(suffix))
+    fileSource(storageConfig.resolveFileName(suffix))
+
+  /**
+    * Returns a source for loading the specified file.
+    *
+    * @param path the path to the file to be loaded
+    * @return the source for loading this file
+    */
+  private def fileSource(path: Path): Source[ByteString, Future[IOResult]] = FileIO.fromPath(path)
 
   /**
     * Writes the data produced by the given source to a file based on the
@@ -201,18 +238,25 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     * @param storageConfig the storage configuration
     * @param suffix        the suffix of the file to be loaded
     * @param optPwd        an optional password for decryption
+    * @param optDefault    an optional default to be returned if the file is
+    *                      not present
     * @param f             the mapping function
     * @param ec            the execution context
     * @param system        the actor system
     * @tparam T the type of the result
     * @return the result generated by the mapping function
     */
-  private def loadAndMapFile[T](storageConfig: OAuthStorageConfig, suffix: String, optPwd: Option[Secret] = None)
-                               (f: ByteString => T)
+  private def loadAndMapFile[T](storageConfig: OAuthStorageConfig, suffix: String, optPwd: Option[Secret] = None,
+                                optDefault: Option[T] = None)(f: ByteString => T)
                                (implicit ec: ExecutionContext, system: ActorSystem): Future[T] = {
-    val source = cryptSource(fileSource(storageConfig, suffix), optPwd, DecryptOpHandler)
-    val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
-    source.runWith(sink).map(f)
+    val path = storageConfig.resolveFileName(suffix)
+    if (optDefault.isDefined && !Files.isRegularFile(path))
+      Future.successful(optDefault.get)
+    else {
+      val source = cryptSource(fileSource(path), optPwd, DecryptOpHandler)
+      val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
+      source.runWith(sink).map(f)
+    }
   }
 
   /**

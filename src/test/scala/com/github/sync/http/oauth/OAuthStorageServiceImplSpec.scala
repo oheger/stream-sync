@@ -41,9 +41,23 @@ object OAuthStorageServiceImplSpec {
 
   /** A test OAuth configuration. */
   private val TestConfig = IDPConfig(authorizationEndpoint = "https://test-idp.org/auth", scope = "foo bar baz",
-    oauthConfig = OAuthConfig(tokenEndpoint = "https://test.idp.org/token", clientSecret = null,
+    oauthConfig = OAuthConfig(tokenEndpoint = "https://test.idp.org/token", clientSecret = ClientSecret,
       redirectUri = "http://my-endpoint/get_code", clientID = "my-client",
-      initTokenData = OAuthTokenData(null, null)))
+      initTokenData = TestTokens))
+
+  /**
+    * Compares two ''IDPConfig'' instances. Because the contained ''Secret''s
+    * do not have an ''equals()'' implementation, they have to be handled in a
+    * special way.
+    *
+    * @param c1 configuration 1
+    * @param c2 configuration 2
+    * @return a flag whether these configurations are equal
+    */
+  private def configEquals(c1: IDPConfig, c2: IDPConfig): Boolean =
+    c1.copy(oauthConfig = null) == c2.copy(oauthConfig = null) &&
+      c1.oauthConfig.copy(clientSecret = null) == c2.oauthConfig.copy(clientSecret = null) &&
+      c1.oauthConfig.clientSecret.secret == c2.oauthConfig.clientSecret.secret
 }
 
 /**
@@ -79,13 +93,29 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
   "OAuthStorageServiceImpl" should "support a round-trip with storing and loading an OAuthConfig" in {
     val storageConfig = createStorageConfig()
 
-    val futConfig = for {_ <- OAuthStorageServiceImpl.saveConfig(storageConfig, TestConfig)
-                         readConfig <- OAuthStorageServiceImpl.loadConfig(storageConfig)
+    val futConfig = for {_ <- OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig)
+                         readConfig <- OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
                          } yield readConfig
     val config = futureResult(futConfig)
     config should not be theSameInstanceAs(TestConfig)
-    config should be(TestConfig)
-    Files.exists(storageConfig.resolveFileName(".xml")) shouldBe true
+    configEquals(TestConfig, config) shouldBe true
+    List("xml", "sec", "toc") foreach { suffix =>
+      Files.exists(storageConfig.resolveFileName("." + suffix)) shouldBe true
+    }
+  }
+
+  it should "leave tokens and the client secret empty if undefined" in {
+    val storageConfig = createStorageConfig()
+    futureResult(OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig))
+    List("sec", "toc") foreach { suffix =>
+      Files.delete(storageConfig.resolveFileName("." + suffix))
+    }
+    val expOAuthConfig = TestConfig.oauthConfig.copy(clientSecret = Secret(""),
+      initTokenData = OAuthTokenData("", ""))
+    val expConfig = TestConfig.copy(oauthConfig = expOAuthConfig)
+
+    val config = futureResult(OAuthStorageServiceImpl.loadIdpConfig(storageConfig))
+    configEquals(config, expConfig) shouldBe true
   }
 
   it should "handle loading an invalid OAuth configuration" in {
@@ -93,7 +123,7 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     writeFileContent(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile),
       FileTestHelper.TestData)
 
-    expectFailedFuture[SAXParseException](OAuthStorageServiceImpl.loadConfig(storageConfig))
+    expectFailedFuture[SAXParseException](OAuthStorageServiceImpl.loadIdpConfig(storageConfig))
   }
 
   it should "handle loading an OAuth configuration with missing properties" in {
@@ -105,7 +135,7 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     writeFileContent(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile),
       xml.toString())
 
-    expectFailedFuture[IllegalArgumentException](OAuthStorageServiceImpl.loadConfig(storageConfig))
+    expectFailedFuture[IllegalArgumentException](OAuthStorageServiceImpl.loadIdpConfig(storageConfig))
   }
 
   it should "handle whitespace in XML correctly" in {
@@ -127,81 +157,42 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
       </redirect-uri>
     </oauth-config>
     val storageConfig = createStorageConfig("formatted")
+    futureResult(OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig))
     writeFileContent(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile),
       xml.toString())
 
-    val readConfig = futureResult(OAuthStorageServiceImpl.loadConfig(storageConfig))
-    readConfig should be(TestConfig)
+    val readConfig = futureResult(OAuthStorageServiceImpl.loadIdpConfig(storageConfig))
+    configEquals(TestConfig, readConfig) shouldBe true
   }
 
-  it should "support a round-trip with saving and loading a client secret" in {
-    val storageConfig = createStorageConfig()
-
-    val futSecret = for {_ <- OAuthStorageServiceImpl.saveClientSecret(storageConfig, ClientSecret)
-                         loadedSecret <- OAuthStorageServiceImpl.loadClientSecret(storageConfig)
-                         } yield loadedSecret
-    val secret = futureResult(futSecret)
-    secret should not be theSameInstanceAs(ClientSecret)
-    secret.secret should be(ClientSecret.secret)
-    val content = readDataFile(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixSecretFile))
-    content should include(ClientSecret.secret)
-  }
-
-  it should "support a round-trip with saving and loading an encrypted secret" in {
+  it should "support a round-trip with saving and loading encrypted data" in {
     val storageConfig = createStorageConfig(optPassword = Some("secure_storage"))
 
-    val futSecret = for {_ <- OAuthStorageServiceImpl.saveClientSecret(storageConfig, ClientSecret)
-                         loadedSecret <- OAuthStorageServiceImpl.loadClientSecret(storageConfig)
-                         } yield loadedSecret
-    val secret = futureResult(futSecret)
-    secret should not be theSameInstanceAs(ClientSecret)
-    secret.secret should be(ClientSecret.secret)
+    val futSecret = for {_ <- OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig)
+                         loadedConfig <- OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
+                         } yield loadedConfig
+    val secretConfig = futureResult(futSecret)
+    configEquals(secretConfig, TestConfig) shouldBe true
     val bytes = Files.readAllBytes(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixSecretFile))
     new String(bytes) should not include ClientSecret.secret
   }
 
-  it should "support a round-trip with saving and loading token information" in {
-    val storageConfig = createStorageConfig()
-
-    val futTokens = for {_ <- OAuthStorageServiceImpl.saveTokens(storageConfig, TestTokens)
-                         loadedTokens <- OAuthStorageServiceImpl.loadTokens(storageConfig)
-                         } yield loadedTokens
-    val tokens = futureResult(futTokens)
-    tokens should not be theSameInstanceAs(TestTokens)
-    tokens should be(TestTokens)
-    val content = readDataFile(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixTokenFile))
-    content should include(TestTokens.accessToken)
-    content should include(TestTokens.refreshToken)
-  }
-
   it should "handle a token file with too few tokens in it" in {
     val storageConfig = createStorageConfig()
+    futureResult(OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig))
     val tokenFile = storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixTokenFile)
     writeFileContent(tokenFile, "foo")
 
-    expectFailedFuture[IllegalArgumentException](OAuthStorageServiceImpl.loadTokens(storageConfig))
+    expectFailedFuture[IllegalArgumentException](OAuthStorageServiceImpl.loadIdpConfig(storageConfig))
   }
 
   it should "handle a token file with too many tokens in it" in {
     val storageConfig = createStorageConfig()
+    futureResult(OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig))
     val tokenFile = storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixTokenFile)
     writeFileContent(tokenFile, "foo\tbar\tbaz")
 
-    expectFailedFuture[IllegalArgumentException](OAuthStorageServiceImpl.loadTokens(storageConfig))
-  }
-
-  it should "support a round-trip with saving and loading encrypted token information" in {
-    val storageConfig = createStorageConfig(optPassword = Some("secret_tokens"))
-
-    val futTokens = for {_ <- OAuthStorageServiceImpl.saveTokens(storageConfig, TestTokens)
-                         loadedTokens <- OAuthStorageServiceImpl.loadTokens(storageConfig)
-                         } yield loadedTokens
-    val tokens = futureResult(futTokens)
-    tokens should be(TestTokens)
-    val bytes = Files.readAllBytes(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixTokenFile))
-    val encContent = new String(bytes)
-    encContent should not include TestTokens.accessToken
-    encContent should not include TestTokens.refreshToken
+    expectFailedFuture[IllegalArgumentException](OAuthStorageServiceImpl.loadIdpConfig(storageConfig))
   }
 
   it should "remove all files related to a storage configuration" in {
