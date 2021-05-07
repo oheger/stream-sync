@@ -67,7 +67,7 @@ trait OAuthMockSupport {
   protected def createOAuthConfig(): IDPConfig = {
     val oauthConfig = OAuthConfig(tokenEndpoint = serverUri(TokenEndpoint), redirectUri = "https://redirect.org",
       clientID = "testClient", clientSecret = ClientSecret, initTokenData = CurrentTokenData)
-  IDPConfig(authorizationEndpoint = "https://auth.org", scope = "test", oauthConfig = oauthConfig)
+    IDPConfig(authorizationEndpoint = "https://auth.org", scope = "test", oauthConfig = oauthConfig)
   }
 
 
@@ -86,17 +86,9 @@ trait OAuthMockSupport {
     *
     * @param storageConfig the OAuth storage configuration
     * @param oauthConfig   the OAuth configuration
-    * @param secret        the client secret
-    * @param tokens        the current token pair
     */
-  protected def saveIdpData(storageConfig: OAuthStorageConfig, oauthConfig: IDPConfig, secret: Secret,
-                            tokens: OAuthTokenData): Unit = {
-    futureResult(for {
-      _ <- OAuthStorageServiceImpl.saveConfig(storageConfig, oauthConfig)
-      _ <- OAuthStorageServiceImpl.saveClientSecret(storageConfig, secret)
-      done <- OAuthStorageServiceImpl.saveTokens(storageConfig, tokens)
-    } yield done)
-  }
+  protected def saveIdpData(storageConfig: OAuthStorageConfig, oauthConfig: IDPConfig): Unit =
+    futureResult(OAuthStorageServiceImpl.saveIdpConfig(storageConfig, oauthConfig))
 
   /**
     * Creates the objects required to access the test IDP and stores them, so
@@ -108,7 +100,7 @@ trait OAuthMockSupport {
   protected def prepareIdpConfig(optPassword: Option[Secret] = Some(PwdIdpData)): OAuthStorageConfig = {
     val storageConfig = createOAuthStorageConfig(optPassword)
     val oauthConfig = createOAuthConfig()
-    saveIdpData(storageConfig, oauthConfig, ClientSecret, CurrentTokenData)
+    saveIdpData(storageConfig, oauthConfig)
     storageConfig
   }
 
