@@ -16,7 +16,6 @@
 
 package com.github.sync.http.oauth
 
-import java.nio.file.{Files, Path}
 import akka.Done
 import akka.actor.ActorSystem
 import akka.stream.IOResult
@@ -24,9 +23,13 @@ import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
-import com.github.sync.crypt.{CryptOpHandler, CryptStage, DecryptOpHandler, EncryptOpHandler}
+import com.github.cloudfiles.crypt.alg.CryptAlgorithm
+import com.github.cloudfiles.crypt.alg.aes.Aes
+import com.github.cloudfiles.crypt.service.CryptService
 import com.github.sync.http.OAuthStorageConfig
 
+import java.nio.file.{Files, Path}
+import java.security.{Key, SecureRandom}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.xml.{Elem, XML}
 
@@ -98,8 +101,38 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     tokens <- loadTokens(storageConfig)
   } yield config.copy(oauthConfig = config.oauthConfig.copy(clientSecret = secret, initTokenData = tokens))
 
-  override def saveConfig(storageConfig: OAuthStorageConfig, config: IDPConfig)
+  override def saveTokens(storageConfig: OAuthStorageConfig, tokens: OAuthTokenData)
                          (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
+    val tokenData = tokens.accessToken + TokenSeparator + tokens.refreshToken
+    val source = cryptSource(Source.single(ByteString(tokenData)), storageConfig.optPassword) { (alg, key, rnd, src) =>
+      CryptService.encryptSource(alg, key, src)(rnd)
+    }
+    saveFile(storageConfig, SuffixTokenFile, source)
+  }
+
+  override def removeStorage(storageConfig: OAuthStorageConfig)(implicit ec: ExecutionContext): Future[List[Path]] =
+    Future {
+      List(SuffixConfigFile, SuffixSecretFile, SuffixTokenFile)
+        .map(storageConfig.resolveFileName)
+        .filter(Files.isRegularFile(_))
+        .map { path =>
+          Files.delete(path)
+          path
+        }
+    }
+
+  /**
+    * Saves the part of the configuration data that contains only properties of
+    * the IDP and no sensitive data.
+    *
+    * @param storageConfig the storage configuration
+    * @param config        the config to be stored
+    * @param ec            the executor context
+    * @param system        the actor system
+    * @return a ''Future'' with the result of the operation
+    */
+  private def saveConfig(storageConfig: OAuthStorageConfig, config: IDPConfig)
+                        (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
     val xml = <oauth-config>
       <client-id>
         {config.oauthConfig.clientID}
@@ -122,8 +155,17 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     saveFile(storageConfig, SuffixConfigFile, source)
   }
 
-  override def loadConfig(storageConfig: OAuthStorageConfig)
-                         (implicit ec: ExecutionContext, system: ActorSystem): Future[IDPConfig] =
+  /**
+    * Loads the file with properties of the IDP. The resulting ''IDPConfig'' is
+    * incomplete, as it does not contain any sensitive data.
+    *
+    * @param storageConfig the storage configuration
+    * @param ec            the execution context
+    * @param system        the actor system
+    * @return a ''Future'' with the (incomplete) ''IDPConfig''
+    */
+  private def loadConfig(storageConfig: OAuthStorageConfig)
+                        (implicit ec: ExecutionContext, system: ActorSystem): Future[IDPConfig] =
     loadAndMapFile(storageConfig, SuffixConfigFile) { buf =>
       val nodeSeq = XML.loadString(buf.utf8String)
       val oauthConfig = OAuthConfig(clientID = extractElem(nodeSeq, PropClientId),
@@ -135,27 +177,49 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
         scope = extractElem(nodeSeq, PropScope), oauthConfig = oauthConfig)
     }
 
-  override def saveClientSecret(storageConfig: OAuthStorageConfig, secret: Secret)
-                               (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
-    val source = cryptSource(Source.single(ByteString(secret.secret)), storageConfig.optPassword,
-      EncryptOpHandler)
+  /**
+    * Writes the file with client secret. The file is encrypted if a password
+    * has been specified.
+    *
+    * @param storageConfig the storage configuration
+    * @param secret        the secret
+    * @param ec            the execution context
+    * @param system        the actor system
+    * @return a ''Future'' with the result of the operation
+    */
+  private def saveClientSecret(storageConfig: OAuthStorageConfig, secret: Secret)
+                              (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
+    val source = cryptSource(Source.single(ByteString(secret.secret)), storageConfig.optPassword) { (a, k, rnd, src) =>
+      CryptService.encryptSource(a, k, src)(rnd)
+    }
     saveFile(storageConfig, SuffixSecretFile, source)
   }
 
-  override def loadClientSecret(storageConfig: OAuthStorageConfig)
-                               (implicit ec: ExecutionContext, system: ActorSystem): Future[Secret] =
+  /**
+    * Loads the client secret from the corresponding file. If this file is not
+    * present, an empty default secret is returned.
+    *
+    * @param storageConfig the storage configuration
+    * @param ec            the execution context
+    * @param system        the actor system
+    * @return a ''Future'' with the client secret
+    */
+  private def loadClientSecret(storageConfig: OAuthStorageConfig)
+                              (implicit ec: ExecutionContext, system: ActorSystem): Future[Secret] =
     loadAndMapFile(storageConfig, SuffixSecretFile, storageConfig.optPassword,
       optDefault = Some(UndefinedSecret))(buf => Secret(buf.utf8String))
 
-  override def saveTokens(storageConfig: OAuthStorageConfig, tokens: OAuthTokenData)
-                         (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
-    val tokenData = tokens.accessToken + TokenSeparator + tokens.refreshToken
-    val source = cryptSource(Source.single(ByteString(tokenData)), storageConfig.optPassword, EncryptOpHandler)
-    saveFile(storageConfig, SuffixTokenFile, source)
-  }
-
-  override def loadTokens(storageConfig: OAuthStorageConfig)
-                         (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] =
+  /**
+    * Loads the current token data from the corresponding file. If this file is
+    * not present, an object with undefined tokens is returned.
+    *
+    * @param storageConfig the storage configuration
+    * @param ec            the execution context
+    * @param system        the actor system
+    * @return a ''Future'' with the token information
+    */
+  private def loadTokens(storageConfig: OAuthStorageConfig)
+                        (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] =
     loadAndMapFile(storageConfig, SuffixTokenFile, optPwd = storageConfig.optPassword,
       optDefault = Some(UndefinedTokens)) { buf =>
       val parts = buf.utf8String.split(TokenSeparator)
@@ -164,17 +228,6 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
       else if (parts.length > 2)
         throw new IllegalArgumentException(s"Token file for ${storageConfig.baseName} has unexpected content.")
       OAuthTokenData(accessToken = parts(0), refreshToken = parts(1))
-    }
-
-  override def removeStorage(storageConfig: OAuthStorageConfig)(implicit ec: ExecutionContext): Future[List[Path]] =
-    Future {
-      List(SuffixConfigFile, SuffixSecretFile, SuffixTokenFile)
-        .map(storageConfig.resolveFileName)
-        .filter(Files.isRegularFile(_))
-        .map { path =>
-          Files.delete(path)
-          path
-        }
     }
 
   /**
@@ -193,17 +246,6 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
       throw new IllegalArgumentException(s"Missing mandatory property '$child' in OAuth configuration.")
     text
   }
-
-  /**
-    * Returns a source for loading a file based on the given storage
-    * configuration.
-    *
-    * @param storageConfig the storage configuration
-    * @param suffix        the suffix of the file to be loaded
-    * @return the source for loading this file
-    */
-  private def fileSource(storageConfig: OAuthStorageConfig, suffix: String): Source[ByteString, Future[IOResult]] =
-    fileSource(storageConfig.resolveFileName(suffix))
 
   /**
     * Returns a source for loading the specified file.
@@ -253,27 +295,31 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     if (optDefault.isDefined && !Files.isRegularFile(path))
       Future.successful(optDefault.get)
     else {
-      val source = cryptSource(fileSource(path), optPwd, DecryptOpHandler)
+      val source = cryptSource(fileSource(path), optPwd) { (alg, key, rnd, src) =>
+        CryptService.decryptSource(alg, key, src)(rnd)
+      }
       val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
       source.runWith(sink).map(f)
     }
   }
 
   /**
-    * Applies encryption to the given source. Some information managed by this
-    * service is sensitive and hence supports encryption. If a secret for
-    * encryption is provided, a corresponding [[CryptStage]] is added to the
-    * source.
+    * Applies a cryptographic operation to the given source. Some information
+    * managed by this service is sensitive and hence supports encryption. If a
+    * secret for encryption is provided, the original source is decorated with
+    * encryption or decryption, depending on the ''cryptFunc'' provided.
     *
-    * @param source         the original source
-    * @param optSecret      and option with the secret to be used for encryption
-    * @param cryptOpHandler the handler for the crypt operation
+    * @param source    the original source
+    * @param optSecret and option with the secret to be used for encryption
+    * @param cryptFunc a function to apply the desired operation to the
+    *                  original source
     * @tparam Mat the type of materialization
     * @return the decorated source
     */
-  private def cryptSource[Mat](source: Source[ByteString, Mat], optSecret: Option[Secret],
-                               cryptOpHandler: CryptOpHandler): Source[ByteString, Mat] =
+  private def cryptSource[Mat](source: Source[ByteString, Mat], optSecret: Option[Secret])
+                              (cryptFunc: (CryptAlgorithm, Key, SecureRandom, Source[ByteString, Mat]) =>
+                                Source[ByteString, Mat]): Source[ByteString, Mat] =
     optSecret.map { secret =>
-      source.via(new CryptStage(cryptOpHandler, CryptStage.keyFromString(secret.secret)))
+      cryptFunc(Aes, Aes.keyFromString(secret.secret), new SecureRandom, source)
     } getOrElse source
 }

@@ -41,7 +41,8 @@ lazy val akkaDependencies = Seq(
 
 lazy val cloudFilesDependencies = Seq(
   "com.github.oheger" %% "cloud-files-core" % VersionCloudFile,
-  "com.github.oheger" %% "cloud-files-crypt" % VersionCloudFile
+  "com.github.oheger" %% "cloud-files-crypt" % VersionCloudFile,
+  "com.github.oheger" %% "cloud-files-cryptalg-aes" % VersionCloudFile
 )
 
 lazy val testDependencies = Seq(
