@@ -114,21 +114,17 @@ class BasicAuthHttpActorFactory(override val httpRequestActorProps: Props) exten
   *
   * @param httpRequestActorProps ''Props'' to create the request actor
   * @param storageConfig         the storage configuration for the IDP
-  * @param oauthConfig           the OAuth configuration
-  * @param clientSecret          the client secret for the IDP
-  * @param initTokenData         initial token material
+  * @param idpConfig             the configuration of the IDP
   */
 class OAuthHttpActorFactory(override val httpRequestActorProps: Props,
                             storageConfig: OAuthStorageConfig,
-                            oauthConfig: IDPConfig,
-                            clientSecret: Secret,
-                            initTokenData: OAuthTokenData) extends HttpActorFactory {
+                            idpConfig: IDPConfig) extends HttpActorFactory {
   override protected def authActorProps(config: HttpConfig, system: ActorSystem, clientCount: Int, name: String,
                                         withKillSwitch: Boolean, httpActor: ActorRef): Props = {
-    val idpActor = system.actorOf(HttpRequestActor(oauthConfig.oauthConfig.tokenEndpoint), name + "_idp")
+    val idpActor = system.actorOf(HttpRequestActor(idpConfig.oauthConfig.tokenEndpoint), name + "_idp")
     val optKillSwitch = if (withKillSwitch) Some(killSwitch) else None
-    OAuthTokenActor(httpActor, clientCount, idpActor, storageConfig, oauthConfig, clientSecret,
-      initTokenData, OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, optKillSwitch)
+    OAuthTokenActor(httpActor, clientCount, idpActor, storageConfig, idpConfig, idpConfig.oauthConfig.clientSecret,
+      idpConfig.oauthConfig.initTokenData, OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, optKillSwitch)
   }
 }
 

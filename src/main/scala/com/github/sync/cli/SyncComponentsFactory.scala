@@ -16,7 +16,6 @@
 
 package com.github.sync.cli
 
-import java.nio.file.Paths
 import akka.NotUsed
 import akka.actor.{ActorSystem, Props}
 import akka.stream.scaladsl.{Flow, Source}
@@ -32,6 +31,7 @@ import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.webdav.DavConfig
 
+import java.nio.file.Paths
 import scala.concurrent.{ExecutionContext, Future}
 
 object SyncComponentsFactory {
@@ -237,10 +237,9 @@ object SyncComponentsFactory {
   Future[HttpActorFactory] =
     httpConfig.authConfig match {
       case storageConfig: OAuthStorageConfig =>
-        for {oauthConfig <- storageService.loadConfig(storageConfig)
-             secret <- storageService.loadClientSecret(storageConfig)
-             tokens <- storageService.loadTokens(storageConfig)
-             } yield new OAuthHttpActorFactory(requestActorProps, storageConfig, oauthConfig, secret, tokens)
+        storageService.loadIdpConfig(storageConfig) map { config =>
+          new OAuthHttpActorFactory(requestActorProps, storageConfig, config)
+        }
       case _: BasicAuthConfig =>
         Future.successful(new BasicAuthHttpActorFactory(requestActorProps))
       case NoAuth =>
