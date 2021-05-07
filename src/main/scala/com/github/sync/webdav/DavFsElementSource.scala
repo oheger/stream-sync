@@ -20,17 +20,16 @@ import java.io.ByteArrayInputStream
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalQuery
-
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
 import com.github.sync.http.HttpFsElementSource.{ElemData, HttpFolder, HttpIterationState, ParsedFolderData}
 import com.github.sync.http.{HttpFsElementSource, HttpRequestActor}
-import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}

@@ -19,12 +19,12 @@ package com.github.sync.crypt
 import java.security.Key
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicInteger
-
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
-import com.github.sync.util.{LRUCache, UriEncodingHelper}
+import com.github.sync.util.LRUCache
 
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}

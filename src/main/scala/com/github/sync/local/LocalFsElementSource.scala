@@ -18,11 +18,10 @@ package com.github.sync.local
 
 import java.io.IOException
 import java.nio.file.{DirectoryStream, Files, Path}
-
 import akka.NotUsed
 import akka.stream.scaladsl.Source
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, FsFile, FsFolder, IterateFunc, IterateResult, NextFolderFunc, SyncFolderData}
-import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext

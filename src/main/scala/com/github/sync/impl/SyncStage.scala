@@ -18,8 +18,8 @@ package com.github.sync.impl
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet}
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
-import com.github.sync.util.UriEncodingHelper
 
 object SyncStage {
   /**

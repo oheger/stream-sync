@@ -19,15 +19,14 @@ package com.github.sync
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
 import java.util.concurrent.atomic.AtomicReference
-
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{Graph, SourceShape}
 import akka.testkit.TestKit
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
 import com.github.sync.impl.ElementSource
-import com.github.sync.util.UriEncodingHelper
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers

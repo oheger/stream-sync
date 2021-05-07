@@ -22,9 +22,9 @@ import akka.http.scaladsl.model.HttpResponse
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{Graph, SourceShape}
 import akka.util.{ByteString, Timeout}
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
 import com.github.sync.http.HttpFsElementSource.{ElemData, HttpFolder, HttpIterationState, ParsedFolderData}
-import com.github.sync.util.UriEncodingHelper
 
 import scala.concurrent.{ExecutionContext, Future}
 

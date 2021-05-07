@@ -17,7 +17,6 @@
 package com.github.sync.onedrive
 
 import java.time.Instant
-
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
@@ -25,10 +24,10 @@ import akka.http.scaladsl.model.headers.Accept
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.scaladsl.Source
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
 import com.github.sync.http.HttpFsElementSource.{HttpIterationState, ParsedFolderData}
 import com.github.sync.http.{HttpFsElementSource, HttpRequestActor}
-import com.github.sync.util.UriEncodingHelper
 
 import scala.concurrent.{ExecutionContext, Future}
 

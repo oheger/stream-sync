@@ -17,16 +17,15 @@
 package com.github.sync.onedrive
 
 import java.time.Instant
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import akka.util.ByteString
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
 import com.github.sync.http.HttpRequestActor
-import com.github.sync.util.UriEncodingHelper
 import com.github.sync.{AsyncTestHelper, FileTestHelper, SourceFileProvider, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.mockito.Mockito

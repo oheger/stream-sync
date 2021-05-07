@@ -17,11 +17,10 @@
 package com.github.sync.local
 
 import java.nio.file.Path
-
 import akka.stream.scaladsl.{FileIO, Source}
 import akka.util.ByteString
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SourceFileProvider
-import com.github.sync.util.UriEncodingHelper
 
 import scala.annotation.tailrec
 import scala.concurrent.Future

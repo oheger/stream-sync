@@ -18,14 +18,14 @@ package com.github.sync.crypt
 
 import java.time.Instant
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
 import akka.testkit.TestKit
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes._
 import com.github.sync.crypt.CryptService.IterateSourceFunc
-import com.github.sync.util.{LRUCache, UriEncodingHelper}
+import com.github.sync.util.LRUCache
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers

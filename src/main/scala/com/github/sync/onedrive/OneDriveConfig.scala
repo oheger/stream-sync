@@ -18,8 +18,8 @@ package com.github.sync.onedrive
 
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.http.{AuthConfig, HttpConfig}
-import com.github.sync.util.UriEncodingHelper
 
 object OneDriveConfig {
   /** The default root URI for the OneDrive API. */
