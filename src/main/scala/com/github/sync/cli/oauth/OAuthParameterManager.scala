@@ -193,11 +193,9 @@ object OAuthParameterManager {
     * the client secret.
     *
     * @param oauthConfig   the OAuth configuration
-    * @param clientSecret  the client secret
     * @param storageConfig the ''OAuthStorageConfig''
     */
   case class InitCommandConfig(oauthConfig: IDPConfig,
-                               clientSecret: Secret,
                                override val storageConfig: OAuthStorageConfig) extends CommandConfig
 
   /**
@@ -411,7 +409,7 @@ object OAuthParameterManager {
       val oauthConfig = OAuthConfig(tokenEndpoint = tokenUrl, redirectUri = redirect, clientID = id,
         clientSecret = secret, initTokenData = OAuthTokenData(null, null))
       val idpConfig = IDPConfig(authorizationEndpoint = authUrl,  scope = scope, oauthConfig = oauthConfig)
-      InitCommandConfig(idpConfig, secret, storage)
+      InitCommandConfig(idpConfig, storage)
     }
 
   /**

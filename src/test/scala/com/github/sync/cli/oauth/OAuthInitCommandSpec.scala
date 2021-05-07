@@ -16,8 +16,6 @@
 
 package com.github.sync.cli.oauth
 
-import java.io.IOException
-import java.nio.file.Paths
 import akka.Done
 import akka.actor.ActorSystem
 import com.github.cloudfiles.core.http.Secret
@@ -33,6 +31,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
+import java.io.IOException
+import java.nio.file.Paths
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -48,13 +48,12 @@ object OAuthInitCommandSpec {
   private val ClientSecret = "<very secret client>"
 
   /** Test configuration for an IDP. */
-  private val TestConfig = IDPConfig(authorizationEndpoint =  "authEndpoint", scope = "scope",
-    oauthConfig = OAuthConfig(tokenEndpoint = "tokenEndpoint", redirectUri =  "redirect", clientID = "clientID",
-      clientSecret = Secret(ClientSecret), initTokenData = OAuthTokenData(null, null)))
+  private val TestConfig = IDPConfig(authorizationEndpoint = "authEndpoint", scope = "scope",
+    oauthConfig = OAuthConfig(tokenEndpoint = "tokenEndpoint", redirectUri = "redirect", clientID = "clientID",
+      clientSecret = Secret(ClientSecret), initTokenData = OAuthTokenData("", "")))
 
   /** The default configuration for the init command. */
-  private val InitConfig = InitCommandConfig(oauthConfig = TestConfig, clientSecret = Secret(ClientSecret),
-    storageConfig = StorageConfig)
+  private val InitConfig = InitCommandConfig(oauthConfig = TestConfig, storageConfig = StorageConfig)
 }
 
 /**
@@ -83,15 +82,6 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
     ex should be(exception)
   }
 
-  it should "report an exception when storing the secret" in {
-    val exception = new IOException("Cannot store secret")
-    val helper = new CommandTestHelper
-
-    val ex = expectFailedFuture[IOException](helper.prepareStorageService(saveSecretResult = Future.failed(exception))
-      .runCommand())
-    ex should be(exception)
-  }
-
   /**
     * A test helper class managing dependencies of the execution.
     */
@@ -108,14 +98,11 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       * saving data related to a new IDP. The results can be specified.
       *
       * @param saveConfigResult result for saving the config
-      * @param saveSecretResult result for saving the client secret
       * @return this test helper
       */
-    def prepareStorageService(saveConfigResult: Future[Done] = Future.successful(Done),
-                              saveSecretResult: Future[Done] = Future.successful(Done)): CommandTestHelper = {
-      when(storageService.saveConfig(StorageConfig, TestConfig)).thenReturn(saveConfigResult)
-      when(storageService.saveClientSecret(eqArg(StorageConfig), any())(eqArg(implicitly[ExecutionContext]),
-        eqArg(actorSystem))).thenReturn(saveSecretResult)
+    def prepareStorageService(saveConfigResult: Future[Done] = Future.successful(Done)): CommandTestHelper = {
+      when(storageService.saveIdpConfig(eqArg(StorageConfig), any())(eqArg(implicitly[ExecutionContext]),
+        eqArg(actorSystem))).thenReturn(saveConfigResult)
       this
     }
 
@@ -126,11 +113,12 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       * @return this test helper
       */
     def verifyStorageService(): CommandTestHelper = {
-      verify(storageService).saveConfig(StorageConfig, TestConfig)
-      val capt = ArgumentCaptor.forClass(classOf[Secret])
-      verify(storageService).saveClientSecret(eqArg(StorageConfig), capt.capture())(eqArg(implicitly[ExecutionContext]),
-        eqArg(actorSystem))
-      capt.getValue.secret should be(ClientSecret)
+      val capt = ArgumentCaptor.forClass(classOf[IDPConfig])
+      verify(storageService).saveIdpConfig(eqArg(StorageConfig), capt.capture())(any(), any())
+      val idpConfig = capt.getValue
+      idpConfig.copy(oauthConfig = null) should be(TestConfig.copy(oauthConfig = null))
+      idpConfig.oauthConfig.copy(clientSecret = null) should be(TestConfig.oauthConfig.copy(clientSecret = null))
+      idpConfig.oauthConfig.clientSecret.secret should be(ClientSecret)
       this
     }
 

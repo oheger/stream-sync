@@ -274,13 +274,13 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       OAuthParameterManager.ScopeOption, OAuthParameterManager.ClientIDOption,
       OAuthParameterManager.ClientSecretOption)
     config match {
-      case InitCommandConfig(idpConfig, clientSecret, storageConfig) =>
+      case InitCommandConfig(idpConfig, storageConfig) =>
         idpConfig.authorizationEndpoint should be(AuthEndpointUrl)
         idpConfig.oauthConfig.tokenEndpoint should be(TokenEndpointUrl)
         idpConfig.scope should be(scopeString(" "))
         idpConfig.oauthConfig.redirectUri should be(Redirect)
         idpConfig.oauthConfig.clientID should be(ClientID)
-        clientSecret.secret should be(ClientSecret)
+        idpConfig.oauthConfig.clientSecret.secret should be(ClientSecret)
         checkStorageConfig(storageConfig)
       case c =>
         fail("Unexpected configuration: " + c)
@@ -309,9 +309,9 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     val (config, next) = futureResult(extractCommandConfig(args, reader))
     ExtractorTestHelper.accessedKeys(next) should contain(OAuthParameterManager.ClientSecretOption)
     config match {
-      case InitCommandConfig(idpConfig, clientSecret, storageConfig) =>
+      case InitCommandConfig(idpConfig, storageConfig) =>
         idpConfig.oauthConfig.clientID should be(ClientID)
-        clientSecret.secret should be(ClientSecret)
+        idpConfig.oauthConfig.clientSecret.secret should be(ClientSecret)
         checkStorageConfig(storageConfig)
       case c =>
         fail("Unexpected configuration:" + c)

@@ -43,9 +43,9 @@ object OAuthCommandsImpl extends OAuthCommands {
 
   override def initIdp(config: InitCommandConfig, storageService: StorageService)
                       (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
-    for {_ <- storageService.saveConfig(config.storageConfig, config.oauthConfig)
-         _ <- storageService.saveClientSecret(config.storageConfig, config.clientSecret)
-         } yield s"IDP ${config.storageConfig.baseName} has been successfully initialized."
+    storageService.saveIdpConfig(config.storageConfig, config.oauthConfig) map { _ =>
+      s"IDP ${config.storageConfig.baseName} has been successfully initialized."
+    }
 
   /**
     * @inheritdoc
