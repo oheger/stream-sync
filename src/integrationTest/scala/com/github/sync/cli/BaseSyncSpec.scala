@@ -65,7 +65,7 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
   /**
     * @inheritdoc Use a higher timeout because of more complex operations.
     */
-  override val timeout: Duration = 10.seconds
+  override val asyncTimeout: Duration = 10.seconds
 
   /**
     * Creates a test file with the given name in the directory specified. The

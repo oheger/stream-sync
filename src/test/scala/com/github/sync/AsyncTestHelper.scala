@@ -33,7 +33,7 @@ trait AsyncTestHelper {
     * The default timeout when waiting for a future result. If derived classes
     * need a different timeout value, this property can be overridden.
     */
-  val timeout: Duration = 3.seconds
+  val asyncTimeout: Duration = 3.seconds
 
   /**
     * Waits for the given future to complete and returns the result.
@@ -43,7 +43,7 @@ trait AsyncTestHelper {
     * @return the result of the future
     */
   def futureResult[A](future: Future[A]): A =
-    Await.result(future, timeout)
+    Await.result(future, asyncTimeout)
 
   /**
     * Checks whether a future failed with the given exception type.
@@ -54,7 +54,7 @@ trait AsyncTestHelper {
     * @return the exception
     */
   def expectFailedFuture[E](future: Future[_])(implicit ct: ClassTag[E]): E = {
-    Await.ready(future, timeout)
+    Await.ready(future, asyncTimeout)
     future.value match {
       case Some(Failure(exception)) if ct.runtimeClass.isInstance(exception) =>
         ct.runtimeClass.cast(exception).asInstanceOf[E]
