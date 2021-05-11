@@ -32,10 +32,10 @@ lazy val ITest = config("integrationTest") extend Test
 
 lazy val akkaDependencies = Seq(
   "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
   "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
   "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-  "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
   "org.scala-lang" % "scala-reflect" % VersionScala
 )
 
@@ -48,6 +48,8 @@ lazy val cloudFilesDependencies = Seq(
 lazy val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % VersionScalaTest % Test,
   "org.scalatestplus" %% "scalatestplus-mockito" % VersionScalaTestMockito % Test,
+  "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
+  "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
   "com.github.tomakehurst" % "wiremock" % VersionWireMock % Test,
   "org.mockito" % "mockito-core" % VersionMockito % Test,
   "junit" % "junit" % VersionJunit % Test,
