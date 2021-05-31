@@ -24,7 +24,7 @@ import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
 import com.github.sync.cli.SyncParameterManager.SyncConfig
-import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
+import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureAuthConfig}
 import com.github.sync.http._
 import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService, OAuthStorageServiceImpl}
 import com.github.sync.local.LocalFsConfig
@@ -247,35 +247,38 @@ object SyncComponentsFactory {
     }
 
   /**
-    * Creates a ''DavConfig'' from the sync config, the structure URI, and the
-    * ''DavStructureConfig''.
+    * Creates a ''DavConfig'' from the sync config, the structure URI, the
+    * ''DavStructureConfig'', and the auth config.
     *
     * @param config       the ''SyncConfig''
     * @param davUri       the URI of the structure
     * @param structConfig the ''DavStructureConfig''
+    * @param authConfig   the config for authentication
     * @return the resulting ''DavConfig''
     */
-  private def davConfigFromStructureConfig(config: SyncConfig, davUri: String, structConfig: DavStructureConfig):
-  DavConfig = {
+  private def davConfigFromStructureConfig(config: SyncConfig, davUri: String, structConfig: DavStructureConfig,
+                                           authConfig: AuthConfig): DavConfig = {
     DavConfig(davUri, structConfig.optLastModifiedProperty,
       structConfig.optLastModifiedNamespace, structConfig.deleteBeforeOverride,
-      config.timeout, structConfig.authConfig)
+      config.timeout, authConfig)
   }
 
   /**
-    * Creates a ''OneDriveConfig'' from the sync config, the drive ID, and
-    * the ''OneDriveStructureConfig''.
+    * Creates a ''OneDriveConfig'' from the sync config, the drive ID, the
+    * ''OneDriveStructureConfig'', and the auth config.
     *
     * @param config       the '' SyncConfig''
     * @param driveID      the OneDrive ID
     * @param structConfig the ''OneDriveStructureConfig''
+    * @param authConfig   the config for authentication
     * @return the resulting ''OneDriveConfig''
     */
   private def oneDriveConfigFromStructureConfig(config: SyncConfig, driveID: String,
-                                                structConfig: OneDriveStructureConfig): OneDriveConfig = {
+                                                structConfig: OneDriveStructureConfig, authConfig: AuthConfig):
+  OneDriveConfig = {
     OneDriveConfig(driveID, structConfig.syncPath,
       structConfig.optUploadChunkSizeMB getOrElse OneDriveConfig.DefaultUploadChunkSizeMB,
-      config.timeout, structConfig.authConfig, structConfig.optServerUri)
+      config.timeout, authConfig, structConfig.optServerUri)
   }
 }
 
@@ -315,17 +318,17 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
     */
   def createSourceComponentsFactory(config: SyncConfig)(implicit system: ActorSystem, ec: ExecutionContext):
   Future[SourceComponentsFactory] = config.srcConfig match {
-    case FsStructureConfig(optTimeZone) =>
+    case StructureAuthConfig(FsStructureConfig(optTimeZone), _) =>
       val fsConfig = LocalFsConfig(Paths get config.srcUri, optTimeZone)
       Future.successful(new LocalFsSourceComponentsFactory(fsConfig))
 
-    case davStructConfig: DavStructureConfig =>
-      createDavComponentsFactory(config, config.srcUri, davStructConfig) { (davConfig, actorFactory) =>
+    case StructureAuthConfig(davStructConfig: DavStructureConfig, authConfig) =>
+      createDavComponentsFactory(config, config.srcUri, davStructConfig, authConfig) { (davConfig, actorFactory) =>
         new DavComponentsSourceFactory(davConfig, actorFactory)
       }
 
-    case oneStructConfig: OneDriveStructureConfig =>
-      createOneDriveComponentsFactory(config, config.srcUri, oneStructConfig) { (oneConfig, actorFactory) =>
+    case StructureAuthConfig(oneStructConfig: OneDriveStructureConfig, authConfig) =>
+      createOneDriveComponentsFactory(config, config.srcUri, oneStructConfig, authConfig) { (oneConfig, actorFactory) =>
         new OneDriveComponentsSourceFactory(oneConfig, actorFactory)
       }
   }
@@ -342,17 +345,17 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
     */
   def createDestinationComponentsFactory(config: SyncConfig)(implicit system: ActorSystem, ec: ExecutionContext):
   Future[DestinationComponentsFactory] = config.dstConfig match {
-    case FsStructureConfig(optTimeZone) =>
+    case StructureAuthConfig(FsStructureConfig(optTimeZone), _) =>
       val fsConfig = LocalFsConfig(Paths get config.dstUri, optTimeZone)
       Future.successful(new LocalFsDestinationComponentsFactory(fsConfig, config.timeout))
 
-    case davStructConfig: DavStructureConfig =>
-      createDavComponentsFactory(config, config.dstUri, davStructConfig) { (davConfig, actorFactory) =>
+    case StructureAuthConfig(davStructConfig: DavStructureConfig, authConfig) =>
+      createDavComponentsFactory(config, config.dstUri, davStructConfig, authConfig) { (davConfig, actorFactory) =>
         new DavComponentsDestinationFactory(davConfig, actorFactory)
       }
 
-    case oneStructConfig: OneDriveStructureConfig =>
-      createOneDriveComponentsFactory(config, config.dstUri, oneStructConfig) { (oneConfig, actorFactory) =>
+    case StructureAuthConfig(oneStructConfig: OneDriveStructureConfig, authConfig) =>
+      createOneDriveComponentsFactory(config, config.dstUri, oneStructConfig, authConfig) { (oneConfig, actorFactory) =>
         new OneDriveComponentsDestinationFactory(oneConfig, actorFactory)
       }
   }
@@ -364,14 +367,15 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
     * @param config       the sync configuration
     * @param uri          the URI of the DAV structure
     * @param structConfig the config for the DAV structure
+    * @param authConfig   the config for authentication
     * @param fCreate      a function to create the resulting factory
     * @param system       the actor system
     * @param ec           the execution context
     * @tparam T the type of the resulting factory
     * @return a future with the resulting factory
     */
-  private def createDavComponentsFactory[T](config: SyncConfig, uri: String, structConfig: DavStructureConfig)
-                                           (fCreate: (DavConfig, HttpActorFactory) => T)
+  private def createDavComponentsFactory[T](config: SyncConfig, uri: String, structConfig: DavStructureConfig,
+                                            authConfig: AuthConfig)(fCreate: (DavConfig, HttpActorFactory) => T)
                                            (implicit system: ActorSystem, ec: ExecutionContext): Future[T] = {
     val futDavUri = uri match {
       case SyncStructureConfig.RegDavUri(uri) => Future.successful(uri)
@@ -381,7 +385,7 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
     }
     for {
       davUri <- futDavUri
-      davConfig <- Future.successful(davConfigFromStructureConfig(config, davUri, structConfig)
+      davConfig <- Future.successful(davConfigFromStructureConfig(config, davUri, structConfig, authConfig)
       )
       factory <- createHttpActorFactory(HttpRequestActor(davUri), davConfig, oauthStorageService)
         .map(factory => fCreate(davConfig, factory))
@@ -395,6 +399,7 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
     * @param config       the sync configuration
     * @param uri          the URI of the OneDrive structure
     * @param structConfig the config of the OneDrive structure
+    * @param authConfig   the config for authentication
     * @param fCreate      a function to create the resulting factory
     * @param system       the actor system
     * @param ec           the execution context
@@ -402,7 +407,7 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
     * @return a future with the resulting factory
     */
   private def createOneDriveComponentsFactory[T](config: SyncConfig, uri: String,
-                                                 structConfig: OneDriveStructureConfig)
+                                                 structConfig: OneDriveStructureConfig, authConfig: AuthConfig)
                                                 (fCreate: (OneDriveConfig, HttpActorFactory) => T)
                                                 (implicit system: ActorSystem, ec: ExecutionContext): Future[T] = {
     val futDriveID = uri match {
@@ -413,7 +418,7 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
     }
     for {
       driveID <- futDriveID
-      oneConfig <- Future.successful(oneDriveConfigFromStructureConfig(config, driveID, structConfig))
+      oneConfig <- Future.successful(oneDriveConfigFromStructureConfig(config, driveID, structConfig, authConfig))
       factory <- createHttpActorFactory(HttpMultiHostRequestActor(OneDriveHostCacheSize, 1),
         oneConfig, oauthStorageService) map (fCreate(oneConfig, _))
     } yield factory

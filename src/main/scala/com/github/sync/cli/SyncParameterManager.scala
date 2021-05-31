@@ -16,14 +16,13 @@
 
 package com.github.sync.cli
 
-import java.nio.file.Path
-import java.util.Locale
-
 import akka.util.Timeout
 import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.SyncStructureConfig.StructureConfig
+import com.github.sync.cli.SyncStructureConfig.StructureAuthConfig
 
+import java.nio.file.Path
+import java.util.Locale
 import scala.concurrent.duration._
 import scala.language.implicitConversions
 import scala.util.Try
@@ -320,8 +319,8 @@ object SyncParameterManager {
     */
   case class SyncConfig(srcUri: String,
                         dstUri: String,
-                        srcConfig: StructureConfig,
-                        dstConfig: StructureConfig,
+                        srcConfig: StructureAuthConfig,
+                        dstConfig: StructureAuthConfig,
                         applyMode: ApplyMode,
                         timeout: Timeout,
                         logFilePath: Option[Path],
@@ -428,8 +427,8 @@ object SyncParameterManager {
     */
   private def createSyncConfig(triedSrcUri: Try[String],
                                triedDstUri: Try[String],
-                               triedSrcConfig: Try[StructureConfig],
-                               triedDstConfig: Try[StructureConfig],
+                               triedSrcConfig: Try[StructureAuthConfig],
+                               triedDstConfig: Try[StructureAuthConfig],
                                triedApplyMode: Try[ApplyMode],
                                triedTimeout: Try[Timeout],
                                triedLogFile: Try[Option[Path]],

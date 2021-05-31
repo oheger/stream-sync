@@ -96,7 +96,7 @@ object SyncStructureConfigSpec {
     */
   private def runConfigExtractor(args: Map[String, String], structureUrl: String, roleType: RoleType,
                                  optReader: Option[ConsoleReader] = None):
-  (Try[StructureConfig], ExtractionContext) = {
+  (Try[StructureAuthConfig], ExtractionContext) = {
     val reader = optReader getOrElse DummyConsoleReader
     val paramCtx = toExtractionContext(toParameters(args, createUrlParameter(structureUrl, roleType)),
       reader = reader)
@@ -116,7 +116,7 @@ object SyncStructureConfigSpec {
     * @return the success result returned by the extractor
     */
   private def extractConfig(args: Map[String, String], structureUrl: String, roleType: RoleType,
-                            optReader: Option[ConsoleReader] = None): (StructureConfig, ExtractionContext) = {
+                            optReader: Option[ConsoleReader] = None): (StructureAuthConfig, ExtractionContext) = {
     val (triedConfig, nextContext) = runConfigExtractor(args, structureUrl, roleType, optReader)
     triedConfig match {
       case Success(config) => (config, nextContext)
@@ -198,7 +198,8 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
     val (config, processedArgs) = extractConfig(args, uri, SourceRoleType)
     checkAccessedParameters(processedArgs, SourceRoleType, SyncStructureConfig.PropLocalFsTimeZone)
-    config should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
+    config.structureConfig should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
+    config.authConfig should be(NoAuth)
   }
 
   it should "create a correct file system config for the source structure with defaults" in {
@@ -206,7 +207,8 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
     val (config, processedArgs) = extractConfig(Map.empty, uri, SourceRoleType)
     checkAccessedParameters(processedArgs, SourceRoleType, SyncStructureConfig.PropLocalFsTimeZone)
-    config should be(FsStructureConfig(None))
+    config.structureConfig should be(FsStructureConfig(None))
+    config.authConfig should be(NoAuth)
   }
 
   it should "generate a failure for invalid parameters of a local FS config" in {
@@ -227,7 +229,8 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
     val (config, processedArgs) = extractConfig(args, uri, DestinationRoleType)
     checkAccessedParameters(processedArgs, DestinationRoleType, SyncStructureConfig.PropLocalFsTimeZone)
-    config should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
+    config.structureConfig should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
+    config.authConfig should be(NoAuth)
   }
 
   it should "create a correct DavConfig for the source structure if all basic auth properties are defined" in {
@@ -240,12 +243,12 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     val (config, processedArgs) =
       extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config match {
+    config.structureConfig match {
       case davConfig: DavStructureConfig =>
         davConfig.optLastModifiedProperty should be(Some(LastModifiedProperty))
         davConfig.optLastModifiedNamespace should be(Some(LastModifiedNamespace))
         davConfig.deleteBeforeOverride shouldBe true
-        checkBasicAuthConfig(davConfig.authConfig)
+        checkBasicAuthConfig(config.authConfig)
       case c => fail("Unexpected result: " + c)
     }
   }
@@ -256,7 +259,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
     val (config, _) =
       extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
-    config match {
+    config.structureConfig match {
       case davConfig: DavStructureConfig =>
         davConfig.optLastModifiedProperty should be(None)
         davConfig.optLastModifiedNamespace should be(None)
@@ -289,7 +292,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
     val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     ExtractorTestHelper.accessedKeys(processedArgs) should be(expAccessedKeys)
-    val oauthConfig = config.asInstanceOf[DavStructureConfig].authConfig.asInstanceOf[OAuthStorageConfig]
+    val oauthConfig = config.authConfig.asInstanceOf[OAuthStorageConfig]
     oauthConfig.baseName should be(IdpName)
     oauthConfig.optPassword.get.secret should be(Password)
     oauthConfig.rootDir.toString should be(StoragePath)
@@ -326,9 +329,9 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     val (config, processedArgs) =
       extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, DestinationRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config match {
+    config.structureConfig match {
       case davConfig: DavStructureConfig =>
-        checkBasicAuthConfig(davConfig.authConfig)
+        checkBasicAuthConfig(config.authConfig)
         davConfig.optLastModifiedProperty should be(Some(LastModifiedProperty))
         davConfig.optLastModifiedNamespace should be(Some(LastModifiedNamespace))
         davConfig.deleteBeforeOverride shouldBe true
@@ -346,8 +349,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     val (config, processedCtx) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType,
       optReader = Some(reader))
     ExtractorTestHelper.accessedKeys(processedCtx) should contain(propPwd)
-    val davConfig = config.asInstanceOf[DavStructureConfig]
-    val authConfig = davConfig.authConfig.asInstanceOf[BasicAuthConfig]
+    val authConfig = config.authConfig.asInstanceOf[BasicAuthConfig]
     authConfig.password.secret should be(Password)
   }
 
@@ -361,12 +363,12 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
     val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config match {
+    config.structureConfig match {
       case oneConfig: OneDriveStructureConfig =>
         oneConfig.optUploadChunkSizeMB should be(Some(ChunkSize))
         oneConfig.syncPath should be(StoragePath)
         oneConfig.optServerUri should be(Some(TestUri))
-        checkBasicAuthConfig(oneConfig.authConfig)
+        checkBasicAuthConfig(config.authConfig)
       case r => fail("Unexpected config " + r)
     }
   }
@@ -374,10 +376,11 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
   it should "create a correct OneDriveConfig for the source structure with defaults" in {
     val args = Map(SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDrivePath) -> StoragePath)
     val ExpConfig = OneDriveStructureConfig(syncPath = StoragePath, optServerUri = None,
-      optUploadChunkSizeMB = None, authConfig = NoAuth)
+      optUploadChunkSizeMB = None)
 
     val (config, _) = extractConfig(args, SyncStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
-    config should be(ExpConfig)
+    config.structureConfig should be(ExpConfig)
+    config.authConfig should be(NoAuth)
   }
 
   it should "generate a failure for invalid properties of a OneDrive configuration" in {
@@ -405,7 +408,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
         SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption))
     val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, expAccessedKeys)
-    val oauthConfig = config.asInstanceOf[OneDriveStructureConfig].authConfig.asInstanceOf[OAuthStorageConfig]
+    val oauthConfig = config.authConfig.asInstanceOf[OAuthStorageConfig]
     oauthConfig.baseName should be(IdpName)
     oauthConfig.optPassword.get.secret should be(Password)
     oauthConfig.rootDir.toString should be(StoragePath)
@@ -423,12 +426,12 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     val (config, processedArgs) =
       extractConfig(args, SyncStructureConfig.PrefixOneDrive + TestUri, DestinationRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config match {
+    config.structureConfig match {
       case oneConfig: OneDriveStructureConfig =>
         oneConfig.optUploadChunkSizeMB should be(Some(ChunkSize))
         oneConfig.syncPath should be(StoragePath)
         oneConfig.optServerUri should be(Some(TestUri))
-        checkBasicAuthConfig(oneConfig.authConfig)
+        checkBasicAuthConfig(config.authConfig)
       case r => fail("Unexpected config " + r)
     }
   }

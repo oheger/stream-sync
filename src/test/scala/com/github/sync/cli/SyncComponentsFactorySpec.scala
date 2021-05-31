@@ -16,8 +16,6 @@
 
 package com.github.sync.cli
 
-import java.nio.file.Paths
-import java.time.ZoneId
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
 import akka.testkit.TestKit
@@ -27,7 +25,7 @@ import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncComponentsFactory.SourceComponentsFactory
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, SyncConfig}
-import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
+import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureAuthConfig}
 import com.github.sync.http._
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
@@ -37,6 +35,8 @@ import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
+import java.nio.file.Paths
+import java.time.ZoneId
 import scala.concurrent.duration._
 import scala.language.implicitConversions
 
@@ -54,7 +54,7 @@ object SyncComponentsFactorySpec {
   private val TestAuthConfig = BasicAuthConfig("scott", Secret("tiger"))
 
   /** A test structure config to be used if no special one is set. */
-  private val TestStructureConfig = FsStructureConfig(None)
+  private val TestStructureConfig = StructureAuthConfig(FsStructureConfig(None), NoAuth)
 
   /** A test OneDrive drive ID. */
   private val OneDriveID = "my-drive"
@@ -70,8 +70,8 @@ object SyncComponentsFactorySpec {
     * @param optDstConfig optional configuration of the destination structure
     * @return the resulting ''SyncConfig''
     */
-  private def syncConfig(optSrcUri: Option[String] = None, optSrcConfig: Option[StructureConfig] = None,
-                         optDstUri: Option[String] = None, optDstConfig: Option[StructureConfig] = None):
+  private def syncConfig(optSrcUri: Option[String] = None, optSrcConfig: Option[StructureAuthConfig] = None,
+                         optDstUri: Option[String] = None, optDstConfig: Option[StructureAuthConfig] = None):
   SyncConfig = {
     val cryptConfig = CryptConfig(srcPassword = None, dstPassword = None,
       srcCryptMode = SyncParameterManager.CryptMode.None, dstCryptMode = SyncParameterManager.CryptMode.None,
@@ -145,7 +145,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   "SyncComponentsFactory" should "create a correct file system config for the source structure" in {
     val TimeZoneId = ZoneId of "UTC+02:00"
     val uri = "/my/sync/dir"
-    val config = syncConfig(optSrcUri = Some(uri), optSrcConfig = Some(FsStructureConfig(Some(TimeZoneId))))
+    val config = syncConfig(optSrcUri = Some(uri),
+      optSrcConfig = Some(StructureAuthConfig(FsStructureConfig(Some(TimeZoneId)), NoAuth)))
     val syncFactory = new SyncComponentsFactory
 
     val sourceFactory = futureResult(syncFactory.createSourceComponentsFactory(config))
@@ -155,7 +156,8 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   it should "create a correct file system config for the destination structure" in {
     val TimeZoneId = ZoneId of "UTC-02:00"
     val uri = "/my/sync/target"
-    val config = syncConfig(optDstUri = Some(uri), optDstConfig = Some(FsStructureConfig(Some(TimeZoneId))))
+    val config = syncConfig(optDstUri = Some(uri),
+      optDstConfig = Some(StructureAuthConfig(FsStructureConfig(Some(TimeZoneId)), NoAuth)))
     val syncFactory = new SyncComponentsFactory
 
     val destFactory = futureResult(syncFactory.createDestinationComponentsFactory(config))
@@ -169,8 +171,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "create a correct DavConfig for the source structure" in {
     val davStructConfig = DavStructureConfig(optLastModifiedNamespace = Some("lastModifiedNS"),
-      optLastModifiedProperty = Some("lastModifiedProp"), deleteBeforeOverride = true, authConfig = TestAuthConfig)
-    val config = syncConfig(optSrcUri = Some(PrefixDavRootUri), optSrcConfig = Some(davStructConfig))
+      optLastModifiedProperty = Some("lastModifiedProp"), deleteBeforeOverride = true)
+    val config = syncConfig(optSrcUri = Some(PrefixDavRootUri),
+      optSrcConfig = Some(StructureAuthConfig(davStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
     val srcFactory = futureResult(syncFactory.createSourceComponentsFactory(config))
@@ -185,8 +188,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "create a correct DavConfig for the source structure with defaults" in {
     val davStructConfig = DavStructureConfig(optLastModifiedNamespace = None, optLastModifiedProperty = None,
-      deleteBeforeOverride = false, authConfig = TestAuthConfig)
-    val config = syncConfig(optSrcUri = Some(PrefixDavRootUri), optSrcConfig = Some(davStructConfig))
+      deleteBeforeOverride = false)
+    val config = syncConfig(optSrcUri = Some(PrefixDavRootUri),
+      optSrcConfig = Some(StructureAuthConfig(davStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
     val srcFactory = futureResult(syncFactory.createSourceComponentsFactory(config))
@@ -198,8 +202,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "handle an invalid structure URI when creating a factory for a DAV structure" in {
     val davStructConfig = DavStructureConfig(optLastModifiedNamespace = None, optLastModifiedProperty = None,
-      deleteBeforeOverride = false, authConfig = TestAuthConfig)
-    val config = syncConfig(optSrcUri = Some("not a DAV uri"), optSrcConfig = Some(davStructConfig))
+      deleteBeforeOverride = false)
+    val config = syncConfig(optSrcUri = Some("not a DAV uri"),
+      optSrcConfig = Some(StructureAuthConfig(davStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
     val ex = expectFailedFuture[IllegalArgumentException](syncFactory.createSourceComponentsFactory(config))
@@ -208,8 +213,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "create a correct DavConfig for the destination structure" in {
     val davStructConfig = DavStructureConfig(optLastModifiedNamespace = Some("lastModifiedNS"),
-      optLastModifiedProperty = Some("lastModifiedProp"), deleteBeforeOverride = true, authConfig = TestAuthConfig)
-    val config = syncConfig(optDstUri = Some(PrefixDavRootUri), optDstConfig = Some(davStructConfig))
+      optLastModifiedProperty = Some("lastModifiedProp"), deleteBeforeOverride = true)
+    val config = syncConfig(optDstUri = Some(PrefixDavRootUri),
+      optDstConfig = Some(StructureAuthConfig(davStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
     val dstFactory = futureResult(syncFactory.createDestinationComponentsFactory(config))
@@ -229,9 +235,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   it should "create a correct OneDriveConfig for the source structure" in {
     val SyncPath = "/path/to/sync"
     val oneStructConfig = OneDriveStructureConfig(syncPath = SyncPath, optServerUri = Some(DavRootUri),
-      optUploadChunkSizeMB = Some(42), authConfig = TestAuthConfig)
+      optUploadChunkSizeMB = Some(42))
     val config = syncConfig(optSrcUri = Some(SyncStructureConfig.PrefixOneDrive + OneDriveID),
-      optSrcConfig = Some(oneStructConfig))
+      optSrcConfig = Some(StructureAuthConfig(oneStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
     val srcFactory = futureResult(syncFactory.createSourceComponentsFactory(config))
@@ -245,9 +251,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   it should "create a correct OneDriveConfig for the source structure with defaults" in {
     val SyncPath = "/path/to/sync"
     val oneStructConfig = OneDriveStructureConfig(syncPath = SyncPath, optServerUri = None,
-      optUploadChunkSizeMB = None, authConfig = TestAuthConfig)
+      optUploadChunkSizeMB = None)
     val config = syncConfig(optSrcUri = Some(SyncStructureConfig.PrefixOneDrive + OneDriveID),
-      optSrcConfig = Some(oneStructConfig))
+      optSrcConfig = Some(StructureAuthConfig(oneStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
     val srcFactory = futureResult(syncFactory.createSourceComponentsFactory(config))
@@ -258,8 +264,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
 
   it should "handle an invalid structure URI when creating a factory for a OneDrive structure" in {
     val oneStructConfig = OneDriveStructureConfig(syncPath = "somePath", optServerUri = None,
-      optUploadChunkSizeMB = None, authConfig = TestAuthConfig)
-    val config = syncConfig(optSrcUri = Some("not a OneDrive URI"), optSrcConfig = Some(oneStructConfig))
+      optUploadChunkSizeMB = None)
+    val config = syncConfig(optSrcUri = Some("not a OneDrive URI"),
+      optSrcConfig = Some(StructureAuthConfig(oneStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
     val ex = expectFailedFuture[IllegalArgumentException](syncFactory.createSourceComponentsFactory(config))
@@ -269,9 +276,9 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
   it should "create a correct OneDriveConfig for the destination structure" in {
     val SyncPath = "/path/to/dest/sync"
     val oneStructConfig = OneDriveStructureConfig(syncPath = SyncPath, optServerUri = Some(DavRootUri),
-      optUploadChunkSizeMB = Some(11), authConfig = TestAuthConfig)
+      optUploadChunkSizeMB = Some(11))
     val config = syncConfig(optDstUri = Some(SyncStructureConfig.PrefixOneDrive + OneDriveID),
-      optDstConfig = Some(oneStructConfig))
+      optDstConfig = Some(StructureAuthConfig(oneStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
     val srcFactory = futureResult(syncFactory.createDestinationComponentsFactory(config))

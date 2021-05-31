@@ -16,18 +16,15 @@
 
 package com.github.sync.cli
 
-import java.nio.file.Paths
-import java.time.ZoneId
-
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import akka.util.Timeout
-import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractionException}
+import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncParameterManager._
-import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, StructureConfig}
+import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, StructureAuthConfig}
 import com.github.sync.http.NoAuth
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito._
@@ -36,6 +33,8 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatestplus.mockito.MockitoSugar
 
+import java.nio.file.Paths
+import java.time.ZoneId
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Failure
@@ -144,7 +143,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (roleType.configPropertyName(SyncStructureConfig.PropLocalFsTimeZone) -> List(zid))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.srcConfig should be(FsStructureConfig(Some(ZoneId.of(zid))))
+    config.srcConfig.structureConfig should be(FsStructureConfig(Some(ZoneId.of(zid))))
+    config.srcConfig.authConfig should be(NoAuth)
   }
 
   it should "construct a correct destination config for a Dav server" in {
@@ -156,8 +156,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (role.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> List(ModifiedProp)) +
       (role.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> List(ModifiedNs)) +
       (ParameterParser.InputParameter.key -> List(SourceUri, DavDestUri))
-    val ExpDavConfig = DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
-      authConfig = NoAuth, deleteBeforeOverride = false)
+    val ExpDavConfig = StructureAuthConfig(DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
+      deleteBeforeOverride = false), NoAuth)
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
     config.dstConfig should be(ExpDavConfig)
@@ -413,8 +413,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       dstPassword = Some("pwd-dst"), dstCryptMode = CryptMode.Files, cryptCacheSize = 55)
     val expCryptConfig = CryptConfig(dstPassword = Some("pwd-src"), dstCryptMode = CryptMode.FilesAndNames,
       srcPassword = Some("pwd-dst"), srcCryptMode = CryptMode.Files, cryptCacheSize = 55)
-    val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureConfig],
-      dstConfig = mock[StructureConfig], applyMode = SyncParameterManager.ApplyModeTarget("test"),
+    val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
+      dstConfig = mock[StructureAuthConfig], applyMode = SyncParameterManager.ApplyModeTarget("test"),
       timeout = 1.minute, logFilePath = None, syncLogPath = None, ignoreTimeDelta = Some(100),
       cryptConfig = orgCryptConfig, opsPerSecond = Some(100), filterData = mock[SyncFilterData],
       switched = true)
