@@ -21,7 +21,7 @@ import akka.stream.{KillSwitches, SharedKillSwitch}
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.http.oauth._
-import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpConfig, HttpNoOpExtensionActor, HttpRequestActor, OAuthStorageConfig}
+import com.github.sync.http.{SyncBasicAuthConfig, HttpBasicAuthActor, HttpConfig, HttpNoOpExtensionActor, HttpRequestActor, SyncOAuthStorageConfig}
 
 object HttpActorFactory {
   /** The name of the HTTP request actor for the source structure. */
@@ -106,7 +106,7 @@ sealed trait HttpActorFactory {
 class BasicAuthHttpActorFactory(override val httpRequestActorProps: Props) extends HttpActorFactory {
   override protected def authActorProps(config: HttpConfig, system: ActorSystem, clientCount: Int, name: String,
                                         withKillSwitch: Boolean, httpActor: ActorRef): Props =
-    HttpBasicAuthActor(httpActor, config.authConfig.asInstanceOf[BasicAuthConfig], clientCount)
+    HttpBasicAuthActor(httpActor, config.authConfig.asInstanceOf[SyncBasicAuthConfig], clientCount)
 }
 
 /**
@@ -117,7 +117,7 @@ class BasicAuthHttpActorFactory(override val httpRequestActorProps: Props) exten
   * @param idpConfig             the configuration of the IDP
   */
 class OAuthHttpActorFactory(override val httpRequestActorProps: Props,
-                            storageConfig: OAuthStorageConfig,
+                            storageConfig: SyncOAuthStorageConfig,
                             idpConfig: IDPConfig) extends HttpActorFactory {
   override protected def authActorProps(config: HttpConfig, system: ActorSystem, clientCount: Int, name: String,
                                         withKillSwitch: Boolean, httpActor: ActorRef): Props = {

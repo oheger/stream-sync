@@ -26,7 +26,7 @@ import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.crypt.alg.CryptAlgorithm
 import com.github.cloudfiles.crypt.alg.aes.Aes
 import com.github.cloudfiles.crypt.service.CryptService
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.SyncOAuthStorageConfig
 
 import java.nio.file.{Files, Path}
 import java.security.{Key, SecureRandom}
@@ -40,7 +40,7 @@ import scala.xml.{Elem, XML}
   * in files with the same base name, but different suffixes. Sensitive
   * information can be encrypted if a password is provided.
   */
-object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] {
+object OAuthStorageServiceImpl extends OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] {
   /** Constant for the suffix used for the file with the OAuth config. */
   final val SuffixConfigFile = ".xml"
 
@@ -86,7 +86,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
   /** The separator character used within the token file. */
   private val TokenSeparator = "\t"
 
-  override def saveIdpConfig(storageConfig: OAuthStorageConfig, config: IDPConfig)
+  override def saveIdpConfig(storageConfig: SyncOAuthStorageConfig, config: IDPConfig)
                             (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
     for {
       _ <- saveConfig(storageConfig, config)
@@ -94,14 +94,14 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
       _ <- saveTokens(storageConfig, config.oauthConfig.initTokenData)
     } yield Done
 
-  override def loadIdpConfig(storageConfig: OAuthStorageConfig)(implicit ec: ExecutionContext, system: ActorSystem):
+  override def loadIdpConfig(storageConfig: SyncOAuthStorageConfig)(implicit ec: ExecutionContext, system: ActorSystem):
   Future[IDPConfig] = for {
     config <- loadConfig(storageConfig)
     secret <- loadClientSecret(storageConfig)
     tokens <- loadTokens(storageConfig)
   } yield config.copy(oauthConfig = config.oauthConfig.copy(clientSecret = secret, initTokenData = tokens))
 
-  override def saveTokens(storageConfig: OAuthStorageConfig, tokens: OAuthTokenData)
+  override def saveTokens(storageConfig: SyncOAuthStorageConfig, tokens: OAuthTokenData)
                          (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
     val tokenData = tokens.accessToken + TokenSeparator + tokens.refreshToken
     val source = cryptSource(Source.single(ByteString(tokenData)), storageConfig.optPassword) { (alg, key, rnd, src) =>
@@ -110,7 +110,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     saveFile(storageConfig, SuffixTokenFile, source)
   }
 
-  override def removeStorage(storageConfig: OAuthStorageConfig)(implicit ec: ExecutionContext): Future[List[Path]] =
+  override def removeStorage(storageConfig: SyncOAuthStorageConfig)(implicit ec: ExecutionContext): Future[List[Path]] =
     Future {
       List(SuffixConfigFile, SuffixSecretFile, SuffixTokenFile)
         .map(storageConfig.resolveFileName)
@@ -131,7 +131,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     * @param system        the actor system
     * @return a ''Future'' with the result of the operation
     */
-  private def saveConfig(storageConfig: OAuthStorageConfig, config: IDPConfig)
+  private def saveConfig(storageConfig: SyncOAuthStorageConfig, config: IDPConfig)
                         (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
     val xml = <oauth-config>
       <client-id>
@@ -164,7 +164,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     * @param system        the actor system
     * @return a ''Future'' with the (incomplete) ''IDPConfig''
     */
-  private def loadConfig(storageConfig: OAuthStorageConfig)
+  private def loadConfig(storageConfig: SyncOAuthStorageConfig)
                         (implicit ec: ExecutionContext, system: ActorSystem): Future[IDPConfig] =
     loadAndMapFile(storageConfig, SuffixConfigFile) { buf =>
       val nodeSeq = XML.loadString(buf.utf8String)
@@ -187,7 +187,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     * @param system        the actor system
     * @return a ''Future'' with the result of the operation
     */
-  private def saveClientSecret(storageConfig: OAuthStorageConfig, secret: Secret)
+  private def saveClientSecret(storageConfig: SyncOAuthStorageConfig, secret: Secret)
                               (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
     val source = cryptSource(Source.single(ByteString(secret.secret)), storageConfig.optPassword) { (a, k, rnd, src) =>
       CryptService.encryptSource(a, k, src)(rnd)
@@ -204,7 +204,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     * @param system        the actor system
     * @return a ''Future'' with the client secret
     */
-  private def loadClientSecret(storageConfig: OAuthStorageConfig)
+  private def loadClientSecret(storageConfig: SyncOAuthStorageConfig)
                               (implicit ec: ExecutionContext, system: ActorSystem): Future[Secret] =
     loadAndMapFile(storageConfig, SuffixSecretFile, storageConfig.optPassword,
       optDefault = Some(UndefinedSecret))(buf => Secret(buf.utf8String))
@@ -218,7 +218,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     * @param system        the actor system
     * @return a ''Future'' with the token information
     */
-  private def loadTokens(storageConfig: OAuthStorageConfig)
+  private def loadTokens(storageConfig: SyncOAuthStorageConfig)
                         (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] =
     loadAndMapFile(storageConfig, SuffixTokenFile, optPwd = storageConfig.optPassword,
       optDefault = Some(UndefinedTokens)) { buf =>
@@ -266,7 +266,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     * @param system        the actor system
     * @return a ''Future'' indicating the success of this operation
     */
-  private def saveFile(storageConfig: OAuthStorageConfig, suffix: String, source: Source[ByteString, Any])
+  private def saveFile(storageConfig: SyncOAuthStorageConfig, suffix: String, source: Source[ByteString, Any])
                       (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
     val sink = FileIO.toPath(storageConfig.resolveFileName(suffix))
     source.runWith(sink).map(_ => Done)
@@ -288,7 +288,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[OAuthStorageConfig, I
     * @tparam T the type of the result
     * @return the result generated by the mapping function
     */
-  private def loadAndMapFile[T](storageConfig: OAuthStorageConfig, suffix: String, optPwd: Option[Secret] = None,
+  private def loadAndMapFile[T](storageConfig: SyncOAuthStorageConfig, suffix: String, optPwd: Option[Secret] = None,
                                 optDefault: Option[T] = None)(f: ByteString => T)
                                (implicit ec: ExecutionContext, system: ActorSystem): Future[T] = {
     val path = storageConfig.resolveFileName(suffix)

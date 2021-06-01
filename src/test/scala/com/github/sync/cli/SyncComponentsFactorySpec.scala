@@ -52,10 +52,10 @@ object SyncComponentsFactorySpec {
   private val PrefixDavRootUri = SyncComponentsFactory.PrefixWebDav + DavRootUri
 
   /** A test authentication configuration. */
-  private val TestAuthConfig = BasicAuthConfig("scott", Secret("tiger"))
+  private val TestAuthConfig = SyncBasicAuthConfig("scott", Secret("tiger"))
 
   /** A test structure config to be used if no special one is set. */
-  private val TestStructureConfig = StructureAuthConfig(FsStructureConfig(None), NoAuth)
+  private val TestStructureConfig = StructureAuthConfig(FsStructureConfig(None), SyncNoAuth)
 
   /** A test OneDrive drive ID. */
   private val OneDriveID = "my-drive"
@@ -147,7 +147,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val TimeZoneId = ZoneId of "UTC+02:00"
     val uri = "/my/sync/dir"
     val config = syncConfig(optSrcUri = Some(uri),
-      optSrcConfig = Some(StructureAuthConfig(FsStructureConfig(Some(TimeZoneId)), NoAuth)))
+      optSrcConfig = Some(StructureAuthConfig(FsStructureConfig(Some(TimeZoneId)), SyncNoAuth)))
     val syncFactory = new SyncComponentsFactory
 
     val sourceFactory = futureResult(syncFactory.createSourceComponentsFactory(config))
@@ -158,7 +158,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val TimeZoneId = ZoneId of "UTC-02:00"
     val uri = "/my/sync/target"
     val config = syncConfig(optDstUri = Some(uri),
-      optDstConfig = Some(StructureAuthConfig(FsStructureConfig(Some(TimeZoneId)), NoAuth)))
+      optDstConfig = Some(StructureAuthConfig(FsStructureConfig(Some(TimeZoneId)), SyncNoAuth)))
     val syncFactory = new SyncComponentsFactory
 
     val destFactory = futureResult(syncFactory.createDestinationComponentsFactory(config))

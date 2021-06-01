@@ -25,7 +25,7 @@ import akka.stream.KillSwitch
 import akka.testkit.{ImplicitSender, TestKit}
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
-import com.github.sync.http.{HttpRequestActor, OAuthStorageConfig}
+import com.github.sync.http.{HttpRequestActor, SyncOAuthStorageConfig}
 import com.github.sync.webdav.DepthHeader
 import org.mockito.Matchers.{any, eq => argEq}
 import org.mockito.Mockito._
@@ -46,7 +46,7 @@ object OAuthTokenActorSpec {
   private val ClientSecret = Secret("theSecretOfTheTestClient")
 
   /** A test storage configuration. */
-  private val TestStorageConfig = OAuthStorageConfig(Paths.get("/token/data"), "test-idp", None)
+  private val TestStorageConfig = SyncOAuthStorageConfig(Paths.get("/token/data"), "test-idp", None)
 
   /** A test request used by the tests. */
   private val TestRequest = HttpRequest(method = HttpMethods.POST, uri = "http://test.org/foo",
@@ -348,7 +348,7 @@ class OAuthTokenActorSpec(testSystem: ActorSystem) extends TestKit(testSystem) w
     */
   private class TokenActorTestHelper {
     /** Mock for the storage service. */
-    private val storageService = mock[OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
+    private val storageService = mock[OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
 
     /** Mock for the token service. */
     private val tokenService = mock[OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]]

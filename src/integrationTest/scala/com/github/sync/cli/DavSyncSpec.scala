@@ -16,8 +16,6 @@
 
 package com.github.sync.cli
 
-import java.nio.file.Files
-import java.util.concurrent.atomic.AtomicInteger
 import akka.http.scaladsl.model.StatusCodes
 import akka.pattern.AskTimeoutException
 import akka.testkit.TestProbe
@@ -26,12 +24,14 @@ import com.github.cloudfiles.core.http.{Secret, UriEncodingHelper}
 import com.github.sync.WireMockSupport.{BasicAuthFunc, Password, TokenAuthFunc, UserId}
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.DecryptOpHandler
-import com.github.sync.http.{BasicAuthConfig, HttpRequestActor}
+import com.github.sync.http.{HttpRequestActor, SyncBasicAuthConfig}
 import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, DavStubbingSupport}
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
 
+import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
@@ -275,7 +275,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val WebDavPath = "/destination"
     val davConfig = DavConfig(serverUri(WebDavPath),
       Some(DavConfig.DefaultModifiedProperty), None, deleteBeforeOverride = false,
-      Timeout(10.seconds), authConfig = BasicAuthConfig(UserId, Secret(Password)))
+      Timeout(10.seconds), authConfig = SyncBasicAuthConfig(UserId, Secret(Password)))
     val shutdownCount = new AtomicInteger
     val provider = new DavSourceFileProvider(davConfig, TestProbe().ref) {
       override def shutdown(): Unit = {

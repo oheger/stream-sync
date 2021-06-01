@@ -20,7 +20,7 @@ import java.io.StringReader
 import java.time.Instant
 
 import akka.util.Timeout
-import com.github.sync.http.NoAuth
+import com.github.sync.http.SyncNoAuth
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -46,7 +46,7 @@ object ModifiedTimeRequestFactorySpec {
                            namespace: Option[String] = None): DavConfig =
     DavConfig(rootUri = "https://test.dav.org",
       optModifiedProperty = Some(property), optModifiedNamespace = namespace,
-      deleteBeforeOverride = false, Timeout(16.seconds), NoAuth)
+      deleteBeforeOverride = false, Timeout(16.seconds), SyncNoAuth)
 
   /**
     * Parses the given template string into an XML element.

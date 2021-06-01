@@ -22,7 +22,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.oauth.OAuthParameterManager.InitCommandConfig
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.SyncOAuthStorageConfig
 import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService}
 import org.mockito.ArgumentCaptor
 import org.mockito.Matchers.{any, eq => eqArg}
@@ -41,7 +41,7 @@ object OAuthInitCommandSpec {
   private val IdpName = "myTestIDP"
 
   /** A test storage configuration. */
-  private val StorageConfig = OAuthStorageConfig(baseName = IdpName, rootDir = Paths.get("/foo"),
+  private val StorageConfig = SyncOAuthStorageConfig(baseName = IdpName, rootDir = Paths.get("/foo"),
     optPassword = None)
 
   /** The content of the client secret. */
@@ -90,7 +90,7 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
     private implicit val actorSystem: ActorSystem = mock[ActorSystem]
 
     /** Mock for the storage service. */
-    private val storageService = mock[OAuthStorageService[OAuthStorageConfig, IDPConfig,
+    private val storageService = mock[OAuthStorageService[SyncOAuthStorageConfig, IDPConfig,
       Secret, OAuthTokenData]]
 
     /**

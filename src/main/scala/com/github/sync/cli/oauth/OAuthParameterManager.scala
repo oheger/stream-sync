@@ -20,7 +20,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.CliActorSystemLifeCycle
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.SyncOAuthStorageConfig
 import com.github.sync.http.oauth.IDPConfig
 
 import java.nio.file.Path
@@ -182,7 +182,7 @@ object OAuthParameterManager {
       *
       * @return the ''OAuthStorageConfig''
       */
-    def storageConfig: OAuthStorageConfig
+    def storageConfig: SyncOAuthStorageConfig
   }
 
   /**
@@ -196,7 +196,7 @@ object OAuthParameterManager {
     * @param storageConfig the ''OAuthStorageConfig''
     */
   case class InitCommandConfig(oauthConfig: IDPConfig,
-                               override val storageConfig: OAuthStorageConfig) extends CommandConfig
+                               override val storageConfig: SyncOAuthStorageConfig) extends CommandConfig
 
   /**
     * A data class collecting all the data required by the command to remove an
@@ -206,7 +206,7 @@ object OAuthParameterManager {
     *
     * @param storageConfig the ''OAuthStorageConfig''
     */
-  case class RemoveCommandConfig(override val storageConfig: OAuthStorageConfig) extends CommandConfig
+  case class RemoveCommandConfig(override val storageConfig: SyncOAuthStorageConfig) extends CommandConfig
 
   /**
     * A data class collecting all the data required by the command to login
@@ -216,7 +216,7 @@ object OAuthParameterManager {
     *
     * @param storageConfig the ''OAuthStorageConfig''
     */
-  case class LoginCommandConfig(override val storageConfig: OAuthStorageConfig) extends CommandConfig
+  case class LoginCommandConfig(override val storageConfig: SyncOAuthStorageConfig) extends CommandConfig
 
   /**
     * A ''CliExtractor'' for extracting the command passed in the
@@ -260,7 +260,7 @@ object OAuthParameterManager {
     * @return the ''CliExtractor'' for the ''OAuthStorageConfig''
     */
   def storageConfigExtractor(needPassword: Boolean, prefix: String = ""):
-  CliExtractor[Try[OAuthStorageConfig]] = {
+  CliExtractor[Try[SyncOAuthStorageConfig]] = {
     val addAlias = prefix.isEmpty
     val procPath = withAlias(optionValue(prefix + StoragePathOption, help = Some(HelpStoragePathOption))
       .toPath
@@ -383,9 +383,9 @@ object OAuthParameterManager {
     * @return a ''Try'' with the generated storage configuration
     */
   private def createStorageConfig(triedName: Try[String], triedPath: Try[Path], triedPwd: Try[Option[String]],
-                                  triedCrypt: Try[Boolean]): Try[OAuthStorageConfig] =
+                                  triedCrypt: Try[Boolean]): Try[SyncOAuthStorageConfig] =
     createRepresentation(triedName, triedPath, triedPwd, triedCrypt) { (name, path, pwd, _) =>
-      OAuthStorageConfig(baseName = name, rootDir = path, optPassword = pwd.map(Secret(_)))
+      SyncOAuthStorageConfig(baseName = name, rootDir = path, optPassword = pwd.map(Secret(_)))
     }
 
   /**
@@ -403,7 +403,7 @@ object OAuthParameterManager {
     */
   private def createIdpConfig(triedAuthUrl: Try[String], triedTokenUrl: Try[String], triedScope: Try[String],
                               triedRedirect: Try[String], triedID: Try[String], triedSecret: Try[Secret],
-                              triedStorage: Try[OAuthStorageConfig]): Try[InitCommandConfig] =
+                              triedStorage: Try[SyncOAuthStorageConfig]): Try[InitCommandConfig] =
     createRepresentation(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect,
       triedID, triedSecret, triedStorage) { (authUrl, tokenUrl, scope, redirect, id, secret, storage) =>
       val oauthConfig = OAuthConfig(tokenEndpoint = tokenUrl, redirectUri = redirect, clientID = id,

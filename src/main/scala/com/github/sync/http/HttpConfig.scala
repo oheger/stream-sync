@@ -27,7 +27,7 @@ import com.github.cloudfiles.core.http.{Secret, UriEncodingHelper}
   * This is just a marker interface. An object implementing this trait is part
   * of an HTTP configuration.
   */
-sealed trait AuthConfig
+sealed trait SyncAuthConfig
 
 /**
   * A data class that collects user credentials for accessing a WebDav server
@@ -36,7 +36,7 @@ sealed trait AuthConfig
   * @param user     the user name
   * @param password the password
   */
-case class BasicAuthConfig(user: String, password: Secret) extends AuthConfig
+case class SyncBasicAuthConfig(user: String, password: Secret) extends SyncAuthConfig
 
 /**
   * A data class with information required to access the persistent information
@@ -55,9 +55,9 @@ case class BasicAuthConfig(user: String, password: Secret) extends AuthConfig
   * @param baseName    the base name of the files of this configuration
   * @param optPassword an option with a password to encrypt sensitive files
   */
-case class OAuthStorageConfig(rootDir: Path,
-                              baseName: String,
-                              optPassword: Option[Secret]) extends AuthConfig {
+case class SyncOAuthStorageConfig(rootDir: Path,
+                                  baseName: String,
+                                  optPassword: Option[Secret]) extends SyncAuthConfig {
   /**
     * Returns a path in the root directory that is derived from the base name
     * with the given suffix. This is useful to locate concrete files related to
@@ -76,7 +76,7 @@ case class OAuthStorageConfig(rootDir: Path,
   * This is used for the rare case that communication with a server should be
   * done without any authentication mechanism.
   */
-case object NoAuth extends AuthConfig
+case object SyncNoAuth extends SyncAuthConfig
 
 /**
   * A trait defining configuration options that are common to all HTTP-based
@@ -109,7 +109,7 @@ trait HttpConfig {
     *
     * @return the configuration for the authentication mechanism
     */
-  def authConfig: AuthConfig
+  def authConfig: SyncAuthConfig
 
   /**
     * Returns the root path of the HTTP server. This path is derived from the

@@ -25,7 +25,7 @@ import akka.util.Timeout
 import com.github.cloudfiles.core.http.{Secret, UriEncodingHelper}
 import com.github.sync.SyncTypes._
 import com.github.sync._
-import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpExtensionActor, HttpRequestActor}
+import com.github.sync.http.{SyncBasicAuthConfig, HttpBasicAuthActor, HttpExtensionActor, HttpRequestActor}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.xml.sax.SAXException
 
@@ -71,7 +71,7 @@ class DavFsElementSourceSpec() extends BaseHttpFsElementSourceSpec(ActorSystem("
     */
   private def createRequestActor(config: DavConfig): ActorRef = {
     val httpActor = system.actorOf(HttpRequestActor(serverUri(""), 2))
-    system.actorOf(HttpBasicAuthActor(httpActor, config.authConfig.asInstanceOf[BasicAuthConfig]))
+    system.actorOf(HttpBasicAuthActor(httpActor, config.authConfig.asInstanceOf[SyncBasicAuthConfig]))
   }
 
   /**
@@ -84,7 +84,7 @@ class DavFsElementSourceSpec() extends BaseHttpFsElementSourceSpec(ActorSystem("
     DavConfig(serverUri(RootPath), modifiedProperty, None,
       deleteBeforeOverride = false,
       modifiedProperties = List(modifiedProperty, DavConfig.DefaultModifiedProperty),
-      Timeout(10.seconds), authConfig = BasicAuthConfig(UserId, Secret(Password)))
+      Timeout(10.seconds), authConfig = SyncBasicAuthConfig(UserId, Secret(Password)))
 
   /**
     * Adds stubbing declarations for all test folders. Each folder is mapped to

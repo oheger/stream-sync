@@ -18,7 +18,7 @@ package com.github.sync.onedrive
 
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import com.github.sync.WireMockSupport
-import com.github.sync.http.NoAuth
+import com.github.sync.http.SyncNoAuth
 import com.github.tomakehurst.wiremock.client.WireMock._
 
 import scala.concurrent.duration._
@@ -126,5 +126,5 @@ trait OneDriveStubbingSupport {
     * @return the configuration for the test source
     */
   protected def createOneDriveConfig(rootPath: String): OneDriveConfig =
-    OneDriveConfig(DriveID, rootPath, 1, 3.seconds, NoAuth, Some(serverUri("")))
+    OneDriveConfig(DriveID, rootPath, 1, 3.seconds, SyncNoAuth, Some(serverUri("")))
 }

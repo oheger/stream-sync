@@ -19,7 +19,7 @@ package com.github.sync.webdav
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
 import com.github.cloudfiles.core.http.UriEncodingHelper
-import com.github.sync.http.{AuthConfig, HttpConfig}
+import com.github.sync.http.{SyncAuthConfig, HttpConfig}
 
 object DavConfig {
   /**
@@ -49,7 +49,7 @@ object DavConfig {
     */
   def apply(rootUri: Uri, optModifiedProperty: Option[String],
             optModifiedNamespace: Option[String], deleteBeforeOverride: Boolean,
-            timeout: Timeout, authConfig: AuthConfig): DavConfig =
+            timeout: Timeout, authConfig: SyncAuthConfig): DavConfig =
     new DavConfig(UriEncodingHelper.removeTrailingSeparator(rootUri.toString()),
       optModifiedProperty getOrElse DefaultModifiedProperty, optModifiedNamespace, deleteBeforeOverride,
       createModifiedProperties(optModifiedProperty), timeout, authConfig)
@@ -100,4 +100,4 @@ case class DavConfig(override val rootUri: Uri,
                      deleteBeforeOverride: Boolean,
                      modifiedProperties: List[String],
                      timeout: Timeout,
-                     override val authConfig: AuthConfig) extends HttpConfig
+                     override val authConfig: SyncAuthConfig) extends HttpConfig

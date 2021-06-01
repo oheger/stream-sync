@@ -16,19 +16,19 @@
 
 package com.github.sync.cli
 
-import java.time.ZoneId
-import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.scli.ParameterExtractor.{ExtractionContext, Parameters}
+import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.sync.cli.ExtractorTestHelper.toExtractionContext
 import com.github.sync.cli.SyncCliStructureConfig._
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.http.{AuthConfig, BasicAuthConfig, NoAuth, OAuthStorageConfig}
+import com.github.sync.http.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
+import java.time.ZoneId
 import scala.util.{Failure, Success, Try}
 
 object SyncCliStructureConfigSpec {
@@ -184,8 +184,8 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     *
     * @param authConfig the auth config to be checked
     */
-  private def checkBasicAuthConfig(authConfig: AuthConfig): Unit = {
-    val basicAuthConfig = authConfig.asInstanceOf[BasicAuthConfig]
+  private def checkBasicAuthConfig(authConfig: SyncAuthConfig): Unit = {
+    val basicAuthConfig = authConfig.asInstanceOf[SyncBasicAuthConfig]
     basicAuthConfig.user should be(User)
     basicAuthConfig.password.secret should be(Password)
   }
@@ -199,7 +199,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, processedArgs) = extractConfig(args, uri, SourceRoleType)
     checkAccessedParameters(processedArgs, SourceRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     config.structureConfig should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
-    config.authConfig should be(NoAuth)
+    config.authConfig should be(SyncNoAuth)
   }
 
   it should "create a correct file system config for the source structure with defaults" in {
@@ -208,7 +208,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, processedArgs) = extractConfig(Map.empty, uri, SourceRoleType)
     checkAccessedParameters(processedArgs, SourceRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     config.structureConfig should be(FsStructureConfig(None))
-    config.authConfig should be(NoAuth)
+    config.authConfig should be(SyncNoAuth)
   }
 
   it should "generate a failure for invalid parameters of a local FS config" in {
@@ -230,7 +230,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, processedArgs) = extractConfig(args, uri, DestinationRoleType)
     checkAccessedParameters(processedArgs, DestinationRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     config.structureConfig should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
-    config.authConfig should be(NoAuth)
+    config.authConfig should be(SyncNoAuth)
   }
 
   it should "create a correct DavConfig for the source structure if all basic auth properties are defined" in {
@@ -292,7 +292,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
 
     val (config, processedArgs) = extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     ExtractorTestHelper.accessedKeys(processedArgs) should be(expAccessedKeys)
-    val oauthConfig = config.authConfig.asInstanceOf[OAuthStorageConfig]
+    val oauthConfig = config.authConfig.asInstanceOf[SyncOAuthStorageConfig]
     oauthConfig.baseName should be(IdpName)
     oauthConfig.optPassword.get.secret should be(Password)
     oauthConfig.rootDir.toString should be(StoragePath)
@@ -349,7 +349,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, processedCtx) = extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType,
       optReader = Some(reader))
     ExtractorTestHelper.accessedKeys(processedCtx) should contain(propPwd)
-    val authConfig = config.authConfig.asInstanceOf[BasicAuthConfig]
+    val authConfig = config.authConfig.asInstanceOf[SyncBasicAuthConfig]
     authConfig.password.secret should be(Password)
   }
 
@@ -380,7 +380,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
 
     val (config, _) = extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     config.structureConfig should be(ExpConfig)
-    config.authConfig should be(NoAuth)
+    config.authConfig should be(SyncNoAuth)
   }
 
   it should "generate a failure for invalid properties of a OneDrive configuration" in {
@@ -408,7 +408,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
         SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption))
     val (config, processedArgs) = extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, expAccessedKeys)
-    val oauthConfig = config.authConfig.asInstanceOf[OAuthStorageConfig]
+    val oauthConfig = config.authConfig.asInstanceOf[SyncOAuthStorageConfig]
     oauthConfig.baseName should be(IdpName)
     oauthConfig.optPassword.get.secret should be(Password)
     oauthConfig.rootDir.toString should be(StoragePath)

@@ -23,7 +23,7 @@ import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterParser}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.cli.{CliActorSystemLifeCycle, ExtractorTestHelper}
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.SyncOAuthStorageConfig
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -150,7 +150,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     * @param storageConfig the configuration to be checked
     * @param withPwd       flag whether a password is expected in the configuration
     */
-  private def checkStorageConfig(storageConfig: OAuthStorageConfig, withPwd: Boolean = true): Unit = {
+  private def checkStorageConfig(storageConfig: SyncOAuthStorageConfig, withPwd: Boolean = true): Unit = {
     storageConfig.rootDir should be(Paths.get(StoragePath))
     storageConfig.baseName should be(ProviderName)
     if (withPwd) {

@@ -21,7 +21,7 @@ import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.SyncOAuthStorageConfig
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -87,7 +87,7 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     * @param optPassword the optional password
     */
   private def createStorageConfig(baseName: String = BaseName, optPassword: Option[String] = None) =
-    OAuthStorageConfig(baseName = baseName, optPassword = optPassword map (pwd => Secret(pwd)),
+    SyncOAuthStorageConfig(baseName = baseName, optPassword = optPassword map (pwd => Secret(pwd)),
       rootDir = testDirectory)
 
   "OAuthStorageServiceImpl" should "support a round-trip with storing and loading an OAuthConfig" in {

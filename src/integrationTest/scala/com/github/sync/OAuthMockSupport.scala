@@ -21,7 +21,7 @@ import akka.http.scaladsl.model.headers.`Content-Type`
 import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.SyncOAuthStorageConfig
 import com.github.sync.http.oauth.{IDPConfig, OAuthStorageServiceImpl}
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, post, stubFor, urlPathEqualTo}
 
@@ -77,8 +77,8 @@ trait OAuthMockSupport {
     * @param optPassword optional password to encrypt IDP data
     * @return the storage configuration
     */
-  protected def createOAuthStorageConfig(optPassword: Option[Secret] = Some(PwdIdpData)): OAuthStorageConfig =
-    OAuthStorageConfig(rootDir = testDirectory, baseName = "testIdp",
+  protected def createOAuthStorageConfig(optPassword: Option[Secret] = Some(PwdIdpData)): SyncOAuthStorageConfig =
+    SyncOAuthStorageConfig(rootDir = testDirectory, baseName = "testIdp",
       optPassword = optPassword)
 
   /**
@@ -87,7 +87,7 @@ trait OAuthMockSupport {
     * @param storageConfig the OAuth storage configuration
     * @param oauthConfig   the OAuth configuration
     */
-  protected def saveIdpData(storageConfig: OAuthStorageConfig, oauthConfig: IDPConfig): Unit =
+  protected def saveIdpData(storageConfig: SyncOAuthStorageConfig, oauthConfig: IDPConfig): Unit =
     futureResult(OAuthStorageServiceImpl.saveIdpConfig(storageConfig, oauthConfig))
 
   /**
@@ -97,7 +97,7 @@ trait OAuthMockSupport {
     * @param optPassword optional password to encrypt IDP data
     * @return the OAuth storage configuration
     */
-  protected def prepareIdpConfig(optPassword: Option[Secret] = Some(PwdIdpData)): OAuthStorageConfig = {
+  protected def prepareIdpConfig(optPassword: Option[Secret] = Some(PwdIdpData)): SyncOAuthStorageConfig = {
     val storageConfig = createOAuthStorageConfig(optPassword)
     val oauthConfig = createOAuthConfig()
     saveIdpData(storageConfig, oauthConfig)
@@ -124,7 +124,7 @@ trait OAuthMockSupport {
     * @param options       additional options
     * @return the resulting array with options
     */
-  protected def withOAuthOptions(storageConfig: OAuthStorageConfig, prefix: String, options: String*):
+  protected def withOAuthOptions(storageConfig: SyncOAuthStorageConfig, prefix: String, options: String*):
   Array[String] = {
     val pwdOptions = storageConfig.optPassword match {
       case Some(pwd) => Array(prefix + "idp-password", pwd.secret)

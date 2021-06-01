@@ -21,7 +21,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.SyncOAuthStorageConfig
 import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService, OAuthTokenRetrieverService}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -31,7 +31,7 @@ object OAuthCommands {
     * A short cut type definition for a fully parameterized
     * ''OAuthStorageService''.
     */
-  type StorageService = OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]
+  type StorageService = OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]
 
   /**
     * A short cut type definition for a full parametrized

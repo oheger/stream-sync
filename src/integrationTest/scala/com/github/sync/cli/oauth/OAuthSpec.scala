@@ -23,7 +23,7 @@ import java.util.Locale
 import com.github.scli.DefaultConsoleReader
 import com.github.sync.cli.CliActorSystemLifeCycle
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.SyncOAuthStorageConfig
 import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.ArgumentCaptor
@@ -121,7 +121,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
     * @param storageConfig the test storage configuration
     * @param args          the array with command line arguments
     */
-  private def checkExecIdpRemoveCommand(storageConfig: OAuthStorageConfig, args: Array[String]): Unit = {
+  private def checkExecIdpRemoveCommand(storageConfig: SyncOAuthStorageConfig, args: Array[String]): Unit = {
     val configFile = storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile)
     writeFileContent(configFile, FileTestHelper.TestData)
 
@@ -166,7 +166,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
   }
 
   it should "execute a command to remove an IDP" in {
-    val storageConfig = OAuthStorageConfig(testDirectory, "testIdp", None)
+    val storageConfig = SyncOAuthStorageConfig(testDirectory, "testIdp", None)
     val args = Array(OAuthParameterManager.CommandRemoveIDP, cmdOpt(OAuthParameterManager.StoragePathOption),
       storageConfig.rootDir.toString, cmdOpt(OAuthParameterManager.NameOption), storageConfig.baseName)
 
@@ -174,7 +174,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
   }
 
   it should "handle a remove command that does not remove any files" in {
-    val storageConfig = OAuthStorageConfig(testDirectory, "unknownIdp", None)
+    val storageConfig = SyncOAuthStorageConfig(testDirectory, "unknownIdp", None)
     val args = Array(OAuthParameterManager.CommandRemoveIDP, cmdOpt(OAuthParameterManager.StoragePathOption),
       storageConfig.rootDir.toString, cmdOpt(OAuthParameterManager.NameOption), storageConfig.baseName)
 
@@ -184,7 +184,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
   }
 
   it should "support short aliases for the options of the storage configuration" in {
-    val storageConfig = OAuthStorageConfig(testDirectory, "testIdp", None)
+    val storageConfig = SyncOAuthStorageConfig(testDirectory, "testIdp", None)
     val args = Array(OAuthParameterManager.CommandRemoveIDP, "-d",
       storageConfig.rootDir.toString, "-n", storageConfig.baseName)
 
@@ -193,7 +193,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
 
   it should "handle a command to log into an IDP" in {
     val ResultText = "Login successful :-)"
-    val storageConfig = OAuthStorageConfig(testDirectory, "testIdp", None)
+    val storageConfig = SyncOAuthStorageConfig(testDirectory, "testIdp", None)
     val args = Array(OAuthParameterManager.CommandLoginIDP, cmdOpt(OAuthParameterManager.StoragePathOption),
       storageConfig.rootDir.toString, cmdOpt(OAuthParameterManager.NameOption), storageConfig.baseName,
       cmdOpt(OAuthParameterManager.PasswordOption), "password")

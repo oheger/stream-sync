@@ -26,7 +26,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.http.HttpRequestActor.{FailedResponseException, RequestException, Result, SendRequest}
 import com.github.sync.http.oauth.OAuthTokenActor.{DoRefresh, PendingRequestData, RefreshFailure, TokensRefreshed}
-import com.github.sync.http.{HttpExtensionActor, OAuthStorageConfig}
+import com.github.sync.http.{HttpExtensionActor, SyncOAuthStorageConfig}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -85,9 +85,9 @@ object OAuthTokenActor {
     *                       of a fatal error
     * @return the ''Props'' for creating a new actor instance
     */
-  def apply(httpActor: ActorRef, clientCount: Int, idpHttpActor: ActorRef, storageConfig: OAuthStorageConfig,
+  def apply(httpActor: ActorRef, clientCount: Int, idpHttpActor: ActorRef, storageConfig: SyncOAuthStorageConfig,
             oauthConfig: IDPConfig, clientSecret: Secret, initTokenData: OAuthTokenData,
-            storageService: OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData],
+            storageService: OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData],
             tokenService: OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData],
             optKillSwitch: Option[KillSwitch]): Props =
     Props(classOf[OAuthTokenActor], httpActor, clientCount, idpHttpActor, storageConfig, oauthConfig,
@@ -124,11 +124,11 @@ object OAuthTokenActor {
 class OAuthTokenActor(override val httpActor: ActorRef,
                       override val clientCount: Int,
                       idpHttpActor: ActorRef,
-                      storageConfig: OAuthStorageConfig,
+                      storageConfig: SyncOAuthStorageConfig,
                       oauthConfig: IDPConfig,
                       clientSecret: Secret,
                       initTokenData: OAuthTokenData,
-                      storageService: OAuthStorageService[OAuthStorageConfig, IDPConfig,
+                      storageService: OAuthStorageService[SyncOAuthStorageConfig, IDPConfig,
                         Secret, OAuthTokenData],
                       tokenService: OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData],
                       optKillSwitch: Option[KillSwitch])

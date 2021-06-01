@@ -34,7 +34,7 @@ object HttpBasicAuthActorSpec {
   val Password = "testPassword"
 
   /** A test configuration for basic auth. */
-  private val TestAuthConfig = BasicAuthConfig(User, Secret(Password))
+  private val TestAuthConfig = SyncBasicAuthConfig(User, Secret(Password))
 }
 
 /**

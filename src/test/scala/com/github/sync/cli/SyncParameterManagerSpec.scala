@@ -25,7 +25,7 @@ import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContex
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncParameterManager._
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
-import com.github.sync.http.NoAuth
+import com.github.sync.http.SyncNoAuth
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito._
@@ -145,7 +145,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
     config.srcConfig.structureConfig should be(FsStructureConfig(Some(ZoneId.of(zid))))
-    config.srcConfig.authConfig should be(NoAuth)
+    config.srcConfig.authConfig should be(SyncNoAuth)
   }
 
   it should "construct a correct destination config for a Dav server" in {
@@ -158,7 +158,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (role.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace) -> List(ModifiedNs)) +
       (ParameterParser.InputParameter.key -> List(SourceUri, DavDestUri))
     val ExpDavConfig = StructureAuthConfig(DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
-      deleteBeforeOverride = false), NoAuth)
+      deleteBeforeOverride = false), SyncNoAuth)
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
     config.dstConfig should be(ExpDavConfig)

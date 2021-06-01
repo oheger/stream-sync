@@ -19,7 +19,7 @@ package com.github.sync.onedrive
 import akka.http.scaladsl.model.Uri
 import akka.util.Timeout
 import com.github.cloudfiles.core.http.UriEncodingHelper
-import com.github.sync.http.{AuthConfig, HttpConfig}
+import com.github.sync.http.{SyncAuthConfig, HttpConfig}
 
 object OneDriveConfig {
   /** The default root URI for the OneDrive API. */
@@ -63,7 +63,7 @@ object OneDriveConfig {
     * @return the newly created ''OneDriveConfig'' object
     */
   def apply(driveID: String, syncPath: String, uploadChunkSizeMB: Int, timeout: Timeout,
-            authConfig: AuthConfig, optServerUri: Option[String] = None): OneDriveConfig = {
+            authConfig: SyncAuthConfig, optServerUri: Option[String] = None): OneDriveConfig = {
     val driveRoot = UriEncodingHelper.withTrailingSeparator(optServerUri.getOrElse(OneDriveServerUri)) + driveID
     val normalizedSyncPath = UriEncodingHelper withLeadingSeparator syncPath
     val rootUri = driveRoot + PrefixRoot + normalizedSyncPath
@@ -90,7 +90,7 @@ object OneDriveConfig {
   */
 case class OneDriveConfig(override val rootUri: Uri,
                           override val timeout: Timeout,
-                          override val authConfig: AuthConfig,
+                          override val authConfig: SyncAuthConfig,
                           driveRootUri: Uri,
                           syncPath: String,
                           uploadChunkSize: Int) extends HttpConfig {

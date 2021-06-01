@@ -17,7 +17,7 @@
 package com.github.sync.onedrive
 
 import akka.http.scaladsl.model.Uri
-import com.github.sync.http.NoAuth
+import com.github.sync.http.SyncNoAuth
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -40,39 +40,39 @@ class OneDriveConfigSpec extends AnyFlatSpec with Matchers {
 
   "OneDriveConfig" should "generate a URI from all components" in {
     val ServerUri = "http://www.my-drive.com"
-    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, NoAuth, optServerUri = Some(ServerUri))
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, SyncNoAuth, optServerUri = Some(ServerUri))
 
     config.rootUri should be(Uri(ServerUri + "/" + DriveID + "/root:" + SyncPath))
   }
 
   it should "generate a URI with the default server URI" in {
-    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, NoAuth)
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, SyncNoAuth)
 
     config.rootUri should be(Uri(OneDriveConfig.OneDriveServerUri + "/" + DriveID + "/root:" + SyncPath))
   }
 
   it should "handle a sync path not starting with a slash" in {
-    val config = OneDriveConfig(DriveID, SyncPath drop 1, 1, 5.minutes, NoAuth)
+    val config = OneDriveConfig(DriveID, SyncPath drop 1, 1, 5.minutes, SyncNoAuth)
 
     config.rootUri should be(Uri(OneDriveConfig.OneDriveServerUri + "/" + DriveID + "/root:" + SyncPath))
   }
 
   it should "handle a server URI with a trailing slash" in {
     val ServerUri = "http://www.my-drive.com/"
-    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, NoAuth, optServerUri = Some(ServerUri))
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, SyncNoAuth, optServerUri = Some(ServerUri))
 
     config.rootUri should be(Uri(ServerUri + DriveID + "/root:" + SyncPath))
   }
 
   it should "set the upload chunk size in MB" in {
-    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, NoAuth)
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, SyncNoAuth)
 
     config.uploadChunkSize should be(1024 * 1024)
   }
 
   it should "generate a correct drive root URI" in {
     val ServerUri = "http://www.my-drive.com"
-    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, NoAuth, optServerUri = Some(ServerUri))
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, SyncNoAuth, optServerUri = Some(ServerUri))
 
     config.driveRootUri should be(Uri(ServerUri + "/" + DriveID))
   }
@@ -81,7 +81,7 @@ class OneDriveConfigSpec extends AnyFlatSpec with Matchers {
     val ServerUri = "http://www.test-uri.org"
     val relUri = "/path/file.txt"
     val expUri = Uri(s"$ServerUri/$DriveID/root:$SyncPath$relUri")
-    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, NoAuth, optServerUri = Some(ServerUri))
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 5.minutes, SyncNoAuth, optServerUri = Some(ServerUri))
 
     config resolveRelativeUri relUri should be(expUri)
   }
@@ -89,7 +89,7 @@ class OneDriveConfigSpec extends AnyFlatSpec with Matchers {
   it should "resolve a URI for the items resource" in {
     val relUri = "/a test/path/elem.txt"
     val expUri = Uri(s"${OneDriveConfig.OneDriveServerUri}/$DriveID/items/root:$SyncPath/a%20test/path/elem.txt")
-    val config = OneDriveConfig(DriveID, SyncPath, 1, 1.minute, NoAuth)
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 1.minute, SyncNoAuth)
 
     config resolveItemsUri relUri should be(expUri)
   }
@@ -98,7 +98,7 @@ class OneDriveConfigSpec extends AnyFlatSpec with Matchers {
     val SyncPathNoSlash = SyncPath drop 1
     val relUri = "/foo/bar/baz.txt"
     val expUri = Uri(s"${OneDriveConfig.OneDriveServerUri}/$DriveID/items/root:$SyncPath$relUri")
-    val config = OneDriveConfig(DriveID, SyncPathNoSlash, 1, 1.minute, NoAuth)
+    val config = OneDriveConfig(DriveID, SyncPathNoSlash, 1, 1.minute, SyncNoAuth)
 
     config.syncPath should be(SyncPath)
     config resolveItemsUri relUri should be(expUri)
@@ -107,14 +107,14 @@ class OneDriveConfigSpec extends AnyFlatSpec with Matchers {
   it should "resolve a URI to a folder's children" in {
     val relUri = "my/special/test folder"
     val expUri = Uri(s"${OneDriveConfig.OneDriveServerUri}/$DriveID/root:$SyncPath/my/special/test%20folder:/children")
-    val config = OneDriveConfig(DriveID, SyncPath, 1, 1.minute, NoAuth)
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 1.minute, SyncNoAuth)
 
     config resolveFolderChildrenUri relUri should be(expUri)
   }
 
   it should "resolve a URI to the root folder's children" in {
     val expUri = Uri(s"${OneDriveConfig.OneDriveServerUri}/$DriveID/root:$SyncPath:/children")
-    val config = OneDriveConfig(DriveID, SyncPath, 1, 1.minute, NoAuth)
+    val config = OneDriveConfig(DriveID, SyncPath, 1, 1.minute, SyncNoAuth)
 
     config resolveFolderChildrenUri "" should be(expUri)
   }

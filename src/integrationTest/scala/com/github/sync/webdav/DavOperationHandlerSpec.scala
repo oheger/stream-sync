@@ -29,7 +29,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.sync.SyncTypes._
 import com.github.sync.WireMockSupport.{Password, PriorityDefault, PrioritySpecific, UserId}
 import com.github.sync._
-import com.github.sync.http.{BasicAuthConfig, HttpBasicAuthActor, HttpRequestActor}
+import com.github.sync.http.{SyncBasicAuthConfig, HttpBasicAuthActor, HttpRequestActor}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.matching.UrlPathPattern
 import org.mockito.Mockito
@@ -113,7 +113,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
   private def createDavConfig(): DavConfig =
     DavConfig(serverUri(RootPath), DavConfig.DefaultModifiedProperty, None,
       deleteBeforeOverride = false, modifiedProperties = List(DavConfig.DefaultModifiedProperty),
-      Timeout(10.seconds), authConfig = BasicAuthConfig(UserId, Secret(Password)))
+      Timeout(10.seconds), authConfig = SyncBasicAuthConfig(UserId, Secret(Password)))
 
   /**
     * Convenience function to define the URI of a stub or verification based on
@@ -163,7 +163,7 @@ class DavOperationHandlerSpec(testSystem: ActorSystem) extends TestKit(testSyste
       Supervision.Resume
     }
     val httpActor = system.actorOf(HttpRequestActor(config.rootUri))
-    val requestActor = system.actorOf(HttpBasicAuthActor(httpActor, config.authConfig.asInstanceOf[BasicAuthConfig]))
+    val requestActor = system.actorOf(HttpBasicAuthActor(httpActor, config.authConfig.asInstanceOf[SyncBasicAuthConfig]))
     val source = Source(operations)
     val sink = Sink.fold[List[SyncOperation], SyncOperation](List.empty) { (lst, op) =>
       op :: lst

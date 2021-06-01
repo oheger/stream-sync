@@ -28,7 +28,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.http.OAuthStorageConfig
+import com.github.sync.http.SyncOAuthStorageConfig
 import com.github.sync.http.oauth._
 import com.github.sync.{AsyncTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
@@ -51,7 +51,7 @@ object OAuthLoginCommandSpec {
   private val TokenEndpoint = "/tokens"
 
   /** A test storage configuration used by test cases. */
-  private val TestStorageConfig = OAuthStorageConfig(Paths.get("idp-data"), "testIdp", None)
+  private val TestStorageConfig = SyncOAuthStorageConfig(Paths.get("idp-data"), "testIdp", None)
 
   /** The configuration for the login command. */
   private val LoginConfig = LoginCommandConfig(TestStorageConfig)
@@ -436,8 +436,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return the mock for the storage service
       */
-    private def createStorageService(): OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] = {
-      val service = mock[OAuthStorageService[OAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
+    private def createStorageService(): OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] = {
+      val service = mock[OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
       when(service.loadIdpConfig(TestStorageConfig)).thenReturn(Future.successful(testOAutConfig))
       when(service.saveTokens(TestStorageConfig, TestTokenData)).thenReturn(Future.successful(Done))
       service
