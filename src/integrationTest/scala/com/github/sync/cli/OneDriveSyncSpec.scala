@@ -179,9 +179,9 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OneDriveSt
   it should "generate a usage message if invalid parameters are passed in" in {
     val options = Array("onedrive:" + DriveID, "/some/path")
 
-    checkSyncOutput(options, "src-" + SyncStructureConfig.PropOneDrivePath,
-      "src-" + SyncStructureConfig.PropOneDriveServer, "src-" + SyncStructureConfig.PropOneDriveUploadChunkSize,
-      "src-" + SyncStructureConfig.PropAuthUser, "src-" + SyncStructureConfig.PropAuthPassword,
+    checkSyncOutput(options, "src-" + SyncCliStructureConfig.PropOneDrivePath,
+      "src-" + SyncCliStructureConfig.PropOneDriveServer, "src-" + SyncCliStructureConfig.PropOneDriveUploadChunkSize,
+      "src-" + SyncCliStructureConfig.PropAuthUser, "src-" + SyncCliStructureConfig.PropAuthPassword,
       "src-" + OAuthParameterManager.PasswordOption, "src-" + OAuthParameterManager.StoragePathOption)
   }
 }

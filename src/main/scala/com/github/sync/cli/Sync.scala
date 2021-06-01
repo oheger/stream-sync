@@ -30,7 +30,7 @@ import com.github.sync.SyncTypes._
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncComponentsFactory.{ApplyStageData, DestinationComponentsFactory, SourceComponentsFactory}
 import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
-import com.github.sync.cli.SyncStructureConfig.{DestinationRoleType, SourceRoleType}
+import com.github.sync.cli.SyncCliStructureConfig.{DestinationRoleType, SourceRoleType}
 import com.github.sync.crypt.CryptService.IterateSourceFunc
 import com.github.sync.crypt.{CryptService, CryptStage}
 import com.github.sync.impl._
@@ -481,8 +481,8 @@ class Sync extends CliActorSystemLifeCycle[SyncConfig] {
   override protected def helpOptionHelp: String = Sync.HelpOptionHelp
 
   override protected def optionsGroupFilter(context: ProcessingContext): ParameterFilter = {
-    val srcExt = SyncStructureConfig.structureTypeSelectorExtractor(SourceRoleType, "uri")
-    val dstExt = SyncStructureConfig.structureTypeSelectorExtractor(DestinationRoleType, "uri")
+    val srcExt = SyncCliStructureConfig.structureTypeSelectorExtractor(SourceRoleType, "uri")
+    val dstExt = SyncCliStructureConfig.structureTypeSelectorExtractor(DestinationRoleType, "uri")
     val contextFilter = HelpGenerator.contextGroupFilterForExtractors(context.parameterContext,
       List(srcExt, dstExt))
     HelpGenerator.andFilter(HelpGenerator.negate(HelpGenerator.InputParamsFilterFunc), contextFilter)

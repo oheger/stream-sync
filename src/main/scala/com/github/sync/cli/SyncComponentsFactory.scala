@@ -24,11 +24,12 @@ import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.sync.SourceFileProvider
 import com.github.sync.SyncTypes.{ElementSourceFactory, FsElement, SyncOperation}
 import com.github.sync.cli.SyncParameterManager.SyncConfig
-import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureAuthConfig}
+import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 import com.github.sync.http._
 import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService, OAuthStorageServiceImpl}
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
 import com.github.sync.webdav.DavConfig
 
 import java.nio.file.Paths
@@ -378,7 +379,7 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
                                             authConfig: AuthConfig)(fCreate: (DavConfig, HttpActorFactory) => T)
                                            (implicit system: ActorSystem, ec: ExecutionContext): Future[T] = {
     val futDavUri = uri match {
-      case SyncStructureConfig.RegDavUri(uri) => Future.successful(uri)
+      case SyncCliStructureConfig.RegDavUri(uri) => Future.successful(uri)
       case _ =>
         // Paranoia check; this cannot happen in practice
         Future.failed(new IllegalArgumentException(s"No a valid WebDav URI: '$uri'"))
@@ -411,7 +412,7 @@ class SyncComponentsFactory(oauthStorageService: OAuthStorageService[OAuthStorag
                                                 (fCreate: (OneDriveConfig, HttpActorFactory) => T)
                                                 (implicit system: ActorSystem, ec: ExecutionContext): Future[T] = {
     val futDriveID = uri match {
-      case SyncStructureConfig.RegOneDriveID(id) => Future.successful(id)
+      case SyncCliStructureConfig.RegOneDriveID(id) => Future.successful(id)
       case _ =>
         // Paranoia check; this cannot happen in practice
         Future.failed(new IllegalArgumentException(s"Not a valid OneDrive URI: '$uri'"))

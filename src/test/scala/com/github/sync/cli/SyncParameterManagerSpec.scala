@@ -24,8 +24,9 @@ import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, P
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncParameterManager._
-import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, StructureAuthConfig}
+import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 import com.github.sync.http.NoAuth
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -139,8 +140,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "construct a correct source config for the local file system" in {
     val zid = ZoneId.getAvailableZoneIds.iterator.next
-    val roleType = SyncStructureConfig.SourceRoleType
-    val argsMap = ArgsMap + (roleType.configPropertyName(SyncStructureConfig.PropLocalFsTimeZone) -> List(zid))
+    val roleType = SyncCliStructureConfig.SourceRoleType
+    val argsMap = ArgsMap + (roleType.configPropertyName(SyncCliStructureConfig.PropLocalFsTimeZone) -> List(zid))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
     config.srcConfig.structureConfig should be(FsStructureConfig(Some(ZoneId.of(zid))))
@@ -150,11 +151,11 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "construct a correct destination config for a Dav server" in {
     val ModifiedProp = "x_changed"
     val ModifiedNs = "ns_foo"
-    val DavDestUri = SyncStructureConfig.PrefixWebDav + "https://dav.org/sync"
-    val role = SyncStructureConfig.DestinationRoleType
+    val DavDestUri = SyncCliStructureConfig.PrefixWebDav + "https://dav.org/sync"
+    val role = SyncCliStructureConfig.DestinationRoleType
     val argsMap = ArgsMap +
-      (role.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> List(ModifiedProp)) +
-      (role.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> List(ModifiedNs)) +
+      (role.configPropertyName(SyncCliStructureConfig.PropDavModifiedProperty) -> List(ModifiedProp)) +
+      (role.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace) -> List(ModifiedNs)) +
       (ParameterParser.InputParameter.key -> List(SourceUri, DavDestUri))
     val ExpDavConfig = StructureAuthConfig(DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
       deleteBeforeOverride = false), NoAuth)

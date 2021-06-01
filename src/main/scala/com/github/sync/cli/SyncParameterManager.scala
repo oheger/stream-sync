@@ -19,7 +19,7 @@ package com.github.sync.cli
 import akka.util.Timeout
 import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.SyncStructureConfig.StructureAuthConfig
+import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 
 import java.nio.file.Path
 import java.util.Locale
@@ -388,8 +388,8 @@ object SyncParameterManager {
   def syncConfigExtractor(): CliExtractor[Try[SyncConfig]] = for {
     srcUri <- srcUriExtractor()
     dstUri <- dstUriExtractor()
-    srcConfig <- SyncStructureConfig.structureConfigExtractor(SyncStructureConfig.SourceRoleType, SourceUriOption)
-    dstConfig <- SyncStructureConfig.structureConfigExtractor(SyncStructureConfig.DestinationRoleType,
+    srcConfig <- SyncCliStructureConfig.structureConfigExtractor(SyncCliStructureConfig.SourceRoleType, SourceUriOption)
+    dstConfig <- SyncCliStructureConfig.structureConfigExtractor(SyncCliStructureConfig.DestinationRoleType,
       DestinationUriOption)
     mode <- applyModeExtractor(dstUri.getOrElse(""))
     timeout <- timeoutExtractor()

@@ -102,17 +102,17 @@ class LocalSyncSpec extends BaseSyncSpec {
       SyncParameterManager.ApplyModeOption, SyncParameterManager.TimeoutOption,
       SyncParameterManager.LogFileOption, FilterManager.ArgCommonFilter, FilterManager.ArgCreateFilter,
       "--" + CliActorSystemLifeCycle.FileOption)
-    output should not include "src-" + SyncStructureConfig.PropOneDrivePath
-    output should not include "src-" + SyncStructureConfig.PropDavDeleteBeforeOverride
+    output should not include "src-" + SyncCliStructureConfig.PropOneDrivePath
+    output should not include "src-" + SyncCliStructureConfig.PropDavDeleteBeforeOverride
   }
 
   it should "generate a usage message with the options for the local file system" in {
     val options = Array("src/directory", "dav:directory", "--filter", "exclude:*.tmp", "--help")
 
-    val output = checkSyncOutput(options, "src-" + SyncStructureConfig.PropLocalFsTimeZone)
-    output should not include "dst-" + SyncStructureConfig.PropLocalFsTimeZone
-    output should not include "src-" + SyncStructureConfig.PropOneDrivePath
-    output should not include "src-" + SyncStructureConfig.PropDavDeleteBeforeOverride
+    val output = checkSyncOutput(options, "src-" + SyncCliStructureConfig.PropLocalFsTimeZone)
+    output should not include "dst-" + SyncCliStructureConfig.PropLocalFsTimeZone
+    output should not include "src-" + SyncCliStructureConfig.PropOneDrivePath
+    output should not include "src-" + SyncCliStructureConfig.PropDavDeleteBeforeOverride
     output should not include "Invalid"
   }
 

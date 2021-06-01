@@ -17,13 +17,13 @@
 package com.github.sync.cli
 
 import java.time.ZoneId
-
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.scli.ParameterExtractor.{ExtractionContext, Parameters}
 import com.github.sync.cli.ExtractorTestHelper.toExtractionContext
-import com.github.sync.cli.SyncStructureConfig._
+import com.github.sync.cli.SyncCliStructureConfig._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.http.{AuthConfig, BasicAuthConfig, NoAuth, OAuthStorageConfig}
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -31,7 +31,7 @@ import org.scalatestplus.mockito.MockitoSugar
 
 import scala.util.{Failure, Success, Try}
 
-object SyncStructureConfigSpec {
+object SyncCliStructureConfigSpec {
   /** Test user name. */
   private val User = "scott"
 
@@ -100,7 +100,7 @@ object SyncStructureConfigSpec {
     val reader = optReader getOrElse DummyConsoleReader
     val paramCtx = toExtractionContext(toParameters(args, createUrlParameter(structureUrl, roleType)),
       reader = reader)
-    ParameterExtractor.runExtractor(SyncStructureConfig.structureConfigExtractor(roleType, "uri"),
+    ParameterExtractor.runExtractor(SyncCliStructureConfig.structureConfigExtractor(roleType, "uri"),
       paramCtx)
   }
 
@@ -149,9 +149,9 @@ object SyncStructureConfigSpec {
 /**
   * Test class for ''SyncStructureConfig''.
   */
-class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
-  import SyncStructureConfigSpec._
+  import SyncCliStructureConfigSpec._
 
   /**
     * Checks whether the set of parameters accessed by the extractors for the
@@ -197,7 +197,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       TimeZoneId)
 
     val (config, processedArgs) = extractConfig(args, uri, SourceRoleType)
-    checkAccessedParameters(processedArgs, SourceRoleType, SyncStructureConfig.PropLocalFsTimeZone)
+    checkAccessedParameters(processedArgs, SourceRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     config.structureConfig should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
     config.authConfig should be(NoAuth)
   }
@@ -206,7 +206,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
     val uri = "/my/sync/dir"
 
     val (config, processedArgs) = extractConfig(Map.empty, uri, SourceRoleType)
-    checkAccessedParameters(processedArgs, SourceRoleType, SyncStructureConfig.PropLocalFsTimeZone)
+    checkAccessedParameters(processedArgs, SourceRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     config.structureConfig should be(FsStructureConfig(None))
     config.authConfig should be(NoAuth)
   }
@@ -216,9 +216,9 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       "invalid zone ID!")
 
     val (exception, processedArgs) = expectFailure(args, "/some/folder", SourceRoleType)
-    checkAccessedParameters(processedArgs, SourceRoleType, SyncStructureConfig.PropLocalFsTimeZone)
+    checkAccessedParameters(processedArgs, SourceRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     exception.getMessage should include(SourceRoleType.configPropertyName(
-      SyncStructureConfig.PropLocalFsTimeZone))
+      SyncCliStructureConfig.PropLocalFsTimeZone))
   }
 
   it should "create a correct file system config for the destination structure" in {
@@ -228,20 +228,20 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       TimeZoneId)
 
     val (config, processedArgs) = extractConfig(args, uri, DestinationRoleType)
-    checkAccessedParameters(processedArgs, DestinationRoleType, SyncStructureConfig.PropLocalFsTimeZone)
+    checkAccessedParameters(processedArgs, DestinationRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     config.structureConfig should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
     config.authConfig should be(NoAuth)
   }
 
   it should "create a correct DavConfig for the source structure if all basic auth properties are defined" in {
-    val args = Map(SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser) -> User,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword) -> Password,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> LastModifiedProperty,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavDeleteBeforeOverride) -> "true")
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedProperty) -> LastModifiedProperty,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavDeleteBeforeOverride) -> "true")
 
     val (config, processedArgs) =
-      extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
+      extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
     config.structureConfig match {
       case davConfig: DavStructureConfig =>
@@ -254,11 +254,11 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
   }
 
   it should "create a correct DavConfig for the source structure with defaults" in {
-    val args = Map(SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser) -> User,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword) -> Password)
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password)
 
     val (config, _) =
-      extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
+      extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     config.structureConfig match {
       case davConfig: DavStructureConfig =>
         davConfig.optLastModifiedProperty should be(None)
@@ -269,19 +269,19 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
   }
 
   it should "generate a failure for invalid parameters of a DavConfig" in {
-    val args = Map(SourceRoleType.configPropertyName(SyncStructureConfig.PropDavDeleteBeforeOverride) -> "xx",
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace)
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavDeleteBeforeOverride) -> "xx",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace)
 
-    val (exception, _) = expectFailure(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
+    val (exception, _) = expectFailure(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     exception.getMessage should include(SourceRoleType.configPropertyName(
       SyncComponentsFactory.PropDavDeleteBeforeOverride))
   }
 
   it should "create a correct DavConfig for the source structure if OAuth properties are defined" in {
     val args = Map(
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> LastModifiedProperty,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavDeleteBeforeOverride) -> "true",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedProperty) -> LastModifiedProperty,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavDeleteBeforeOverride) -> "true",
       SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOption) -> StoragePath,
       SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
       SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password
@@ -290,7 +290,7 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
       SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption) +
       SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser)
 
-    val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
+    val (config, processedArgs) = extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     ExtractorTestHelper.accessedKeys(processedArgs) should be(expAccessedKeys)
     val oauthConfig = config.authConfig.asInstanceOf[OAuthStorageConfig]
     oauthConfig.baseName should be(IdpName)
@@ -300,17 +300,17 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
   it should "fail parsing parameters if properties for both basic auth and OAuth are set" in {
     val args = Map(
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) -> LastModifiedProperty,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropDavDeleteBeforeOverride) -> "true",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedProperty) -> LastModifiedProperty,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace) -> LastModifiedNamespace,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavDeleteBeforeOverride) -> "true",
       SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOption) -> StoragePath,
       SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
       SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser) -> User,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword) -> Password
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password
     )
 
-    val (_, context) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
+    val (_, context) = extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     val notAccessedKeys = context.parameters.notAccessedKeys map (_.key)
     notAccessedKeys should contain allOf(SourceRoleType.configPropertyName(
       OAuthParameterManager.NameOption), SourceRoleType.configPropertyName(
@@ -318,16 +318,16 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
   }
 
   it should "create a correct DavConfig for the destination structure" in {
-    val args = Map(DestinationRoleType.configPropertyName(SyncStructureConfig.PropAuthUser) -> User,
-      DestinationRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword) -> Password,
-      DestinationRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedProperty) ->
+    val args = Map(DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedProperty) ->
         LastModifiedProperty,
-      DestinationRoleType.configPropertyName(SyncStructureConfig.PropDavModifiedNamespace) ->
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace) ->
         LastModifiedNamespace,
-      DestinationRoleType.configPropertyName(SyncStructureConfig.PropDavDeleteBeforeOverride) -> "true")
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropDavDeleteBeforeOverride) -> "true")
 
     val (config, processedArgs) =
-      extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, DestinationRoleType)
+      extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, DestinationRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
     config.structureConfig match {
       case davConfig: DavStructureConfig =>
@@ -340,13 +340,13 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
   }
 
   it should "read the Auth password from the console if it is not specified" in {
-    val args = Map(SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser) -> User)
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User)
     val Password = "$ecretPwd"
     val reader = mock[ConsoleReader]
-    val propPwd = SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword)
+    val propPwd = SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword)
     when(reader.readOption(propPwd, password = true)).thenReturn(Password)
 
-    val (config, processedCtx) = extractConfig(args, SyncStructureConfig.PrefixWebDav + TestUri, SourceRoleType,
+    val (config, processedCtx) = extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType,
       optReader = Some(reader))
     ExtractorTestHelper.accessedKeys(processedCtx) should contain(propPwd)
     val authConfig = config.authConfig.asInstanceOf[BasicAuthConfig]
@@ -355,13 +355,13 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
   it should "create a correct OneDriveConfig for the source structure with basic auth properties" in {
     val ChunkSize = 42
-    val args = Map(SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser) -> User,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword) -> Password,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDriveServer) -> TestUri,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDrivePath) -> StoragePath,
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDriveUploadChunkSize) -> ChunkSize.toString)
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveServer) -> TestUri,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDrivePath) -> StoragePath,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveUploadChunkSize) -> ChunkSize.toString)
 
-    val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
+    val (config, processedArgs) = extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
     config.structureConfig match {
       case oneConfig: OneDriveStructureConfig =>
@@ -374,19 +374,19 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
   }
 
   it should "create a correct OneDriveConfig for the source structure with defaults" in {
-    val args = Map(SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDrivePath) -> StoragePath)
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDrivePath) -> StoragePath)
     val ExpConfig = OneDriveStructureConfig(syncPath = StoragePath, optServerUri = None,
       optUploadChunkSizeMB = None)
 
-    val (config, _) = extractConfig(args, SyncStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
+    val (config, _) = extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     config.structureConfig should be(ExpConfig)
     config.authConfig should be(NoAuth)
   }
 
   it should "generate a failure for invalid properties of a OneDrive configuration" in {
-    val args = Map(SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDriveUploadChunkSize) -> "xx")
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveUploadChunkSize) -> "xx")
 
-    val (exception, _) = expectFailure(args, SyncStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
+    val (exception, _) = expectFailure(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     exception.getMessage should include(SourceRoleType.configPropertyName(
       SyncComponentsFactory.PropOneDriveUploadChunkSize))
     exception.getMessage should include(SourceRoleType.configPropertyName(
@@ -395,18 +395,18 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
   it should "create a correct OneDriveConfig for the source structure if OAuth properties are defined" in {
     val args = Map(
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDrivePath) -> "/a-path",
-      SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDriveUploadChunkSize) -> "4",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDrivePath) -> "/a-path",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveUploadChunkSize) -> "4",
       SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOption) -> StoragePath,
       SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
       SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password
     )
     val expAccessedKeys = args.keySet ++
       Set(SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption),
-        SourceRoleType.configPropertyName(SyncStructureConfig.PropOneDriveServer),
-        SourceRoleType.configPropertyName(SyncStructureConfig.PropAuthUser),
+        SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveServer),
+        SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser),
         SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption))
-    val (config, processedArgs) = extractConfig(args, SyncStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
+    val (config, processedArgs) = extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, expAccessedKeys)
     val oauthConfig = config.authConfig.asInstanceOf[OAuthStorageConfig]
     oauthConfig.baseName should be(IdpName)
@@ -416,15 +416,15 @@ class SyncStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSuga
 
   it should "create a correct OneDriveConfig for the destination structure" in {
     val ChunkSize = 11
-    val args = Map(DestinationRoleType.configPropertyName(SyncStructureConfig.PropAuthUser) -> User,
-      DestinationRoleType.configPropertyName(SyncStructureConfig.PropAuthPassword) -> Password,
-      DestinationRoleType.configPropertyName(SyncStructureConfig.PropOneDriveServer) -> TestUri,
-      DestinationRoleType.configPropertyName(SyncStructureConfig.PropOneDrivePath) -> StoragePath,
-      DestinationRoleType.configPropertyName(SyncStructureConfig.PropOneDriveUploadChunkSize) ->
+    val args = Map(DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveServer) -> TestUri,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropOneDrivePath) -> StoragePath,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveUploadChunkSize) ->
         ChunkSize.toString)
 
     val (config, processedArgs) =
-      extractConfig(args, SyncStructureConfig.PrefixOneDrive + TestUri, DestinationRoleType)
+      extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, DestinationRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
     config.structureConfig match {
       case oneConfig: OneDriveStructureConfig =>

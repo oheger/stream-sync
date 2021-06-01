@@ -20,25 +20,25 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.http.{AuthConfig, BasicAuthConfig, NoAuth}
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
 
 import java.time.ZoneId
 import scala.util.{Success, Try}
 
 /**
-  * A module defining configuration parameters for the structures taking part
-  * in a sync process.
+  * A module defining CLI-related configuration parameters for the structures
+  * taking part in a sync process.
   *
   * Depending on the types of structures to be synced, different parameters
-  * need to be passed to the command line. This module defines configuration
-  * objects for the different structure types and ''CliExtractor'' objects to
-  * construct them from the current command line.
+  * need to be passed to the command line. This module defines ''CliExtractor''
+  * objects to construct the configuration objects for the source and
+  * destination structure from the current command line.
   *
-  * The configuration objects for the source and the destination structure are
-  * part of the overall sync configuration. They are parsed dynamically from
-  * the command line; this is done via a conditional ''CliExtractor'' that
-  * evaluates the URI defining the structure.
+  * These configuration objects are part of the overall sync configuration.
+  * They are parsed dynamically from the command line; this is done via a
+  * conditional ''CliExtractor'' that evaluates the URI defining the structure.
   */
-object SyncStructureConfig {
+object SyncCliStructureConfig {
   /** URI prefix indicating a WebDav structure. */
   final val PrefixWebDav = "dav:"
 
@@ -238,50 +238,6 @@ object SyncStructureConfig {
 
     override val parameterIndex: Int = 1
   }
-
-  /**
-    * A trait representing the configuration of a concrete sync role type.
-    *
-    * This is just a marker trait. There are concrete sub classes defining the
-    * command line arguments for all the structure types supported for sync
-    * processes. The properties of these sub classes are a sub set of the data
-    * expected by the actual configuration classes.
-    */
-  sealed trait StructureConfig
-
-  /**
-    * Parameter configuration class for the structure type ''local file
-    * system''.
-    *
-    * @param optTimeZone an optional timezone that determines how the timestamps
-    *                    of files are to be interpreted
-    */
-  case class FsStructureConfig(optTimeZone: Option[ZoneId]) extends StructureConfig
-
-  /**
-    * Parameter configuration class for the structure type ''WebDav''.
-    *
-    * @param optLastModifiedProperty  optional property with the last modified
-    *                                 timestamp
-    * @param optLastModifiedNamespace optional namespace for the last modified
-    *                                 property
-    * @param deleteBeforeOverride     the delete before override flag
-    */
-  case class DavStructureConfig(optLastModifiedProperty: Option[String],
-                                optLastModifiedNamespace: Option[String],
-                                deleteBeforeOverride: Boolean) extends StructureConfig
-
-  /**
-    * Parameter configuration class for the structure type ''OneDrive''.
-    *
-    * @param syncPath             the relative path in the drive to be synced
-    * @param optUploadChunkSizeMB optional chunk size for uploads of large
-    *                             files (in MB)
-    * @param optServerUri         optional (alternative) server URI
-    */
-  case class OneDriveStructureConfig(syncPath: String,
-                                     optUploadChunkSizeMB: Option[Int],
-                                     optServerUri: Option[String]) extends StructureConfig
 
   /**
     * A class that combines a configuration for a sync structure with the

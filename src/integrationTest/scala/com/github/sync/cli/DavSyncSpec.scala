@@ -452,9 +452,9 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
   it should "generate a usage message if invalid parameters are passed in" in {
     val options = Array("/some/path", "dav:" + serverUri("/target"), "--dst-delete-before-override", "invalid")
 
-    checkSyncOutput(options, "dst-" + SyncStructureConfig.PropDavDeleteBeforeOverride,
-      "dst-" + SyncStructureConfig.PropDavModifiedNamespace, "dst-" + SyncStructureConfig.PropDavModifiedProperty,
-      "dst-" + SyncStructureConfig.PropAuthUser, "dst-" + SyncStructureConfig.PropAuthPassword,
+    checkSyncOutput(options, "dst-" + SyncCliStructureConfig.PropDavDeleteBeforeOverride,
+      "dst-" + SyncCliStructureConfig.PropDavModifiedNamespace, "dst-" + SyncCliStructureConfig.PropDavModifiedProperty,
+      "dst-" + SyncCliStructureConfig.PropAuthUser, "dst-" + SyncCliStructureConfig.PropAuthPassword,
       "dst-" + OAuthParameterManager.PasswordOption, "dst-" + OAuthParameterManager.StoragePathOption)
   }
 }

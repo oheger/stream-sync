@@ -25,10 +25,11 @@ import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncComponentsFactory.SourceComponentsFactory
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, SyncConfig}
-import com.github.sync.cli.SyncStructureConfig.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureAuthConfig}
+import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 import com.github.sync.http._
 import com.github.sync.local.LocalFsConfig
 import com.github.sync.onedrive.OneDriveConfig
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
 import com.github.sync.webdav.DavConfig
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -236,7 +237,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val SyncPath = "/path/to/sync"
     val oneStructConfig = OneDriveStructureConfig(syncPath = SyncPath, optServerUri = Some(DavRootUri),
       optUploadChunkSizeMB = Some(42))
-    val config = syncConfig(optSrcUri = Some(SyncStructureConfig.PrefixOneDrive + OneDriveID),
+    val config = syncConfig(optSrcUri = Some(SyncCliStructureConfig.PrefixOneDrive + OneDriveID),
       optSrcConfig = Some(StructureAuthConfig(oneStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
@@ -252,7 +253,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val SyncPath = "/path/to/sync"
     val oneStructConfig = OneDriveStructureConfig(syncPath = SyncPath, optServerUri = None,
       optUploadChunkSizeMB = None)
-    val config = syncConfig(optSrcUri = Some(SyncStructureConfig.PrefixOneDrive + OneDriveID),
+    val config = syncConfig(optSrcUri = Some(SyncCliStructureConfig.PrefixOneDrive + OneDriveID),
       optSrcConfig = Some(StructureAuthConfig(oneStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
@@ -277,7 +278,7 @@ class SyncComponentsFactorySpec(testSystem: ActorSystem) extends TestKit(testSys
     val SyncPath = "/path/to/dest/sync"
     val oneStructConfig = OneDriveStructureConfig(syncPath = SyncPath, optServerUri = Some(DavRootUri),
       optUploadChunkSizeMB = Some(11))
-    val config = syncConfig(optDstUri = Some(SyncStructureConfig.PrefixOneDrive + OneDriveID),
+    val config = syncConfig(optDstUri = Some(SyncCliStructureConfig.PrefixOneDrive + OneDriveID),
       optDstConfig = Some(StructureAuthConfig(oneStructConfig, TestAuthConfig)))
     val syncFactory = new SyncComponentsFactory
 
