@@ -33,12 +33,13 @@ import scala.concurrent.{ExecutionContext, Future}
   * concrete ''FileSystem''. To align the data types (the different
   * representations of files and folders), it makes use of a
   * [[FileSystemProtocolConverter]].
+  *
   * @param fileSystem the ''FileSystem''
   * @param httpSender the actor for sending HTTP requests
-  * @param converter the converter for data types
-  * @param system the actor system
-  * @tparam ID the type of element IDs
-  * @tparam FILE the type of files
+  * @param converter  the converter for data types
+  * @param system     the actor system
+  * @tparam ID     the type of element IDs
+  * @tparam FILE   the type of files
   * @tparam FOLDER the type of folders
   */
 class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
@@ -76,7 +77,7 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
   }
 
   override def updateFile(file: SyncTypes.FsFile, source: Source[ByteString, Any]): Future[Unit] =
-    run(fileSystem.updateFileContent(converter.elementID(file), file.size, source))
+    run(fileSystem.updateFileAndContent(converter.toFsFile(file, ""), source))
 
   override def downloadFile(id: String): Future[Source[ByteString, Any]] =
     run(fileSystem.downloadFile(converter.elementIDFromString(id)) map (_.dataBytes))
@@ -89,8 +90,9 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
   /**
     * Reads the content of the folder with the given ID, converts the elements
     * contained to ''FsElement'' objects, and returns a list with the results.
-    * @param id the ID of the folder to read
-    * @param path the path prefix for this folder
+    *
+    * @param id    the ID of the folder to read
+    * @param path  the path prefix for this folder
     * @param level the level of the elements
     * @return a ''Future'' with a list of the elements in this folder
     */
@@ -102,6 +104,7 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
 
   /**
     * Executes the given operation using the HTTP sender actor.
+    *
     * @param op the operation
     * @tparam R the result type of the operation
     * @return the future result of the operation
@@ -111,6 +114,7 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
   /**
     * Obtains the execution context from the implicit actor system and exposes
     * it in implicit scope.
+    *
     * @param system the actor system
     * @return the ''ExecutionContext''
     */

@@ -47,7 +47,7 @@ class FileSystemSyncProtocolSpec extends ScalaTestWithActorTestKit with AnyFlatS
     val FolderID = "theFolder"
     val PathPrefix = "/the/test/path/"
     val Level = 28
-    val files = (1 to 10).map(FileSystemProtocolConverterTestImpl.testFile).map(f => (f.id, f)).toMap
+    val files = (1 to 10).map(FileSystemProtocolConverterTestImpl.testFile(_)).map(f => (f.id, f)).toMap
     val folders = (20 to 30).map(FileSystemProtocolConverterTestImpl.testFolder).map(f => (f.id, f)).toMap
     val content = Model.FolderContent(FolderID, files, folders)
     val expFiles = (1 to 10).map(idx => FileSystemProtocolConverterTestImpl.testFileElement(idx, PathPrefix, Level))
@@ -67,7 +67,7 @@ class FileSystemSyncProtocolSpec extends ScalaTestWithActorTestKit with AnyFlatS
 
   it should "read the content of the root folder" in {
     val RootID = "TheRootFolder"
-    val files = (1 to 5).map(FileSystemProtocolConverterTestImpl.testFile).map(f => (f.id, f)).toMap
+    val files = (1 to 5).map(FileSystemProtocolConverterTestImpl.testFile(_)).map(f => (f.id, f)).toMap
     val folders = (10 to 16).map(FileSystemProtocolConverterTestImpl.testFolder).map(f => (f.id, f)).toMap
     val content = Model.FolderContent(RootID, files, folders)
     val expFiles = (1 to 5).map(idx => FileSystemProtocolConverterTestImpl.testFileElement(idx, "/", 0))
@@ -150,16 +150,16 @@ class FileSystemSyncProtocolSpec extends ScalaTestWithActorTestKit with AnyFlatS
 
   it should "update a file" in {
     val fileElem = FileSystemProtocolConverterTestImpl.testFileElement(3, "", 1)
-    val fileID = FileSystemProtocolConverterTestImpl.elementIDFromString(fileElem.id)
+    val fsFile = FileSystemProtocolConverterTestImpl.testFile(3, optName = Some(""))
     val content = fileContent
     val helper = new ProtocolTestHelper
 
     helper.withFileSystem { fs =>
-      when(fs.updateFileContent(fileID, fileElem.size, content)).thenReturn(helper.stubOperation(()))
+      when(fs.updateFileAndContent(fsFile, content)).thenReturn(helper.stubOperation(()))
     }
     futureResult(helper.protocol.updateFile(fileElem, content))
     helper.withFileSystem { fs =>
-      verify(fs).updateFileContent(fileID, fileElem.size, content)
+      verify(fs).updateFileAndContent(fsFile, content)
     }
   }
 
@@ -298,11 +298,12 @@ object FileSystemProtocolConverterTestImpl
   /**
     * Generates the test file with the given index.
     *
-    * @param idx the index
+    * @param idx     the index
+    * @param optName an optional file name
     * @return the test file with this index
     */
-  def testFile(idx: Int): Model.File[String] =
-    TestFile(id = IDPrefix + idx, name = s"testFile$idx.tst", description = null, createdAt = null,
+  def testFile(idx: Int, optName: Option[String] = None): Model.File[String] =
+    TestFile(id = IDPrefix + idx, name = optName getOrElse s"testFile$idx.tst", description = null, createdAt = null,
       lastModifiedAt = modifiedDate(idx), 10 * idx)
 
   /**
