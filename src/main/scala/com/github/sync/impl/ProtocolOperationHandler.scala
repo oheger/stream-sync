@@ -45,11 +45,11 @@ class ProtocolOperationHandler(protocol: SyncProtocol, downloadProtocol: SyncPro
         protocol.removeFolder(folder.id)
 
       case SyncOperation(folder@FsFolder(_, _, _, _), ActionCreate, _, _, _) =>
-        val (parent, name) = UriEncodingHelper.splitParent(folder.relativeUri)
+        val (parent, name) = extractParentAndName(folder)
         protocol.createFolder(parent, name, folder)
 
       case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionCreate, _, srcID, _) =>
-        val (parent, name) = UriEncodingHelper.splitParent(file.relativeUri)
+        val (parent, name) = extractParentAndName(file)
         downloadProtocol.downloadFile(srcID) flatMap { source =>
           protocol.createFile(parent, name, file, source)
         }
@@ -62,4 +62,16 @@ class ProtocolOperationHandler(protocol: SyncProtocol, downloadProtocol: SyncPro
       case _ =>
         Future.failed(new IllegalStateException("Invalid SyncOperation: " + op))
     }
+
+  /**
+    * Helper function to split the relative URI of an element into the parent
+    * path and the element name. The name is decoded.
+    *
+    * @param element the element
+    * @return a tuple with the parent URI and the decoded element name
+    */
+  private def extractParentAndName(element: FsElement): (String, String) = {
+    val (parent, encName) = UriEncodingHelper.splitParent(element.relativeUri)
+    (parent, UriEncodingHelper.decode(encName))
+  }
 }

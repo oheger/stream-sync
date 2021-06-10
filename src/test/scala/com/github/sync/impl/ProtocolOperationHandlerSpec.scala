@@ -38,10 +38,13 @@ object ProtocolOperationHandlerSpec {
   private val ElementParent = "/path/to"
 
   /** The name of a test element. */
-  private val ElementName = "element"
+  private val ElementName = "the element"
+
+  /** The encoded name of the test element. */
+  private val EncodedElementName = "the%20element"
 
   /** The relative URI of a test element. */
-  private val ElementUri = ElementParent + "/" + ElementName
+  private val ElementUri = ElementParent + "/" + EncodedElementName
 
   /** A test file element. */
   private val TestFile = FsFile(id = ElementID, relativeUri = ElementUri, level = 17,
