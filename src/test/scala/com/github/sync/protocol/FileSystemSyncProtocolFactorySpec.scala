@@ -25,7 +25,7 @@ import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpReq
 import com.github.cloudfiles.core.{FileSystem, Model}
 import com.github.cloudfiles.crypt.alg.aes.Aes
 import com.github.cloudfiles.crypt.fs.{CryptConfig, CryptContentFileSystem, CryptNamesFileSystem}
-import com.github.sync.protocol.config.StructureCryptConfig
+import com.github.sync.protocol.config.{StructureConfig, StructureCryptConfig}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -37,9 +37,6 @@ import scala.concurrent.duration._
 object FileSystemSyncProtocolFactorySpec {
   /** The protocol-specific URI used by tests. */
   private val ProtocolUri = "https://test.protocol.example.org"
-
-  /** The protocol-specific configuration. */
-  private val ProtocolConfig = 20210529
 
   /** A test configuration for the HTTP sender actor. */
   private val SenderConfig = HttpRequestSenderConfig(queueSize = 42)
@@ -129,6 +126,9 @@ class FileSystemSyncProtocolFactorySpec extends ScalaTestWithActorTestKit with A
     /** Mock for the HTTP sender factory. */
     private val senderFactory = mock[HttpRequestSenderFactory]
 
+    /** Mock for the protocol-specific configuration. */
+    private val protocolConfig = mock[StructureConfig]
+
     /** Mock for the file system returned by the creator. */
     private val fileSystem = mock[ExtensibleFileSystem[String, Model.File[String], Model.Folder[String],
       Model.FolderContent[String, Model.File[String], Model.Folder[String]]]]
@@ -144,8 +144,8 @@ class FileSystemSyncProtocolFactorySpec extends ScalaTestWithActorTestKit with A
 
     /** The factory to be tested. */
     private val factory =
-      new FileSystemSyncProtocolFactory[String, Model.File[String], Model.Folder[String], Int](creator, SenderConfig,
-        FsTimeout, spawner, senderFactory)
+      new FileSystemSyncProtocolFactory[String, Model.File[String], Model.Folder[String],
+        StructureConfig](creator, protocolConfig, SenderConfig, FsTimeout, spawner, senderFactory)
 
     /**
       * Invokes the test factory to create a protocol based on the managed mock
@@ -157,7 +157,7 @@ class FileSystemSyncProtocolFactorySpec extends ScalaTestWithActorTestKit with A
       */
     def createAndCheckProtocol(cryptConfig: StructureCryptConfig):
     FileSystemSyncProtocol[_, _, _] =
-      factory.createProtocol(ProtocolUri, ProtocolConfig, cryptConfig) match {
+      factory.createProtocol(ProtocolUri, cryptConfig) match {
         case p: FileSystemSyncProtocol[_, _, _] =>
           p.converter should be(converter)
           p.httpSender should be(httpSender)
@@ -206,12 +206,13 @@ class FileSystemSyncProtocolFactorySpec extends ScalaTestWithActorTestKit with A
       *
       * @return the ''FileSystemProtocolCreator'' mock
       */
-    private def createCreator(): FileSystemProtocolCreator[String, Model.File[String], Model.Folder[String], Int] = {
-      val c = mock[FileSystemProtocolCreator[String, Model.File[String], Model.Folder[String], Int]]
-      when(c.createFileSystem(ProtocolUri, ProtocolConfig, FsTimeout)).thenReturn(fileSystem)
-      when(c.createHttpSender(spawner, senderFactory, ProtocolUri, ProtocolConfig, SenderConfig))
+    private def createCreator():
+    FileSystemProtocolCreator[String, Model.File[String], Model.Folder[String], StructureConfig] = {
+      val c = mock[FileSystemProtocolCreator[String, Model.File[String], Model.Folder[String], StructureConfig]]
+      when(c.createFileSystem(ProtocolUri, protocolConfig, FsTimeout)).thenReturn(fileSystem)
+      when(c.createHttpSender(spawner, senderFactory, ProtocolUri, protocolConfig, SenderConfig))
         .thenReturn(httpSender)
-      when(c.createConverter(ProtocolConfig)).thenReturn(converter)
+      when(c.createConverter(protocolConfig)).thenReturn(converter)
       c
     }
   }

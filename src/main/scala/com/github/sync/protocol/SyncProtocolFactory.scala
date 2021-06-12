@@ -23,18 +23,15 @@ import com.github.sync.protocol.config.StructureCryptConfig
   *
   * The trait defines a single factory function that expects some configuration
   * data and creates a specific [[SyncProtocol]].
-  *
-  * @tparam C the type of configuration for the supported sync structure
   */
-trait SyncProtocolFactory[C] {
+trait SyncProtocolFactory {
   /**
     * Creates a concrete ''SyncProtocol'' instance based on the parameters
     * provided.
     *
     * @param uri         the protocol-specific URI
-    * @param config      the protocol-specific configuration
     * @param cryptConfig configuration related to encryption
     * @return the resulting ''SyncProtocol''
     */
-  def createProtocol(uri: String, config: C, cryptConfig: StructureCryptConfig): SyncProtocol
+  def createProtocol(uri: String, cryptConfig: StructureCryptConfig): SyncProtocol
 }

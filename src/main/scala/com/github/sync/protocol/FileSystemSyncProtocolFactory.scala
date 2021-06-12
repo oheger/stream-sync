@@ -25,7 +25,7 @@ import com.github.cloudfiles.crypt.alg.aes.Aes
 import com.github.cloudfiles.crypt.fs.resolver.CachePathComponentsResolver
 import com.github.cloudfiles.crypt.fs.{CryptConfig, CryptContentFileSystem, CryptNamesFileSystem}
 import com.github.sync.protocol.FileSystemSyncProtocolFactory.createCryptConfig
-import com.github.sync.protocol.config.StructureCryptConfig
+import com.github.sync.protocol.config.{StructureConfig, StructureCryptConfig}
 
 import java.security.SecureRandom
 
@@ -62,6 +62,7 @@ object FileSystemSyncProtocolFactory {
   * desired) and then bundled together to a working protocol instance.
   *
   * @param creator           the object to create protocol-specific components
+  * @param config            the protocol-specific configuration
   * @param httpSenderConfig  the config for the HTTP sender actor
   * @param timeout           the timeout for sync operations
   * @param spawner           the object to spawn new actors
@@ -73,13 +74,14 @@ object FileSystemSyncProtocolFactory {
   * @tparam C      the type of configuration for the supported sync structure
   */
 class FileSystemSyncProtocolFactory[ID, FILE <: Model.File[ID], FOLDER <: Model.Folder[ID],
-  C](val creator: FileSystemProtocolCreator[ID, FILE, FOLDER, C],
-     val httpSenderConfig: HttpRequestSenderConfig,
-     val timeout: Timeout,
-     spawner: Spawner,
-     httpSenderFactory: HttpRequestSenderFactory = HttpRequestSenderFactoryImpl)
-    (implicit system: ActorSystem[_]) extends SyncProtocolFactory[C] {
-  override def createProtocol(uri: String, config: C, cryptConfig: StructureCryptConfig): SyncProtocol = {
+  C <: StructureConfig](val creator: FileSystemProtocolCreator[ID, FILE, FOLDER, C],
+                        val config: C,
+                        val httpSenderConfig: HttpRequestSenderConfig,
+                        val timeout: Timeout,
+                        spawner: Spawner,
+                        httpSenderFactory: HttpRequestSenderFactory = HttpRequestSenderFactoryImpl)
+                       (implicit system: ActorSystem[_]) extends SyncProtocolFactory {
+  override def createProtocol(uri: String, cryptConfig: StructureCryptConfig): SyncProtocol = {
     val fileSystem = decorateFileSystem(creator.createFileSystem(uri, config, timeout), cryptConfig)
     val httpSender = creator.createHttpSender(spawner, httpSenderFactory, uri, config, httpSenderConfig)
     val converter = creator.createConverter(config)
