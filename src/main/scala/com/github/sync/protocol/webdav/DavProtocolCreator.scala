@@ -33,7 +33,7 @@ import com.github.sync.protocol.config.DavStructureConfig
   *
   * It creates a ''DavFileSystem'' and compatible components.
   */
-class DavProtocolCreator
+private object DavProtocolCreator
   extends FileSystemProtocolCreator[Uri, DavModel.DavFile, DavModel.DavFolder, DavStructureConfig] {
   override def createFileSystem(uri: String, config: DavStructureConfig, timeout: Timeout):
   ExtensibleFileSystem[Uri, DavModel.DavFile, DavModel.DavFolder,

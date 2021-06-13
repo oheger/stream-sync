@@ -51,9 +51,8 @@ class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar
   "DavProtocolCreator" should "create a correct file system" in {
     val expDavConfig = DavConfig(rootUri = TestUri, deleteBeforeOverride = TestConfig.deleteBeforeOverride,
       timeout = TestTimeout)
-    val creator = new DavProtocolCreator
 
-    creator.createFileSystem(TestUri, TestConfig, TestTimeout) match {
+    DavProtocolCreator.createFileSystem(TestUri, TestConfig, TestTimeout) match {
       case fs: DavFileSystem =>
         fs.config should be(expDavConfig)
       case fs => fail("Unexpected file system: " + fs)
@@ -66,15 +65,12 @@ class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar
     val senderConfig = mock[HttpRequestSenderConfig]
     val sender = mock[ActorRef[HttpRequestSender.HttpCommand]]
     when(factory.createRequestSender(spawner, TestUri, senderConfig)).thenReturn(sender)
-    val creator = new DavProtocolCreator
 
-    creator.createHttpSender(spawner, factory, TestUri, TestConfig, senderConfig) should be(sender)
+    DavProtocolCreator.createHttpSender(spawner, factory, TestUri, TestConfig, senderConfig) should be(sender)
   }
 
   it should "create a correct protocol converter" in {
-    val creator = new DavProtocolCreator
-
-    creator.createConverter(TestConfig) match {
+    DavProtocolCreator.createConverter(TestConfig) match {
       case davConverter: DavProtocolConverter =>
         davConverter.davConfig should be(TestConfig)
       case c => fail("Unexpected converter: " + c)
