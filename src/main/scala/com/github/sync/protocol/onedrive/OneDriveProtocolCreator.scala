@@ -32,7 +32,7 @@ import com.github.sync.protocol.config.OneDriveStructureConfig
   *
   * It creates a ''OneDriveFileSystem'' and compatible components.
   */
-object OneDriveProtocolCreator
+private object OneDriveProtocolCreator
   extends FileSystemProtocolCreator[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder,
     OneDriveStructureConfig] {
   override def createFileSystem(uri: String, config: OneDriveStructureConfig, timeout: Timeout):
