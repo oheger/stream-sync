@@ -38,25 +38,25 @@ class ProtocolOperationHandler(protocol: SyncProtocol, downloadProtocol: SyncPro
                               (implicit ec: ExecutionContext) {
   def execute(op: SyncOperation): Future[Unit] =
     op match {
-      case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionRemove, _, _, _) =>
-        protocol.removeFile(file.id)
+      case SyncOperation(_: FsFile, ActionRemove, _, _, _, dstID) =>
+        protocol.removeFile(dstID)
 
-      case SyncOperation(folder@FsFolder(_, _, _, _), ActionRemove, _, _, _) =>
-        protocol.removeFolder(folder.id)
+      case SyncOperation(_: FsFolder, ActionRemove, _, _, _, dstID) =>
+        protocol.removeFolder(dstID)
 
-      case SyncOperation(folder@FsFolder(_, _, _, _), ActionCreate, _, _, _) =>
+      case SyncOperation(folder: FsFolder, ActionCreate, _, _, _, _) =>
         val (parent, name) = extractParentAndName(folder)
         protocol.createFolder(parent, name, folder)
 
-      case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionCreate, _, srcID, _) =>
+      case SyncOperation(file: FsFile, ActionCreate, _, _, _, _) =>
         val (parent, name) = extractParentAndName(file)
-        downloadProtocol.downloadFile(srcID) flatMap { source =>
+        downloadProtocol.downloadFile(file.id) flatMap { source =>
           protocol.createFile(parent, name, file, source)
         }
 
-      case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionOverride, _, srcID, _) =>
-        downloadProtocol.downloadFile(srcID) flatMap { source =>
-          protocol.updateFile(file, source)
+      case SyncOperation(file: FsFile, ActionOverride, _, _, _, dstID) =>
+        downloadProtocol.downloadFile(file.id) flatMap { source =>
+          protocol.updateFile(file.copy(id = dstID), source)
         }
 
       case _ =>

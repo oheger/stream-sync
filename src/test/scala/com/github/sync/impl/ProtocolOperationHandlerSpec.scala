@@ -47,11 +47,11 @@ object ProtocolOperationHandlerSpec {
   private val ElementUri = ElementParent + "/" + EncodedElementName
 
   /** A test file element. */
-  private val TestFile = FsFile(id = ElementID, relativeUri = ElementUri, level = 17,
+  private val TestFile = FsFile(id = ElementID + "_src", relativeUri = ElementUri, level = 17,
     lastModified = Instant.parse("2021-05-19T19:51:35.100Z"), size = 4711)
 
   /** A test folder element. */
-  private val TestFolder = FsFolder(id = ElementID, relativeUri = ElementUri, level = 35)
+  private val TestFolder = FsFolder(id = ElementID + "_src_fld", relativeUri = ElementUri, level = 35)
 
   /** A source simulating content of a test file. */
   private val FileContent = Source.single(ByteString(FileTestHelper.testBytes()))
@@ -62,11 +62,11 @@ object ProtocolOperationHandlerSpec {
     *
     * @param elem   the affected element
     * @param action the action to execute on this element
-    * @param srcID  the optional source ID
+    * @param dstID  the optional destination ID
     * @return the ''SyncOperation''
     */
-  private def createOp(elem: FsElement, action: SyncAction, srcID: String = null): SyncOperation =
-    SyncOperation(elem, action, srcUri = srcID, level = 0, dstUri = null)
+  private def createOp(elem: FsElement, action: SyncAction, dstID: String = ElementID): SyncOperation =
+    SyncOperation(elem, action, dstID = dstID, level = 0, srcUri = null, dstUri = null)
 }
 
 /**
@@ -105,7 +105,7 @@ class ProtocolOperationHandlerSpec extends ScalaTestWithActorTestKit with AnyFla
   }
 
   it should "handle an operation to create a folder" in {
-    val op = createOp(TestFolder, ActionCreate)
+    val op = createOp(TestFolder, ActionCreate, dstID = null)
     val protocol = mock[SyncProtocol]
     when(protocol.createFolder(ElementParent, ElementName, TestFolder)).thenReturn(Future.successful(()))
     val handler = new ProtocolOperationHandler(protocol, null)
@@ -115,11 +115,10 @@ class ProtocolOperationHandlerSpec extends ScalaTestWithActorTestKit with AnyFla
   }
 
   it should "handle an operation to create a file" in {
-    val SrcID = "SourceElementID"
-    val op = createOp(TestFile, ActionCreate, SrcID)
+    val op = createOp(TestFile, ActionCreate, dstID = null)
     val protocol = mock[SyncProtocol]
     val downloadProtocol = mock[SyncProtocol]
-    when(downloadProtocol.downloadFile(SrcID)).thenReturn(Future.successful(FileContent))
+    when(downloadProtocol.downloadFile(TestFile.id)).thenReturn(Future.successful(FileContent))
     when(protocol.createFile(ElementParent, ElementName, TestFile, FileContent)).thenReturn(Future.successful(()))
     val handler = new ProtocolOperationHandler(protocol, downloadProtocol)
 
@@ -128,16 +127,16 @@ class ProtocolOperationHandlerSpec extends ScalaTestWithActorTestKit with AnyFla
   }
 
   it should "handle an operation to override a file" in {
-    val SrcID = "OverrideFileID"
-    val op = createOp(TestFile, ActionOverride, SrcID)
+    val DstFile = TestFile.copy(id = ElementID)
+    val op = createOp(TestFile, ActionOverride)
     val protocol = mock[SyncProtocol]
     val downloadProtocol = mock[SyncProtocol]
-    when(downloadProtocol.downloadFile(SrcID)).thenReturn(Future.successful(FileContent))
-    when(protocol.updateFile(TestFile, FileContent)).thenReturn(Future.successful(()))
+    when(downloadProtocol.downloadFile(TestFile.id)).thenReturn(Future.successful(FileContent))
+    when(protocol.updateFile(DstFile, FileContent)).thenReturn(Future.successful(()))
     val handler = new ProtocolOperationHandler(protocol, downloadProtocol)
 
     futureResult(handler.execute(op))
-    verify(protocol).updateFile(TestFile, FileContent)
+    verify(protocol).updateFile(DstFile, FileContent)
   }
 
   it should "handle an unexpected operation" in {

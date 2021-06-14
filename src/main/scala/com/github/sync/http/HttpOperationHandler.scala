@@ -79,16 +79,16 @@ trait HttpOperationHandler[C <: HttpConfig] {
     // Creates the object with requests for a single sync operation
     def createRequestData(op: SyncOperation): Future[SyncOperationRequestData] = {
       op match {
-        case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionRemove, _, _, _) =>
+        case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionRemove, _, _, _, _) =>
           createRemoveFileRequest(op, file)
-        case SyncOperation(folder@FsFolder(_, _, _, _), ActionRemove, _, _, _) =>
+        case SyncOperation(folder@FsFolder(_, _, _, _), ActionRemove, _, _, _, _) =>
           createRemoveFolderRequest(op, folder)
-        case SyncOperation(folder@FsFolder(_, _, _, _), ActionCreate, _, _, _) =>
+        case SyncOperation(folder@FsFolder(_, _, _, _), ActionCreate, _, _, _, _) =>
           createNewFolderRequest(op, folder)
-        case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionCreate, _, srcUri, _) =>
+        case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionCreate, _, srcUri, _, _) =>
           createNewFileRequest(op, file, fileProvider.fileSize(file.size),
             fileProvider.fileSource(srcUri))
-        case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionOverride, _, srcUri, _) =>
+        case SyncOperation(file@FsFile(_, _, _, _, _, _), ActionOverride, _, srcUri, _, _) =>
           createUpdateFileRequest(op, file, fileProvider.fileSize(file.size),
             fileProvider.fileSource(srcUri))
         case _ =>

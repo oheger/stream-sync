@@ -155,11 +155,15 @@ object SyncTypes {
     * A class that stores all information for a single sync operation.
     *
     * Subject of the operation is an element (a folder or a file), for which an
-    * action is to be executed. The operation also has a level which corresponds
-    * to the level of the element in the source structure that triggered it.
-    * (Note that this does not necessarily correspond to the level of the element
-    * associated with the operation.) The level can be used in filter expressions
-    * to customize sync behavior.
+    * action is to be executed. This is in most cases the data from the source
+    * structure. To reference the element affected by the action in the
+    * destination structure, its ID is stored explicitly (if applicable).
+    *
+    * The operation also has a level which corresponds to the level of the
+    * element in the source structure that triggered it. (Note that this does
+    * not necessarily correspond to the level of the element associated with
+    * the operation.) The level can be used in filter expressions to customize
+    * sync behavior.
     *
     * In some constellations it is required to know the URIs of the element
     * affected on both the source and the destination side. The URI in the
@@ -172,8 +176,10 @@ object SyncTypes {
     * @param level   the level of this operation
     * @param srcUri  the URI of the affected element in the source structure
     * @param dstUri  the URI of the affected element in the dest structure
+    * @param dstID   the ID of the destination element; required for downloads
     */
-  case class SyncOperation(element: FsElement, action: SyncAction, level: Int, srcUri: String, dstUri: String)
+  case class SyncOperation(element: FsElement, action: SyncAction, level: Int, srcUri: String, dstUri: String,
+                           dstID: String = null)
 
   /**
     * A class describing objects storing information about folders during a

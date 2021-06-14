@@ -140,16 +140,16 @@ object CryptService {
   (SyncOperation, LRUCache[String, String]) => Future[(SyncOperation, LRUCache[String, String])] =
     (op, cache) => {
       op match {
-        case SyncOperation(FsFile(_, uri, _, _, _, _), ActionCreate, _, _, _) =>
+        case SyncOperation(FsFile(_, uri, _, _, _, _), ActionCreate, _, _, _, _) =>
           mapCreateOperation(key, srcFunc, op, cache, uri, updateCache = false)
 
-        case SyncOperation(FsFolder(_, uri, _, _), ActionCreate, _, _, _) =>
+        case SyncOperation(FsFolder(_, uri, _, _), ActionCreate, _, _, _, _) =>
           mapCreateOperation(key, srcFunc, op, cache, uri, updateCache = true)
 
-        case SyncOperation(FsFolder(_, uri, _, _), _, _, _, _) =>
+        case SyncOperation(FsFolder(_, uri, _, _), _, _, _, _, _) =>
           Future.successful((op, cache.put(uri -> op.dstUri)))
 
-        case SyncOperation(FsFile(_, uri, _, _, _, _), _, _, _, _) =>
+        case SyncOperation(FsFile(_, uri, _, _, _, _), _, _, _, _, _) =>
           Future.successful((op,
             cache.put(UriEncodingHelper.splitParent(uri)._1 -> UriEncodingHelper.splitParent(op.dstUri)._1)))
       }
