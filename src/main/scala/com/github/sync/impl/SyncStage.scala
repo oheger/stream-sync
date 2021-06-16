@@ -23,6 +23,12 @@ import com.github.sync.SyncTypes._
 
 object SyncStage {
   /**
+    * Constant for a destination ID that is used when this property is
+    * irrelevant.
+    */
+  private val DstIDUnknown = "-"
+
+  /**
     * A function to handle state transitions when an element from upstream
     * is received.
     *
@@ -204,8 +210,7 @@ object SyncStage {
     lazy val delta = compareElements(elemSource, elemDest)
     val isRemoved = isInRemovedPath(state, elemDest)
     if (isRemoved.isDefined || delta > 0) {
-      val (op, next) = removeElement(state.updateCurrentElement(elemSource),
-        elemDest, isRemoved)
+      val (op, next) = removeElement(state.updateCurrentElement(elemSource), elemDest, isRemoved)
       Some((EmitData(op, stage.PullDest), next))
     } else if (delta < 0)
       Some((EmitData(List(createOp(elemSource)), stage.PullSource), state.updateCurrentElement(elemDest)))
@@ -252,7 +257,7 @@ object SyncStage {
       case (eSrc: FsFile, eDst: FsFile)
         if differentFileTimes(eSrc, eDst, ignoreTimeDelta) || eSrc.size != eDst.size =>
         Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, eSrc.originalUri,
-          eDst.originalUri)), state, stage))
+          eDst.originalUri, dstID = eDst.id)), state, stage))
 
       case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
         val ops = List(removeOp(fileDst, fileDst.level), createOp(folderSrc))
@@ -397,7 +402,7 @@ object SyncStage {
     * @return the operation
     */
   private def createOp(elem: FsElement): SyncOperation =
-    SyncOperation(elem, ActionCreate, elem.level, elem.originalUri, elem.relativeUri)
+    SyncOperation(elem, ActionCreate, elem.level, elem.originalUri, elem.relativeUri, DstIDUnknown)
 
   /**
     * Creates an operation that indicates that an element needs to be removed.
@@ -407,7 +412,7 @@ object SyncStage {
     * @return the operation
     */
   private def removeOp(element: FsElement, level: Int): SyncOperation =
-    SyncOperation(element, ActionRemove, level, element.originalUri, element.originalUri)
+    SyncOperation(element, ActionRemove, level, element.originalUri, element.originalUri, dstID = element.id)
 
   /**
     * Checks whether the timestamps of the given files are different, taking
@@ -473,11 +478,11 @@ class SyncStage(val ignoreTimeDeltaSec: Int = 0)
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) {
       // Current state of the sync stream
-      var state = SyncState(null, waitForElements, 0, Nil, Set.empty)
+      var state: SyncState = SyncState(null, waitForElements, 0, Nil, Set.empty)
 
       // Manually stores the inlets that have been pulled; this is necessary
       // to process onUpstreamFinish notifications at the correct time
-      var pulledPorts: Array[Boolean] = Array(true, true)
+      val pulledPorts: Array[Boolean] = Array(true, true)
 
       setHandler(inSource, new InHandler {
         override def onPush(): Unit = {
