@@ -159,8 +159,8 @@ class LocalSyncSpec extends BaseSyncSpec {
     result.totalOperations should be(2)
     result.successfulOperations should be(2)
     val lines = Files.readAllLines(logFile)
-    lines.get(0) should include("CREATE 0 FILE %2Fcreate.txt 0")
-    lines.get(1) should include("REMOVE 0 FILE %2Fremoved.txt 0")
+    lines.get(0) should include("CREATE 0 FILE  %2Fcreate.txt 0")
+    lines.get(1) should include("REMOVE 0 FILE  %2Fremoved.txt 0")
     checkFileNotPresent(dstFolder, "removed.txt")
   }
 
@@ -204,9 +204,9 @@ class LocalSyncSpec extends BaseSyncSpec {
     createTestFile(dstFolder, RemoveFileName)
     createTestFile(dstFolder, "remaining.txt")
     val procLog = createPathInDirectory("processed.log")
-    val operations = List(s"CREATE 0 FILE /syncFile.txt 0 $lastModified 42",
-      s"CREATE 0 FOLDER /$NewFolderName 0",
-      s"REMOVE 0 FILE /$RemoveFileName 0 2018-09-12T21:12:45.00Z 10")
+    val operations = List(s"CREATE 0 FILE file1 /syncFile.txt 0 $lastModified 42",
+      s"CREATE 0 FOLDER $NewFolderName /$NewFolderName 0",
+      s"REMOVE 0 FILE $RemoveFileName /$RemoveFileName 0 2018-09-12T21:12:45.00Z 10")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString)
@@ -228,7 +228,7 @@ class LocalSyncSpec extends BaseSyncSpec {
     val lastModified = Instant.parse("2018-09-12T21:35:10.10Z")
     createTestFile(srcFolder, SuccessFile)
     val operations = List("not a valid sync operation!?",
-      s"CREATE 0 FILE /$SuccessFile 0 $lastModified 42")
+      s"CREATE 0 FILE $SuccessFile /$SuccessFile 0 $lastModified 42")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString)
@@ -243,8 +243,8 @@ class LocalSyncSpec extends BaseSyncSpec {
     val SuccessFile = "successSync.txt"
     val lastModified = Instant.parse("2018-09-13T16:39:16.10Z")
     createTestFile(srcFolder, SuccessFile)
-    val operations = List(s"OVERRIDE 0 FILE /nonExisting.file 0 $lastModified 10",
-      s"CREATE 0 FILE /$SuccessFile 0 $lastModified 42")
+    val operations = List(s"OVERRIDE 0 FILE f1 /nonExisting.file 0 $lastModified 10",
+      s"CREATE 0 FILE $SuccessFile /$SuccessFile 0 $lastModified 42")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--timeout", "2")
@@ -260,8 +260,8 @@ class LocalSyncSpec extends BaseSyncSpec {
     val FailedFile = "nonExisting.file"
     val lastModified = Instant.parse("2018-10-29T20:26:49.11Z")
     createTestFile(srcFolder, SuccessFile)
-    val operations = List(s"OVERRIDE 0 FILE /$FailedFile 0 $lastModified 10",
-      s"CREATE 0 FILE /$SuccessFile 0 $lastModified 42")
+    val operations = List(s"OVERRIDE 0 FILE $FailedFile /$FailedFile 0 $lastModified 10",
+      s"CREATE 0 FILE $SuccessFile /$SuccessFile 0 $lastModified 42")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val logFile = createFileReference()
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
@@ -282,8 +282,8 @@ class LocalSyncSpec extends BaseSyncSpec {
     val lastModified = Instant.parse("2018-09-13T19:00:01.11Z")
     createTestFile(srcFolder, ProcessedFile)
     createTestFile(srcFolder, NewFile)
-    val ProcessedOp = s"CREATE 0 FILE /$ProcessedFile 0 $lastModified 2"
-    val operations = List(ProcessedOp, s"CREATE 0 FILE /$NewFile 0 $lastModified 4")
+    val ProcessedOp = s"CREATE 0 FILE $ProcessedFile /$ProcessedFile 0 $lastModified 2"
+    val operations = List(ProcessedOp, s"CREATE 0 FILE $NewFile /$NewFile 0 $lastModified 4")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val logFile = createDataFile(content = ProcessedOp)
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,

@@ -71,7 +71,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("CREATE 0 FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
   }
 
   it should "support a WebDav URI for the source structure with an OAuth IDP" in {
@@ -91,7 +91,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("CREATE 0 FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
   }
 
   it should "support a WebDav URI for the source structure without authentication" in {
@@ -106,7 +106,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("CREATE 0 FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
 
     import scala.jdk.CollectionConverters._
     getAllServeEvents.asScala foreach { event =>
@@ -127,7 +127,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("REMOVE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("REMOVE 0 FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
   }
 
   it should "support the --switch parameter to switch source and destination structures" in {
@@ -143,7 +143,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("CREATE 0 FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
   }
 
   it should "support switching source and destination parameters with complex authentication" in {
@@ -163,13 +163,13 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0 FILE %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be("CREATE 0 FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
   }
 
   it should "do proper cleanup for a Dav source when using a log file source and apply mode NONE" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val procLog = createPathInDirectory("processed.log")
-    val operations = List(s"CREATE 0 FILE /syncFile.txt 0 2019-09-04T21:30:23.00Z 42")
+    val operations = List(s"CREATE 0 FILE id1 /syncFile.txt 0 2019-09-04T21:30:23.00Z 42")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val options = Array("dav:http://irrelevant.host.org/test", dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString,
