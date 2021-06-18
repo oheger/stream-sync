@@ -73,10 +73,10 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
     */
   private def checkSerializedOperation(action: SyncAction, strAction: String): Unit = {
     val elem = FsFolder("1a", "my_folder", 8)
-    val op = SyncOperation(elem, action, 4, elem.relativeUri, elem.relativeUri)
+    val op = SyncOperation(elem, action, 4, elem.relativeUri, elem.relativeUri, dstID = "someDstID")
 
     val s = ElementSerializer.serializeOperation(op).utf8String
-    s should be(s"$strAction ${op.level} FOLDER ${elem.id} ${elem.relativeUri} ${elem.level}$lineEnd")
+    s should be(s"$strAction ${op.level} ${op.dstID} FOLDER ${elem.id} ${elem.relativeUri} ${elem.level}$lineEnd")
   }
 
   it should "serialize a create operation" in {
@@ -95,21 +95,23 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
     val elem = FsFolder("17", "/test folder/uri", 7)
     val EncUri = "%2Ftest%20folder%2Furi"
     val srcUri = "/folder/the org/test uri"
-    val op = SyncOperation(elem, ActionCreate, 2, srcUri, elem.relativeUri)
+    val dstID = "the destination ID"
+    val EncDstID = "the%20destination%20ID"
+    val op = SyncOperation(elem, ActionCreate, 2, srcUri, elem.relativeUri, dstID = dstID)
 
     val s = ElementSerializer.serializeOperation(op).utf8String
-    s should be(s"CREATE ${op.level} %2Ffolder%2Fthe%20org%2Ftest%20uri $EncUri FOLDER ${elem.id} $EncUri " +
-      s"${elem.level}$lineEnd")
+    s should be(s"CREATE ${op.level} $EncDstID %2Ffolder%2Fthe%20org%2Ftest%20uri $EncUri FOLDER ${elem.id} " +
+      s"$EncUri ${elem.level}$lineEnd")
   }
 
   it should "serialize an action if the destination URI differs from the element URI" in {
     val elem = FsFolder("id", "/test folder/uri", 7)
     val EncUri = "%2Ftest%20folder%2Furi"
     val dstUri = "/folder/dest org/test uri"
-    val op = SyncOperation(elem, ActionOverride, 2, elem.relativeUri, dstUri)
+    val op = SyncOperation(elem, ActionOverride, 2, elem.relativeUri, dstUri, dstID = "12345")
 
     val s = ElementSerializer.serializeOperation(op).utf8String
-    s should be(s"OVERRIDE ${op.level} $EncUri %2Ffolder%2Fdest%20org%2Ftest%20uri FOLDER " +
+    s should be(s"OVERRIDE ${op.level} ${op.dstID} $EncUri %2Ffolder%2Fdest%20org%2Ftest%20uri FOLDER " +
       s"${elem.id} $EncUri ${elem.level}$lineEnd")
   }
 
@@ -164,10 +166,10 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
     */
   private def checkDeserializeOperation(action: SyncAction, optSrcUri: Option[String] = None,
                                         optDstUri: Option[String] = None): Unit = {
-    val file = FsFile("100", "my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
+    val file = FsFile("the ID", "my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
       20180906193152L)
     val operation = SyncOperation(file, action, 22, optSrcUri getOrElse file.relativeUri,
-      optDstUri getOrElse file.relativeUri)
+      optDstUri getOrElse file.relativeUri, dstID = "the destination ID")
     val opRaw = ElementSerializer serializeOperation operation
 
     ElementSerializer.deserializeOperation(opRaw.utf8String) match {

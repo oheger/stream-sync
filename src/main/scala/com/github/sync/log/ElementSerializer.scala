@@ -80,8 +80,8 @@ object ElementSerializer {
     * @return the string representation for this operation
     */
   def serializeOperation(operation: SyncOperation): ByteString =
-    ByteString(s"${ActionTagMapping(operation.action)} ${operation.level}${serializeOperationUris(operation)} ") ++
-      serializeElement(operation.element) ++ CR
+    ByteString(s"${ActionTagMapping(operation.action)} ${operation.level} ${encode(operation.dstID)}" +
+      s"${serializeOperationUris(operation)} ") ++ serializeElement(operation.element) ++ CR
 
   /**
     * Tries to create an ''FsElement'' from its serialized form. Note that the
@@ -112,9 +112,9 @@ object ElementSerializer {
     */
   def deserializeOperation(raw: String): Try[SyncOperation] = for {
     actionData <- deserializeAction(raw)
-    elem <- deserializeElement(actionData._5)
-  } yield SyncOperation(elem, actionData._1, actionData._2, actionData._3 getOrElse elem.relativeUri,
-    actionData._4 getOrElse elem.relativeUri)
+    elem <- deserializeElement(actionData._6)
+  } yield SyncOperation(elem, actionData._1, actionData._2, actionData._4 getOrElse elem.relativeUri,
+    actionData._5 getOrElse elem.relativeUri, dstID = actionData._3)
 
   /**
     * Encode the given string, so that it can be safely serialized.
@@ -147,14 +147,15 @@ object ElementSerializer {
     * @param raw the raw data with the serialized form of the operation
     * @return a ''Try'' with elements that could be parsed
     */
-  private def deserializeAction(raw: String): Try[(SyncAction, Int, Option[String], Option[String], Seq[String])] =
+  private def deserializeAction(raw: String):
+  Try[(SyncAction, Int, String, Option[String], Option[String], Seq[String])] =
     Try {
       val parts = raw.split("\\s").toSeq
       val indexTag = parts.indexWhere(p => TagFile == p || TagFolder == p)
-      if (indexTag <= 2)
-        (TagActionMapping(parts.head), parts(1).toInt, None, None, parts drop 2)
-      else (TagActionMapping(parts.head), parts(1).toInt, Some(UriEncodingHelper decode parts(2)),
-        Some(UriEncodingHelper decode parts(3)), parts drop 4)
+      if (indexTag <= 3)
+        (TagActionMapping(parts.head), parts(1).toInt, UriEncodingHelper decode parts(2), None, None, parts drop 3)
+      else (TagActionMapping(parts.head), parts(1).toInt, UriEncodingHelper decode parts(2),
+        Some(UriEncodingHelper decode parts(3)), Some(UriEncodingHelper decode parts(4)), parts drop 5)
     }
 
   /**
