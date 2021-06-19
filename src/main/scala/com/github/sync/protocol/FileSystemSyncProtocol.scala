@@ -48,7 +48,7 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
                               val converter: FileSystemProtocolConverter[ID, FILE, FOLDER])
                              (implicit system: ActorSystem[_]) extends SyncProtocol {
   override def readRootFolder(): Future[List[SyncTypes.FsElement]] =
-    run(fileSystem.rootID) flatMap (id => readFolderWithID(id, "/", 1))
+    run(fileSystem.rootID) flatMap (id => readFolderWithID(id, "/", 0))
 
   override def readFolder(id: String, path: String, level: Int): Future[List[SyncTypes.FsElement]] =
     readFolderWithID(converter.elementIDFromString(id), path, level)

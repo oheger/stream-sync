@@ -40,7 +40,7 @@ object ProtocolElementSourceSpec {
     * @param level the level
     * @return the file
     */
-  private def createFile(uri: String, level: Int = 1): FsFile =
+  private def createFile(uri: String, level: Int = 0): FsFile =
     FsFile(null, uri, level, Instant.now(), uri.length * 100)
 
   /**
@@ -62,7 +62,7 @@ object ProtocolElementSourceSpec {
     * @param level the level
     * @return the folder
     */
-  private def createFolder(id: String, uri: String, level: Int = 1): FsFolder =
+  private def createFolder(id: String, uri: String, level: Int = 0): FsFolder =
     FsFolder(id, uri, level)
 
   /**

@@ -70,9 +70,9 @@ class FileSystemSyncProtocolSpec extends ScalaTestWithActorTestKit with AnyFlatS
     val files = (1 to 5).map(FileSystemProtocolConverterTestImpl.testFile(_)).map(f => (f.id, f)).toMap
     val folders = (10 to 16).map(FileSystemProtocolConverterTestImpl.testFolder).map(f => (f.id, f)).toMap
     val content = Model.FolderContent(RootID, files, folders)
-    val expFiles = (1 to 5).map(idx => FileSystemProtocolConverterTestImpl.testFileElement(idx, "/", 1))
+    val expFiles = (1 to 5).map(idx => FileSystemProtocolConverterTestImpl.testFileElement(idx, "/", 0))
     val expFolders = (10 to 16)
-      .map(idx => FileSystemProtocolConverterTestImpl.testFolderElement(idx, "/", 1))
+      .map(idx => FileSystemProtocolConverterTestImpl.testFolderElement(idx, "/", 0))
     val helper = new ProtocolTestHelper
 
     helper.withFileSystem { fs =>
