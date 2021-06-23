@@ -19,12 +19,19 @@ package com.github.sync.cli
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
+import akka.util.Timeout
 import akka.{actor => classic}
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth._
+import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.sync.AsyncTestHelper
+import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService}
 import com.github.sync.http.{SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
+import com.github.sync.protocol.local.LocalProtocolFactory
+import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
+import com.github.sync.protocol.webdav.DavProtocolFactory
 import org.mockito.Matchers.any
 import org.mockito.Mockito.{never, verify, verifyZeroInteractions, when}
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -33,14 +40,33 @@ import org.scalatestplus.mockito.MockitoSugar
 
 import java.io.IOException
 import java.nio.file.Paths
+import java.time.ZoneId
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 import scala.util.{Failure, Success}
+
+object SyncSetupSpec {
+  /** Constant for a sync timeout. */
+  private val SyncTimeout = Timeout(2.minutes)
+
+  /** A test sync configuration. */
+  private val TestSyncConfig = SyncConfig(srcUri = "someSrcUri", dstUri = "someDstUri", srcConfig = null,
+    dstConfig = null, timeout = SyncTimeout, applyMode = SyncParameterManager.ApplyModeTarget("test"),
+    logFilePath = None, syncLogPath = None, ignoreTimeDelta = None, cryptConfig = null, opsPerSecond = None,
+    filterData = null, switched = false)
+
+  /** A test configuration for HTTP actors. */
+  private val TestSenderConfig = HttpRequestSenderConfig(actorName = Some("testActor"))
+}
 
 /**
   * Test class for ''SyncSetup''.
   */
 class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers with MockitoSugar
   with AsyncTestHelper {
+
+  import SyncSetupSpec._
+
   /**
     * Returns the classic actor system in implicit scope. This is needed for
     * interactions with the storage service.
@@ -146,5 +172,46 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     val authConfig = expectOAuthConfig(authFunc(storageConfig))
     authConfig.refreshNotificationFunc(Failure(new IOException("Test Exception: No tokens.")))
     verify(storageService, never()).saveTokens(any(), any())(any(), any())
+  }
+
+  it should "provide a setup function that creates a local sync protocol" in {
+    val structConfig = FsStructureConfig(Some(ZoneId.of("Z")))
+    val spawner = mock[Spawner]
+
+    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match {
+      case f: LocalProtocolFactory =>
+        f.config should be(structConfig)
+        f.timeout should be(SyncTimeout)
+        f.httpSenderConfig should be(TestSenderConfig)
+      case o => fail("Unexpected protocol factory: " + o)
+    }
+  }
+
+  it should "provide a setup function that creates a WebDav sync protocol" in {
+    val structConfig = DavStructureConfig(optLastModifiedProperty = Some("changed"),
+      optLastModifiedNamespace = Some("my-ns"), deleteBeforeOverride = false)
+    val spawner = mock[Spawner]
+
+    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match {
+      case f: DavProtocolFactory =>
+        f.config should be(structConfig)
+        f.timeout should be(SyncTimeout)
+        f.httpSenderConfig should be(TestSenderConfig)
+      case o => fail("Unexpected protocol factory: " + o)
+    }
+  }
+
+  it should "provide a setup function that creates a OneDrive sync protocol" in {
+    val structConfig = OneDriveStructureConfig(syncPath = "/my/data", optUploadChunkSizeMB = None,
+      optServerUri = None)
+    val spawner = mock[Spawner]
+
+    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match {
+      case f: OneDriveProtocolFactory =>
+        f.config should be(structConfig)
+        f.timeout should be(SyncTimeout)
+        f.httpSenderConfig should be(TestSenderConfig)
+      case o => fail("Unexpected protocol factory: " + o)
+    }
   }
 }

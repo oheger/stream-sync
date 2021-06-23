@@ -22,8 +22,15 @@ import akka.{actor => classic}
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthConfig.TokenRefreshNotificationFunc
 import com.github.cloudfiles.core.http.auth.{AuthConfig, BasicAuthConfig, NoAuthConfig, OAuthTokenData}
+import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
+import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService, OAuthStorageServiceImpl}
 import com.github.sync.http.{SyncAuthConfig, SyncBasicAuthConfig, SyncOAuthStorageConfig}
+import com.github.sync.protocol.SyncProtocolFactory
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
+import com.github.sync.protocol.local.LocalProtocolFactory
+import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
+import com.github.sync.protocol.webdav.DavProtocolFactory
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -42,6 +49,13 @@ object SyncSetup {
     * asynchronous process, as typically some data files have to be read.
     */
   type AuthSetupFunc = SyncAuthConfig => Future[AuthConfig]
+
+  /**
+    * A function for creating a factory for a ''SyncProtocol'' based on the
+    * configuration passed via the command line.
+    */
+  type ProtocolFactorySetupFunc =
+    (StructureConfig, SyncConfig, HttpRequestSenderConfig, Spawner) => SyncProtocolFactory
 
   /**
     * Definition of the concrete service type used to access persistent
@@ -72,6 +86,29 @@ object SyncSetup {
         storageService.loadIdpConfig(storageConfig) map (_.oauthConfig.copy(refreshNotificationFunc = refreshFunc))
       case _ =>
         Future.successful(NoAuthConfig)
+    }
+  }
+
+  /**
+    * Returns a default setup function for a protocol factory. As some concrete
+    * factory implementations require an explicit ''ExecutionContext'' (which
+    * is not necessarily the one of the actor system), this object has to be
+    * passed in separately.
+    *
+    * @param system the actor system
+    * @param ec     the execution context
+    * @return the function to setup a protocol factory
+    */
+  def defaultProtocolFactorySetupFunc(implicit system: ActorSystem[_], ec: ExecutionContext):
+  ProtocolFactorySetupFunc = (structConfig, syncConfig, senderConfig, spawner) => {
+    val syncTimeout = syncConfig.timeout
+    structConfig match {
+      case fsConfig: FsStructureConfig =>
+        new LocalProtocolFactory(fsConfig, senderConfig, syncTimeout, spawner, ec)
+      case davConfig: DavStructureConfig =>
+        new DavProtocolFactory(davConfig, senderConfig, syncTimeout, spawner)
+      case oneConfig: OneDriveStructureConfig =>
+        new OneDriveProtocolFactory(oneConfig, senderConfig, syncTimeout, spawner)
     }
   }
 }
