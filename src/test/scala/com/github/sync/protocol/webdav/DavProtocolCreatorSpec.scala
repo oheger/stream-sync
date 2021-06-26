@@ -59,6 +59,17 @@ class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar
     }
   }
 
+  it should "remove the dav: prefix from the URI when creating the file system" in {
+    val expDavConfig = DavConfig(rootUri = TestUri, deleteBeforeOverride = TestConfig.deleteBeforeOverride,
+      timeout = TestTimeout)
+
+    DavProtocolCreator.createFileSystem("dav:" + TestUri, TestConfig, TestTimeout) match {
+      case fs: DavFileSystem =>
+        fs.config should be(expDavConfig)
+      case fs => fail("Unexpected file system: " + fs)
+    }
+  }
+
   it should "create a correct HTTP sender actor" in {
     val spawner = mock[Spawner]
     val factory = mock[HttpRequestSenderFactory]
@@ -67,6 +78,17 @@ class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar
     when(factory.createRequestSender(spawner, TestUri, senderConfig)).thenReturn(sender)
 
     DavProtocolCreator.createHttpSender(spawner, factory, TestUri, TestConfig, senderConfig) should be(sender)
+  }
+
+  it should "remove the dav: prefix from the URI when creating the HTTP sender actor" in {
+    val spawner = mock[Spawner]
+    val factory = mock[HttpRequestSenderFactory]
+    val senderConfig = mock[HttpRequestSenderConfig]
+    val sender = mock[ActorRef[HttpRequestSender.HttpCommand]]
+    when(factory.createRequestSender(spawner, TestUri, senderConfig)).thenReturn(sender)
+
+    DavProtocolCreator.createHttpSender(spawner, factory, "dav:" + TestUri, TestConfig,
+      senderConfig) should be(sender)
   }
 
   it should "create a correct protocol converter" in {
