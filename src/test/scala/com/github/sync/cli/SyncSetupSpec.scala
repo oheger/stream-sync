@@ -19,6 +19,7 @@ package com.github.sync.cli
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
+import akka.stream.KillSwitch
 import akka.util.Timeout
 import akka.{actor => classic}
 import com.github.cloudfiles.core.http.Secret
@@ -98,7 +99,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     val storageService = createStorageService()
     val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
 
-    futureResult(authFunc(SyncNoAuth)) should be(NoAuthConfig)
+    futureResult(authFunc(SyncNoAuth, mock[KillSwitch])) should be(NoAuthConfig)
     verifyZeroInteractions(storageService)
   }
 
@@ -107,7 +108,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     val syncConfig = SyncBasicAuthConfig("test-user", Secret("theSecretPassword"))
     val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
 
-    val authConfig = futureResult(authFunc(syncConfig))
+    val authConfig = futureResult(authFunc(syncConfig, mock[KillSwitch]))
     authConfig should be(BasicAuthConfig(syncConfig.user, syncConfig.password))
     verifyZeroInteractions(storageService)
   }
@@ -144,7 +145,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     when(storageService.loadIdpConfig(storageConfig)).thenReturn(Future.successful(idpConfig))
     val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
 
-    val authConfig = expectOAuthConfig(authFunc(storageConfig))
+    val authConfig = expectOAuthConfig(authFunc(storageConfig, mock[KillSwitch]))
     authConfig.copy(refreshNotificationFunc =
       idpConfig.oauthConfig.refreshNotificationFunc) should be(idpConfig.oauthConfig)
   }
@@ -153,25 +154,30 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     val storageService = createStorageService()
     val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", Some(Secret("crypt")))
     val idpConfig = createIDPConfig()
+    val killSwitch = mock[KillSwitch]
     when(storageService.loadIdpConfig(storageConfig)).thenReturn(Future.successful(idpConfig))
     val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
 
-    val authConfig = expectOAuthConfig(authFunc(storageConfig))
+    val authConfig = expectOAuthConfig(authFunc(storageConfig, killSwitch))
     val newTokens = OAuthTokenData("refreshedAccessToken", "refreshToken")
     authConfig.refreshNotificationFunc(Success(newTokens))
     verify(storageService).saveTokens(storageConfig, newTokens)
+    verifyZeroInteractions(killSwitch)
   }
 
-  it should "provide an OAuth refresh notification func that does not fail on errors" in {
+  it should "provide an OAuth refresh notification func that triggers the kill switch on errors" in {
     val storageService = createStorageService()
     val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", Some(Secret("crypt")))
     val idpConfig = createIDPConfig()
+    val killSwitch = mock[KillSwitch]
     when(storageService.loadIdpConfig(storageConfig)).thenReturn(Future.successful(idpConfig))
+    val exception = new IOException("Test Exception: No tokens.")
     val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
 
-    val authConfig = expectOAuthConfig(authFunc(storageConfig))
-    authConfig.refreshNotificationFunc(Failure(new IOException("Test Exception: No tokens.")))
+    val authConfig = expectOAuthConfig(authFunc(storageConfig, killSwitch))
+    authConfig.refreshNotificationFunc(Failure(exception))
     verify(storageService, never()).saveTokens(any(), any())(any(), any())
+    verify(killSwitch).abort(exception)
   }
 
   it should "provide a setup function that creates a local sync protocol" in {

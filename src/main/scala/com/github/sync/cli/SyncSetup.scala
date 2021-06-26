@@ -18,6 +18,7 @@ package com.github.sync.cli
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
+import akka.stream.KillSwitch
 import akka.{actor => classic}
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthConfig.TokenRefreshNotificationFunc
@@ -33,6 +34,7 @@ import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
 import com.github.sync.protocol.webdav.DavProtocolFactory
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
 /**
   * A module providing functions to setup important components required for a
@@ -48,7 +50,7 @@ object SyncSetup {
     * a ''SyncAuthConfig'' read from the command line. The creation is an
     * asynchronous process, as typically some data files have to be read.
     */
-  type AuthSetupFunc = SyncAuthConfig => Future[AuthConfig]
+  type AuthSetupFunc = (SyncAuthConfig, KillSwitch) => Future[AuthConfig]
 
   /**
     * A function for creating a factory for a ''SyncProtocol'' based on the
@@ -77,16 +79,44 @@ object SyncSetup {
     implicit val classicSystem: classic.ActorSystem = system.toClassic
     implicit val executionContext: ExecutionContext = system.executionContext
 
-    {
-      case SyncBasicAuthConfig(user, password) =>
-        Future.successful(BasicAuthConfig(user, password))
-      case storageConfig: SyncOAuthStorageConfig =>
-        val refreshFunc: TokenRefreshNotificationFunc = triedTokens =>
-          triedTokens.foreach(storageService.saveTokens(storageConfig, _))
-        storageService.loadIdpConfig(storageConfig) map (_.oauthConfig.copy(refreshNotificationFunc = refreshFunc))
-      case _ =>
-        Future.successful(NoAuthConfig)
+    (authConfig, killSwitch) =>
+      authConfig match {
+        case SyncBasicAuthConfig(user, password) =>
+          Future.successful(BasicAuthConfig(user, password))
+        case storageConfig: SyncOAuthStorageConfig =>
+          val refreshFunc = createTokenRefreshNotificationFunc(storageService, storageConfig, killSwitch)
+          storageService.loadIdpConfig(storageConfig) map (_.oauthConfig.copy(refreshNotificationFunc = refreshFunc))
+
+        case _ =>
+          Future.successful(NoAuthConfig)
+      }
+  }
+
+  /**
+    * Creates a function that is invoked when OAuth tokens are refreshed. If
+    * successful, the function passes the new tokens to the storage service to
+    * persist them. In case of a failure, the sync stream is aborted, as any
+    * following operations are expected to fail.
+    *
+    * @param storageService the service to store token information
+    * @param storageConfig  the OAuth storage configuration
+    * @param killSwitch     the kill switch to terminate the sync stream
+    * @param system         the actor system
+    * @param ec             the execution context
+    * @return the notification function for a token refresh
+    */
+  private def createTokenRefreshNotificationFunc(storageService: SyncOAuthStorageService,
+                                                 storageConfig: SyncOAuthStorageConfig,
+                                                 killSwitch: KillSwitch)
+                                                (implicit system: classic.ActorSystem, ec: ExecutionContext):
+  TokenRefreshNotificationFunc = {
+    val refreshFunc: TokenRefreshNotificationFunc = {
+      case Success(tokens) =>
+        storageService.saveTokens(storageConfig, tokens)
+      case Failure(exception) =>
+        killSwitch.abort(exception)
     }
+    refreshFunc
   }
 
   /**
