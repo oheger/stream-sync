@@ -35,10 +35,17 @@ import com.github.sync.protocol.config.OneDriveStructureConfig
 private object OneDriveProtocolCreator
   extends FileSystemProtocolCreator[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder,
     OneDriveStructureConfig] {
+  /**
+    * The prefix of URIs indicating the OneDrive protocol. This prefix needs to
+    * be removed when determining the drive ID.
+    */
+  private val OneDriveUriPrefix = "onedrive:"
+
   override def createFileSystem(uri: String, config: OneDriveStructureConfig, timeout: Timeout):
   ExtensibleFileSystem[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder,
     Model.FolderContent[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder]] = {
-    val baseConfig = OneDriveConfig(driveID = uri, timeout = timeout, optRootPath = Some(config.syncPath))
+    val driveID = uri.stripPrefix(OneDriveUriPrefix)
+    val baseConfig = OneDriveConfig(driveID = driveID, timeout = timeout, optRootPath = Some(config.syncPath))
     val chunkedConfig = config.optUploadChunkSizeMB.map(_ * 1024 * 1024).map(c => baseConfig.copy(uploadChunkSize = c))
       .getOrElse(baseConfig)
     val oneDriveConfig = config.optServerUri.map(u => chunkedConfig.copy(serverUri = u)).getOrElse(chunkedConfig)
