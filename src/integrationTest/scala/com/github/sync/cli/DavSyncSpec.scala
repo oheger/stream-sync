@@ -17,29 +17,33 @@
 package com.github.sync.cli
 
 import akka.http.scaladsl.model.StatusCodes
-import akka.pattern.AskTimeoutException
-import akka.testkit.TestProbe
-import akka.util.{ByteString, Timeout}
-import com.github.cloudfiles.core.http.{Secret, UriEncodingHelper}
+import akka.util.ByteString
+import com.github.cloudfiles.core.http.{HttpRequestSender, UriEncodingHelper}
 import com.github.sync.WireMockSupport.{BasicAuthFunc, Password, TokenAuthFunc, UserId}
+import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.DecryptOpHandler
-import com.github.sync.http.{HttpRequestActor, SyncBasicAuthConfig}
-import com.github.sync.webdav.{DavConfig, DavSourceFileProvider, DavStubbingSupport}
+import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
+import com.github.sync.webdav.DavStubbingSupport
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
+import org.mockito.Matchers.{any, anyString}
+import org.mockito.Mockito.{verify, when}
+import org.mockito.invocation.InvocationOnMock
+import org.scalatestplus.mockito.MockitoSugar
 
 import java.nio.file.Files
-import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.ExecutionContext
+import java.util.concurrent.TimeoutException
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Integration test class for sync processes that contains tests related to
   * WebDav servers. The tests typically make use of a WireMock server.
   */
-class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupport with OAuthMockSupport {
+class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport with DavStubbingSupport
+  with OAuthMockSupport {
 
   import OAuthMockSupport._
 
@@ -66,12 +70,14 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--src-user", UserId,
       "--src-password", Password)
+    val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
+      " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0  FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be(expLine)
   }
 
   it should "support a WebDav URI for the source structure with an OAuth IDP" in {
@@ -86,12 +92,14 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val options = withOAuthOptions(storageConfig, "--src-",
       "dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--log", logFile.toAbsolutePath.toString, "--apply", "None")
+    val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
+      " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0  FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be(expLine)
   }
 
   it should "support a WebDav URI for the source structure without authentication" in {
@@ -101,12 +109,14 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val logFile = createFileReference()
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--log", logFile.toAbsolutePath.toString, "--apply", "None")
+    val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
+      " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0  FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be(expLine)
 
     import scala.jdk.CollectionConverters._
     getAllServeEvents.asScala foreach { event =>
@@ -122,12 +132,14 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
       "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--dst-user", UserId,
       "--dst-password", Password, "--dst-modified-Property", "Win32LastModifiedTime")
+    val FileID = "%2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3"
+    val expLine = s"REMOVE 0 $FileID FILE $FileID %2Ffil5.mp3 0 2018-09-21T20:14:00Z 500"
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("REMOVE 0  FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be(expLine)
   }
 
   it should "support the --switch parameter to switch source and destination structures" in {
@@ -138,12 +150,14 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val options = Array(dstFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
       "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--dst-user", UserId,
       "--dst-password", Password, "--switch")
+    val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
+      " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0  FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be(expLine)
   }
 
   it should "support switching source and destination parameters with complex authentication" in {
@@ -158,15 +172,23 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val options = withOAuthOptions(storageConfig, "--dst-",
       dstFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
       "-S", "--log", logFile.toAbsolutePath.toString, "--apply", "None")
+    val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
+      " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
     val lines = Files.readAllLines(logFile)
     lines.size() should be(1)
-    lines.get(0) should be("CREATE 0  FILE  %2Ffile%20%285%29.mp3 0 2018-09-19T20:14:00Z 500")
+    lines.get(0) should be(expLine)
   }
 
   it should "do proper cleanup for a Dav source when using a log file source and apply mode NONE" in {
+    def createMockProtocol(): SyncProtocol = {
+      val protocol = mock[SyncProtocol]
+      when(protocol.readRootFolder()).thenReturn(Future.successful(Nil))
+      protocol
+    }
+
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val procLog = createPathInDirectory("processed.log")
     val operations = List(s"CREATE 0 null FILE id1 /syncFile.txt 0 2019-09-04T21:30:23.00Z 42")
@@ -174,12 +196,22 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val options = Array("dav:http://irrelevant.host.org/test", dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString,
       "--apply", "none", "--src-user", UserId, "--src-password", Password)
+    val srcProtocol = createMockProtocol()
+    val dstProtocol = createMockProtocol()
+    val protocolFactory = mock[SyncProtocolFactory]
+    when(protocolFactory.createProtocol(anyString(), any())).thenAnswer((invocation: InvocationOnMock) => {
+      val uri = invocation.getArgumentAt(0, classOf[String])
+      if (uri == dstFolder.toString) dstProtocol else srcProtocol
+    })
+    val protocolSetupFunc: ProtocolFactorySetupFunc = (_, _, _, _) => protocolFactory
 
-    val result = futureResult(runSync(options))
+    val result = futureResult(runSync(options, optProtocolSetupFunc = Some(protocolSetupFunc)))
     result.successfulOperations should be(operations.size)
+    verify(srcProtocol).close()
+    verify(dstProtocol).close()
   }
 
-  it should "create a correct SourceFileProvider for a WebDav source with basic auth" in {
+  it should "correctly download files from a WebDav source with basic auth" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3.xml")
@@ -191,11 +223,11 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
-    val fileContent = readFileInPath(dstFolder, "file (5).mp3")
+    val fileContent = readFileInPath(dstFolder, "fil5.mp3")
     fileContent should startWith(FileTestHelper.TestData take 50)
   }
 
-  it should "create a correct SourceFileProvider for a WebDav source with OAuth" in {
+  it should "correctly download files from a WebDav source with OAuth" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val storageConfig = prepareIdpConfig(optPassword = None)
@@ -212,7 +244,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
-    val fileContent = readFileInPath(dstFolder, "file (5).mp3")
+    val fileContent = readFileInPath(dstFolder, "fil5.mp3")
     fileContent should startWith(FileTestHelper.TestData take 50)
   }
 
@@ -228,8 +260,8 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
       .withRequestBody(equalTo(FileName))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
     stubFor(request("PROPPATCH", urlPathEqualTo(WebDavPath + "/" + FileName))
-      .withRequestBody(matching(".*xmlns:ssync=\"" + ModifiedNamespace + ".*"))
-      .withRequestBody(matching(s".*<ssync:$ModifiedProperty>.*"))
+      .withRequestBody(matching(".*xmlns:ns0=\"" + ModifiedNamespace + ".*"))
+      .withRequestBody(matching(s".*<ns0:$ModifiedProperty>.*"))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
     val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
       "--dst-user", UserId, "--dst-password", Password,
@@ -271,30 +303,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     result.successfulOperations should be(1)
   }
 
-  it should "make sure that an element source for WebDav operations is shutdown" in {
-    val WebDavPath = "/destination"
-    val davConfig = DavConfig(serverUri(WebDavPath),
-      Some(DavConfig.DefaultModifiedProperty), None, deleteBeforeOverride = false,
-      Timeout(10.seconds), authConfig = SyncBasicAuthConfig(UserId, Secret(Password)))
-    val shutdownCount = new AtomicInteger
-    val provider = new DavSourceFileProvider(davConfig, TestProbe().ref) {
-      override def shutdown(): Unit = {
-        shutdownCount.incrementAndGet() // records this invocation
-        super.shutdown()
-      }
-    }
-    val factory = factoryWithMockSourceProvider(provider)
-    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
-    stubFolderRequest(WebDavPath, "empty_folder.xml")
-    stubSuccess()
-    val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + davConfig.rootUri,
-      "--dst-user", UserId, "--dst-password", Password)
-
-    futureResult(runSync(options, factory))
-    shutdownCount.get() should be(1)
-  }
-
-  it should "evaluate the timeout for the WebDav file source provider" in {
+  it should "evaluate the timeout when downloading a file from a WebDav server" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val timeout = 1.second
@@ -321,7 +330,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--src-user", UserId, "--src-password", Password, "-t", timeout.toSeconds.toString)
 
-    expectFailedFuture[AskTimeoutException](runSync(options))
+    expectFailedFuture[TimeoutException](runSync(options))
   }
 
   it should "support a WebDav source with encrypted file names" in {
@@ -446,7 +455,7 @@ class DavSyncSpec extends BaseSyncSpec with WireMockSupport with DavStubbingSupp
       srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
       "--dst-modified-property", ModifiedProperty, "--dst-modified-namespace", ModifiedNamespace)
 
-    expectFailedFuture[HttpRequestActor.RequestException](runSync(options))
+    expectFailedFuture[HttpRequestSender.FailedResponseException](runSync(options))
   }
 
   it should "generate a usage message if invalid parameters are passed in" in {

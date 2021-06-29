@@ -16,6 +16,7 @@
 
 package com.github.sync.cli
 
+import akka.stream.{KillSwitches, SharedKillSwitch}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.protocol.SyncProtocol
 import org.mockito.Mockito.verify
@@ -35,7 +36,8 @@ class SyncProtocolHolderSpec extends AnyFlatSpec with Matchers with MockitoSugar
     val srcProtocol = mock[SyncProtocol]
     val dstProtocol = mock[SyncProtocol]
     val promise = Promise[Int]()
-    val holder = new SyncProtocolHolder(srcProtocol, dstProtocol)
+    val ks = KillSwitches.shared("mockKs1")
+    val holder = new SyncProtocolHolder(srcProtocol, dstProtocol, ks)
 
     val futClose = holder.registerCloseHandler(promise.future)
     promise.success(42)
@@ -49,7 +51,8 @@ class SyncProtocolHolderSpec extends AnyFlatSpec with Matchers with MockitoSugar
     val srcProtocol = mock[SyncProtocol]
     val dstProtocol = mock[SyncProtocol]
     val promise = Promise[Int]()
-    val holder = new SyncProtocolHolder(srcProtocol, dstProtocol)
+    val ks = KillSwitches.shared("mockKs2")
+    val holder = new SyncProtocolHolder(srcProtocol, dstProtocol, ks)
 
     val futClose = holder.registerCloseHandler(promise.future)
     promise.failure(exception)

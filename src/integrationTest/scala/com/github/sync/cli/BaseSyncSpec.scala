@@ -16,12 +16,8 @@
 
 package com.github.sync.cli
 
-import java.io.ByteArrayOutputStream
-import java.nio.file.attribute.FileTime
-import java.nio.file.{Files, Path}
-import java.time.Instant
-
-import akka.actor.ActorSystem
+import akka.actor.typed.scaladsl.adapter._
+import akka.actor.{ActorSystem, typed}
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.{ImplicitSender, TestKit}
 import akka.util.ByteString
@@ -33,6 +29,10 @@ import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
+import java.io.ByteArrayOutputStream
+import java.nio.file.attribute.FileTime
+import java.nio.file.{Files, Path}
+import java.time.Instant
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -191,17 +191,21 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * Executes a sync process with the given command line options.
     *
     * @param args    the array with command line options
-    * @param factory the factory for sync components
+    * @param optProtocolSetupFunc optional function to setup protocol factories
     * @return the future result of the sync process
     */
-  protected def runSync(args: Array[String], factory: SyncComponentsFactory = new SyncComponentsFactory):
+  protected def runSync(args: Array[String],
+                        optProtocolSetupFunc: Option[SyncSetup.ProtocolFactorySetupFunc] = None):
   Future[SyncResult] = {
     CliActorSystemLifeCycle.processCommandLine(args.toSeq, SyncParameterManager.syncConfigExtractor(),
       "HelpHelp") match {
       case Left(_) =>
         Future.failed(new AssertionError("Could not parse command line."))
       case Right(value) =>
-        Sync.syncProcess(factory, value)
+        implicit val typedActorSystem: typed.ActorSystem[Nothing] = system.toTyped
+        val authSetupFunc = SyncSetup.defaultAuthSetupFunc()
+        val protocolSetupFunc = optProtocolSetupFunc getOrElse SyncSetup.defaultProtocolFactorySetupFunc
+        Sync.syncProcess(value)(authSetupFunc)(protocolSetupFunc)
     }
   }
 

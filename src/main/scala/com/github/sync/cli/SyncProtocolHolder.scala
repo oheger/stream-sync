@@ -16,9 +16,85 @@
 
 package com.github.sync.cli
 
+import akka.NotUsed
+import akka.stream.scaladsl.{Flow, Source}
+import akka.stream.{KillSwitch, KillSwitches, SharedKillSwitch}
+import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
+import com.github.sync.SyncTypes.{FsElement, SyncOperation}
+import com.github.sync.cli.SyncParameterManager.{CryptConfig, CryptMode, SyncConfig}
+import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
+import com.github.sync.http.SyncAuthConfig
+import com.github.sync.impl.{ProtocolElementSource, ProtocolOperationHandler, ProtocolOperationHandlerStage}
 import com.github.sync.protocol.SyncProtocol
+import com.github.sync.protocol.config._
 
 import scala.concurrent.{ExecutionContext, Future}
+
+object SyncProtocolHolder {
+  /**
+    * A factory function for creating a [[SyncProtocolHolder]] instance with
+    * the protocols to use for the current sync process. This function
+    * evaluates the configuration objects provided an creates suitable protocol
+    * objects for them. With these, a new holder instance is created.
+    *
+    * @param syncConfig        the config for the sync process
+    * @param spawner           the spawner
+    * @param authSetupFunc     the function to setup authentication
+    * @param protocolSetupFunc the function to setup the protocol factory
+    * @param ec                the execution context
+    * @return a ''Future'' with the resulting ''SyncProtocolHolder''
+    */
+  def apply(syncConfig: SyncConfig, spawner: Spawner)(authSetupFunc: AuthSetupFunc)
+           (protocolSetupFunc: ProtocolFactorySetupFunc)(implicit ec: ExecutionContext): Future[SyncProtocolHolder] = {
+    val killSwitch = KillSwitches.shared("oauth-token-refresh")
+    val futSenderConfigSrc = createHttpSenderConfig(authSetupFunc, syncConfig.srcConfig.authConfig, killSwitch)
+    val futSenderConfigDst = createHttpSenderConfig(authSetupFunc, syncConfig.dstConfig.authConfig, killSwitch)
+
+    for {
+      senderConfigSrc <- futSenderConfigSrc
+      senderConfigDst <- futSenderConfigDst
+    } yield {
+      val srcProtocolFactory =
+        protocolSetupFunc(syncConfig.srcConfig.structureConfig, syncConfig, senderConfigSrc, spawner)
+      val srcCryptConfig = createStructureCryptConfig(syncConfig.cryptConfig, syncConfig.cryptConfig.srcPassword,
+        syncConfig.cryptConfig.srcCryptMode)
+      val srcProtocol = srcProtocolFactory.createProtocol(syncConfig.srcUri, srcCryptConfig)
+      val dstProtocolFactory =
+        protocolSetupFunc(syncConfig.dstConfig.structureConfig, syncConfig, senderConfigDst, spawner)
+      val dstCryptConfig = createStructureCryptConfig(syncConfig.cryptConfig, syncConfig.cryptConfig.dstPassword,
+        syncConfig.cryptConfig.dstCryptMode)
+      val dstProtocol = dstProtocolFactory.createProtocol(syncConfig.dstUri, dstCryptConfig)
+      new SyncProtocolHolder(srcProtocol, dstProtocol, killSwitch)
+    }
+  }
+
+  /**
+    * Creates the configuration for the HTTP request sender actor to be used
+    * for a structure based on the authentication config for this structure.
+    *
+    * @param authSetupFunc  the function to setup authentication
+    * @param syncAuthConfig the ''SyncAuthConfig'' for this structure
+    * @param killSwitch     the kill switch for a failed token refresh
+    * @param ec             the execution context
+    * @return a ''Future'' with the HTTP actor configuration
+    */
+  private def createHttpSenderConfig(authSetupFunc: AuthSetupFunc, syncAuthConfig: SyncAuthConfig,
+                                     killSwitch: KillSwitch)(implicit ec: ExecutionContext):
+  Future[HttpRequestSenderConfig] =
+    authSetupFunc(syncAuthConfig, killSwitch) map { authConfig => HttpRequestSenderConfig(authConfig = authConfig) }
+
+  /**
+    * Create a ''StructureCryptConfig'' from the passed in parameters.
+    *
+    * @param cryptConfig the original ''CryptConfig''
+    * @param password    the optional password
+    * @param cryptMode   the ''CryptMode''
+    * @return the resulting ''StructureCryptConfig''
+    */
+  private def createStructureCryptConfig(cryptConfig: CryptConfig, password: Option[String],
+                                         cryptMode: CryptMode.Value): StructureCryptConfig =
+    StructureCryptConfig(password, cryptMode == CryptMode.FilesAndNames, cryptConfig.cryptCacheSize)
+}
 
 /**
   * A class that holds the [[SyncProtocol]] objects used by the current sync
@@ -32,10 +108,48 @@ import scala.concurrent.{ExecutionContext, Future}
   * There is also support for cleaning up resources when a sync process
   * completes.
   *
-  * @param srcProtocol the protocol for the source structure
-  * @param dstProtocol the protocol for the destination structure
+  * Further, the class manages a ''KillSwitch'' that is triggered when an OAuth
+  * token refresh operation fails. If this kill switch is integrated into the
+  * sync stream, it can be aborted when such an error occurs.
+  *
+  * @param srcProtocol            the protocol for the source structure
+  * @param dstProtocol            the protocol for the destination structure
+  * @param oAuthRefreshKillSwitch the kill switch triggered for failed OAuth
+  *                               token refresh operations
+  * @param ec                     the execution context
   */
-class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol) {
+class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
+                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit ec: ExecutionContext) {
+  /**
+    * Creates a source for iterating over the elements of the source structure.
+    *
+    * @return the source for the source structure
+    */
+  def createSourceElementSource(): Source[FsElement, Any] = createElementSource(srcProtocol)
+
+  /**
+    * Creates a source for iterating over the elements of the destination
+    * structure.
+    *
+    * @return the source for the destination structure
+    */
+  def createDestinationElementSource(): Source[FsElement, Any] = createElementSource(dstProtocol)
+
+  /**
+    * Creates the flow stage for applying the sync operations against the
+    * destination structure.
+    *
+    * @return the apply stage
+    */
+  def createApplyStage(): Flow[SyncOperation, SyncOperation, NotUsed] = {
+    val protocolHandler = new ProtocolOperationHandler(dstProtocol, srcProtocol)
+    ProtocolOperationHandlerStage(protocolHandler)
+      .filter { op =>
+        op.optFailure.foreach(_.printStackTrace())
+        op.optFailure.isEmpty
+      }.map(_.op)
+  }
+
   /**
     * Registers a handler at the given ''Future'' that closes the managed
     * protocols when the future completes (either successfully or with a
@@ -44,14 +158,23 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol) {
     * released properly at the end of the process.
     *
     * @param future the ''Future'' to register the handler
-    * @param ec     the execution context
     * @tparam A the result type of the future
     * @return the ''Future'' with the handler registered
     */
-  def registerCloseHandler[A](future: Future[A])(implicit ec: ExecutionContext): Future[A] =
+  def registerCloseHandler[A](future: Future[A]): Future[A] =
     future.andThen {
       case _ =>
         srcProtocol.close()
         dstProtocol.close()
     }
+
+  /**
+    * Creates a source for file system elements that uses the protocol
+    * specified.
+    *
+    * @param protocol the ''SyncProtocol'' for this source
+    * @return the source for iterating the elements of this structure
+    */
+  private def createElementSource(protocol: SyncProtocol): Source[FsElement, Any] =
+    Source.fromGraph(new ProtocolElementSource(protocol))
 }

@@ -17,6 +17,7 @@
 package com.github.sync.onedrive
 
 import akka.http.scaladsl.model.{StatusCodes, Uri}
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.WireMockSupport
 import com.github.sync.http.SyncNoAuth
 import com.github.tomakehurst.wiremock.client.WireMock._
@@ -49,44 +50,62 @@ trait OneDriveStubbingSupport {
   import WireMockSupport._
 
   /**
+    * Adds a stubbing declaration for a request to resolve the given path.
+    *
+    * @param config    the OneDerive config
+    * @param resPath   the path that is to be resolved
+    * @param elementID the ID of the element to be returned
+    * @param status    the status code to be returned for the request
+    * @param authFunc  the authentication function
+    */
+  protected def stubResolvePathRequest(config: OneDriveConfig, resPath: String, elementID: String,
+                                       status: Int = StatusCodes.OK.intValue,
+                                       authFunc: AuthFunc = WireMockSupport.NoAuthFunc): Unit = {
+    val resolvedUri = UriEncodingHelper.removeTrailingSeparator(path(config.resolveRelativeUri(resPath))) +
+      ":?select=id"
+    val response = "{ \"id\": \"" + elementID + "\" }"
+    stubFor(authFunc(get(urlEqualTo(resolvedUri)))
+      .withHeader("Accept", equalTo("application/json"))
+      .willReturn(aResponse().withStatus(status)
+        .withHeader("Content-Type", ContentType)
+        .withBody(response)))
+  }
+
+  /**
     * Adds a stubbing declaration for a request to a OneDrive folder that is
     * served with content defined by the given content function.
     *
-    * @param config   the OneDrive config
-    * @param uri      the URI of the folder
+    * @param id       the ID of the folder
     * @param status   the status code to be returned for the request
     * @param authFunc the authentication function
     * @param fContent the function defining the content
     * @return the URI to request the folder
     */
-  protected def stubOneDriveFolderRequestContent(config: OneDriveConfig, uri: String,
-                                                 status: Int = StatusCodes.OK.intValue,
+  protected def stubOneDriveFolderRequestContent(id: String, status: Int = StatusCodes.OK.intValue,
                                                  authFunc: AuthFunc = WireMockSupport.NoAuthFunc)
                                                 (fContent: ResponseFunc): String = {
-    val stubUri = config.resolveFolderChildrenUri(uri)
-    stubFor(authFunc(get(urlPathEqualTo(path(stubUri))))
+    val stubUri = itemUri(id, "/children")
+    stubFor(authFunc(get(urlEqualTo(path(stubUri))))
       .withHeader("Accept", equalTo("application/json"))
       .willReturn(fContent(aResponse()
         .withStatus(status)
         .withHeader("Content-Type", ContentType))))
-    stubUri.toString()
+    stubUri
   }
 
   /**
     * Adds a stubbing declaration for a request to a OneDrive folder that is
     * served with the file specified.
     *
-    * @param config       the OneDrive config
-    * @param uri          the URI of the folder
+    * @param id           the ID of the folder
     * @param responseFile the file to serve the request
     * @param status       the status code to be returned for the request
     * @param authFunc     the authentication function
     * @return the URI to request the folder
     */
-  protected def stubOneDriveFolderRequest(config: OneDriveConfig, uri: String, responseFile: String,
-                                          status: Int = StatusCodes.OK.intValue,
+  protected def stubOneDriveFolderRequest(id: String, responseFile: String, status: Int = StatusCodes.OK.intValue,
                                           authFunc: AuthFunc = WireMockSupport.NoAuthFunc): String = {
-    stubOneDriveFolderRequestContent(config, uri, status, authFunc)(bodyFile(responseFile))
+    stubOneDriveFolderRequestContent(id, status, authFunc)(bodyFile(responseFile))
   }
 
   /**
@@ -96,6 +115,16 @@ trait OneDriveStubbingSupport {
     * @return the path of this URI as string
     */
   protected def path(uri: Uri): String = uri.path.toString()
+
+  /**
+    * Generates the URI of an element based on its ID.
+    *
+    * @param id     the element ID
+    * @param suffix an option suffix to append to the URI
+    * @return the relative element URI
+    */
+  protected def itemUri(id: String, suffix: String = null): String =
+    s"/$DriveID/items/$id${Option(suffix).getOrElse("")}"
 
   /**
     * Maps a relative element URI to the URI expected by the OneDrive server.
