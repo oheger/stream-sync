@@ -19,12 +19,11 @@ package com.github.sync.cli
 import akka.http.scaladsl.model.StatusCodes
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.{HttpRequestSender, UriEncodingHelper}
-import com.github.sync.WireMockSupport.{BasicAuthFunc, Password, TokenAuthFunc, UserId}
+import com.github.sync.WireMockSupport._
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.crypt.DecryptOpHandler
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
-import com.github.sync.webdav.DavStubbingSupport
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.http.RequestMethod
@@ -42,8 +41,7 @@ import scala.concurrent.{ExecutionContext, Future}
   * Integration test class for sync processes that contains tests related to
   * WebDav servers. The tests typically make use of a WireMock server.
   */
-class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport with DavStubbingSupport
-  with OAuthMockSupport {
+class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport with OAuthMockSupport {
 
   import OAuthMockSupport._
 
@@ -59,6 +57,30 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     stubFor(BasicAuthFunc(get(urlPathEqualTo(uri))
       .willReturn(aResponse()
         .withStatus(StatusCodes.OK.intValue)
+        .withBodyFile(responseFile))))
+  }
+  /**
+    * Adds a stubbing declaration for a request to a folder that is served with
+    * the file specified.
+    *
+    * @param uri          the URI of the folder
+    * @param responseFile the file to serve the request
+    * @param status       the status code to return from the request
+    * @param authFunc     the authorization function
+    * @param optDelay     an optional delay for this request
+    */
+  private def stubFolderRequest(uri: String, responseFile: String,
+                                  status: Int = StatusCodes.OK.intValue,
+                                  authFunc: AuthFunc = BasicAuthFunc,
+                                  optDelay: Option[FiniteDuration] = None): Unit = {
+    val reqUri = if (uri.endsWith("/")) uri else uri + "/"
+    val delay = optDelay.map(_.toMillis.toInt).getOrElse(0)
+    stubFor(authFunc(request("PROPFIND", urlPathEqualTo(reqUri))
+      .withHeader("Accept", equalTo("text/xml"))
+      .withHeader("Depth", equalTo("1"))
+      .willReturn(aResponse()
+        .withStatus(status)
+        .withFixedDelay(delay)
         .withBodyFile(responseFile))))
   }
 
