@@ -17,6 +17,7 @@
 package com.github.sync.cli
 
 import akka.NotUsed
+import akka.actor.typed.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import akka.stream.{KillSwitch, KillSwitches, SharedKillSwitch}
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
@@ -41,11 +42,13 @@ object SyncProtocolHolder {
     * @param spawner           the spawner
     * @param authSetupFunc     the function to setup authentication
     * @param protocolSetupFunc the function to setup the protocol factory
-    * @param ec                the execution context
+    * @param system            the actor system
     * @return a ''Future'' with the resulting ''SyncProtocolHolder''
     */
   def apply(syncConfig: SyncConfig, spawner: Spawner)(authSetupFunc: AuthSetupFunc)
-           (protocolSetupFunc: ProtocolFactorySetupFunc)(implicit ec: ExecutionContext): Future[SyncProtocolHolder] = {
+           (protocolSetupFunc: ProtocolFactorySetupFunc)
+           (implicit system: ActorSystem[_]): Future[SyncProtocolHolder] = {
+    implicit val ec: ExecutionContext = system.executionContext
     val killSwitch = KillSwitches.shared("oauth-token-refresh")
     val futSenderConfigSrc = createHttpSenderConfig(authSetupFunc, syncConfig.srcConfig.authConfig, killSwitch)
     val futSenderConfigDst = createHttpSenderConfig(authSetupFunc, syncConfig.dstConfig.authConfig, killSwitch)
@@ -116,10 +119,10 @@ object SyncProtocolHolder {
   * @param dstProtocol            the protocol for the destination structure
   * @param oAuthRefreshKillSwitch the kill switch triggered for failed OAuth
   *                               token refresh operations
-  * @param ec                     the execution context
+  * @param system                 the actor system
   */
 class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
-                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit ec: ExecutionContext) {
+                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[_]) {
   /**
     * Creates a source for iterating over the elements of the source structure.
     *
@@ -177,4 +180,11 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     */
   private def createElementSource(protocol: SyncProtocol): Source[FsElement, Any] =
     Source.fromGraph(new ProtocolElementSource(protocol))
+
+  /**
+    * Returns the execution context from the actor system in implicit scope.
+    *
+    * @return the execution context
+    */
+  private implicit def executionContext: ExecutionContext = system.executionContext
 }

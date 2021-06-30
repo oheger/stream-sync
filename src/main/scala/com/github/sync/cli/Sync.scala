@@ -86,7 +86,7 @@ object Sync {
                  (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] = {
     val spawner: Spawner = system
     for {
-      holder <- SyncProtocolHolder(config, spawner)(authSetupFunc)(protocolSetupFunc)
+      holder <- SyncProtocolHolder(config, spawner)(authSetupFunc)(protocolSetupFunc)(system.toTyped)
       result <- runSync(config, holder)
     } yield result
   }

@@ -459,7 +459,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
   it should "cancel a sync operation if the access token cannot be refreshed" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val WebDavPath = "/destination"
-    val FileCount = 8
+    val FileCount = 16
     (1 to FileCount) map (i => s"testDataFile$i.dat") foreach (name => createTestFile(srcFolder, name))
     val ModifiedProperty = "Win32LastModifiedTime"
     val ModifiedNamespace = "modified-urn:"
