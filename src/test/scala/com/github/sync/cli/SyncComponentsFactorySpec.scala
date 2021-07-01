@@ -79,9 +79,8 @@ object SyncComponentsFactorySpec {
       cryptCacheSize = 17)
     SyncConfig(srcUri = optSrcUri.getOrElse("/source"), srcConfig = optSrcConfig.getOrElse(TestStructureConfig),
       dstUri = optDstUri.getOrElse("/target"), dstConfig = optDstConfig.getOrElse(TestStructureConfig),
-      applyMode = SyncParameterManager.ApplyModeTarget("uri"), timeout = TestTimeout, logFilePath = None,
-      syncLogPath = None, ignoreTimeDelta = None, opsPerSecond = None, cryptConfig = cryptConfig,
-      filterData = SyncFilterData(Map.empty), switched = false)
+      dryRun = false, timeout = TestTimeout, logFilePath = None, syncLogPath = None, ignoreTimeDelta = None,
+      opsPerSecond = None, cryptConfig = cryptConfig, filterData = SyncFilterData(Map.empty), switched = false)
   }
 }
 

@@ -216,8 +216,8 @@ object Sync {
 
   /**
     * Creates the flow stage that applies sync operations based on the given
-    * sync config. If the apply mode does not require any actions, a dummy flow
-    * is returned that passes all operations through.
+    * sync config. If the dry-run mode is enabled, a dummy flow is returned
+    * that passes all operations through.
     *
     * @param config         the sync configuration
     * @param protocolHolder the ''SyncProtocolHolder''
@@ -228,13 +228,8 @@ object Sync {
   private def createApplyStage(config: SyncConfig, protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Flow[SyncOperation, SyncOperation, NotUsed]] = Future {
-    config.applyMode match {
-      case SyncParameterManager.ApplyModeTarget(_) =>
-        protocolHolder.createApplyStage()
-
-      case SyncParameterManager.ApplyModeNone =>
-        Flow[SyncOperation].map(identity)
-    }
+    if (config.dryRun) Flow[SyncOperation].map(identity)
+    else protocolHolder.createApplyStage()
   }
 
   /**

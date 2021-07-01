@@ -218,14 +218,14 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
   }
 
   it should "not support short alias names for storage configuration options" in {
-    val options = Array("-n", "someIDP", "-d", testDirectory.toAbsolutePath.toString, "-U", "some/src/path",
+    val options = Array("-n", "someIDP", "-D", testDirectory.toAbsolutePath.toString, "-U", "some/src/path",
       "onedrive:" + DriveID, "--dst-path", "ServerPath", "--dst-server-uri", serverUri("/"))
 
     val output = checkSyncOutput(options, "Invalid")
     val usagePos = output.indexOf("Usage:")
     usagePos should be > 0
     val errorMsg = output.substring(0, usagePos)
-    errorMsg should include("-d ")
+    errorMsg should include("-D ")
     errorMsg should include("-n ")
     errorMsg should include("-U ")
   }

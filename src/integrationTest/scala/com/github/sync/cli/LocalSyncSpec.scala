@@ -16,11 +16,6 @@
 
 package com.github.sync.cli
 
-import java.io.File
-import java.nio.file.{Files, Path}
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-import java.util.concurrent.atomic.AtomicInteger
 import akka.actor.{ActorIdentity, Identify}
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.UriEncodingHelper
@@ -28,17 +23,18 @@ import com.github.sync.cli.LocalSyncSpec.encodePath
 import com.github.sync.cli.SyncParameterManager.CryptMode
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.crypt.DecryptOpHandler
-import com.github.sync.local.LocalUriResolver
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
-import com.github.sync.protocol.config.FsStructureConfig
 import org.mockito.Matchers.{any, anyString}
 import org.mockito.Mockito.{verify, when}
 import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.{Await, Future, TimeoutException}
+import java.io.File
+import java.nio.file.{Files, Path}
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future, TimeoutException}
 
 object LocalSyncSpec {
   /**
@@ -119,7 +115,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     val options = Array("--filter", "exclude:*.tmp", "--foo", "bar")
 
     val output = checkSyncOutput(options, "<sourceURI>", "<destinationURI>",
-      SyncParameterManager.ApplyModeOption, SyncParameterManager.TimeoutOption,
+      SyncParameterManager.DryRunOption, SyncParameterManager.TimeoutOption,
       SyncParameterManager.LogFileOption, FilterManager.ArgCommonFilter, FilterManager.ArgCreateFilter,
       "--" + CliActorSystemLifeCycle.FileOption)
     output should not include "src-" + SyncCliStructureConfig.PropOneDrivePath
@@ -149,22 +145,6 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     checkSyncOutput(options, "--filter, -f", "--help, -h")
   }
 
-  ignore should "apply operations to an alternative target" in {
-    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
-    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val dstFolder2 = Files.createDirectory(createPathInDirectory("dest2"))
-    createTestFile(srcFolder, "new.txt")
-    createTestFile(dstFolder, "obsolete.dat")
-    createTestFile(dstFolder2, "obsolete.dat")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--apply", "target:" + dstFolder2.toAbsolutePath.toString)
-
-    futureResult(runSync(options))
-    checkFile(dstFolder2, "new.txt")
-    checkFile(dstFolder, "obsolete.dat")
-    checkFileNotPresent(dstFolder2, "obsolete.dat")
-  }
-
   it should "store sync operations in a log file" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -192,20 +172,19 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     val logFile = createDataFile(content = LogHeader)
     createTestFile(srcFolder, "fileToSync.dat")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "-a", "none", "-l", logFile.toAbsolutePath.toString)
+      "-d", "-l", logFile.toAbsolutePath.toString)
 
     futureResult(runSync(options))
     readDataFile(logFile) should startWith(LogHeader)
   }
 
-  it should "support an apply mode 'None'" in {
+  it should "support a dry-run mode" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     createTestFile(srcFolder, "file1.txt")
     createTestFile(srcFolder, "file2.txt")
     createTestFile(dstFolder, "removed.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--apply", "NonE")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "-d")
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(3)

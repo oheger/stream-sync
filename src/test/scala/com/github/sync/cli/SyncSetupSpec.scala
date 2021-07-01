@@ -52,9 +52,8 @@ object SyncSetupSpec {
 
   /** A test sync configuration. */
   private val TestSyncConfig = SyncConfig(srcUri = "someSrcUri", dstUri = "someDstUri", srcConfig = null,
-    dstConfig = null, timeout = SyncTimeout, applyMode = SyncParameterManager.ApplyModeTarget("test"),
-    logFilePath = None, syncLogPath = None, ignoreTimeDelta = None, cryptConfig = null, opsPerSecond = None,
-    filterData = null, switched = false)
+    dstConfig = null, timeout = SyncTimeout, dryRun = false, logFilePath = None, syncLogPath = None,
+    ignoreTimeDelta = None, cryptConfig = null, opsPerSecond = None, filterData = null, switched = false)
 
   /** A test configuration for HTTP actors. */
   private val TestSenderConfig = HttpRequestSenderConfig(actorName = Some("testActor"))

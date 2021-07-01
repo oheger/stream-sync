@@ -90,7 +90,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     stubFolderRequest(WebDavPath, "folder3.xml")
     val logFile = createFileReference()
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
-      "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--src-user", UserId,
+      "--log", logFile.toAbsolutePath.toString, "--dry-run", "--src-user", UserId,
       "--src-password", Password)
     val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
       " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
@@ -113,7 +113,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     val logFile = createFileReference()
     val options = withOAuthOptions(storageConfig, "--src-",
       "dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
-      "--log", logFile.toAbsolutePath.toString, "--apply", "None")
+      "--log", logFile.toAbsolutePath.toString, "-d")
     val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
       " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
 
@@ -130,7 +130,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     stubFolderRequest(WebDavPath, "folder3.xml", authFunc = identity)
     val logFile = createFileReference()
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
-      "--log", logFile.toAbsolutePath.toString, "--apply", "None")
+      "--log", logFile.toAbsolutePath.toString, "-d")
     val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
       " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
 
@@ -152,7 +152,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     stubFolderRequest(WebDavPath, "folder3_full.xml")
     val logFile = createFileReference()
     val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
-      "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--dst-user", UserId,
+      "--log", logFile.toAbsolutePath.toString, "--dry-run", "--dst-user", UserId,
       "--dst-password", Password, "--dst-modified-Property", "Win32LastModifiedTime")
     val FileID = "%2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3"
     val expLine = s"REMOVE 0 $FileID FILE $FileID %2Ffil5.mp3 0 2018-09-21T20:14:00Z 500"
@@ -170,7 +170,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     stubFolderRequest(WebDavPath, "folder3.xml")
     val logFile = createFileReference()
     val options = Array(dstFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
-      "--log", logFile.toAbsolutePath.toString, "--apply", "None", "--dst-user", UserId,
+      "--log", logFile.toAbsolutePath.toString, "-d", "--dst-user", UserId,
       "--dst-password", Password, "--switch")
     val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
       " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
@@ -193,7 +193,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     val logFile = createFileReference()
     val options = withOAuthOptions(storageConfig, "--dst-",
       dstFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
-      "-S", "--log", logFile.toAbsolutePath.toString, "--apply", "None")
+      "-S", "--log", logFile.toAbsolutePath.toString, "--dry-run")
     val expLine = "CREATE 0 - FILE %2Ftest%2520data%2Ffolder%2520%282%29%2Ffolder%2520%283%29%2Ffile%2520%285%29.mp3" +
       " %2Ffil5.mp3 0 2018-09-19T20:14:00Z 500"
 
@@ -217,7 +217,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val options = Array("dav:http://irrelevant.host.org/test", dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString,
-      "--apply", "none", "--src-user", UserId, "--src-password", Password)
+      "-d", "--src-user", UserId, "--src-password", Password)
     val srcProtocol = createMockProtocol()
     val dstProtocol = createMockProtocol()
     val protocolFactory = mock[SyncProtocolFactory]

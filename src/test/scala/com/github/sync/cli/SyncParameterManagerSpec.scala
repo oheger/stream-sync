@@ -171,32 +171,16 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       SyncParameterManager.TimeoutOption, "Single value expected")
   }
 
-  it should "return a default apply mode" in {
+  it should "return a default dry-run mode" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-    config.applyMode should be(ApplyModeTarget(DestinationUri))
+    config.dryRun shouldBe false
   }
 
-  it should "return a target apply mode with the specified URI" in {
-    val applyUri = "/dest/apply/uri"
-    val argsMap = ArgsMap + (SyncParameterManager.ApplyModeOption -> List("Target:" + applyUri))
+  it should "support enabling the dry-run mode" in {
+    val argsMap = ArgsMap + (SyncParameterManager.DryRunOption -> List("true"))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.applyMode should be(ApplyModeTarget(applyUri))
-  }
-
-  it should "return the apply mode NONE" in {
-    val argsMap = ArgsMap + (SyncParameterManager.ApplyModeOption -> List("none"))
-
-    val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.applyMode should be(ApplyModeNone)
-  }
-
-  it should "handle an invalid apply mode" in {
-    val Mode = "unknown:foo"
-    val argsMap = ArgsMap + (SyncParameterManager.ApplyModeOption -> List(Mode))
-
-    expectFailedFuture(extractSyncConfig(argsMap),
-      "Invalid apply mode: '" + Mode)
+    config.dryRun shouldBe true
   }
 
   it should "return a default timeout if no timeout option is provided" in {
@@ -391,7 +375,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (SyncParameterManager.IgnoreTimeDeltaOption -> List("1"))
 
     val (_, updCtx) = futureResult(extractSyncConfig(argsMap))
-    accessedKeys(updCtx) should contain allOf(SyncParameterManager.ApplyModeOption,
+    accessedKeys(updCtx) should contain allOf(SyncParameterManager.DryRunOption,
       SyncParameterManager.TimeoutOption, SyncParameterManager.LogFileOption, SyncParameterManager.SyncLogOption,
       SyncParameterManager.IgnoreTimeDeltaOption, SyncParameterManager.OpsPerSecondOption,
       SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption,
@@ -400,12 +384,11 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "combine multiple error messages when parsing the sync config" in {
     val argsMap = Map(ParameterParser.InputParameter.key -> List(SourceUri),
-      SyncParameterManager.ApplyModeOption -> List("invalidApplyMode"),
       SyncParameterManager.TimeoutOption -> List("invalidTimeout"),
       SyncParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      "destinationURI: Mandatory parameter", "Invalid apply mode", SyncParameterManager.TimeoutOption,
+      "destinationURI: Mandatory parameter", SyncParameterManager.TimeoutOption,
       SyncParameterManager.CryptCacheSizeOption)
   }
 
@@ -415,10 +398,9 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val expCryptConfig = CryptConfig(dstPassword = Some("pwd-src"), dstCryptMode = CryptMode.FilesAndNames,
       srcPassword = Some("pwd-dst"), srcCryptMode = CryptMode.Files, cryptCacheSize = 55)
     val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
-      dstConfig = mock[StructureAuthConfig], applyMode = SyncParameterManager.ApplyModeTarget("test"),
-      timeout = 1.minute, logFilePath = None, syncLogPath = None, ignoreTimeDelta = Some(100),
-      cryptConfig = orgCryptConfig, opsPerSecond = Some(100), filterData = mock[SyncFilterData],
-      switched = true)
+      dstConfig = mock[StructureAuthConfig], dryRun = false, timeout = 1.minute, logFilePath = None,
+      syncLogPath = None, ignoreTimeDelta = Some(100), cryptConfig = orgCryptConfig, opsPerSecond = Some(100),
+      filterData = mock[SyncFilterData], switched = true)
     val expNormalized = orgConfig.copy(srcUri = orgConfig.dstUri, dstUri = orgConfig.srcUri,
       srcConfig = orgConfig.dstConfig, dstConfig = orgConfig.srcConfig, cryptConfig = expCryptConfig,
       switched = false)

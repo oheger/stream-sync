@@ -62,17 +62,13 @@ object SyncParameterManager {
       |source URI, but determines where to apply the changes.
       |""".stripMargin
 
-  /** Name of the option for the apply mode. */
-  final val ApplyModeOption: String = "apply"
+  /** Name of the option for the dry-run mode. */
+  final val DryRunOption: String = "dry-run"
 
-  /** Help text for the apply mode option. */
-  final val ApplyModeHelp =
-    """Determines how and where changes are applied. The value can be one of the following:
-      |TARGET - Changes are applied to the target structure (the default)
-      |TARGET:<uri> - Changes are applied to the structure defined by the given URI (which can be \
-      |different from the destination URI); this only works for file system URIs
-      |NONE - No changes are applied; this can be used as a dry run to check which changes would \
-      |be applied
+  /** Help text for the dry-run mode option. */
+  final val DryRunHelp =
+    """Enables a special dry-run mode. In this mode, no changes are applied to the destination structure. \
+      |From the log, it can be determined, which operations would have been performed.
       |""".stripMargin
 
   /** Name of the option that defines a timeout for sync operations. */
@@ -220,30 +216,6 @@ object SyncParameterManager {
   val MinCryptCacheSize = 32
 
   /**
-    * A trait representing the mode how sync operations are to be applied.
-    *
-    * Per default, sync operations are executed against the destination
-    * structure. By specifying specific options, this can be changed, e.g. to
-    * write operations only to a log file. Concrete sub classes represent such
-    * special apply modes and contain additional data.
-    */
-  sealed trait ApplyMode
-
-  /**
-    * A concrete apply mode meaning that sync operations are applied against
-    * a target structure.
-    *
-    * @param targetUri the URI of the target structure
-    */
-  case class ApplyModeTarget(targetUri: String) extends ApplyMode
-
-  /**
-    * A concrete apply mode meaning that sync operations are not to be
-    * executed. This is useful for instance if only a log file is written.
-    */
-  case object ApplyModeNone extends ApplyMode
-
-  /**
     * An enumeration defining the usage of encryption for a structure.
     *
     * With a value of this enumeration it is determined if and which parts of
@@ -303,7 +275,7 @@ object SyncParameterManager {
     * @param dstUri          the destination URI of the sync process
     * @param srcConfig       the config for the source structure
     * @param dstConfig       the config for the destination structure
-    * @param applyMode       the apply mode
+    * @param dryRun          flag whether only a dry-run should be done
     * @param timeout         a timeout for sync operations
     * @param logFilePath     an option with the path to the log file if defined
     * @param syncLogPath     an option with the path to a file containing sync
@@ -321,7 +293,7 @@ object SyncParameterManager {
                         dstUri: String,
                         srcConfig: StructureAuthConfig,
                         dstConfig: StructureAuthConfig,
-                        applyMode: ApplyMode,
+                        dryRun: Boolean,
                         timeout: Timeout,
                         logFilePath: Option[Path],
                         syncLogPath: Option[Path],
@@ -341,43 +313,9 @@ object SyncParameterManager {
     def normalized: SyncConfig =
       if (switched)
         copy(srcUri = dstUri, dstUri = srcUri, srcConfig = dstConfig, dstConfig = srcConfig,
-          applyMode = switchedApplyMode, cryptConfig = switchCryptConfig(cryptConfig), switched = false)
+          cryptConfig = switchCryptConfig(cryptConfig), switched = false)
       else this
-
-    /**
-      * Returns a switched apply mode. The apply mode contains the target URI.
-      * If the configuration needs to be switched, and the target URI is the
-      * destination URI, it has to be replaced by the source URI.
-      *
-      * @return the switched apply mode
-      */
-    private def switchedApplyMode: ApplyMode =
-      applyMode match {
-        case ApplyModeTarget(`dstUri`) => ApplyModeTarget(srcUri)
-        case _ => applyMode
-      }
   }
-
-  /** Prefix for regular expressions related to the target apply mode. */
-  private val RegApplyTargetPrefix = "(?i)TARGET"
-
-  /**
-    * Regular expression for parsing the apply mode ''Target'' with a
-    * destination URI.
-    */
-  private val RegApplyTargetUri = (RegApplyTargetPrefix + ":(.+)").r
-
-  /**
-    * Regular expression for parsing the apply mode ''Target'' without an URI.
-    * In this case, the destination URI is used as target URI.
-    */
-  private val RegApplyTargetDefault = RegApplyTargetPrefix.r
-
-  /**
-    * Regular expression for parsing the apply mode ''None''.
-    */
-  private val RegApplyLog =
-    """(?i)NONE""".r
 
   /**
     * Returns an extractor that extracts the ''SyncConfig'' from the command
@@ -391,7 +329,7 @@ object SyncParameterManager {
     srcConfig <- SyncCliStructureConfig.structureConfigExtractor(SyncCliStructureConfig.SourceRoleType, SourceUriOption)
     dstConfig <- SyncCliStructureConfig.structureConfigExtractor(SyncCliStructureConfig.DestinationRoleType,
       DestinationUriOption)
-    mode <- applyModeExtractor(dstUri.getOrElse(""))
+    dryRun <- dryRunExtractor()
     timeout <- timeoutExtractor()
     logFile <- optionValue(LogFileOption, Some(LogFileHelp)).alias("l").toPath
     syncLog <- optionValue(SyncLogOption, Some(SyncLogHelp)).toPath
@@ -401,7 +339,7 @@ object SyncParameterManager {
     filters <- FilterManager.filterDataExtractor
     switched <- switchValue(SwitchOption, optHelp = Some(SwitchOptionHelp)).alias("S")
     _ <- CliActorSystemLifeCycle.FileExtractor
-  } yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, mode, timeout, logFile, syncLog, timeDelta,
+  } yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, dryRun, timeout, logFile, syncLog, timeDelta,
     opsPerSec, cryptConf, filters, switched) map (_.normalized)
 
   /**
@@ -414,7 +352,7 @@ object SyncParameterManager {
     * @param triedDstUri      the dest URI component
     * @param triedSrcConfig   the source structure config component
     * @param triedDstConfig   the destination structure config component
-    * @param triedApplyMode   the apply mode component
+    * @param triedDryRun      the dry-run component
     * @param triedTimeout     the timeout component
     * @param triedLogFile     the log file component
     * @param triedSyncLog     the sync log component
@@ -429,7 +367,7 @@ object SyncParameterManager {
                                triedDstUri: Try[String],
                                triedSrcConfig: Try[StructureAuthConfig],
                                triedDstConfig: Try[StructureAuthConfig],
-                               triedApplyMode: Try[ApplyMode],
+                               triedDryRun: Try[Boolean],
                                triedTimeout: Try[Timeout],
                                triedLogFile: Try[Option[Path]],
                                triedSyncLog: Try[Option[Path]],
@@ -439,7 +377,7 @@ object SyncParameterManager {
                                triedFilterData: Try[SyncFilterData],
                                triedSwitch: Try[Boolean]): Try[SyncConfig] =
     createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
-      triedApplyMode, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedCryptConfig,
+      triedDryRun, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedCryptConfig,
       triedOpsPerSec, triedFilterData, triedSwitch)(SyncConfig)
 
   /**
@@ -463,26 +401,12 @@ object SyncParameterManager {
       .mandatory
 
   /**
-    * Returns an extractor that extracts the value of the option for the
-    * apply mode.
+    * Returns an extractor for the dry-run switch.
     *
-    * @param destUri the destination URI
-    * @return the extractor to extract the apply mode
+    * @return the extractor for the dry-run mode switch
     */
-  private def applyModeExtractor(destUri: String): CliExtractor[Try[ApplyMode]] =
-    optionValue(ApplyModeOption, Some(ApplyModeHelp))
-      .alias("a")
-      .mapTo[ApplyMode] {
-        case RegApplyTargetUri(uri) =>
-          ApplyModeTarget(uri)
-        case RegApplyTargetDefault(_*) =>
-          ApplyModeTarget(destUri)
-        case RegApplyLog(_*) =>
-          ApplyModeNone
-        case s =>
-          throw new IllegalArgumentException(s"Invalid apply mode: '$s'!")
-      }.fallbackValueWithDesc(Some("TARGET"), ApplyModeTarget(destUri))
-      .mandatory
+  private def dryRunExtractor(): CliExtractor[Try[Boolean]] =
+    switchValue(DryRunOption, Some(DryRunHelp)).alias("d")
 
   /**
     * Returns an extractor that extracts a crypt mode value from a command line
