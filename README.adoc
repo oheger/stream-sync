@@ -267,38 +267,6 @@ before a given reference date.
 before 2018.
 |====
 
-=== Apply modes
-
-Per default the sync process determines the delta between the source structure
-and the destination structure (whose URIs are specified on the command line)
-and then applies the resulting sync operations to the destination structure.
-That way the destination structure becomes a mirror of the source structure.
-
-It is possible to change this behavior by specifying the `--apply` option. The
-option can have one of the following values (case does not matter):
-
-.Apply modes
-[cols="1,3",options="header"]
-|====
-| Apply mode | Description
-| TARGET | This is the default apply mode causing the behavior as described
-above.
-| TARGET:URI | Works like the default _TARGET_ mode, but the sync operations
-are applied to the structure defined by the URI. This can be a different URI
-than the URI of the destination structure. This is useful for instance if a
-structure should be mirrored to multiple backup locations. Then the delta
-between the source and destination structure can be applied to alternative
-target structures as well.
-| NONE | In this mode no sync operations are executed at all. This mainly makes
-sense when a log file is written (see below); then a sync process can be
-executed in a _dry-run_ mode in which no actions are performed, but the
-operations that would be executed can be seen in the log file.
-|====
-
-WARNING: The implementation of the apply mode `TARGET:URI` is currently
-limited. It can only be used when syncing file systems and file names are not
-encrypted.
-
 === Sync log files
 
 The sync operations executed during a sync process can also be written in a
@@ -831,6 +799,17 @@ an encrypted WebDav server. Then a password is needed to connect to the server,
 and another one for the encryption. Either of them can be omitted from the
 command line; the user is prompted for all missing passwords.
 
+=== Dry-run mode
+
+Before actually modifying data on the destination structure, it is sometimes
+useful to check, which actions will be performed; so that unexpected
+manipulations or even data loss can be avoided. This is possible by adding the
+`--dry-run` switch to the command line or its short alias `-d`. The sync
+process then still determines the differences between the source and the
+destination structure, and a sync log file can be specified, in which the sync
+operations are written. It will, however, not apply any actual changes to the
+destination structure.
+
 === Switching source and destination structures
 
 The typical use case for Stream Sync is transferring data from one system - the
@@ -939,7 +918,7 @@ can be stopped at any time and resumed at a later point in time. The first
 step is to generate a so-called _sync log_, i.e. a file containing the
 operations to be executed to sync the structures in question:
 
- Sync /path/to/source /path/to/dest --apply NONE --log /data/sync.log
+ Sync /path/to/source /path/to/dest --dry-run --log /data/sync.log
 
 This command does not change anything in the destination structure, but only
 creates a file _/data/sync.log_ with a textual description of the operations to
