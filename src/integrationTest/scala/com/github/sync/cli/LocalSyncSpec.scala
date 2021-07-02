@@ -22,7 +22,6 @@ import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.cli.LocalSyncSpec.encodePath
 import com.github.sync.cli.SyncParameterManager.CryptMode
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
-import com.github.sync.crypt.DecryptOpHandler
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
 import org.mockito.Matchers.{any, anyString}
 import org.mockito.Mockito.{verify, when}
@@ -463,7 +462,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     result.totalOperations should be(result.successfulOperations)
     Files.exists(delFolder) shouldBe false
     val overrideData = ByteString(Files.readAllBytes(pathOverride))
-    crypt(Password, DecryptOpHandler, overrideData).utf8String should be(OverrideName)
+    decrypt(Password, overrideData).utf8String should be(OverrideName)
   }
 
   it should "support a round-trip with encrypted file names" in {

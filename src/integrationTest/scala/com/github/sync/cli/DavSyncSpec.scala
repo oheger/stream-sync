@@ -22,7 +22,6 @@ import com.github.cloudfiles.core.http.{HttpRequestSender, UriEncodingHelper}
 import com.github.sync.WireMockSupport._
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.crypt.DecryptOpHandler
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
@@ -404,7 +403,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     val (parent, fileUri) = UriEncodingHelper.splitParent(putRequest.getUrl)
     parent should be(WebDavPath)
     decryptName(CryptPassword, fileUri) should be(FileName)
-    val bodyPlain = crypt(CryptPassword, DecryptOpHandler, ByteString(putRequest.getBody))
+    val bodyPlain = decrypt(CryptPassword, ByteString(putRequest.getBody))
     bodyPlain.utf8String should be(Content)
   }
 

@@ -21,10 +21,10 @@ import akka.actor.{ActorSystem, typed}
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.{ImplicitSender, TestKit}
 import akka.util.ByteString
+import com.github.cloudfiles.crypt.alg.aes.Aes
+import com.github.cloudfiles.crypt.service.CryptService
 import com.github.sync.cli.Sync.SyncResult
-import com.github.sync.cli.SyncParameterManager.SyncConfig
-import com.github.sync.crypt.{CryptOpHandler, CryptService, CryptStage}
-import com.github.sync.{AsyncTestHelper, DelegateSourceComponentsFactory, FileTestHelper, SourceFileProvider}
+import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
@@ -32,6 +32,7 @@ import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import java.io.ByteArrayOutputStream
 import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}
+import java.security.SecureRandom
 import java.time.Instant
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -66,6 +67,9 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @inheritdoc Use a higher timeout because of more complex operations.
     */
   override val asyncTimeout: Duration = 10.seconds
+
+  /** A source for randomness for crypt operations. */
+  private implicit val secureRandom: SecureRandom = new SecureRandom
 
   /**
     * Creates a test file with the given name in the directory specified. The
@@ -134,37 +138,17 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
   }
 
   /**
-    * Returns a ''SyncStreamFactory'' that always returns the given
-    * ''SourceFileProvider''.
+    * Performs a decrypt operation on the given data and returns the result.
     *
-    * @param provider the ''SourceFileProvider'' to be returned
-    * @return the factory
-    */
-  protected def factoryWithMockSourceProvider(provider: SourceFileProvider): SyncComponentsFactory =
-    new SyncComponentsFactory {
-      override def createSourceComponentsFactory(config: SyncConfig)
-                                                (implicit system: ActorSystem, ec: ExecutionContext):
-      Future[SyncComponentsFactory.SourceComponentsFactory] =
-        super.createSourceComponentsFactory(config) map { t =>
-          new DelegateSourceComponentsFactory(t) {
-            override def createSourceFileProvider(): SourceFileProvider = provider
-          }
-        }
-    }
-
-  /**
-    * Performs a crypt operation on the given data and returns the result.
-    *
-    * @param key     the key for encryption / decryption
-    * @param handler the crypt handler
+    * @param key     the key for decryption
     * @param data    the data to be processed
     * @return the processed data
     */
-  protected def crypt(key: String, handler: CryptOpHandler, data: ByteString): ByteString = {
+  protected def decrypt(key: String, data: ByteString): ByteString = {
     val source = Source.single(data)
-    val stage = new CryptStage(handler, CryptStage.keyFromString(key))
+    val decryptSource = CryptService.decryptSource(Aes, Aes.keyFromString(key), source)
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
-    futureResult(source.via(stage).runWith(sink))
+    futureResult(decryptSource.runWith(sink))
   }
 
   /**
@@ -175,7 +159,7 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @return the encrypted name
     */
   protected def encryptName(key: String, data: String): String =
-    futureResult(CryptService.encryptName(CryptStage.keyFromString(key), data))
+    CryptService.encryptTextToBase64(Aes, Aes.keyFromString(key), data)
 
   /**
     * Decrypts the given file name.
@@ -185,7 +169,7 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @return the decrypted name
     */
   protected def decryptName(key: String, name: String): String =
-    futureResult(CryptService.decryptName(CryptStage.keyFromString(key), name))
+    CryptService.decryptTextFromBase64(Aes, Aes.keyFromString(key), name)
 
   /**
     * Executes a sync process with the given command line options.
