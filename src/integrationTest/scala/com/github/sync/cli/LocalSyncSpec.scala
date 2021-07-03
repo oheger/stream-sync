@@ -16,7 +16,6 @@
 
 package com.github.sync.cli
 
-import akka.actor.{ActorIdentity, Identify}
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.cli.LocalSyncSpec.encodePath
@@ -317,21 +316,6 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     futureResult(runSync(options, optProtocolSetupFunc = Some(protocolSetupFunc)))
     verify(srcProtocol).close()
     verify(dstProtocol).close()
-  }
-
-  it should "stop the actor for local sync operations after stream processing" in {
-    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
-    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val identifyId = 20190817
-    createTestFile(srcFolder, "test.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString)
-
-    futureResult(runSync(options))
-    val selection = system.actorSelection(s"/user/${LocalFsDestinationComponentsFactory.LocalSyncOpActorName}")
-    selection ! Identify(identifyId)
-    val identity = expectMsgType[ActorIdentity]
-    identity.correlationId should be(identifyId)
-    identity.ref.isDefined shouldBe false
   }
 
   it should "take the time zone of a local files source into account" in {

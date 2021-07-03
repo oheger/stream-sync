@@ -193,7 +193,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
   "SyncStructureConfig" should "create a correct file system config for the source structure" in {
     val TimeZoneId = "UTC+02:00"
     val uri = "/my/sync/dir"
-    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropLocalFsTimeZone) ->
       TimeZoneId)
 
     val (config, processedArgs) = extractConfig(args, uri, SourceRoleType)
@@ -212,7 +212,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
   }
 
   it should "generate a failure for invalid parameters of a local FS config" in {
-    val args = Map(SourceRoleType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropLocalFsTimeZone) ->
       "invalid zone ID!")
 
     val (exception, processedArgs) = expectFailure(args, "/some/folder", SourceRoleType)
@@ -224,7 +224,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
   it should "create a correct file system config for the destination structure" in {
     val TimeZoneId = "UTC-02:00"
     val uri = "/my/sync/target"
-    val args = Map(DestinationRoleType.configPropertyName(SyncComponentsFactory.PropLocalFsTimeZone) ->
+    val args = Map(DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropLocalFsTimeZone) ->
       TimeZoneId)
 
     val (config, processedArgs) = extractConfig(args, uri, DestinationRoleType)
@@ -274,7 +274,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
 
     val (exception, _) = expectFailure(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     exception.getMessage should include(SourceRoleType.configPropertyName(
-      SyncComponentsFactory.PropDavDeleteBeforeOverride))
+      SyncCliStructureConfig.PropDavDeleteBeforeOverride))
   }
 
   it should "create a correct DavConfig for the source structure if OAuth properties are defined" in {
@@ -288,7 +288,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     )
     val expAccessedKeys = args.keySet + ParameterParser.InputParameter.key +
       SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption) +
-      SourceRoleType.configPropertyName(SyncComponentsFactory.PropDavUser)
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser)
 
     val (config, processedArgs) = extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     ExtractorTestHelper.accessedKeys(processedArgs) should be(expAccessedKeys)
@@ -388,9 +388,9 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
 
     val (exception, _) = expectFailure(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     exception.getMessage should include(SourceRoleType.configPropertyName(
-      SyncComponentsFactory.PropOneDriveUploadChunkSize))
+      SyncCliStructureConfig.PropOneDriveUploadChunkSize))
     exception.getMessage should include(SourceRoleType.configPropertyName(
-      SyncComponentsFactory.PropOneDrivePath))
+      SyncCliStructureConfig.PropOneDrivePath))
   }
 
   it should "create a correct OneDriveConfig for the source structure if OAuth properties are defined" in {
