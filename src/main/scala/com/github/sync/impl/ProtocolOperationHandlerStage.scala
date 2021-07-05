@@ -138,28 +138,6 @@ object ProtocolOperationHandlerStage {
     * Returns a flow stage that processes [[SyncOperation]] objects using the
     * specified ''ProtocolOperationHandler''. The parallelism for asynchronous
     * operations is set to the size of the HTTP connection pool, as each
-    * operation requires an HTTP request.
-    *
-    * @param handler the ''ProtocolOperationHandler''
-    * @param system  the actor system
-    * @return the flow stage
-    */
-  def apply(handler: ProtocolOperationHandler)
-           (implicit system: ActorSystem[_]): Flow[SyncOperation, SyncOperationResult, NotUsed] = {
-    implicit val ec: ExecutionContext = system.executionContext
-    val parallelism = system.settings.config.getInt(PropMaxConnections)
-
-    Flow[SyncOperation].mapAsync(parallelism) { op =>
-      handler.execute(op) map { _ => SyncOperationResult(op, None) } recover {
-        case e => SyncOperationResult(op, Some(e))
-      }
-    }
-  }
-
-  /**
-    * Returns a flow stage that processes [[SyncOperation]] objects using the
-    * specified ''ProtocolOperationHandler''. The parallelism for asynchronous
-    * operations is set to the size of the HTTP connection pool, as each
     * operation requires an HTTP request. An internal actor is used to forward
     * parallel sync operations to the handler in a controlled way.
     *

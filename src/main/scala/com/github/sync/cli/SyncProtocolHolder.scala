@@ -20,6 +20,7 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import akka.stream.{KillSwitch, KillSwitches, SharedKillSwitch}
+import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.sync.SyncTypes.{FsElement, SyncOperation}
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, CryptMode, SyncConfig}
@@ -142,15 +143,17 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     * Creates the flow stage for applying the sync operations against the
     * destination structure.
     *
+    * @param syncConfig the config for the sync process
+    * @param spawner    an object to create actors
     * @return the apply stage
     */
-  def createApplyStage(): Flow[SyncOperation, SyncOperation, NotUsed] = {
+  def createApplyStage(syncConfig: SyncConfig, spawner: Spawner): Flow[SyncOperation, SyncOperation, NotUsed] = {
     val protocolHandler = new ProtocolOperationHandler(dstProtocol, srcProtocol)
-    ProtocolOperationHandlerStage(protocolHandler)
-      .filter { op =>
-        op.optFailure.foreach(_.printStackTrace())
-        op.optFailure.isEmpty
-      }.map(_.op)
+    implicit val timeout: Timeout = syncConfig.timeout
+
+    ProtocolOperationHandlerStage(protocolHandler, spawner)
+      .filter { op => op.optFailure.isEmpty }
+      .map(_.op)
   }
 
   /**

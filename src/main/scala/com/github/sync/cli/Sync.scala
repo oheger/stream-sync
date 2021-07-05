@@ -87,7 +87,7 @@ object Sync {
     val spawner: Spawner = system
     for {
       holder <- SyncProtocolHolder(config, spawner)(authSetupFunc)(protocolSetupFunc)(system.toTyped)
-      result <- runSync(config, holder)
+      result <- runSync(config, spawner, holder)
     } yield result
   }
 
@@ -95,17 +95,18 @@ object Sync {
     * Runs the stream that represents the sync process.
     *
     * @param config         the ''SyncConfig''
+    * @param spawner        the object to spawn actors
     * @param protocolHolder the ''SyncProtocolHolder''
     * @param system         the actor system
     * @param ec             the execution context
     * @return a future with information about the result of the process
     */
-  private def runSync(config: SyncConfig, protocolHolder: SyncProtocolHolder)
+  private def runSync(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
                      (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] =
     protocolHolder.registerCloseHandler(for {
       source <- createSyncSource(config, protocolHolder)
       decoratedSource <- decorateSource(source, config, protocolHolder)
-      stage <- createApplyStage(config, protocolHolder)
+      stage <- createApplyStage(config, spawner, protocolHolder)
       g <- createSyncStream(decoratedSource, stage, config.logFilePath)
       res <- g.run()
     } yield SyncResult(res._1, res._2))
@@ -220,16 +221,17 @@ object Sync {
     * that passes all operations through.
     *
     * @param config         the sync configuration
+    * @param spawner        the object to spawn actors
     * @param protocolHolder the ''SyncProtocolHolder''
     * @param ec             the execution context
     * @param system         the actor system
     * @return a future with the flow to apply sync operations
     */
-  private def createApplyStage(config: SyncConfig, protocolHolder: SyncProtocolHolder)
+  private def createApplyStage(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Flow[SyncOperation, SyncOperation, NotUsed]] = Future {
     if (config.dryRun) Flow[SyncOperation].map(identity)
-    else protocolHolder.createApplyStage()
+    else protocolHolder.createApplyStage(config, spawner)
   }
 
   /**
