@@ -19,7 +19,6 @@ package com.github.sync.cli
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.cli.LocalSyncSpec.encodePath
-import com.github.sync.cli.SyncParameterManager.CryptMode
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
 import org.mockito.Matchers.{any, anyString}
@@ -50,9 +49,6 @@ object LocalSyncSpec {
   * on the local file system.
   */
 class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
-
-  import system.dispatcher
-
   "Sync" should "synchronize two directory structures" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -500,13 +496,6 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     subContent should have length 2
     val subSubContent = findDirectory(subContent).listFiles()
     subSubContent should have length 2
-  }
-
-  it should "evaluate the cache size for encrypted names" in {
-    val CacheSize = 444
-    val transformer = Sync.createResultTransformer(Some("secret"), cryptMode = CryptMode.Files, CacheSize)
-    val cache = transformer.get.initialState
-    cache.capacity should be(CacheSize)
   }
 
   it should "support restricting the number of operations per second" in {

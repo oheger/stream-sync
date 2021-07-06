@@ -28,12 +28,10 @@ import com.github.scli.{HelpGenerator, ParameterExtractor}
 import com.github.sync.SyncTypes._
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStructureConfig.{DestinationRoleType, SourceRoleType}
-import com.github.sync.cli.SyncParameterManager.{CryptMode, SyncConfig}
+import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
-import com.github.sync.crypt.{CryptService, CryptStage}
 import com.github.sync.impl._
 import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
-import com.github.sync.util.LRUCache
 
 import java.nio.file.{Path, StandardOpenOption}
 import scala.concurrent.duration._
@@ -174,27 +172,6 @@ object Sync {
     }
     Future.successful(throttledSource.via(protocolHolder.oAuthRefreshKillSwitch.flow))
   }
-
-  /**
-    * Returns a ''ResultTransformer'' for an element source based on the given
-    * parameters. The transformer makes sure that the results produced by an
-    * element source are compatible with the parameters passed in.
-    *
-    * @param optCryptPwd    the optional encryption password
-    * @param cryptMode      the crypt mode
-    * @param cryptCacheSize size of the cache for encrypted names
-    * @param ec             the execution context
-    * @param system         the actor system
-    * @return the ''ResultTransformer'' for these parameters
-    */
-  private[cli] def createResultTransformer(optCryptPwd: Option[String], cryptMode: CryptMode.Value,
-                                           cryptCacheSize: Int)
-                                          (implicit ec: ExecutionContext, system: ActorSystem):
-  Option[ResultTransformer[LRUCache[String, String]]] =
-    optCryptPwd.map { pwd =>
-      val optNameKey = if (cryptMode == CryptMode.FilesAndNames) Some(CryptStage.keyFromString(pwd)) else None
-      CryptService.cryptTransformer(optNameKey, cryptCacheSize)
-    }
 
   /**
     * Creates the source for the sync process if a sync log is provided. The
