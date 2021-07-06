@@ -25,8 +25,8 @@ import akka.stream.KillSwitch
 import akka.testkit.{ImplicitSender, TestKit}
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
+import com.github.cloudfiles.webdav.DepthHeader
 import com.github.sync.http.{HttpRequestActor, SyncOAuthStorageConfig}
-import com.github.sync.webdav.DepthHeader
 import org.mockito.Matchers.{any, eq => argEq}
 import org.mockito.Mockito._
 import org.scalatest.BeforeAndAfterAll
