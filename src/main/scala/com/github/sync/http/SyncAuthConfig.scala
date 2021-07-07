@@ -16,10 +16,9 @@
 
 package com.github.sync.http
 
+import com.github.cloudfiles.core.http.Secret
+
 import java.nio.file.Path
-import akka.http.scaladsl.model.Uri
-import akka.util.Timeout
-import com.github.cloudfiles.core.http.{Secret, UriEncodingHelper}
 
 /**
   * A trait representing a configuration for an authentication mechanism.
@@ -78,62 +77,3 @@ case class SyncOAuthStorageConfig(rootDir: Path,
   */
 case object SyncNoAuth extends SyncAuthConfig
 
-/**
-  * A trait defining configuration options that are common to all HTTP-based
-  * protocols.
-  *
-  * The options defined by this trait are used by the base classes in the
-  * ''http'' package. For a specific protocol a configuration class with
-  * additional properties can be created the extends this trait.
-  */
-trait HttpConfig {
-  /**
-    * Returns the root URI to be used by the sync process for the HTTP server
-    * represented by this configuration. Here a host plus the base path can be
-    * set.
-    *
-    * @return the HTTP server's root URI
-    */
-  def rootUri: Uri
-
-  /**
-    * Returns a timeout for all operations against the represented HTTP server.
-    *
-    * @return a timeout
-    */
-  def timeout: Timeout
-
-  /**
-    * Returns the configuration for the authentication mechanism. Here one of
-    * the supported implementations is returned.
-    *
-    * @return the configuration for the authentication mechanism
-    */
-  def authConfig: SyncAuthConfig
-
-  /**
-    * Returns the root path of the HTTP server. This path is derived from the
-    * root URI by extracting the path component.
-    *
-    * @return the root path
-    */
-  def rootPath: String = rootUri.path.toString()
-
-  /**
-    * Provides basic functionality to resolve relative URIs against the root
-    * path of the HTTP server. The function is passed an un-encoded relative
-    * URI, which can consist of multiple components. The single components are
-    * encoded and appended to the given prefix. Optionally, a trailing slash is
-    * added.
-    *
-    * @param uri               the relative URI to be resolved
-    * @param prefix            the prefix to be added
-    * @param withTrailingSlash flag whether the result should end on a slash
-    * @return the resolved URI
-    */
-  def resolveRelativeUri(uri: String, prefix: String = rootPath, withTrailingSlash: Boolean = false): Uri = {
-    val encodedUri = UriEncodingHelper encodeComponents uri
-    val relativeUri = if (withTrailingSlash) encodedUri + UriEncodingHelper.UriSeparator else encodedUri
-    Uri(prefix + relativeUri)
-  }
-}
