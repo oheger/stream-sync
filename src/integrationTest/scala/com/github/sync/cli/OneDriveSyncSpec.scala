@@ -17,23 +17,25 @@
 package com.github.sync.cli
 
 import akka.http.scaladsl.model.{StatusCodes, Uri}
-import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.OAuthMockSupport.{CurrentTokenData, RefreshedTokenData}
 import com.github.sync.WireMockSupport._
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.http.SyncNoAuth
-import com.github.sync.onedrive.OneDriveConfig
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 
 import java.nio.file.Files
 import java.util.UUID
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 object OneDriveSyncSpec {
   /** The drive ID used by tests. */
   private val DriveID = "test-drive"
+
+  /** The root path on the server used by tests. */
+  private val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
+
+  /** The URI to resolve the root folder of the test setup. */
+  private val ResolveFolderUri = s"/$DriveID/root:$ServerPath:?select=id"
 
   /** The content type reported by OneDrive for JSON documents. */
   private val ContentType =
@@ -68,31 +70,16 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
   import OneDriveSyncSpec._
 
   /**
-    * Creates a test configuration pointing to the mock server that uses the
-    * root path specified.
-    *
-    * @param rootPath the root path of the sync process
-    * @return the configuration for the test source
-    */
-  private def createOneDriveConfig(rootPath: String): OneDriveConfig =
-    OneDriveConfig(DriveID, rootPath, 1, 3.seconds, SyncNoAuth, Some(serverUri("")))
-
-  /**
     * Adds a stubbing declaration for a request to resolve the given path.
     *
-    * @param config    the OneDerive config
-    * @param resPath   the path that is to be resolved
     * @param elementID the ID of the element to be returned
     * @param status    the status code to be returned for the request
     * @param authFunc  the authentication function
     */
-  private def stubResolvePathRequest(config: OneDriveConfig, resPath: String, elementID: String,
-                                     status: Int = StatusCodes.OK.intValue,
+  private def stubResolvePathRequest(elementID: String, status: Int = StatusCodes.OK.intValue,
                                      authFunc: AuthFunc = WireMockSupport.NoAuthFunc): Unit = {
-    val resolvedUri = UriEncodingHelper.removeTrailingSeparator(path(config.resolveRelativeUri(resPath))) +
-      ":?select=id"
     val response = "{ \"id\": \"" + elementID + "\" }"
-    stubFor(authFunc(get(urlEqualTo(resolvedUri)))
+    stubFor(authFunc(get(urlEqualTo(ResolveFolderUri)))
       .withHeader("Accept", equalTo("application/json"))
       .willReturn(aResponse().withStatus(status)
         .withHeader("Content-Type", ContentType)
@@ -148,17 +135,13 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
 
   "Sync" should "support a OneDrive URI for the source structure with OAuth" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
     val FileName = "file (5).mp3"
-    val config = createOneDriveConfig(ServerPath)
     val storageConfig = prepareIdpConfig()
     val authFunc = TokenAuthFunc(RefreshedTokenData.accessToken)
     val FolderID = "theFolderID"
     val FileID = "xxxyyyzzz1234567!26990"
-    stubResolvePathRequest(config, "", FolderID,
-      status = StatusCodes.Unauthorized.intValue,
-      authFunc = TokenAuthFunc(CurrentTokenData.accessToken))
-    stubResolvePathRequest(config, "", FolderID, authFunc = authFunc)
+    stubResolvePathRequest(FolderID, status = StatusCodes.Unauthorized.intValue, authFunc = TokenAuthFunc(CurrentTokenData.accessToken))
+    stubResolvePathRequest(FolderID, authFunc = authFunc)
     stubOneDriveFolderRequest(FolderID, "folder3.json", authFunc = authFunc)
     stubTokenRefresh()
     stubDownloadRequest(FileID, authFunc)
@@ -174,12 +157,10 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
 
   it should "support a OneDrive URI for the source structure with basic auth" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
     val FolderID = "theFolderID"
     val FileName = "file (5).mp3"
     val FileID = "xxxyyyzzz1234567!26990"
-    val config = createOneDriveConfig(ServerPath)
-    stubResolvePathRequest(config, "", FolderID, authFunc = BasicAuthFunc)
+    stubResolvePathRequest(FolderID, authFunc = BasicAuthFunc)
     stubOneDriveFolderRequest(FolderID, "folder3.json", authFunc = BasicAuthFunc)
     stubDownloadRequest(FileID, BasicAuthFunc)
     val options = Array("onedrive:" + DriveID, dstFolder.toAbsolutePath.toString, "--src-path", ServerPath,
@@ -193,16 +174,13 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
 
   it should "support a OneDrive URI for the destination structure with OAuth" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
-    val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
     val FolderID = "theFolderID"
     val FileID = "xxxyyyzzz1234567!26990"
-    val config = createOneDriveConfig(ServerPath)
     val storageConfig = prepareIdpConfig()
     val oldTokenAuth = TokenAuthFunc(CurrentTokenData.accessToken)
     val newTokenAuth = TokenAuthFunc(RefreshedTokenData.accessToken)
-    stubResolvePathRequest(config, "", FolderID,
-      status = StatusCodes.Unauthorized.intValue, authFunc = oldTokenAuth)
-    stubResolvePathRequest(config, "", FolderID, authFunc = newTokenAuth)
+    stubResolvePathRequest(FolderID, status = StatusCodes.Unauthorized.intValue, authFunc = oldTokenAuth)
+    stubResolvePathRequest(FolderID, authFunc = newTokenAuth)
     stubOneDriveFolderRequest(FolderID, "folder3.json", authFunc = newTokenAuth)
     stubTokenRefresh()
     stubFor(oldTokenAuth(delete(anyUrl())).willReturn(aResponse().withStatus(StatusCodes.Unauthorized.intValue)))
@@ -232,11 +210,9 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
 
   it should "support a OneDrive URI for the destination structure with basic auth" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
-    val ServerPath = "/test%20data/folder%20(2)/folder%20(3)"
     val FolderID = "theFolderID"
     val FileID = "xxxyyyzzz1234567!26990"
-    val config = createOneDriveConfig(ServerPath)
-    stubResolvePathRequest(config, "", FolderID, authFunc = BasicAuthFunc)
+    stubResolvePathRequest(FolderID, authFunc = BasicAuthFunc)
     stubOneDriveFolderRequest(FolderID, "folder3.json", authFunc = BasicAuthFunc)
     stubFor(BasicAuthFunc(delete(anyUrl())).willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
     val options = Array(srcFolder.toAbsolutePath.toString, "onedrive:" + DriveID, "--dst-path", ServerPath,
@@ -251,10 +227,8 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
   it should "support a OneDrive source with encrypted file names" in {
     val CryptPassword = Password
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val ServerPath = "/encrypted"
     val FolderID = "theEncryptedFolder"
-    val config = createOneDriveConfig(ServerPath)
-    stubResolvePathRequest(config, "", FolderID, authFunc = BasicAuthFunc)
+    stubResolvePathRequest(FolderID, authFunc = BasicAuthFunc)
     stubOneDriveFolderRequest(FolderID, "root_encrypted.json", authFunc = BasicAuthFunc)
     stubOneDriveFolderRequest("xxxyyyzzz1234567!7193", "folder_encrypted.json", authFunc = BasicAuthFunc)
     stubDownloadRequest("xxxyyyzzz1234567!26990", BasicAuthFunc, bodyFile("encrypted1.dat"))
