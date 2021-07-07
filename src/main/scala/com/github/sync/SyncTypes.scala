@@ -182,6 +182,19 @@ object SyncTypes {
                            dstID: String = null)
 
   /**
+    * A data class representing the result of the execution of a sync
+    * operation.
+    *
+    * The ''SyncOperation'' affected is part of the data. An ''Option'' can be
+    * used to determine whether the execution was successful: in case of an
+    * error, the causing ''Throwable'' is contained.
+    *
+    * @param op         the sync operation
+    * @param optFailure an ''Option'' with the exception in case of a failure
+    */
+  case class SyncOperationResult(op: SyncOperation, optFailure: Option[Throwable])
+
+  /**
     * A class describing objects storing information about folders during a
     * sync operation.
     *

@@ -23,7 +23,6 @@ import akka.stream.scaladsl.{Sink, Source}
 import com.github.cloudfiles.core.http.factory.Spawner
 import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes._
-import com.github.sync.http.SyncOperationRequestActor.SyncOperationResult
 import org.mockito.Matchers.any
 import org.mockito.Mockito.when
 import org.mockito.invocation.InvocationOnMock
