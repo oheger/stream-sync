@@ -66,7 +66,7 @@ object ProtocolOperationHandlerSpec {
     * @return the ''SyncOperation''
     */
   private def createOp(elem: FsElement, action: SyncAction, dstID: String = ElementID): SyncOperation =
-    SyncOperation(elem, action, dstID = dstID, level = 0, srcUri = null, dstUri = null)
+    SyncOperation(elem, action, dstID = dstID, level = 0)
 }
 
 /**

@@ -74,8 +74,8 @@ class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSy
 
   it should "create a source to read sync operations" in {
     val op1 = SyncOperation(FsFile("fileID", "/test/file.txt", 4, Instant.now(), 256), ActionOverride, 1,
-      "/some/src/uri", "/some/dest/uri", dstID = "The destination ID")
-    val op2 = SyncOperation(FsFolder("folderID", "/test/folder", 2), ActionRemove, 1, "/src", "/dst", dstID = "21")
+      dstID = "The destination ID")
+    val op2 = SyncOperation(FsFolder("folderID", "/test/folder", 2), ActionRemove, 1, dstID = "21")
     val Content = List(op1, op2).map(op => ElementSerializer.serializeOperation(op).utf8String)
       .mkString("\n")
     val logFile = createDataFile(Content)

@@ -66,7 +66,7 @@ object ElementSerializer {
     elem match {
       case folder: FsFolder =>
         serializeBaseProperties(TagFolder, folder)
-      case file@FsFile(_, _, _, lastModified, size, _) =>
+      case file@FsFile(_, _, _, lastModified, size) =>
         s"${serializeBaseProperties(TagFile, file)} $lastModified $size"
     }
   }
@@ -80,8 +80,8 @@ object ElementSerializer {
     * @return the string representation for this operation
     */
   def serializeOperation(operation: SyncOperation): ByteString =
-    ByteString(s"${ActionTagMapping(operation.action)} ${operation.level} ${encode(operation.dstID)}" +
-      s"${serializeOperationUris(operation)} ") ++ serializeElement(operation.element) ++ CR
+    ByteString(s"${ActionTagMapping(operation.action)} ${operation.level} ${encode(operation.dstID)} ") ++
+      serializeElement(operation.element) ++ CR
 
   /**
     * Tries to create an ''FsElement'' from its serialized form. Note that the
@@ -113,8 +113,7 @@ object ElementSerializer {
   def deserializeOperation(raw: String): Try[SyncOperation] = for {
     actionData <- deserializeAction(raw)
     elem <- deserializeElement(actionData._6)
-  } yield SyncOperation(elem, actionData._1, actionData._2, actionData._4 getOrElse elem.relativeUri,
-    actionData._5 getOrElse elem.relativeUri, dstID = actionData._3)
+  } yield SyncOperation(elem, actionData._1, actionData._2, dstID = actionData._3)
 
   /**
     * Encode the given string, so that it can be safely serialized.
@@ -157,17 +156,4 @@ object ElementSerializer {
       else (TagActionMapping(parts.head), parts(1).toInt, UriEncodingHelper decode parts(2),
         Some(UriEncodingHelper decode parts(3)), Some(UriEncodingHelper decode parts(4)), parts drop 5)
     }
-
-  /**
-    * Generates a string for the serialized URIs of an operation. The URIs are
-    * only serialized if at least one of them is different from the element's
-    * URI.
-    *
-    * @param op the operation
-    * @return a string for the serialized operation URIs
-    */
-  private def serializeOperationUris(op: SyncOperation): String =
-    if (op.element.relativeUri != op.srcUri || op.element.relativeUri != op.dstUri)
-      " " + UriEncodingHelper.encode(op.srcUri) + " " + UriEncodingHelper.encode(op.dstUri)
-    else ""
 }

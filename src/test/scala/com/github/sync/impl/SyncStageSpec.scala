@@ -54,13 +54,10 @@ object SyncStageSpec {
     * @param uri          the URI of the file
     * @param lastModified the last modified time
     * @param level        the level of the file
-    * @param optOrgUri    an option with the original URI
     * @return the file element
     */
-  private def createFile(uri: String, lastModified: Instant = FileTime, level: Int = 0,
-                         optOrgUri: Option[String] = None): FsFile =
-    FsFile(elementID(uri), relativeUri = uri, size = uri.length, level = level, lastModified = lastModified,
-      optOriginalUri = optOrgUri)
+  private def createFile(uri: String, lastModified: Instant = FileTime, level: Int = 0): FsFile =
+    FsFile(elementID(uri), relativeUri = uri, size = uri.length, level = level, lastModified = lastModified)
 
   /**
     * Generates a test folder element with the specified URI. (Levels are
@@ -116,16 +113,12 @@ object SyncStageSpec {
     * @param element   the element subject to the operation
     * @param action    the action
     * @param level     the level
-    * @param optSrcUri an option source URI
-    * @param optDstUri an optional destination URI
     * @param optDstID  an optional destination ID
     * @return the sync operation
     */
   private def createOp(element: FsElement, action: SyncAction, level: Int = 0,
-                       optSrcUri: Option[String] = None, optDstUri: Option[String] = None,
                        optDstID: Option[String] = None): SyncOperation =
-    SyncOperation(element, action, level, optSrcUri getOrElse element.relativeUri,
-      optDstUri getOrElse element.relativeUri, optDstID getOrElse "-")
+    SyncOperation(element, action, level, optDstID getOrElse "-")
 }
 
 /**
@@ -190,16 +183,6 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     runStage(Source.empty, Source(files)) should contain theSameElementsAs expOps
   }
 
-  it should "set correct URIs for remove operations" in {
-    val files = List(createFile("/song1.mp3", optOrgUri = Some("/org1.mp3")),
-      createFile("/song2.mp3", optOrgUri = Some("/org2.mp3")),
-      createFile("/songOther.ogg", optOrgUri = Some("/otherOrg.ogg")))
-    val expOps = files map (e => createOp(element = e, action = ActionRemove, optSrcUri = Some(e.originalUri),
-      optDstUri = Some(e.originalUri), optDstID = Some(e.id)))
-
-    runStage(Source.empty, Source(files)) should contain theSameElementsAs expOps
-  }
-
   it should "handle an empty target directory with a delay" in {
     val sourceTarget = Source.single(createFile("song0.mp3"))
       .delay(200.millis)
@@ -232,14 +215,13 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
   }
 
   it should "respect original URIs when syncing file structures" in {
-    val file1 = createFile("/song1.mp3", optOrgUri = Some("/org1.mp3"))
+    val file1 = createFile("/song1.mp3")
     val file2 = createFile("/song2.mp3")
-    val file3 = createFile("/song3.mp3", optOrgUri = Some("/org3.mp3"))
+    val file3 = createFile("/song3.mp3")
     val filesSource = List(file1, file2)
     val filesDest = destinationElems(List(file2, file3))
-    val expSync = List(createOp(file1, ActionCreate, optSrcUri = Some(file1.originalUri)),
-      createOp(destinationElem(file3), ActionRemove, optSrcUri = Some(file3.originalUri),
-        optDstUri = Some(file3.originalUri), optDstID = destinationID(file3)))
+    val expSync = List(createOp(file1, ActionCreate),
+      createOp(destinationElem(file3), ActionRemove, optDstID = destinationID(file3)))
 
     runStage(Source(filesSource), Source(filesDest)) should contain theSameElementsAs expSync
   }
@@ -258,15 +240,12 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
 
   it should "respect original URIs when overriding files" in {
     val FileUri = "/testFile.dat"
-    val OrgUriSrc = "/testFileInSource.dat"
-    val OrgUriDst = "/testFileInDestination.dat"
-    val fileSrc = createFile(FileUri, optOrgUri = Some(OrgUriSrc))
-    val fileDest = destinationElem(createFile(FileUri, optOrgUri = Some(OrgUriDst),
+    val fileSrc = createFile(FileUri)
+    val fileDest = destinationElem(createFile(FileUri,
       lastModified = Instant.parse("2018-08-10T22:13:55.45Z")))
     val sourceOrg = Source.single(fileSrc)
     val sourceTarget = Source.single(fileDest)
-    val expOp = createOp(fileSrc, ActionOverride, optSrcUri = Some(OrgUriSrc), optDstUri = Some(OrgUriDst),
-      optDstID = Some(fileDest.id))
+    val expOp = createOp(fileSrc, ActionOverride, optDstID = Some(fileDest.id))
 
     runStage(sourceOrg, sourceTarget) should contain only expOp
   }
@@ -298,7 +277,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val elemB = createFile("/b.txt")
     val elemC = createFolder("/c", optOrgUri = Some("/c-org"))
     val elemD = createFile("/d.txt")
-    val elemE = createFile("/e.txt", optOrgUri = Some("/eOrg.txt"))
+    val elemE = createFile("/e.txt")
     val elemF = createFolder("/f")
     val elemCSubFile = createFile("/c/file.sub", level = 1)
     val elemCSubFolder = createFolder("/c/subFolder", 1)
@@ -309,27 +288,24 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val sourceTarget = Source(destinationElems(List(elemA, elemC, elemE, elemCSubFile, elemCSubFolder,
       elemCSubSubFile, elemF, elemFSubFileA)))
     val expOps = List(createOp(elemB, ActionCreate), createOp(elemD, ActionCreate),
-      createOp(destinationElem(elemE), ActionRemove, optSrcUri = Some(elemE.originalUri),
-        optDstUri = Some(elemE.originalUri), optDstID = destinationID(elemE)),
+      createOp(destinationElem(elemE), ActionRemove, optDstID = destinationID(elemE)),
       createOp(destinationElem(elemCSubFile), ActionRemove, optDstID = destinationID(elemCSubFile)),
       createOp(destinationElem(elemCSubSubFile), ActionRemove, optDstID = destinationID(elemCSubSubFile)),
       createOp(elemFSubFileB, ActionCreate, 1),
       createOp(destinationElem(elemCSubFolder), ActionRemove, optDstID = destinationID(elemCSubFolder)),
-      createOp(destinationElem(elemC), ActionRemove, optSrcUri = Some(elemC.originalUri),
-        optDstUri = Some(elemC.originalUri), optDstID = destinationID(elemC)))
+      createOp(destinationElem(elemC), ActionRemove, optDstID = destinationID(elemC)))
 
     runStage(sourceOrg, sourceTarget) should contain theSameElementsInOrderAs expOps
   }
 
   it should "handle a file that has been converted to a folder" in {
-    val elemOrgFile = createFile("/my.dat", optOrgUri = Some("/org.dat"))
+    val elemOrgFile = createFile("/my.dat")
     val elemConvertedFolder = createFolder(elemOrgFile.relativeUri)
     val elemOther = createFile("other.foo")
     val elemSubFile = createFile(elemConvertedFolder.relativeUri + "/sub.dat", level = 1)
     val sourceOrg = Source(List(elemConvertedFolder, elemOther, elemSubFile))
     val sourceTarget = Source(List(destinationElem(elemOrgFile)))
-    val expOps = List(createOp(destinationElem(elemOrgFile), ActionRemove, optSrcUri = Some(elemOrgFile.originalUri),
-      optDstUri = Some(elemOrgFile.originalUri), optDstID = destinationID(elemOrgFile)),
+    val expOps = List(createOp(destinationElem(elemOrgFile), ActionRemove, optDstID = destinationID(elemOrgFile)),
       createOp(elemConvertedFolder, ActionCreate),
       createOp(elemOther, ActionCreate),
       createOp(elemSubFile, ActionCreate, 1))
@@ -347,9 +323,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val expOps = List(createOp(destinationElem(elemSubFile), ActionRemove, 1,
       optDstID = destinationID(elemSubFile)),
       createOp(elemOther, ActionCreate, 1),
-      createOp(destinationElem(elemOrgFolder), ActionRemove, 1, optSrcUri = Some(elemOrgFolder.originalUri),
-        optDstUri = Some(elemOrgFolder.originalUri),
-        optDstID = destinationID(elemOrgFolder)),
+      createOp(destinationElem(elemOrgFolder), ActionRemove, 1, optDstID = destinationID(elemOrgFolder)),
       createOp(elemConvertedFile, ActionCreate, 1))
 
     runStage(sourceOrg, sourceTarget) should contain theSameElementsInOrderAs expOps

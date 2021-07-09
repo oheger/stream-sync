@@ -256,8 +256,7 @@ object SyncStage {
     (elemSource, elemDest) match {
       case (eSrc: FsFile, eDst: FsFile)
         if differentFileTimes(eSrc, eDst, ignoreTimeDelta) || eSrc.size != eDst.size =>
-        Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, eSrc.originalUri,
-          eDst.originalUri, dstID = eDst.id)), state, stage))
+        Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, dstID = eDst.id)), state, stage))
 
       case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
         val ops = List(removeOp(fileDst, fileDst.level), createOp(folderSrc))
@@ -402,7 +401,7 @@ object SyncStage {
     * @return the operation
     */
   private def createOp(elem: FsElement): SyncOperation =
-    SyncOperation(elem, ActionCreate, elem.level, elem.originalUri, elem.relativeUri, DstIDUnknown)
+    SyncOperation(elem, ActionCreate, elem.level, DstIDUnknown)
 
   /**
     * Creates an operation that indicates that an element needs to be removed.
@@ -412,7 +411,7 @@ object SyncStage {
     * @return the operation
     */
   private def removeOp(element: FsElement, level: Int): SyncOperation =
-    SyncOperation(element, ActionRemove, level, element.originalUri, element.originalUri, dstID = element.id)
+    SyncOperation(element, ActionRemove, level, dstID = element.id)
 
   /**
     * Checks whether the timestamps of the given files are different, taking

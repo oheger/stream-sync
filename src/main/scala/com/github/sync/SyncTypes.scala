@@ -65,28 +65,6 @@ object SyncTypes {
       * @return the level of this element
       */
     def level: Int
-
-    /**
-      * Returns an ''Option'' with the original URI of this element. During
-      * processing, it can happen that the URI is changed, e.g. if the element
-      * name has to be adapted somehow. With this property the original URI can
-      * be obtained. It returns ''None'' if there was no change in the URI.
-      *
-      * @return an ''Option'' for the original URI of this element
-      */
-    def optOriginalUri: Option[String]
-
-    /**
-      * Returns the original URI of this element. This is the URI how it is
-      * stored in the folder structure the element lives in. It may have been
-      * changed during processing by a sync operation. In this case, the
-      * ''relativeUri'' property contains the modified URI while this property
-      * can be used to find the original one. If the URI has not been changed,
-      * both properties have the same value.
-      *
-      * @return the original URI of this element
-      */
-    def originalUri: String = optOriginalUri getOrElse relativeUri
   }
 
   /**
@@ -99,14 +77,12 @@ object SyncTypes {
     * @param level          the level of this file
     * @param lastModified   the time of the last modification
     * @param size           the file size (in bytes)
-    * @param optOriginalUri an ''Option'' for the original URI of this element
     */
   case class FsFile(override val id: String,
                     override val relativeUri: String,
                     override val level: Int,
                     lastModified: Instant,
-                    size: Long,
-                    override val optOriginalUri: Option[String] = None) extends FsElement
+                    size: Long) extends FsElement
 
   /**
     * A class representing a folder in a file system to be synced.
@@ -114,12 +90,10 @@ object SyncTypes {
     * @param id             the ID of this folder
     * @param relativeUri    the relative URI of this folder
     * @param level          the level of this folder
-    * @param optOriginalUri an ''Option'' for the original URI of this element
     */
   case class FsFolder(override val id: String,
                       override val relativeUri: String,
-                      override val level: Int,
-                      override val optOriginalUri: Option[String] = None) extends FsElement
+                      override val level: Int) extends FsElement
 
   /**
     * A trait representing an action to be applied on an element during a sync
@@ -159,21 +133,12 @@ object SyncTypes {
     * the operation.) The level can be used in filter expressions to customize
     * sync behavior.
     *
-    * In some constellations it is required to know the URIs of the element
-    * affected on both the source and the destination side. The URI in the
-    * element is not sufficient here because both structures may use different
-    * file names (e.g. if file names are encrypted). Therefore, the operation
-    * stores both URIs explicitly.
-    *
     * @param element the element that is subject to this operation
     * @param action  the action to be executed on this element
     * @param level   the level of this operation
-    * @param srcUri  the URI of the affected element in the source structure
-    * @param dstUri  the URI of the affected element in the dest structure
     * @param dstID   the ID of the destination element; required for downloads
     */
-  case class SyncOperation(element: FsElement, action: SyncAction, level: Int, srcUri: String, dstUri: String,
-                           dstID: String = null)
+  case class SyncOperation(element: FsElement, action: SyncAction, level: Int, dstID: String = null)
 
   /**
     * A data class representing the result of the execution of a sync

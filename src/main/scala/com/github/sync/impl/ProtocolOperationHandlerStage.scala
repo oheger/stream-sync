@@ -202,19 +202,19 @@ object ProtocolOperationHandlerStage {
   private def handleExecutionCommand(ctx: ActorContext[OperationHandlerCommand], state: ExecutionState,
                                      cmd: ExecuteOperationCommand): ExecutionState =
     cmd.op match {
-      case SyncOperation(elem, ActionCreate, level, _, _, _) =>
+      case SyncOperation(elem, ActionCreate, level, _) =>
         handleIfPossible(ctx, state, cmd, notifyOnComplete = elem.isInstanceOf[FsFolder]) {
-          case SyncOperation(_: FsFolder, ActionCreate, otherLevel, _, _, _) if otherLevel < level => true
+          case SyncOperation(_: FsFolder, ActionCreate, otherLevel, _) if otherLevel < level => true
           case _ => false
         }
 
-      case SyncOperation(_: FsFolder, ActionRemove, level, _, _, _) =>
+      case SyncOperation(_: FsFolder, ActionRemove, level, _) =>
         handleIfPossible(ctx, state, cmd, notifyOnComplete = true) {
-          case SyncOperation(_, ActionRemove, otherLevel, _, _, _) if otherLevel > level => true
+          case SyncOperation(_, ActionRemove, otherLevel, _) if otherLevel > level => true
           case _ => false
         }
 
-      case SyncOperation(_, ActionRemove, _, _, _, _) =>
+      case SyncOperation(_, ActionRemove, _, _) =>
         handleOperation(ctx, state, cmd, notifyOnComplete = true)
 
       case _ => handleOperation(ctx, state, cmd, notifyOnComplete = false)

@@ -99,7 +99,7 @@ object ProtocolOperationHandlerStageSpec {
     * @return the operation
     */
   private def createOp(elem: FsElement, action: SyncAction, level: Int = Level): SyncOperation =
-    SyncOperation(element = elem, action = action, level = level, srcUri = null, dstUri = null)
+    SyncOperation(element = elem, action = action, level = level)
 }
 
 /**
