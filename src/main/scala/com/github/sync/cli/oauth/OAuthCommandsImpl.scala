@@ -16,14 +16,15 @@
 
 package com.github.sync.cli.oauth
 
-import akka.actor.ActorSystem
+import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
+import akka.actor.{ActorSystem, typed}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.stream.scaladsl.Sink
+import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.http.HttpRequestActor
 import com.github.sync.http.oauth._
 
 import scala.concurrent.{ExecutionContext, Future, Promise}
@@ -56,13 +57,15 @@ object OAuthCommandsImpl extends OAuthCommands {
   override def login(loginConfig: LoginCommandConfig, storageService: StorageService, tokenService: TokenService,
                      browserHandler: BrowserHandler, consoleReader: ConsoleReader,
                      printFunc: PrintFunc = ConsolePrintFunc)
-                    (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
+                    (implicit ec: ExecutionContext, system: ActorSystem): Future[String] = {
+    implicit val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
     for {config <- storageService.loadIdpConfig(loginConfig.storageConfig)
          authUri <- tokenService.authorizeUrl(config)
          code <- obtainCode(config, authUri, browserHandler, consoleReader, printFunc)
          tokens <- fetchTokens(config, code, tokenService)
          _ <- storageService.saveTokens(loginConfig.storageConfig, tokens)
          } yield "Login into identity provider was successful. Token data has been stored."
+  }
 
   override def removeIdp(removeConfig: RemoveCommandConfig, storageService: StorageService)
                         (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
@@ -185,9 +188,10 @@ object OAuthCommandsImpl extends OAuthCommands {
   private def fetchTokens(config: IDPConfig, code: String, tokenService: TokenService)
                          (implicit ec: ExecutionContext, system: ActorSystem):
   Future[OAuthTokenData] = {
-    val httpActor = system.actorOf(HttpRequestActor(config.oauthConfig.tokenEndpoint), "httpRequestActor")
+    implicit val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
+    val httpActor = system.spawn(HttpRequestSender(config.oauthConfig.tokenEndpoint), "httpRequestActor")
     tokenService.fetchTokens(httpActor, config, config.oauthConfig.clientSecret, code) andThen {
-      case _ => system stop httpActor
+      case _ => httpActor ! HttpRequestSender.Stop
     }
   }
 }

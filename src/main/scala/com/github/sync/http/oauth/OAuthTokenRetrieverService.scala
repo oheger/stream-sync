@@ -16,10 +16,11 @@
 
 package com.github.sync.http.oauth
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.Uri
+import com.github.cloudfiles.core.http.HttpRequestSender
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 
 /**
   * A trait defining a service that is responsible for retrieving token-related
@@ -38,10 +39,10 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS] {
     * configuration.
     *
     * @param config the OAuth configuration
-    * @param ec     the execution context
+    * @param system the actor system
     * @return a ''Future'' with the authorization URI
     */
-  def authorizeUrl(config: CONFIG)(implicit ec: ExecutionContext): Future[Uri]
+  def authorizeUrl(config: CONFIG)(implicit system: ActorSystem[_]): Future[Uri]
 
   /**
     * Sends a request to the token endpoint of the referenced IDP to exchange
@@ -51,12 +52,11 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS] {
     * @param config    the OAuth configuration
     * @param secret    the client secret
     * @param code      the authorization code
-    * @param ec        the execution context
     * @param system    the actor system
     * @return a ''Future'' with the tokens retrieved from the IDP
     */
-  def fetchTokens(httpActor: ActorRef, config: CONFIG, secret: CLIENT_SECRET, code: String)
-                 (implicit ec: ExecutionContext, system: ActorSystem): Future[TOKENS]
+  def fetchTokens(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: CONFIG, secret: CLIENT_SECRET,
+                  code: String)(implicit system: ActorSystem[_]): Future[TOKENS]
 
   /**
     * Sends a request to the token endpoint of the referenced IDP to obtain
@@ -66,10 +66,9 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS] {
     * @param config       the OAuth configuration
     * @param secret       the client secret
     * @param refreshToken the refresh token
-    * @param ec           the execution context
     * @param system       the actor system
     * @return a ''Future'' with the tokens retrieved from the IDP
     */
-  def refreshToken(httpActor: ActorRef, config: CONFIG, secret: CLIENT_SECRET, refreshToken: String)
-                  (implicit ec: ExecutionContext, system: ActorSystem): Future[TOKENS]
+  def refreshToken(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: CONFIG, secret: CLIENT_SECRET,
+                   refreshToken: String)(implicit system: ActorSystem[_]): Future[TOKENS]
 }

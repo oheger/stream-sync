@@ -16,16 +16,15 @@
 
 package com.github.sync.cli.oauth
 
-import java.io.IOException
-import java.net.{ServerSocket, Socket}
-import java.nio.file.Paths
 import akka.Done
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.typed.ActorRef
+import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
+import akka.actor.{ActorSystem, typed}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
 import akka.testkit.TestKit
-import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
+import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
 import com.github.sync.http.SyncOAuthStorageConfig
@@ -41,7 +40,10 @@ import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.{ExecutionContext, Future}
+import java.io.IOException
+import java.net.{ServerSocket, Socket}
+import java.nio.file.Paths
+import scala.concurrent.Future
 
 object OAuthLoginCommandSpec {
   /** The authorization URI used by tests. */
@@ -134,6 +136,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
 
   import OAuthLoginCommandSpec._
   import system.dispatcher
+
+  implicit val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
 
   /**
     * Prepares the mock server to answer a successful token request.
@@ -419,13 +423,12 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     private def createTokenService(): OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData] = {
       val service = mock[OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]]
       initTokenServiceAuthorizationUri(service, Future.successful(AuthorizationUri))
-      when(service.fetchTokens(any(), any(), any(), any())(any(), any()))
+      when(service.fetchTokens(any(), any(), any(), any())(any()))
         .thenAnswer((invocation: InvocationOnMock) => {
           val args = invocation.getArguments
-          OAuthTokenRetrieverServiceImpl.fetchTokens(args.head.asInstanceOf[ActorRef],
+          OAuthTokenRetrieverServiceImpl.fetchTokens(args.head.asInstanceOf[ActorRef[HttpRequestSender.HttpCommand]],
             args(1).asInstanceOf[IDPConfig], args(2).asInstanceOf[Secret],
-            args(3).asInstanceOf[String])(args(4).asInstanceOf[ExecutionContext],
-            args(5).asInstanceOf[ActorSystem])
+            args(3).asInstanceOf[String])(args(4).asInstanceOf[akka.actor.typed.ActorSystem[_]])
         })
       service
     }

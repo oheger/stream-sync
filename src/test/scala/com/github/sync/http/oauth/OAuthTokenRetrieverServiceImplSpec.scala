@@ -16,24 +16,23 @@
 
 package com.github.sync.http.oauth
 
-import java.io.IOException
 import akka.Done
-import akka.actor.{Actor, ActorRef, ActorSystem, Props, Status}
+import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.`Content-Type`
 import akka.stream.scaladsl.Sink
-import akka.testkit.TestKit
 import akka.util.ByteString
-import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
+import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
 import com.github.sync.AsyncTestHelper
-import com.github.sync.http.HttpRequestActor
-import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.{ExecutionContext, Future}
+import java.io.IOException
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success, Try}
 
 object OAuthTokenRetrieverServiceImplSpec {
@@ -58,7 +57,7 @@ object OAuthTokenRetrieverServiceImplSpec {
   /** A test configuration object. */
   private val TestConfig = IDPConfig(authorizationEndpoint = s"https://$Host$AuthPath", scope = "foo bar",
     oauthConfig = OAuthConfig(tokenEndpoint = s"https://$Host$TokenPath", clientID = "testClient",
-    redirectUri = "http://localhost:12345", clientSecret = Secret(ClientSecret), initTokenData = TestTokens))
+      redirectUri = "http://localhost:12345", clientSecret = Secret(ClientSecret), initTokenData = TestTokens))
 
   /**
     * A map with the expected parameters for a request to fetch new tokens.
@@ -91,13 +90,14 @@ object OAuthTokenRetrieverServiceImplSpec {
     * Validates some basic properties of a request and returns a future with
     * the result.
     *
-    * @param req     the request
+    * @param request the request
     * @param expPath the expected path
     * @param ec      the execution context
     * @return the validation result
     */
-  private def validateRequestProperties(req: HttpRequest, expPath: String)
+  private def validateRequestProperties(request: HttpRequestSender.SendRequest, expPath: String)
                                        (implicit ec: ExecutionContext): Future[Done] = Future {
+    val req = request.request
     if (req.uri.path.toString() != expPath) {
       throw new IllegalArgumentException(s"Wrong path: got ${req.uri.path}, want $expPath")
     }
@@ -106,6 +106,9 @@ object OAuthTokenRetrieverServiceImplSpec {
     }
     if (!req.header[`Content-Type`].map(_.contentType).contains(ContentTypes.`application/x-www-form-urlencoded`)) {
       throw new IllegalArgumentException(s"Wrong content type; got ${req.header[`Content-Type`]}")
+    }
+    if (request.discardEntityMode != HttpRequestSender.DiscardEntityMode.OnFailure) {
+      throw new IllegalArgumentException(s"Unexpected discard mode: ${request.discardEntityMode}.")
     }
     Done
   }
@@ -121,7 +124,7 @@ object OAuthTokenRetrieverServiceImplSpec {
     * @return the validation result
     */
   private def validateFormParameters(req: HttpRequest, expParams: Map[String, String])
-                                    (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] = {
+                                    (implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Done] = {
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     req.entity.dataBytes.runWith(sink)
       .map(bs => Query(bs.utf8String))
@@ -143,68 +146,59 @@ object OAuthTokenRetrieverServiceImplSpec {
     * @param system    the actor system
     * @return the validation result
     */
-  private def validateRequest(req: HttpRequest, expPath: String, expParams: Map[String, String])
-                             (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
+  private def validateRequest(req: HttpRequestSender.SendRequest, expPath: String, expParams: Map[String, String])
+                             (implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Done] =
     for {_ <- validateRequestProperties(req, expPath)
-         res <- validateFormParameters(req, expParams)
+         res <- validateFormParameters(req.request, expParams)
          } yield res
 
   /**
-    * An actor class used to mock an HTTP request actor.
+    * Generates a result for the given request with the content specified.
     *
-    * The class checks a request against expected data and sends a response.
+    * @param req     the request
+    * @param content the content of the response
+    * @return the result object
+    */
+  private def createResponse(req: HttpRequestSender.SendRequest, content: String):
+  Future[HttpRequestSender.Result] = {
+    val response = HttpResponse(entity = content)
+    Future.successful(HttpRequestSender.SuccessResult(req, response))
+  }
+
+  /**
+    * Returns the behavior of an actor that simulates processing of an HTTP
+    * request to an OAuth identity provider. The request is validated, and a
+    * pre-configured response is returned.
     *
     * @param expPath   the expected path for the request
     * @param expParams the expected form parameters
     * @param response  the response to be returned
+    * @return the behavior of this stub actor
     */
-  class HttpStubActor(expPath: String, expParams: Map[String, String], response: Try[String]) extends Actor {
-    private implicit val system: ActorSystem = context.system
-
-    override def receive: Receive = {
-      case req: HttpRequestActor.SendRequest =>
-        implicit val ec: ExecutionContext = context.dispatcher
-        val caller = sender()
-        (for {_ <- validateRequest(req.request, expPath, expParams)
-              respStr <- Future.fromTry(response)
-              resp <- createResponse(req, respStr)
-              } yield resp) onComplete {
-          case Success(result) =>
-            caller ! result
-          case Failure(exception) =>
-            caller ! Status.Failure(exception)
-        }
-    }
-
-    /**
-      * Generates a result for the given request with the content specified.
-      *
-      * @param req     the request
-      * @param content the content of the response
-      * @return the result object
-      */
-    private def createResponse(req: HttpRequestActor.SendRequest, content: String): Future[HttpRequestActor.Result] = {
-      val response = HttpResponse(entity = content)
-      Future.successful(HttpRequestActor.Result(req, response))
-    }
+  private def httpStubActor(expPath: String, expParams: Map[String, String], response: Try[String]):
+  Behavior[HttpRequestSender.HttpCommand] = Behaviors.receivePartial {
+    case (ctx, req: HttpRequestSender.SendRequest) =>
+      implicit val system: ActorSystem[Nothing] = ctx.system
+      implicit val ec: ExecutionContextExecutor = system.executionContext
+      (for {_ <- validateRequest(req, expPath, expParams)
+            respStr <- Future.fromTry(response)
+            resp <- createResponse(req, respStr)
+            } yield resp) onComplete {
+        case Success(result) => req.replyTo ! result
+        case Failure(exception) =>
+          req.replyTo ! HttpRequestSender.FailedResult(req, exception)
+      }
+      Behaviors.same
   }
-
 }
 
 /**
   * Test class for ''OAuthTokenRetrieverServiceImpl''.
   */
-class OAuthTokenRetrieverServiceImplSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with Matchers with AsyncTestHelper {
-  def this() = this(ActorSystem("OAuthTokenRetrieverServiceSpec"))
-
-  override protected def afterAll(): Unit = {
-    super.afterAll()
-    TestKit shutdownActorSystem system
-  }
+class OAuthTokenRetrieverServiceImplSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike
+  with Matchers with AsyncTestHelper {
 
   import OAuthTokenRetrieverServiceImplSpec._
-  import system.dispatcher
 
   /**
     * Convenience function to create a stub actor with the given parameters.
@@ -213,10 +207,12 @@ class OAuthTokenRetrieverServiceImplSpec(testSystem: ActorSystem) extends TestKi
     * @param response  the response to be returned
     * @return the stub HTTP actor
     */
-  private def createStubActor(expParams: Map[String, String], response: Try[String]): ActorRef =
-    system.actorOf(Props(classOf[HttpStubActor], TokenPath, expParams, response))
+  private def createStubActor(expParams: Map[String, String], response: Try[String]):
+  ActorRef[HttpRequestSender.HttpCommand] =
+    testKit.spawn(httpStubActor(TokenPath, expParams, response))
 
   "OAuthTokenRetrieverServiceImpl" should "generate a correct authorize URL" in {
+    implicit val ec: ExecutionContextExecutor = system.executionContext
     val uri = futureResult(OAuthTokenRetrieverServiceImpl.authorizeUrl(TestConfig))
 
     uri.authority.host.toString() should be(Host)
@@ -229,6 +225,7 @@ class OAuthTokenRetrieverServiceImplSpec(testSystem: ActorSystem) extends TestKi
   }
 
   it should "handle an invalid URI when generating the authorize URL" in {
+    implicit val ec: ExecutionContextExecutor = system.executionContext
     val config = TestConfig.copy(authorizationEndpoint = "?not a valid URI!")
 
     expectFailedFuture[IllegalUriException](OAuthTokenRetrieverServiceImpl.authorizeUrl(config))

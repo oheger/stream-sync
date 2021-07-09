@@ -16,18 +16,16 @@
 
 package com.github.sync.http.oauth
 
-import java.io.IOException
-import java.util.regex.Pattern
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.{FormData, HttpMethods, HttpRequest, Uri}
-import akka.pattern.ask
 import akka.stream.scaladsl.Sink
 import akka.util.{ByteString, Timeout}
-import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
-import com.github.sync.http.HttpRequestActor
+import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
 
+import java.io.IOException
+import java.util.regex.Pattern
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
@@ -75,21 +73,23 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
   /** A timeout for invoking the request actor. */
   private implicit val timeout: Timeout = Timeout(1.minute)
 
-  override def authorizeUrl(config: IDPConfig)(implicit ec: ExecutionContext): Future[Uri] = Future {
+  override def authorizeUrl(config: IDPConfig)(implicit system: ActorSystem[_]): Future[Uri] = Future {
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamScope -> config.scope,
       ParamRedirectUri -> config.oauthConfig.redirectUri, ParamResponseType -> ResponseTypeCode)
     Uri(config.authorizationEndpoint).withQuery(Query(params))
   }
 
-  override def fetchTokens(httpActor: ActorRef, config: IDPConfig, secret: Secret, code: String)
-                          (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] = {
+  override def fetchTokens(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
+                           secret: Secret, code: String)
+                          (implicit system: ActorSystem[_]): Future[OAuthTokenData] = {
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamRedirectUri -> config.oauthConfig.redirectUri,
       ParamClientSecret -> secret.secret, ParamCode -> code, ParamGrantType -> GrantTypeAuthorizationCode)
     sendTokenRequest(httpActor, config, params)
   }
 
-  override def refreshToken(httpActor: ActorRef, config: IDPConfig, secret: Secret, refreshToken: String)
-                           (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] = {
+  override def refreshToken(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
+                            secret: Secret, refreshToken: String)
+                           (implicit system: ActorSystem[_]): Future[OAuthTokenData] = {
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamRedirectUri -> config.oauthConfig.redirectUri,
       ParamClientSecret -> secret.secret, ParamRefreshToken -> refreshToken, ParamGrantType -> GrantTypeRefreshToken)
     sendTokenRequest(httpActor, config, params)
@@ -103,15 +103,15 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     * @param httpActor the actor for sending HTTP requests
     * @param config    the OAuth configuration
     * @param params    the parameters for the request
-    * @param ec        the execution context
     * @param system    the actor system
     * @return a ''Future'' with the tokens obtained from the IDP
     */
-  private def sendTokenRequest(httpActor: ActorRef, config: IDPConfig, params: Map[String, String])
-                              (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] = {
-    val request = HttpRequestActor.SendRequest(request = HttpRequest(uri = config.oauthConfig.tokenEndpoint,
-      entity = FormData(params).toEntity, method = HttpMethods.POST), null)
-    for {result <- (httpActor ? request).mapTo[HttpRequestActor.Result]
+  private def sendTokenRequest(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
+                               params: Map[String, String])
+                              (implicit system: ActorSystem[_]): Future[OAuthTokenData] = {
+    val futResult = HttpRequestSender.sendRequestSuccess(request = HttpRequest(uri = config.oauthConfig.tokenEndpoint,
+      entity = FormData(params).toEntity, method = HttpMethods.POST), requestData = null, sender = httpActor)
+    for {result <- futResult
          content <- responseBody(result)
          tokenData <- extractTokenData(content)
          } yield tokenData
@@ -121,12 +121,11 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     * Extracts the text content from the given result object.
     *
     * @param result the result object
-    * @param ec     the execution context
     * @param system the actor system
     * @return the text content of the response
     */
-  private def responseBody(result: HttpRequestActor.Result)
-                          (implicit ec: ExecutionContext, system: ActorSystem): Future[String] = {
+  private def responseBody(result: HttpRequestSender.SuccessResult)
+                          (implicit system: ActorSystem[_]): Future[String] = {
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     result.response.entity.dataBytes.runWith(sink).map(_.utf8String)
   }
@@ -156,4 +155,13 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     */
   private def jsonPropRegEx(property: String): Regex =
     raw""""${Pattern.quote(property)}"\s*:\s*"([^"]+)"""".r
+
+  /**
+    * Obtains an implicit execution context from an implicit actor system.
+    *
+    * @param system the actor system
+    * @return the ''ExecutionContext''
+    */
+  private implicit def executionContext(implicit system: ActorSystem[_]): ExecutionContext =
+    system.executionContext
 }
