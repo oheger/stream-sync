@@ -15,13 +15,13 @@
  */
 
 /** Definition of versions. */
-lazy val AkkaVersion = "2.6.14"
+lazy val AkkaVersion = "2.6.15"
 lazy val AkkaHttpVersion = "10.2.4"
-lazy val VersionScala = "2.13.5"
+lazy val VersionScala = "2.13.6"
 lazy val VersionScalaXml = "1.3.0"
-lazy val VersionCloudFile = "0.2-SNAPSHOT"
-lazy val VersionScalaTest = "3.2.7"
-lazy val VersionWireMock = "2.27.2"
+lazy val VersionCloudFiles = "0.2"
+lazy val VersionScalaTest = "3.2.9"
+lazy val VersionWireMock = "2.29.0"
 lazy val VersionMockito = "1.9.5"
 lazy val VersionScalaTestMockito = "1.0.0-M2"
 lazy val VersionJunit = "4.13"  // needed by mockito
@@ -40,12 +40,12 @@ lazy val akkaDependencies = Seq(
 )
 
 lazy val cloudFilesDependencies = Seq(
-  "com.github.oheger" %% "cloud-files-core" % VersionCloudFile,
-  "com.github.oheger" %% "cloud-files-crypt" % VersionCloudFile,
-  "com.github.oheger" %% "cloud-files-cryptalg-aes" % VersionCloudFile,
-  "com.github.oheger" %% "cloud-files-localfs" % VersionCloudFile,
-  "com.github.oheger" %% "cloud-files-webdav" % VersionCloudFile,
-  "com.github.oheger" %% "cloud-files-onedrive" % VersionCloudFile
+  "com.github.oheger" %% "cloud-files-core" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-crypt" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-cryptalg-aes" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-localfs" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-webdav" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-onedrive" % VersionCloudFiles
 )
 
 lazy val testDependencies = Seq(
@@ -53,7 +53,7 @@ lazy val testDependencies = Seq(
   "org.scalatestplus" %% "scalatestplus-mockito" % VersionScalaTestMockito % Test,
   "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
-  "com.github.tomakehurst" % "wiremock" % VersionWireMock % Test,
+  "com.github.tomakehurst" % "wiremock-jre8" % VersionWireMock % Test,
   "org.mockito" % "mockito-core" % VersionMockito % Test,
   "junit" % "junit" % VersionJunit % Test,
   "org.slf4j" % "slf4j-simple" % "1.7.25" % Test
@@ -72,6 +72,5 @@ lazy val StreamSync = (project in file("."))
     libraryDependencies ++= testDependencies,
     resolvers += Resolver.mavenLocal,
     name := "stream-sync",
-    IntegrationTest / parallelExecution := false,
     mainClass in assembly := Some("com.github.sync.cli.Sync")
   )
