@@ -22,8 +22,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.oauth.OAuthParameterManager.InitCommandConfig
-import com.github.sync.http.SyncOAuthStorageConfig
-import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService}
+import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncOAuthStorageConfig}
 import org.mockito.ArgumentCaptor
 import org.mockito.Matchers.{any, eq => eqArg}
 import org.mockito.Mockito._

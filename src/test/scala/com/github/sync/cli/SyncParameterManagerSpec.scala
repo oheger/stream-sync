@@ -25,7 +25,7 @@ import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContex
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncParameterManager._
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
-import com.github.sync.http.SyncNoAuth
+import com.github.sync.oauth.SyncNoAuth
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito._

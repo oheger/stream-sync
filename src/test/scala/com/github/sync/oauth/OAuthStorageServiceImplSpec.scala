@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-package com.github.sync.http.oauth
+package com.github.sync.oauth
 
 import java.nio.file.Files
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
-import com.github.sync.http.SyncOAuthStorageConfig
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers

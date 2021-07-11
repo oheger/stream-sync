@@ -27,8 +27,7 @@ import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.http.SyncOAuthStorageConfig
-import com.github.sync.http.oauth._
+import com.github.sync.oauth.{SyncOAuthStorageConfig, _}
 import com.github.sync.{AsyncTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import org.mockito.Matchers.any

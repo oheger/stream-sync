@@ -27,8 +27,7 @@ import com.github.cloudfiles.core.http.auth._
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.SyncParameterManager.SyncConfig
-import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService}
-import com.github.sync.http.{SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
+import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
 import com.github.sync.protocol.local.LocalProtocolFactory
 import com.github.sync.protocol.onedrive.OneDriveProtocolFactory

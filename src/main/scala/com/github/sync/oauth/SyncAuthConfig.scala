@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.http
+package com.github.sync.oauth
 
 import com.github.cloudfiles.core.http.Secret
 

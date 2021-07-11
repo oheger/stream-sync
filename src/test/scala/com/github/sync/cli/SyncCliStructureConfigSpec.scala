@@ -21,7 +21,7 @@ import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, P
 import com.github.sync.cli.ExtractorTestHelper.toExtractionContext
 import com.github.sync.cli.SyncCliStructureConfig._
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.http.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
+import com.github.sync.oauth.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec

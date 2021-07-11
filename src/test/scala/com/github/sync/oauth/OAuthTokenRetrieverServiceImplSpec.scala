@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.http.oauth
+package com.github.sync.oauth
 
 import akka.Done
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit

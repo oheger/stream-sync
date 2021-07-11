@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.http.oauth
+package com.github.sync.oauth
 
 import akka.Done
 import akka.actor.ActorSystem
@@ -26,7 +26,6 @@ import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.crypt.alg.CryptAlgorithm
 import com.github.cloudfiles.crypt.alg.aes.Aes
 import com.github.cloudfiles.crypt.service.CryptService
-import com.github.sync.http.SyncOAuthStorageConfig
 
 import java.nio.file.{Files, Path}
 import java.security.{Key, SecureRandom}

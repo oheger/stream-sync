@@ -17,13 +17,12 @@
 package com.github.sync.cli.oauth
 
 import java.nio.file.Paths
-
 import com.github.scli.ParameterExtractor.{ExtractionContext, Parameters, tryExtractor}
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterParser}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.cli.{CliActorSystemLifeCycle, ExtractorTestHelper}
-import com.github.sync.http.SyncOAuthStorageConfig
+import com.github.sync.oauth.SyncOAuthStorageConfig
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

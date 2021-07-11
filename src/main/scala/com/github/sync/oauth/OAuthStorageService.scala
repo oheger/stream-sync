@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.http.oauth
+package com.github.sync.oauth
 
 import java.nio.file.Path
 

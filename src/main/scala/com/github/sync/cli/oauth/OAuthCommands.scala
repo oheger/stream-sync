@@ -21,8 +21,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.http.SyncOAuthStorageConfig
-import com.github.sync.http.oauth.{IDPConfig, OAuthStorageService, OAuthTokenRetrieverService}
+import com.github.sync.oauth.{IDPConfig, OAuthStorageService, OAuthTokenRetrieverService, SyncOAuthStorageConfig}
 
 import scala.concurrent.{ExecutionContext, Future}
 

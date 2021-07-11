@@ -19,12 +19,10 @@ package com.github.sync.cli.oauth
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.util.Locale
-
 import com.github.scli.DefaultConsoleReader
 import com.github.sync.cli.CliActorSystemLifeCycle
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.http.SyncOAuthStorageConfig
-import com.github.sync.http.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
+import com.github.sync.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, SyncOAuthStorageConfig}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.ArgumentCaptor
 import org.mockito.Matchers.{any, eq => argEq}

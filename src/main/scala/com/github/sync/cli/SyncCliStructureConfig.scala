@@ -19,7 +19,7 @@ package com.github.sync.cli
 import com.github.cloudfiles.core.http.Secret
 import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.http.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth}
+import com.github.sync.oauth.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
 
 import java.time.ZoneId
