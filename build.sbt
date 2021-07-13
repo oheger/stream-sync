@@ -22,6 +22,7 @@ lazy val VersionScalaXml = "1.3.0"
 lazy val VersionCloudFiles = "0.2"
 lazy val VersionLog4j = "2.14.1"
 lazy val VersionLog4jScala = "12.0"
+lazy val VersionDisruptor = "3.4.4"
 lazy val VersionScalaTest = "3.2.9"
 lazy val VersionWireMock = "2.29.0"
 lazy val VersionMockito = "1.9.5"
@@ -50,6 +51,12 @@ lazy val cloudFilesDependencies = Seq(
   "com.github.oheger" %% "cloud-files-onedrive" % VersionCloudFiles
 )
 
+lazy val loggingDependencies = Seq(
+  "org.apache.logging.log4j" %% "log4j-api-scala" % VersionLog4jScala,
+  "org.apache.logging.log4j" % "log4j-slf4j-impl" % VersionLog4j,
+  "com.lmax" % "disruptor" % VersionDisruptor
+)
+
 lazy val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % VersionScalaTest % Test,
   "org.scalatestplus" %% "scalatestplus-mockito" % VersionScalaTestMockito % Test,
@@ -57,8 +64,7 @@ lazy val testDependencies = Seq(
   "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
   "com.github.tomakehurst" % "wiremock-jre8" % VersionWireMock % Test,
   "org.mockito" % "mockito-core" % VersionMockito % Test,
-  "junit" % "junit" % VersionJunit % Test,
-  "org.slf4j" % "slf4j-simple" % "1.7.25" % Test
+  "junit" % "junit" % VersionJunit % Test
 )
 
 lazy val StreamSync = (project in file("."))
@@ -71,8 +77,7 @@ lazy val StreamSync = (project in file("."))
     libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
     libraryDependencies += "com.github.oheger" %% "scli" % "1.0.0",
     libraryDependencies ++= cloudFilesDependencies,
-    libraryDependencies += "org.apache.logging.log4j" %% "log4j-api-scala" % VersionLog4jScala,
-    libraryDependencies += "org.apache.logging.log4j" % "log4j-slf4j-impl" % VersionLog4j,
+    libraryDependencies ++= loggingDependencies,
     libraryDependencies ++= testDependencies,
     resolvers += Resolver.mavenLocal,
     name := "stream-sync",
