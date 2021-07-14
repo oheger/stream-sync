@@ -28,6 +28,7 @@ import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 import com.github.sync.oauth.SyncNoAuth
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
+import org.apache.logging.log4j.Level
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -367,6 +368,33 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       "Crypt cache size must be greater or equal " + SyncParameterManager.MinCryptCacheSize)
   }
 
+  it should "set a default log level" in {
+    val (config, _) = futureResult(extractSyncConfig(ArgsMap))
+
+    config.logLevel should be(Level.WARN)
+  }
+
+  it should "handle the log level option" in {
+    val argsMap = ArgsMap + (SyncParameterManager.LogLevelOption -> List("INFO"))
+    val (config, _) = futureResult(extractSyncConfig(argsMap))
+
+    config.logLevel should be(Level.INFO)
+  }
+
+  it should "handle the log level option in a case-insensitive manner" in {
+    val argsMap = ArgsMap + (SyncParameterManager.LogLevelOption -> List("Error"))
+    val (config, _) = futureResult(extractSyncConfig(argsMap))
+
+    config.logLevel should be(Level.ERROR)
+  }
+
+  it should "handle an invalid log level value" in {
+    val InvalidLevel = "SILENT"
+    val argsMap = ArgsMap + (SyncParameterManager.LogLevelOption -> List(InvalidLevel))
+
+    expectFailedFuture(extractSyncConfig(argsMap), InvalidLevel, SyncParameterManager.LogLevelOption)
+  }
+
   it should "mark all options contained in the sync config as accessed" in {
     val otherOptions = Map("foo" -> List("v1"), "bar" -> List("v2", "v3"),
       SyncParameterManager.SourceCryptModeOption -> List("files"),
@@ -400,7 +428,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
       dstConfig = mock[StructureAuthConfig], dryRun = false, timeout = 1.minute, logFilePath = None,
       syncLogPath = None, ignoreTimeDelta = Some(100), cryptConfig = orgCryptConfig, opsPerSecond = Some(100),
-      filterData = mock[SyncFilterData], switched = true)
+      filterData = mock[SyncFilterData], logLevel = Level.INFO, switched = true)
     val expNormalized = orgConfig.copy(srcUri = orgConfig.dstUri, dstUri = orgConfig.srcUri,
       srcConfig = orgConfig.dstConfig, dstConfig = orgConfig.srcConfig, cryptConfig = expCryptConfig,
       switched = false)

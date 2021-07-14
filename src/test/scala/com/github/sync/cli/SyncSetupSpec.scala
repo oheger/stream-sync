@@ -32,6 +32,7 @@ import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, O
 import com.github.sync.protocol.local.LocalProtocolFactory
 import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
 import com.github.sync.protocol.webdav.DavProtocolFactory
+import org.apache.logging.log4j.Level
 import org.mockito.Matchers.any
 import org.mockito.Mockito.{never, verify, verifyZeroInteractions, when}
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -52,7 +53,8 @@ object SyncSetupSpec {
   /** A test sync configuration. */
   private val TestSyncConfig = SyncConfig(srcUri = "someSrcUri", dstUri = "someDstUri", srcConfig = null,
     dstConfig = null, timeout = SyncTimeout, dryRun = false, logFilePath = None, syncLogPath = None,
-    ignoreTimeDelta = None, cryptConfig = null, opsPerSecond = None, filterData = null, switched = false)
+    ignoreTimeDelta = None, cryptConfig = null, opsPerSecond = None, filterData = null, switched = false,
+    logLevel = Level.DEBUG)
 
   /** A test configuration for HTTP actors. */
   private val TestSenderConfig = HttpRequestSenderConfig(actorName = Some("testActor"))
