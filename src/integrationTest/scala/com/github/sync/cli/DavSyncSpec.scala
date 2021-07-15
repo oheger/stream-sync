@@ -31,10 +31,15 @@ import org.mockito.Mockito.{verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.scalatestplus.mockito.MockitoSugar
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+
+object DavSyncSpec {
+  /** A test path to be requested from the server. */
+  private val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
+}
 
 /**
   * Integration test class for sync processes that contains tests related to
@@ -42,6 +47,7 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport with OAuthMockSupport {
 
+  import DavSyncSpec._
   import OAuthMockSupport._
 
   override implicit val ec: ExecutionContext = system.dispatcher
@@ -58,6 +64,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
         .withStatus(StatusCodes.OK.intValue)
         .withBodyFile(responseFile))))
   }
+
   /**
     * Adds a stubbing declaration for a request to a folder that is served with
     * the file specified.
@@ -69,9 +76,9 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     * @param optDelay     an optional delay for this request
     */
   private def stubFolderRequest(uri: String, responseFile: String,
-                                  status: Int = StatusCodes.OK.intValue,
-                                  authFunc: AuthFunc = BasicAuthFunc,
-                                  optDelay: Option[FiniteDuration] = None): Unit = {
+                                status: Int = StatusCodes.OK.intValue,
+                                authFunc: AuthFunc = BasicAuthFunc,
+                                optDelay: Option[FiniteDuration] = None): Unit = {
     val reqUri = if (uri.endsWith("/")) uri else uri + "/"
     val delay = optDelay.map(_.toMillis.toInt).getOrElse(0)
     stubFor(authFunc(request("PROPFIND", urlPathEqualTo(reqUri))
@@ -85,7 +92,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   "Sync" should "support a WebDav URI for the source structure" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3.xml")
     val logFile = createFileReference()
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
@@ -103,7 +109,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   it should "support a WebDav URI for the source structure with an OAuth IDP" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val storageConfig = prepareIdpConfig()
     stubFolderRequest(WebDavPath, "folder3.xml", status = StatusCodes.Unauthorized.intValue,
       authFunc = TokenAuthFunc(CurrentTokenData.accessToken))
@@ -125,7 +130,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   it should "support a WebDav URI for the source structure without authentication" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3.xml", authFunc = identity)
     val logFile = createFileReference()
     val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
@@ -147,7 +151,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   it should "support a WebDav URI for the destination structure" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3_full.xml")
     val logFile = createFileReference()
     val options = Array(srcFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
@@ -165,7 +168,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   it should "support the --switch parameter to switch source and destination structures" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     stubFolderRequest(WebDavPath, "folder3.xml")
     val logFile = createFileReference()
     val options = Array(dstFolder.toAbsolutePath.toString, "dav:" + serverUri(WebDavPath),
@@ -183,7 +185,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   it should "support switching source and destination parameters with complex authentication" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val storageConfig = prepareIdpConfig()
     stubFolderRequest(WebDavPath, "folder3.xml", status = StatusCodes.Unauthorized.intValue,
       authFunc = TokenAuthFunc(CurrentTokenData.accessToken))
@@ -232,15 +233,25 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     verify(dstProtocol).close()
   }
 
-  it should "correctly download files from a WebDav source with basic auth" in {
-    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
+  /**
+    * Prepares a sync operation between the test DAV server and the file
+    * system. A single file should be downloaded from the server.
+    *
+    * @param dstFolder the destination folder
+    * @return the array with options to run the sync process
+    */
+  private def prepareSyncFromServer(dstFolder: Path): Array[String] = {
     stubFolderRequest(WebDavPath, "folder3.xml")
     stubFor(BasicAuthFunc(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBodyFile("response.txt")))
-    val options = Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
+    Array("dav:" + serverUri(WebDavPath), dstFolder.toAbsolutePath.toString,
       "--src-user", UserId, "--src-password", Password)
+  }
+
+  it should "correctly download files from a WebDav source with basic auth" in {
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val options = prepareSyncFromServer(dstFolder)
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
@@ -250,7 +261,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   it should "correctly download files from a WebDav source with OAuth" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val storageConfig = prepareIdpConfig(optPassword = None)
     stubFolderRequest(WebDavPath, "folder3.xml", status = StatusCodes.Unauthorized.intValue,
       authFunc = TokenAuthFunc(CurrentTokenData.accessToken))
@@ -326,7 +336,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   it should "evaluate the timeout when downloading a file from a WebDav server" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val timeout = 1.second
     stubFolderRequest(WebDavPath, "folder3.xml")
     stubFor(BasicAuthFunc(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
@@ -342,7 +351,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   it should "evaluate the timeout for the WebDav element source" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
     val timeout = 1.second
     stubFolderRequest(WebDavPath, "folder3.xml", optDelay = Some(timeout * 2))
     stubFor(BasicAuthFunc(get(urlPathEqualTo(WebDavPath + "/file%20(5).mp3")))
@@ -486,5 +494,22 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
       "dst-" + SyncCliStructureConfig.PropDavModifiedNamespace, "dst-" + SyncCliStructureConfig.PropDavModifiedProperty,
       "dst-" + SyncCliStructureConfig.PropAuthUser, "dst-" + SyncCliStructureConfig.PropAuthPassword,
       "dst-" + OAuthParameterManager.PasswordOption, "dst-" + OAuthParameterManager.StoragePathOption)
+  }
+
+  it should "not produce any log output per default" in {
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val args = prepareSyncFromServer(dstFolder)
+
+    val log = runSyncAndCaptureLogs(args)
+    log should be("")
+  }
+
+  it should "log HTTP requests with log level INFO" in {
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val args = prepareSyncFromServer(dstFolder) ++ Array("--log-level", "INFO")
+
+    val log = runSyncAndCaptureLogs(args)
+    log should include("GET " + WebDavPath)
+    log should include("PROPFIND")
   }
 }

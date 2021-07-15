@@ -32,6 +32,7 @@ import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
 import com.github.sync.impl._
 import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
+import org.apache.logging.log4j.core.config.Configurator
 
 import java.nio.file.{Path, StandardOpenOption}
 import scala.concurrent.duration._
@@ -100,7 +101,9 @@ object Sync {
     * @return a future with information about the result of the process
     */
   private def runSync(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
-                     (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] =
+                     (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] = {
+    Configurator.setRootLevel(config.logLevel)
+
     protocolHolder.registerCloseHandler(for {
       source <- createSyncSource(config, protocolHolder)
       decoratedSource <- decorateSource(source, config, protocolHolder)
@@ -108,6 +111,7 @@ object Sync {
       g <- createSyncStream(decoratedSource, stage, config.logFilePath)
       res <- g.run()
     } yield SyncResult(res._1, res._2))
+  }
 
   /**
     * Creates the source for the sync process based on the given configuration.
