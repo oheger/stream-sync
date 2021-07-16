@@ -29,6 +29,7 @@ import com.github.sync.impl.{ProtocolElementSource, ProtocolOperationHandler, Pr
 import com.github.sync.oauth.SyncAuthConfig
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.protocol.config._
+import org.apache.logging.log4j.scala.Logging
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -123,7 +124,8 @@ object SyncProtocolHolder {
   * @param system                 the actor system
   */
 class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
-                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[_]) {
+                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[_])
+  extends Logging {
   /**
     * Creates a source for iterating over the elements of the source structure.
     *
@@ -152,7 +154,13 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     implicit val timeout: Timeout = syncConfig.timeout
 
     ProtocolOperationHandlerStage(protocolHandler, spawner)
-      .filter { op => op.optFailure.isEmpty }
+      .filter { op =>
+        // TODO: In future, failed operations may be passed to a dedicated sub flow.
+        op.optFailure foreach {
+          logger.error(s"Failed to apply operation '${op.op}'.", _)
+        }
+        op.optFailure.isEmpty
+      }
       .map(_.op)
   }
 

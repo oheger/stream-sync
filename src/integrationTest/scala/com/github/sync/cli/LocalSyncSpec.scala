@@ -513,4 +513,21 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
       Await.ready(syncFuture, 2.seconds)
     }
   }
+
+  it should "log failed sync operations" in {
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val FailedFile = "nonExisting.file"
+    val lastModified = Instant.parse("2021-07-15T20:10:02.12Z")
+    val operations = List(s"OVERRIDE 0 $FailedFile FILE $FailedFile /$FailedFile 0 $lastModified 10")
+    val syncLogFile = createDataFile(content = operations.mkString("\n"))
+    val logFile = createFileReference()
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString,
+      "--timeout", "2")
+
+    val log = runSyncAndCaptureLogs(options)
+    log should include("Failed to apply operation")
+    log should include(FailedFile)
+  }
 }
