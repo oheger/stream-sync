@@ -575,4 +575,25 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
       log should include("/" + folder.getFileName)
     }
   }
+
+  it should "log data about overridden files in debug level" in {
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val UnchangedFile = "notChanged.txt"
+    val ChangedFile = "modifiedTime.txt"
+    val Time1 = Instant.parse("2021-07-17T14:25:04.01Z")
+    val Time2 = Instant.parse("2021-07-17T14:29:25.11Z")
+    val Time3 = Instant.parse("2021-07-17T14:29:35.11Z")
+    createTestFile(srcFolder, UnchangedFile, fileTime = Some(Time1))
+    createTestFile(dstFolder, UnchangedFile, fileTime = Some(Time1))
+    createTestFile(srcFolder, ChangedFile, fileTime = Some(Time2))
+    createTestFile(dstFolder, ChangedFile, fileTime = Some(Time3))
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--log-level", "debug")
+
+    val log = runSyncAndCaptureLogs(options)
+    log should not include Time1.toString
+    log should include(Time2.toString)
+    log should include(Time3.toString)
+  }
 }

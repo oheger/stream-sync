@@ -16,7 +16,8 @@
 
 package com.github.sync.impl
 
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
+import akka.event.LoggingAdapter
+import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler, StageLogging}
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet}
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
@@ -32,14 +33,15 @@ object SyncStage {
     * A function to handle state transitions when an element from upstream
     * is received.
     *
-    * The function is passed the old sync state, the element from upstream,
-    * and the index of the inlet from which the element was received. It then
-    * determines the actions to execute and returns an updated sync state.
+    * The function is passed the old sync state, a reference to the
+    * ''SyncStage'', the element from upstream, the index of the inlet from
+    * which the element was received, and a logger. It then determines the
+    * actions to execute and returns an updated sync state.
     *
     * When the function is invoked with a '''null''' element, this means that
     * the upstream for this port is finished.
     */
-  private type SyncFunc = (SyncState, SyncStage, Int, FsElement) => (EmitData, SyncState)
+  private type SyncFunc = (SyncState, SyncStage, Int, FsElement, LoggingAdapter) => (EmitData, SyncState)
 
   /**
     * A class with details about elements to be emitted downstream.
@@ -80,11 +82,12 @@ object SyncStage {
       * @param stage   the sync stage
       * @param portIdx the port index
       * @param element the new element
+      * @param log     the logger
       * @return the result of the sync function
       */
-    def updateAndCallSyncFunction(f: SyncFunc, stage: SyncStage, portIdx: Int, element: FsElement):
-    (EmitData, SyncState) =
-      f(copy(syncFunc = f), stage, portIdx, element)
+    def updateAndCallSyncFunction(f: SyncFunc, stage: SyncStage, portIdx: Int, element: FsElement,
+                                  log: LoggingAdapter): (EmitData, SyncState) =
+      f(copy(syncFunc = f), stage, portIdx, element, log)
 
     /**
       * Updates the current element of this state instance if necessary. If
@@ -118,14 +121,15 @@ object SyncStage {
     * @param stage   the stage
     * @param portIdx the port index
     * @param element the new element
+    * @param log     the logger
     * @return data to emit and the next state
     */
-  private def waitForElements(state: SyncState, stage: SyncStage, portIdx: Int,
-                              element: FsElement): (EmitData, SyncState) =
-    handleNullElementDuringSync(state, stage, portIdx, element) getOrElse {
+  private def waitForElements(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+                              log: LoggingAdapter): (EmitData, SyncState) =
+    handleNullElementDuringSync(state, stage, portIdx, element, log) getOrElse {
       if (state.currentElem == null)
         (EmitNothing, state.copy(currentElem = element))
-      else state.updateAndCallSyncFunction(syncElements, stage, portIdx, element)
+      else state.updateAndCallSyncFunction(syncElements, stage, portIdx, element, log)
     }
 
   /**
@@ -138,15 +142,15 @@ object SyncStage {
     * @param stage   the stage
     * @param portIdx the port index
     * @param element the new element
+    * @param log     the logger
     * @return data to emit and the next state
     */
-  private def syncElements(state: SyncState, stage: SyncStage, portIdx: Int,
-                           element: FsElement): (EmitData, SyncState) =
-    handleNullElementDuringSync(state, stage, portIdx, element) orElse {
+  private def syncElements(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+                           log: LoggingAdapter): (EmitData, SyncState) =
+    handleNullElementDuringSync(state, stage, portIdx, element, log) orElse {
       val (elemSource, elemDest) = extractSyncPair(state, portIdx, element)
       syncOperationForElements(elemSource, elemDest, state, stage) orElse
-        syncOperationForFileFolderDiff(elemSource, elemDest, state, stage,
-          stage.ignoreTimeDeltaSec)
+        syncOperationForFileFolderDiff(elemSource, elemDest, state, stage, stage.ignoreTimeDeltaSec, log)
     } getOrElse emitAndPullBoth(Nil, state, stage)
 
   /**
@@ -158,10 +162,11 @@ object SyncStage {
     * @param stage   the stage
     * @param portIdx the port index
     * @param element the new element
+    * @param log     the logger
     * @return data to emit and the next state
     */
-  private def destinationFinished(state: SyncState, stage: SyncStage, portIdx: Int,
-                                  element: FsElement): (EmitData, SyncState) = {
+  private def destinationFinished(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+                                  log: LoggingAdapter): (EmitData, SyncState) = {
     def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
       (EmitData(List(createOp(elem)), stage.PullSource), s)
 
@@ -178,10 +183,11 @@ object SyncStage {
     * @param stage   the stage
     * @param portIdx the port index
     * @param element the new element
+    * @param log     the logger
     * @return data to emit and the next state
     */
-  private def sourceDirFinished(state: SyncState, stage: SyncStage, portIdx: Int,
-                                element: FsElement): (EmitData, SyncState) = {
+  private def sourceDirFinished(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+                                log: LoggingAdapter): (EmitData, SyncState) = {
     def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) = {
       val (op, next) = removeElement(s, elem, removedPath = None)
       (EmitData(op, stage.PullDest), next)
@@ -247,15 +253,16 @@ object SyncStage {
     * @param state           the current sync state
     * @param stage           the stage
     * @param ignoreTimeDelta the delta in file times to be ignored
+    * @param log             the logger
     * @return an ''Option'' with data how to handle these elements
     */
-  private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement,
-                                             state: SyncState, stage: SyncStage,
-                                             ignoreTimeDelta: Int):
+  private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement, state: SyncState,
+                                             stage: SyncStage, ignoreTimeDelta: Int, log: LoggingAdapter):
   Option[(EmitData, SyncState)] =
     (elemSource, elemDest) match {
       case (eSrc: FsFile, eDst: FsFile)
         if differentFileTimes(eSrc, eDst, ignoreTimeDelta) || eSrc.size != eDst.size =>
+        log.debug("Different file attributes: {} <=> {}.", eSrc, eDst)
         Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, dstID = eDst.id)), state, stage))
 
       case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
@@ -294,14 +301,15 @@ object SyncStage {
     * @param stage   the stage
     * @param portIdx the port index
     * @param element the new element
+    * @param log     the logger
     * @return an ''Option'' with data to change to the next state in case an
     *         input source is finished
     */
-  private def handleNullElementDuringSync(state: SyncState, stage: SyncStage, portIdx: Int,
-                                          element: FsElement): Option[(EmitData, SyncState)] =
+  private def handleNullElementDuringSync(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+                                          log: LoggingAdapter): Option[(EmitData, SyncState)] =
     if (element == null) {
       val stateFunc = if (portIdx == IdxSource) sourceDirFinished _ else destinationFinished _
-      Some(state.updateAndCallSyncFunction(stateFunc, stage, portIdx, element))
+      Some(state.updateAndCallSyncFunction(stateFunc, stage, portIdx, element, log))
     } else None
 
   /**
@@ -475,7 +483,7 @@ class SyncStage(val ignoreTimeDeltaSec: Int = 0)
     new FanInShape2[FsElement, FsElement, SyncOperation](inSource, inDest, out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) {
+    new GraphStageLogic(shape) with StageLogging {
       // Current state of the sync stream
       var state: SyncState = SyncState(null, waitForElements, 0, Nil, Set.empty)
 
@@ -519,7 +527,7 @@ class SyncStage(val ignoreTimeDeltaSec: Int = 0)
         * @param element the element (may be '''null''' for completion)
         */
       private def updateState(portIdx: Int, element: FsElement): Unit = {
-        val (data, next) = state.syncFunc(state, SyncStage.this, portIdx, element)
+        val (data, next) = state.syncFunc(state, SyncStage.this, portIdx, element, log)
         state = next
         emitMultiple(out, data.ops)
         pulledPorts(portIdx) = false
