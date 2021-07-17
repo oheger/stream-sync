@@ -27,11 +27,10 @@ private object SyncFolderQueue {
     * structure serving as input of a sync process.
     *
     * @param init the initial element
-    * @tparam T the type of elements managed by the queue
     * @return the new queue instance
     */
-  def apply[T](init: SyncFolderData[T]): SyncFolderQueue[T] = {
-    new SyncFolderQueue[T](SortedSet(init))
+  def apply(init: SyncFolderData): SyncFolderQueue = {
+    new SyncFolderQueue(SortedSet(init))
   }
 }
 
@@ -44,19 +43,18 @@ private object SyncFolderQueue {
   * order. To support them, this class is provided. It stores elements of
   * type ''SyncFolderData'' (which can be ordered) and implements typical queue
   * operations. It is ensured that elements are obtained from the queue in the
-  * correct order. Each element can store custom data on behalf of the client
-  * element source.
+  * correct order.
   *
-  * @tparam T the type of the data managed by elements stored in the queue
+  * @param data the set with the data objects contained in this queue
   */
-private class SyncFolderQueue[T] private(data: SortedSet[SyncFolderData[T]]) {
+private class SyncFolderQueue private(data: SortedSet[SyncFolderData]) {
   /**
     * Returns a new instance that contains the specified element.
     *
     * @param elem the element to be added
     * @return the updated instance with this element
     */
-  def +(elem: SyncFolderData[T]): SyncFolderQueue[T] =
+  def +(elem: SyncFolderData): SyncFolderQueue =
     new SyncFolderQueue(data.union(Set(elem)))
 
   /**
@@ -65,7 +63,7 @@ private class SyncFolderQueue[T] private(data: SortedSet[SyncFolderData[T]]) {
     * @param elems a sequence with the elements to be added
     * @return the updated instance with these elements
     */
-  def ++(elems: Iterable[SyncFolderData[T]]): SyncFolderQueue[T] =
+  def ++(elems: Iterable[SyncFolderData]): SyncFolderQueue =
     new SyncFolderQueue(data ++ elems)
 
   /**
@@ -76,7 +74,7 @@ private class SyncFolderQueue[T] private(data: SortedSet[SyncFolderData[T]]) {
     * @return a tuple with the first element and the updated queue
     * @throws NoSuchElementException if the queue is empty
     */
-  def dequeue(): (SyncFolderData[T], SyncFolderQueue[T]) = {
+  def dequeue(): (SyncFolderData, SyncFolderQueue) = {
     val firstElem = data.firstKey
     (firstElem, new SyncFolderQueue(data.diff(Set(firstElem))))
   }

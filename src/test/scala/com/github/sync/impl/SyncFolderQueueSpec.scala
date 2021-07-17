@@ -29,10 +29,10 @@ object SyncFolderQueueSpec {
     * @param queue the queue to be read
     * @return a list with the elements extracted from the queue
     */
-  private def readQueue(queue: SyncFolderQueue[Int]): List[SyncFolderData[Int]] = {
+  private def readQueue(queue: SyncFolderQueue): List[SyncFolderData] = {
     @scala.annotation.tailrec
-    def dequeueElement(q: SyncFolderQueue[Int],
-                       resultList: List[SyncFolderData[Int]]): List[SyncFolderData[Int]] =
+    def dequeueElement(q: SyncFolderQueue,
+                       resultList: List[SyncFolderData]): List[SyncFolderData] =
       if (q.isEmpty) resultList.reverse
       else {
         val (d, q2) = q.dequeue()
@@ -50,9 +50,9 @@ object SyncFolderQueueSpec {
     * @param level the folder level
     * @return the resulting ''SyncFolderData''
     */
-  private def folderData(uri: String, level: Int): SyncFolderData[Int] = {
+  private def folderData(uri: String, level: Int): SyncFolderData = {
     val theFolder = FsFolder(null, uri, level)
-    SyncFolderData(theFolder, level + 1)
+    SyncFolderData(theFolder)
   }
 }
 

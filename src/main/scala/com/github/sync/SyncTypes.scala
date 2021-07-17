@@ -157,18 +157,13 @@ object SyncTypes {
     * A class describing objects storing information about folders during a
     * sync operation.
     *
-    * (Sub) folders discovered while iterating over a folder structure have to
-    * be recorded and processed later in a defined order. The order is
-    * determined by the folder object, but for concrete iteration
-    * implementations it may be necessary to store some additional properties.
-    * This is handled by a generic ''data'' property that can be used in an
-    * arbitrary way.
+    * An instance merely contains a folder and defines a ''compare()''
+    * function, so that folders are processed in the correct order.
     *
     * @param folder the associated ''FsFolder'' object
-    * @param data   arbitrary data to be stored with the folder
     */
-  case class SyncFolderData[T](folder: FsFolder, data: T) extends Ordered[SyncFolderData[T]] {
-    override def compare(that: SyncFolderData[T]): Int = {
+  case class SyncFolderData(folder: FsFolder) extends Ordered[SyncFolderData] {
+    override def compare(that: SyncFolderData): Int = {
       val deltaLevel = that.folder.level - folder.level
       if (deltaLevel != 0) deltaLevel
       else folder.relativeUri.compareTo(that.folder.relativeUri)

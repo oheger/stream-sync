@@ -47,7 +47,7 @@ class ProtocolElementSource(protocol: SyncProtocol)
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) with StageLogging {
       /** The queue with the folders that are pending to be processed. */
-      private var pendingFolders = SyncFolderQueue[Unit](SyncFolderData(FsFolder("", "/", -1), ()))
+      private var pendingFolders = SyncFolderQueue(SyncFolderData(FsFolder("", "/", -1)))
 
       setHandler(out, new OutHandler {
         override def onPull(): Unit = {
@@ -89,7 +89,7 @@ class ProtocolElementSource(protocol: SyncProtocol)
           case Success(results) if results.nonEmpty =>
             emitMultiple(out, results.sortWith(_.relativeUri < _.relativeUri))
             val folders = results.filter(_.isInstanceOf[FsFolder])
-              .map(elem => SyncFolderData(elem.asInstanceOf[FsFolder], ()))
+              .map(elem => SyncFolderData(elem.asInstanceOf[FsFolder]))
             pendingFolders = pendingFolders ++ folders
 
           case Success(_) =>
