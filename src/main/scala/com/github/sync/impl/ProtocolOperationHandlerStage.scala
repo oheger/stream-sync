@@ -238,6 +238,7 @@ object ProtocolOperationHandlerStage {
                               command: ExecuteOperationCommand, notifyOnComplete: Boolean):
   ExecutionState = {
     implicit val ec: ExecutionContext = ctx.executionContext
+    ctx.log.debug("Processing operation {}.", command.op)
     val futExecute = state.handler.execute(command.op)
     val (futComplete, next) = if (notifyOnComplete)
       (futExecute.andThen(_ => ctx.self ! OperationCompletedCommand(command.op)), state.operationStarted(command.op))

@@ -530,4 +530,49 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     log should include("Failed to apply operation")
     log should include(FailedFile)
   }
+
+  it should "log all sync operations in debug level" in {
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val f1 = createTestFile(srcFolder, "test1.txt")
+    val f2 = createTestFile(srcFolder, "test2.txt")
+    val f3 = createTestFile(dstFolder, "toBeRemoved.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--log-level", "debug")
+
+    val log = runSyncAndCaptureLogs(options)
+    List(f1, f2, f3) foreach { file =>
+      log should include(file.getFileName.toString)
+    }
+  }
+
+  it should "not log sync operations in info level" in {
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val f = createTestFile(srcFolder, "test1.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--log-level", "info")
+
+    val log = runSyncAndCaptureLogs(options)
+    log should not include f.getFileName.toString
+  }
+
+  it should "log the folders currently processed in info level" in {
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    createTestFile(srcFolder, "test1.txt")
+    val srcSubFolder1 = Files.createDirectory(srcFolder.resolve("sub"))
+    val srcSubFolder2 = Files.createDirectory(srcSubFolder1.resolve("anotherSub"))
+    val dstSubFolder = Files.createDirectory(dstFolder.resolve("sub"))
+    createTestFile(dstSubFolder, "dest.dat")
+    createTestFile(srcSubFolder1, "src.dat")
+    createTestFile(srcSubFolder2, "moreData.txt")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--log-level", "info")
+
+    val log = runSyncAndCaptureLogs(options)
+    List(srcSubFolder1, srcSubFolder2) foreach { folder =>
+      log should include("/" + folder.getFileName)
+    }
+  }
 }

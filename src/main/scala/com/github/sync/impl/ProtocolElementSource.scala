@@ -17,7 +17,7 @@
 package com.github.sync.impl
 
 import akka.stream.{Attributes, Outlet, SourceShape}
-import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
+import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncFolderData}
 import com.github.sync.protocol.SyncProtocol
@@ -45,7 +45,7 @@ class ProtocolElementSource(protocol: SyncProtocol)
   override def shape: SourceShape[FsElement] = SourceShape(out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) {
+    new GraphStageLogic(shape) with StageLogging {
       /** The queue with the folders that are pending to be processed. */
       private var pendingFolders = SyncFolderQueue[Unit](SyncFolderData(FsFolder("", "/", -1), ()))
 
@@ -67,6 +67,7 @@ class ProtocolElementSource(protocol: SyncProtocol)
           val (data, queue) = pendingFolders.dequeue()
           pendingFolders = queue
           val folder = data.folder
+          log.info("Processing {}.", folder.relativeUri)
           val callback = getAsyncCallback[Try[List[FsElement]]](handleFolderResults)
           val futFolderResult = if (folder.level < 0) protocol.readRootFolder()
           else protocol.readFolder(folder.id, UriEncodingHelper.withTrailingSeparator(folder.relativeUri),
