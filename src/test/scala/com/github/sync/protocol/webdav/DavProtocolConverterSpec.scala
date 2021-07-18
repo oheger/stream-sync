@@ -89,11 +89,12 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers {
 
   it should "convert a sync file to a dav file" in {
     val FileName = "testFile.txt"
-    val SyncFile = SyncTypes.FsFile(id = null, relativeUri = "/some/uri/test.txt", size = 8192,
+    val SyncFile = SyncTypes.FsFile(id = TestUriStr, relativeUri = "/some/uri/test.txt", size = 8192,
       lastModified = LastModifiedTime, level = TestLevel)
     val converter = new DavProtocolConverter(PlainConfig)
 
-    val fsFile = converter.toFsFile(SyncFile, FileName)
+    val fsFile = converter.toFsFile(SyncFile, FileName, useID = true)
+    fsFile.id should be(TestUri)
     fsFile.name should be(FileName)
     fsFile.size should be(SyncFile.size)
     fsFile.attributes.values should have size 1
@@ -110,12 +111,26 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers {
       optLastModifiedNamespace = Some(Namespace), deleteBeforeOverride = false)
     val converter = new DavProtocolConverter(config)
 
-    val fsFile = converter.toFsFile(SyncFile, FileName)
+    val fsFile = converter.toFsFile(SyncFile, FileName, useID = true)
     fsFile.id should be(TestUri)
     fsFile.name should be(FileName)
     fsFile.size should be(SyncFile.size)
     fsFile.attributes.values should have size 1
     fsFile.attributes.values(DavModel.AttributeKey(Namespace, ModifiedProperty)) should be(LastModifiedTimeStr)
+  }
+
+  it should "optionally ignore the ID when converting a sync file to a dav file" in {
+    val FileName = "testFile.txt"
+    val SyncFile = SyncTypes.FsFile(id = TestUriStr, relativeUri = "/some/uri/test.txt", size = 8192,
+      lastModified = LastModifiedTime, level = TestLevel)
+    val converter = new DavProtocolConverter(PlainConfig)
+
+    val fsFile = converter.toFsFile(SyncFile, FileName, useID = false)
+    fsFile.id should be(null)
+    fsFile.name should be(FileName)
+    fsFile.size should be(SyncFile.size)
+    fsFile.attributes.values should have size 1
+    fsFile.attributes.values(DavParser.AttrModifiedAt) should be(LastModifiedTimeStr)
   }
 
   it should "convert a dav file to a sync file" in {

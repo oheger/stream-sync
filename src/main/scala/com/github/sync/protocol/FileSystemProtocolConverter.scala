@@ -60,16 +60,19 @@ trait FileSystemProtocolConverter[ID, FILE, FOLDER] {
     *
     * @param fileElement the file element
     * @param name        the file name (extracted from the path)
+    * @param useID       flag whether the ID element should be taken into account
     * @return the file for this file system
     */
-  def toFsFile(fileElement: FsFile, name: String): FILE
+  def toFsFile(fileElement: FsFile, name: String, useID: Boolean): FILE
 
   /**
     * Converts the given sync folder element to a folder in terms of the
-    * associated ''FileSystem''.
+    * associated ''FileSystem''. This is used when a new file is to be created
+    * or an existing file is overwritten. In the first case, the file ID is
+    * irrelevant, in the second it is not.
     *
     * @param folderElement the folder element
-    * @param name the folder name (extracted from the path)
+    * @param name          the folder name (extracted from the path)
     * @return the folder for this file system
     */
   def toFsFolder(folderElement: FsFolder, name: String): FOLDER

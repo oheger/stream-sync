@@ -61,17 +61,17 @@ class LocalProtocolConverterSpec extends AnyFlatSpec with Matchers {
     val syncFile = SyncTypes.FsFile(TestPath.toString, "/some/uri", 0, ModifiedTime, FileSize)
     val converter = new LocalProtocolConverter(None)
 
-    val fsFile = converter.toFsFile(syncFile, FileName)
+    val fsFile = converter.toFsFile(syncFile, FileName, useID = true)
     fsFile.id should be(TestPath)
     fsFile.name should be(FileName)
     fsFile.lastModifiedUpdate should be(Some(ModifiedTime))
   }
 
-  it should "handle a null ID when converting a sync file to an FS file" in {
-    val syncFile = SyncTypes.FsFile(null, "/some/uri", 0, ModifiedTime, FileSize)
+  it should "optionally ignore the ID when converting a sync file to an FS file" in {
+    val syncFile = SyncTypes.FsFile("someID", "/some/uri", 0, ModifiedTime, FileSize)
     val converter = new LocalProtocolConverter(None)
 
-    val fsFile = converter.toFsFile(syncFile, "someName.tst")
+    val fsFile = converter.toFsFile(syncFile, "someName.tst", useID = false)
     fsFile.id should be(null)
   }
 
@@ -127,7 +127,7 @@ class LocalProtocolConverterSpec extends AnyFlatSpec with Matchers {
     val syncFile = SyncTypes.FsFile(TestPath.toString, "/some/uri", 0, ModifiedTime, FileSize)
     val converter = new LocalProtocolConverter(Some(timeZone))
 
-    val fsFile = converter.toFsFile(syncFile, FileName)
+    val fsFile = converter.toFsFile(syncFile, FileName, useID = true)
     fsFile.lastModifiedUpdate.get should be(ModifiedTime.minus(2, ChronoUnit.HOURS))
   }
 }

@@ -74,8 +74,20 @@ class OneDriveProtocolConverterSpec extends AnyFlatSpec with Matchers {
     val syncFile = SyncTypes.FsFile(id = ElementID, relativeUri = ParentPath + FileName, level = 0, size = FileSize,
       lastModified = LastModified)
 
-    val fsFile = OneDriveProtocolConverter.toFsFile(syncFile, FileName)
+    val fsFile = OneDriveProtocolConverter.toFsFile(syncFile, FileName, useID = true)
     fsFile.id should be(ElementID)
+    fsFile.name should be(FileName)
+    fsFile.size should be(FileSize)
+    fsFile.item.fileSystemInfo.lastModifiedDateTime should be(LastModified)
+  }
+
+  it should "optionally ignore the ID when converting a Sync file to a OneDrive file" in {
+    val FileName = "aNewFile.mp3"
+    val syncFile = SyncTypes.FsFile(id = ElementID, relativeUri = ParentPath + FileName, level = 0, size = FileSize,
+      lastModified = LastModified)
+
+    val fsFile = OneDriveProtocolConverter.toFsFile(syncFile, FileName, useID = false)
+    fsFile.id should be(null)
     fsFile.name should be(FileName)
     fsFile.size should be(FileSize)
     fsFile.item.fileSystemInfo.lastModifiedDateTime should be(LastModified)

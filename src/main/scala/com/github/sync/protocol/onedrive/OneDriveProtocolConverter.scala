@@ -33,8 +33,8 @@ object OneDriveProtocolConverter
   extends FileSystemProtocolConverter[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder] {
   override def elementIDFromString(strID: String): String = strID
 
-  override def toFsFile(fileElement: SyncTypes.FsFile, name: String): OneDriveModel.OneDriveFile =
-    OneDriveModel.newFile(id = fileElement.id, name = name, size = fileElement.size,
+  override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): OneDriveModel.OneDriveFile =
+    OneDriveModel.newFile(id = if (useID) fileElement.id else null, name = name, size = fileElement.size,
       info = Some(OneDriveJsonProtocol.WritableFileSystemInfo(lastModifiedDateTime = Some(fileElement.lastModified))))
 
   override def toFsFolder(folderElement: SyncTypes.FsFolder, name: String): OneDriveModel.OneDriveFolder =

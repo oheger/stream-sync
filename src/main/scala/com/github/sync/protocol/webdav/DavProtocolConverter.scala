@@ -49,10 +49,10 @@ private class DavProtocolConverter(val davConfig: DavStructureConfig)
 
   override def elementIDFromString(strID: String): Uri = strID
 
-  override def toFsFile(fileElement: SyncTypes.FsFile, name: String): DavModel.DavFile = {
+  override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): DavModel.DavFile = {
     val lastModifiedStr = fileElement.lastModified.toString
     val attributes = Map(setModifiedAttribute -> lastModifiedStr)
-    val fileUri = if (fileElement.id == null) null else Uri(fileElement.id)
+    val fileUri = if (useID) Uri(fileElement.id) else null
     DavModel.newFile(name, fileElement.size, id = fileUri, attributes = DavModel.Attributes(attributes))
   }
 

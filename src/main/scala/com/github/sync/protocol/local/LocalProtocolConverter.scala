@@ -97,8 +97,8 @@ private class LocalProtocolConverter(val optTimeZone: Option[ZoneId])
 
   override def elementIDFromString(strID: String): Path = Paths get strID
 
-  override def toFsFile(fileElement: SyncTypes.FsFile, name: String): LocalFsModel.LocalFile = {
-    val path = if (fileElement.id == null) null else Paths.get(fileElement.id)
+  override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): LocalFsModel.LocalFile = {
+    val path = if (useID) Paths.get(fileElement.id) else null
     LocalFsModel.newFile(path = path, name = name,
       lastModifiedAt = Some(instantToTimeZone(fileElement.lastModified, optTimeZone)))
   }

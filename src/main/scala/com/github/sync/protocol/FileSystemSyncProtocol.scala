@@ -69,7 +69,7 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
 
   override def createFile(parentPath: String, name: String, file: SyncTypes.FsFile,
                           source: Source[ByteString, Any]): Future[Unit] = {
-    val fsFile = converter.toFsFile(file, name)
+    val fsFile = converter.toFsFile(file, name, useID = false)
     run(for {
       parentID <- fileSystem.resolvePath(parentPath)
       _ <- fileSystem.createFile(parentID, fsFile, source)
@@ -77,7 +77,7 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
   }
 
   override def updateFile(file: SyncTypes.FsFile, source: Source[ByteString, Any]): Future[Unit] =
-    run(fileSystem.updateFileAndContent(converter.toFsFile(file, ""), source))
+    run(fileSystem.updateFileAndContent(converter.toFsFile(file, "", useID = true), source))
 
   override def downloadFile(id: String): Future[Source[ByteString, Any]] =
     run(fileSystem.downloadFile(converter.elementIDFromString(id)) map (_.dataBytes))

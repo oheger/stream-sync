@@ -132,7 +132,7 @@ class FileSystemSyncProtocolSpec extends ScalaTestWithActorTestKit with AnyFlatS
 
   it should "create a new file" in {
     val fileElem = FileSystemProtocolConverterTestImpl.testFileElement(2, "", 17)
-    val file = FileSystemProtocolConverterTestImpl.testFile(2)
+    val file = FileSystemProtocolConverterTestImpl.testFile(2, withID = false)
     val content = fileContent
     val ParentPath = "/the/parent/path"
     val ParentID = "parentFolderOfNewFile"
@@ -300,11 +300,12 @@ object FileSystemProtocolConverterTestImpl
     *
     * @param idx     the index
     * @param optName an optional file name
+    * @param withID  flag whether the file should have an ID
     * @return the test file with this index
     */
-  def testFile(idx: Int, optName: Option[String] = None): Model.File[String] =
-    TestFile(id = IDPrefix + idx, name = optName getOrElse s"testFile$idx.tst", description = null, createdAt = null,
-      lastModifiedAt = modifiedDate(idx), 10 * idx)
+  def testFile(idx: Int, optName: Option[String] = None, withID: Boolean = true): Model.File[String] =
+    TestFile(id = if (withID) IDPrefix + idx else null, name = optName getOrElse s"testFile$idx.tst",
+      description = null, createdAt = null, lastModifiedAt = modifiedDate(idx), 10 * idx)
 
   /**
     * Generates the test folder with the given index.
@@ -340,8 +341,8 @@ object FileSystemProtocolConverterTestImpl
 
   override def elementIDFromString(strID: String): String = IDPrefix + strID
 
-  override def toFsFile(fileElement: SyncTypes.FsFile, name: String): Model.File[String] =
-    TestFile(id = elementID(fileElement), name = name, description = null, createdAt = null,
+  override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): Model.File[String] =
+    TestFile(id = if (useID) elementID(fileElement) else null, name = name, description = null, createdAt = null,
       lastModifiedAt = fileElement.lastModified, size = fileElement.size)
 
   override def toFsFolder(folderElement: SyncTypes.FsFolder, name: String): Model.Folder[String] =
