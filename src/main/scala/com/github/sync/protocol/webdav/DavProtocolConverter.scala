@@ -22,8 +22,18 @@ import com.github.cloudfiles.webdav.{DavModel, DavParser}
 import com.github.sync.SyncTypes
 import com.github.sync.protocol.FileSystemProtocolConverter
 import com.github.sync.protocol.config.DavStructureConfig
+import com.github.sync.protocol.webdav.DavProtocolConverter.PatchTimeFormatter
 
-import java.time.Instant
+import java.time.{Instant, ZoneId}
+import java.time.format.DateTimeFormatter
+
+private object DavProtocolConverter {
+  /**
+    * A formatter instance used to generate the time representation for the
+    * last modified attribute.
+    */
+  private val PatchTimeFormatter = DateTimeFormatter.RFC_1123_DATE_TIME.withZone(ZoneId.of("Z"))
+}
 
 /**
   * A [[FileSystemProtocolConverter]] implementation for the WebDAV file
@@ -50,7 +60,7 @@ private class DavProtocolConverter(val davConfig: DavStructureConfig)
   override def elementIDFromString(strID: String): Uri = strID
 
   override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): DavModel.DavFile = {
-    val lastModifiedStr = fileElement.lastModified.toString
+    val lastModifiedStr = PatchTimeFormatter.format(fileElement.lastModified)
     val attributes = Map(setModifiedAttribute -> lastModifiedStr)
     val fileUri = if (useID) Uri(fileElement.id) else null
     DavModel.newFile(name, fileElement.size, id = fileUri, attributes = DavModel.Attributes(attributes))

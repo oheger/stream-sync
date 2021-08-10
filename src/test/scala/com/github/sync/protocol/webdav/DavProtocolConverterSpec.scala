@@ -35,11 +35,11 @@ object DavProtocolConverterSpec {
   /** The level used by tests. */
   private val TestLevel = 3
 
-  /** The string representation of the test modified time. */
-  private val LastModifiedTimeStr = "2021-06-03T16:55:32Z"
+  /** The formatted string representation of the test modified time. */
+  private val LastModifiedTimeStr = "Mon, 9 Aug 2021 20:18:38 GMT"
 
   /** The Instant representation of the test modified time. */
-  private val LastModifiedTime = Instant.parse(LastModifiedTimeStr)
+  private val LastModifiedTime = Instant.parse("2021-08-09T20:18:38Z")
 
   /** Constant for a config with basic settings. */
   private val PlainConfig = DavStructureConfig(optLastModifiedProperty = None, optLastModifiedNamespace = None,
