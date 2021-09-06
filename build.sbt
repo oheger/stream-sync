@@ -15,10 +15,9 @@
  */
 
 /** Definition of versions. */
-lazy val AkkaVersion = "2.6.15"
-lazy val AkkaHttpVersion = "10.2.4"
+lazy val AkkaVersion = "2.6.16"
+lazy val AkkaHttpVersion = "10.2.6"
 lazy val VersionScala = "2.13.6"
-lazy val VersionScalaXml = "1.3.0"
 lazy val VersionCloudFiles = "0.2"
 lazy val VersionLog4j = "2.14.1"
 lazy val VersionLog4jScala = "12.0"
@@ -27,7 +26,7 @@ lazy val VersionScalaTest = "3.2.9"
 lazy val VersionWireMock = "2.29.0"
 lazy val VersionMockito = "1.9.5"
 lazy val VersionScalaTestMockito = "1.0.0-M2"
-lazy val VersionJunit = "4.13"  // needed by mockito
+lazy val VersionJunit = "4.13.2"  // needed by mockito
 
 scalacOptions ++= Seq("-deprecation", "-feature")
 
@@ -74,12 +73,11 @@ lazy val StreamSync = (project in file("."))
     version := "0.13-SNAPSHOT",
     scalaVersion := VersionScala,
     libraryDependencies ++= akkaDependencies,
-    libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
     libraryDependencies += "com.github.oheger" %% "scli" % "1.0.0",
     libraryDependencies ++= cloudFilesDependencies,
     libraryDependencies ++= loggingDependencies,
     libraryDependencies ++= testDependencies,
     resolvers += Resolver.mavenLocal,
     name := "stream-sync",
-    mainClass in assembly := Some("com.github.sync.cli.Sync")
+    assembly / mainClass := Some("com.github.sync.cli.Sync")
   )

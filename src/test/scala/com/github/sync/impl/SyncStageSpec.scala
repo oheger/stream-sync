@@ -149,7 +149,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
       Sink.fold[List[SyncOperation], SyncOperation](List.empty[SyncOperation]) { (lst, e) =>
         e :: lst
       }
-    val g = RunnableGraph.fromGraph(GraphDSL.create(foldSink) { implicit builder =>
+    val g = RunnableGraph.fromGraph(GraphDSL.createGraph(foldSink) { implicit builder =>
       sink =>
         import GraphDSL.Implicits._
         val syncStage = builder.add(new SyncStage(ignoreTimeDelta))
