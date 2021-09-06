@@ -18,7 +18,7 @@
 lazy val AkkaVersion = "2.6.16"
 lazy val AkkaHttpVersion = "10.2.6"
 lazy val VersionScala = "2.13.6"
-lazy val VersionCloudFiles = "0.2"
+lazy val VersionCloudFiles = "0.3-SNAPSHOT"
 lazy val VersionLog4j = "2.14.1"
 lazy val VersionLog4jScala = "12.0"
 lazy val VersionDisruptor = "3.4.4"

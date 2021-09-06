@@ -273,7 +273,7 @@ object FileSystemProtocolConverterTestImpl
     */
   case class TestFile(override val id: String,
                       override val name: String,
-                      override val description: String,
+                      override val description: Option[String],
                       override val createdAt: Instant,
                       override val lastModifiedAt: Instant,
                       override val size: Long) extends Model.File[String]
@@ -283,7 +283,7 @@ object FileSystemProtocolConverterTestImpl
     */
   case class TestFolder(override val id: String,
                         override val name: String,
-                        override val description: String,
+                        override val description: Option[String],
                         override val createdAt: Instant,
                         override val lastModifiedAt: Instant) extends Model.Folder[String]
 

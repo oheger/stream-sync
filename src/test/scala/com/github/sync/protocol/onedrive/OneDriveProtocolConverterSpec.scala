@@ -62,7 +62,7 @@ class OneDriveProtocolConverterSpec extends AnyFlatSpec with Matchers {
   it should "convert a OneDrive folder to a Sync folder" in {
     val FolderName = "existing Folder"
     val EncFolderName = "existing%20Folder"
-    val oneDriveFolder = OneDriveModel.newFolder(id = ElementID, name = FolderName, description = "a desc")
+    val oneDriveFolder = OneDriveModel.newFolder(id = ElementID, name = FolderName, description = Some("a desc"))
     val expSyncFolder = SyncTypes.FsFolder(ElementID, ParentPath + EncFolderName, TestLevel)
 
     val syncFolder = OneDriveProtocolConverter.toFolderElement(oneDriveFolder, ParentPath, TestLevel)
@@ -96,7 +96,8 @@ class OneDriveProtocolConverterSpec extends AnyFlatSpec with Matchers {
   it should "convert a OneDrive file to a Sync file" in {
     val FileName = "file To Convert.doc"
     val EncFileName = "file%20To%20Convert.doc"
-    val oneDriveFile = OneDriveModel.newFile(id = ElementID, name = FileName, size = FileSize, description = "desc",
+    val oneDriveFile = OneDriveModel.newFile(id = ElementID, name = FileName, size = FileSize,
+      description = Some("desc"),
       info = Some(OneDriveJsonProtocol.WritableFileSystemInfo(lastModifiedDateTime = Some(LastModified))))
     val expSyncFile = SyncTypes.FsFile(id = ElementID, relativeUri = ParentPath + EncFileName, size = FileSize,
       lastModified = LastModified, level = TestLevel)
