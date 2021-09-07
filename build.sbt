@@ -47,7 +47,8 @@ lazy val cloudFilesDependencies = Seq(
   "com.github.oheger" %% "cloud-files-cryptalg-aes" % VersionCloudFiles,
   "com.github.oheger" %% "cloud-files-localfs" % VersionCloudFiles,
   "com.github.oheger" %% "cloud-files-webdav" % VersionCloudFiles,
-  "com.github.oheger" %% "cloud-files-onedrive" % VersionCloudFiles
+  "com.github.oheger" %% "cloud-files-onedrive" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-googledrive" % VersionCloudFiles
 )
 
 lazy val loggingDependencies = Seq(
