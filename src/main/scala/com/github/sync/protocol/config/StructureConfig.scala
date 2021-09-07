@@ -16,6 +16,8 @@
 
 package com.github.sync.protocol.config
 
+import com.github.cloudfiles.gdrive.GoogleDriveConfig
+
 import java.time.ZoneId
 
 /**
@@ -61,3 +63,22 @@ case class DavStructureConfig(optLastModifiedProperty: Option[String],
 case class OneDriveStructureConfig(syncPath: String,
                                    optUploadChunkSizeMB: Option[Int],
                                    optServerUri: Option[String]) extends StructureConfig
+
+/**
+  * Parameter configuration for the structure type ''GoogleDrive''.
+  *
+  * For ''GoogleDrive'', only a limited set of configuration options can be
+  * set. The relative sync path is part of the structure URI.
+  *
+  * @param optServerUri optional (alternative) server URI
+  */
+case class GoogleDriveStructureConfig(optServerUri: Option[String]) extends StructureConfig {
+  /**
+    * Returns the URI of the GoogleDrive server to access. If the optional
+    * server URI is defined, it is returned; otherwise, result is the default
+    * GoogleDrive API URI.
+    *
+    * @return the URI of the GoogleDrive server
+    */
+  def serverUri: String = optServerUri getOrElse GoogleDriveConfig.GoogleDriveServerUri
+}
