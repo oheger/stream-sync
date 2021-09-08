@@ -28,7 +28,8 @@ import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
-import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig}
+import com.github.sync.protocol.gdrive.GoogleDriveProtocolFactory
 import com.github.sync.protocol.local.LocalProtocolFactory
 import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
 import com.github.sync.protocol.webdav.DavProtocolFactory
@@ -214,6 +215,19 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
 
     SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match {
       case f: OneDriveProtocolFactory =>
+        f.config should be(structConfig)
+        f.timeout should be(SyncTimeout)
+        f.httpSenderConfig should be(TestSenderConfig)
+      case o => fail("Unexpected protocol factory: " + o)
+    }
+  }
+
+  it should "provide a setup function that creates a GoogleDrive sync protocol" in {
+    val structConfig = GoogleDriveStructureConfig(optServerUri = Some("https://google-drive.example.org"))
+    val spawner = mock[Spawner]
+
+    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match {
+      case f: GoogleDriveProtocolFactory =>
         f.config should be(structConfig)
         f.timeout should be(SyncTimeout)
         f.httpSenderConfig should be(TestSenderConfig)

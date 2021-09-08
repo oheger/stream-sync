@@ -27,7 +27,8 @@ import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, OAuthStorageServiceImpl, SyncAuthConfig, SyncBasicAuthConfig, SyncOAuthStorageConfig}
 import com.github.sync.protocol.SyncProtocolFactory
-import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig, StructureConfig}
+import com.github.sync.protocol.gdrive.GoogleDriveProtocolFactory
 import com.github.sync.protocol.local.LocalProtocolFactory
 import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
 import com.github.sync.protocol.webdav.DavProtocolFactory
@@ -138,6 +139,8 @@ object SyncSetup {
         new DavProtocolFactory(davConfig, senderConfig, syncTimeout, spawner)
       case oneConfig: OneDriveStructureConfig =>
         new OneDriveProtocolFactory(oneConfig, senderConfig, syncTimeout, spawner)
+      case googleConfig: GoogleDriveStructureConfig =>
+        new GoogleDriveProtocolFactory(googleConfig, senderConfig, syncTimeout, spawner)
     }
   }
 }
