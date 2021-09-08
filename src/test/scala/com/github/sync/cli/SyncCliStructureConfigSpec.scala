@@ -22,7 +22,7 @@ import com.github.sync.cli.ExtractorTestHelper.toExtractionContext
 import com.github.sync.cli.SyncCliStructureConfig._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.oauth.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
-import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig}
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -431,6 +431,65 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
         oneConfig.optUploadChunkSizeMB should be(Some(ChunkSize))
         oneConfig.syncPath should be(StoragePath)
         oneConfig.optServerUri should be(Some(TestUri))
+        checkBasicAuthConfig(config.authConfig)
+      case r => fail("Unexpected config " + r)
+    }
+  }
+
+  it should "create a correct GoogleDriveConfig for the source structure with basic auth properties" in {
+    val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropGoogleDriveServer) -> TestUri)
+
+    val (config, processedArgs) =
+      extractConfig(args, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, SourceRoleType)
+    checkAccessedParameters(processedArgs, args.keySet)
+    config.structureConfig match {
+      case googleConfig: GoogleDriveStructureConfig =>
+        googleConfig.optServerUri should be(Some(TestUri))
+        checkBasicAuthConfig(config.authConfig)
+      case r => fail("Unexpected config " + r)
+    }
+  }
+
+  it should "create a correct GoogleDriveConfig for the source structure with defaults" in {
+    val ExpConfig = GoogleDriveStructureConfig(optServerUri = None)
+
+    val (config, _) = extractConfig(Map.empty, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, SourceRoleType)
+    config.structureConfig should be(ExpConfig)
+    config.authConfig should be(SyncNoAuth)
+  }
+
+  it should "create a correct GoogleDriveConfig for the source structure if OAuth properties are defined" in {
+    val args = Map(
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropGoogleDriveServer) -> TestUri,
+      SourceRoleType.configPropertyName(OAuthParameterManager.StoragePathOption) -> StoragePath,
+      SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
+      SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password
+    )
+    val expAccessedKeys = args.keySet ++
+      Set(SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption),
+        SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser))
+    val (config, processedArgs) =
+      extractConfig(args, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, SourceRoleType)
+    checkAccessedParameters(processedArgs, expAccessedKeys)
+    val oauthConfig = config.authConfig.asInstanceOf[SyncOAuthStorageConfig]
+    oauthConfig.baseName should be(IdpName)
+    oauthConfig.optPassword.get.secret should be(Password)
+    oauthConfig.rootDir.toString should be(StoragePath)
+  }
+
+  it should "create a correct GoogleDriveConfig for the destination structure" in {
+    val args = Map(DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropGoogleDriveServer) -> TestUri)
+
+    val (config, processedArgs) =
+      extractConfig(args, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, DestinationRoleType)
+    checkAccessedParameters(processedArgs, args.keySet)
+    config.structureConfig match {
+      case googleConfig: GoogleDriveStructureConfig =>
+        googleConfig.optServerUri should be(Some(TestUri))
         checkBasicAuthConfig(config.authConfig)
       case r => fail("Unexpected config " + r)
     }

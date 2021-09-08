@@ -51,7 +51,8 @@ object SyncParameterManager {
     """The URI defining the source structure of the sync process.
       |The URI can start with a prefix that determines the type of the structure. If no prefix \
       |is provided, it is interpreted as path to a file system (a local directory or a network \
-      |share). The prefix "dav:" indicates a WebDav server. "onedrive:" points to a OneDrive server.
+      |share). The prefix "dav:" indicates a WebDav server; "onedrive:" points to a OneDrive server; \
+      |"googledrive:" refers to a GoogleDrive server.
       |""".stripMargin
 
   /** Name of the input option for the URI of the destination structure. */

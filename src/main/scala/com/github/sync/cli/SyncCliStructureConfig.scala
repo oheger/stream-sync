@@ -20,7 +20,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.scli.ParameterExtractor._
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.oauth.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth}
-import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, OneDriveStructureConfig, StructureConfig}
+import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig, StructureConfig}
 
 import java.time.ZoneId
 import scala.util.{Success, Try}
@@ -44,6 +44,9 @@ object SyncCliStructureConfig {
 
   /** URI prefix indicating a OneDrive structure. */
   final val PrefixOneDrive = "onedrive:"
+
+  /** URI prefix indicating a GoogleDrive structure. */
+  final val PrefixGoogleDrive = "googledrive:"
 
   /**
     * Property for the time zone to be applied to the last-modified timestamps
@@ -154,6 +157,17 @@ object SyncCliStructureConfig {
       |file uploads. If a file larger than the threshold is to be uploaded, it needs to be split into \
       |multiple chunks. This option defines the maximum file size in MB. It is optional.""".stripMargin
 
+  /**
+    * Property for the URI of the GoogleDrive server. This property is
+    * optional; the default server URI is used if not specified.
+    */
+  final val PropGoogleDriveServer = "server-uri"
+
+  /** Help text for the GoogleDrive server property. */
+  final val HelpGoogleDriveServer =
+    """Allows setting an alternative URI for the GoogleDrive server. This is needed only in special cases, as \
+      |the default GoogleDrive URI should be appropriate.""".stripMargin
+
   /** Group name for the options for basic auth. */
   final val GroupBasicAuth = "authBasic"
 
@@ -172,11 +186,17 @@ object SyncCliStructureConfig {
   /** Group name for the parameters related to OneDrive. */
   final val GroupOneDrive = "onedrive"
 
+  /** Group name for the parameters related to GoogleDrive */
+  final val GroupGoogleDrive = "googledrive"
+
   /** Regular expression for parsing a WebDav URI. */
   final val RegDavUri = (PrefixWebDav + "(.+)").r
 
   /** Regular expression for parsing a OneDrive drive ID. */
   final val RegOneDriveID = (PrefixOneDrive + "(.+)").r
+
+  /** Regular expression for checking for a GoogleDrive URI. */
+  final val RegGoogleDriveID = (PrefixGoogleDrive + ".*").r
 
   /**
     * A trait defining the role a structure plays in a sync process.
@@ -273,7 +293,8 @@ object SyncCliStructureConfig {
   def structureConfigExtractor(roleType: RoleType, uriOptionName: String): CliExtractor[Try[StructureAuthConfig]] = {
     val extMap = Map(structureGroup(GroupLocalFs, roleType) -> localFsConfigExtractor(roleType),
       structureGroup(GroupDav, roleType) -> davConfigExtractor(roleType),
-      structureGroup(GroupOneDrive, roleType) -> oneDriveConfigExtractor(roleType))
+      structureGroup(GroupOneDrive, roleType) -> oneDriveConfigExtractor(roleType),
+      structureGroup(GroupGoogleDrive, roleType) -> googleDriveConfigExtractor(roleType))
     conditionalGroupValue(structureTypeSelectorExtractor(roleType, uriOptionName), extMap)
   }
 
@@ -292,6 +313,7 @@ object SyncCliStructureConfig {
       .mapTo {
         case RegDavUri(_) => structureGroup(GroupDav, roleType)
         case RegOneDriveID(_) => structureGroup(GroupOneDrive, roleType)
+        case RegGoogleDriveID() => structureGroup(GroupGoogleDrive, roleType)
         case _ => structureGroup(GroupLocalFs, roleType)
       }.mandatory
 
@@ -354,6 +376,22 @@ object SyncCliStructureConfig {
       triedServer <- extServer
       triedAuth <- authConfigExtractor(roleType)
     } yield createOneDriveConfig(triedPath, triedChunkSize, triedServer, triedAuth)
+  }
+
+  /**
+    * Returns a ''CliExtractor'' that extracts the configuration for a
+    * GoogleDrive server from the current command line arguments.
+    *
+    * @param roleType the structure type
+    * @return the ''CliExtractor'' for the GoogleDrive configuration
+    */
+  private def googleDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] = {
+    val extServer = optionValue(roleType.configPropertyName(PropGoogleDriveServer),
+      help = Some(HelpGoogleDriveServer))
+    for {
+      triedServer <- extServer
+      triedAuth <- authConfigExtractor(roleType)
+    } yield createGoogleDriveConfig(triedServer, triedAuth)
   }
 
   /**
@@ -440,8 +478,8 @@ object SyncCliStructureConfig {
     }
 
   /**
-    * Creates a ''DavStructureConfig'' object from the given components. Errors
-    * are aggregated in the resulting ''Try''.
+    * Creates a ''StructureAuthConfig'' with a [[DavStructureConfig]] from the
+    * given components. Errors are aggregated in the resulting ''Try''.
     *
     * @param triedOptModifiedProp      the component for the modified property
     * @param triedOptModifiedNamespace the component for the modified namespace
@@ -461,14 +499,15 @@ object SyncCliStructureConfig {
   }
 
   /**
-    * Creates a ''OneDriveStructureConfig'' object from the given components.
-    * Errors are aggregated in the resulting ''Try''.
+    * Creates a ''StructureAuthConfig'' with a [[OneDriveStructureConfig]]
+    * from the given components. Errors are aggregated in the resulting
+    * ''Try''.
     *
     * @param triedPath      the component for the sync path
     * @param triedChunkSize the component for the upload chung size
     * @param triedServer    the component for the optional server URI
     * @param triedAuth      the component for the auth config
-    * @return a ''Try'' with the OneDrive configuration
+    * @return a ''Try'' with the resulting configuration
     */
   private def createOneDriveConfig(triedPath: Try[String],
                                    triedChunkSize: Try[Option[Int]],
@@ -476,5 +515,19 @@ object SyncCliStructureConfig {
                                    triedAuth: Try[SyncAuthConfig]): Try[StructureAuthConfig] =
     createRepresentation(triedPath, triedChunkSize, triedServer, triedAuth) { (path, chunk, server, auth) =>
       StructureAuthConfig(OneDriveStructureConfig(path, chunk, server), auth)
+    }
+
+  /**
+    * Creates a ''StructureAuthConfig'' with a [[GoogleDriveStructureConfig]]
+    * from the given components.
+    *
+    * @param triedServer the component for the optional server URI
+    * @param triedAuth   the component for the auth config
+    * @return a ''Try'' with the resulting configuration
+    */
+  private def createGoogleDriveConfig(triedServer: Try[Option[String]],
+                                      triedAuth: Try[SyncAuthConfig]): Try[StructureAuthConfig] =
+    createRepresentation(triedServer, triedAuth) { (server, auth) =>
+      StructureAuthConfig(GoogleDriveStructureConfig(server), auth)
     }
 }
