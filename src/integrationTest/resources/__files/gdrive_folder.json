@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "createdTime": "2021-09-08T19:15:32.000Z",
+      "description": "Description of the test file.",
+      "id": "file_id-1",
+      "md5Checksum": "check-1",
+      "mimeType": "text/plain",
+      "modifiedTime": "2021-09-08T19:15:55.123Z",
+      "name": "test-file.txt",
+      "parents": [
+        "parent_id"
+      ],
+      "size": "1001"
+    }
+  ]
+}
