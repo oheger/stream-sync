@@ -506,7 +506,7 @@ integrated OneDrive client that automatically syncs this storage area to the
 local machine. For Linux, however, no official client exists.
 
 Stream Sync supports a OneDrive storage as both source or destination structure
-of a sync process. The storage is identified by using an URL of the form
+of a sync process. The storage is identified by using a URL of the form
 `onedrive:<driveID>` where _driveID_ is a string referencing a specific
 Microsoft OneDrive account. In addition, the following special command line
 options are supported:
@@ -530,6 +530,47 @@ setup (refer to the <<OAuth 2>> section for further information). This
 requires a bunch of preparation steps before sync processes can be run
 successfully. The example <<Sync from a local directory to Microsoft OneDrive>>
 contains a full description of the steps necessary.
+
+==== Google Drive
+
+Another popular cloud storage offering is available from Google: On a
+https://www.google.com/intl/en/drive/[Google Drive] account users can store
+information up to a certain limit. Most users of Android will have such an
+account. As is true for <<Microsoft OneDrive>>, official sync clients are not
+available for all operation systems.
+
+Stream Sync can handle a Google Drive account as both source and destination of
+a sync process. To access such an account, use a URL of the form
+`googledrive:<path>`, where _path_ is the optional root path of the sync
+process. If it is missing, the special _root_ folder of the Google Drive
+account is used; otherwise, only the path specified here is taken into account
+by sync operations. Note that there is no such thing like an account ID in the
+URL; the account to be accessed is encoded in the OAuth 2 access token, which
+is used for authentication (the <<OAuth 2>> section contains more information
+about this topic).
+
+One speciality of Google Drive is that this file system is not strictly
+hierarchical. A single file or folder can have multiple parents, and it is
+possible that a folder can have multiple children with the same name. Thus, a
+path like `documents/private/MyText.doc` does not necessarily uniquely identify
+a single element. Even cycles in folder structures are possible. Stream Sync
+does not handle such scenarios. It treats Google Drive like any other folder
+structure and assumes the same properties. So when using Stream Sync together
+with Google Drive, you should make sure that at least the sub path to be synced
+follows the conventions of a strictly hierarchical file system.
+
+Other than the root path to be synced in the target Google Drive account -
+which is part of the structure URL - you typically do not have to specify any
+further configuration options.
+
+NOTE: There is one additional command line option, `--server-url`, which can be
+used to specify an alternative server URL; but this is only needed for very
+special scenarios, e.g. for testing. Per default, the standard Google Drive API
+endpoint is addressed.
+
+You can find a complete example how to set up Stream Sync for accessing a
+Google Drive account in the section
+<<Sync from a local directory to Google Drive>>.
 
 === Authentication
 
@@ -1129,6 +1170,97 @@ Sync ~/work onedrive:$DRIVE_ID \
 --ops-per-second 2 \
 --timeout 600
 ----
+
+==== Sync from a local directory to Google Drive
+
+The steps to set up Stream Sync for an integration with Google Drive are very
+similar to the ones described in the
+<<Sync from a local directory to Microsoft OneDrive,OneDrive example>>.
+Specifically, an application needs to be created in the
+https://console.developers.google.com/[Google Cloud Platform Console], in order
+to obtain the credentials (the OAuth client ID and secret) required for the
+authentication with Google's OAuth identity provider. As the
+<<Sync from a local directory to Microsoft OneDrive,OneDrive example>> covers
+the basics in detail, this section will focus mainly on the differences between
+these cloud storage providers.
+
+Documentation about the process can be found in the
+https://support.google.com/cloud/answer/6158849[Official Google documentation].
+Here is a short summary:
+
+At first, a new project has to be created in the
+https://console.developers.google.com/[Google Cloud Platform Console]. With
+this new project selected, under _Credentials_ click _CREATE CREDENTIALS_ and
+select _OAuth Client ID_. Set the _Application type_ to _Desktop app_ and enter
+a name for the new client. After the successful creation of the OAuth client,
+the web application will present its client ID and secret. In contrast to
+Microsoft's OAuth implementation, no redirect URL needs to be specified when
+selecting _Desktop app_ as client type. We can use a local redirect URL later
+when interacting with the identity provider.
+
+With the OAuth client ID and secret available, Stream Sync can now be
+configured with the details of this client. This can be done using the
+following command:
+
+[source]
+----
+$ java -cp $SYNC_JAR com.github.sync.cli.oauth.OAuth init \
+  --idp-storage-path $TOKEN_STORE \
+  --idp-name google \
+  --auth-url https://accounts.google.com/o/oauth2/v2/auth \
+  --token-url https://oauth2.googleapis.com/token \
+  --scope "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata" \
+  --redirect-url http://localhost:8080 \
+  --client-id $CLIENT_ID \
+  --client-secret $CLIENT_SECRET
+----
+
+NOTE: Here again some environment variables are referenced that are expected to
+have been initialized with the corresponding information. They are explained in
+the OneDrive example. Of course, you can use a different name for this
+configuration than _google_.
+
+The next step is a login against the Google identity provider. It can be
+triggered with the command below:
+
+[source]
+----
+$ java -cp $SYNC_JAR com.github.sync.cli.oauth.OAuth login \
+  --idp-storage-path $TOKEN_STORE \
+  --idp-name google
+----
+
+The command opens a web browser and navigates to a login page served by the
+Google OAuth identity provider. The account you select for the login will be
+the one that is later accessed by Stream Sync. You have to confirm that you
+grant access to the application you have created before. After a successful
+login, Stream Sync should be able to obtain the OAuth tokens and store them
+locally in the configured path.
+
+You can now run sync processes using your Google Drive account as source or
+destination structure. For instance, the following command syncs the folder
+`/data/google` against the full content stored in your Google Drive:
+
+[source]
+----
+Sync /data/google googledrive: \
+--dst-idp-storage-path $TOKEN_STORE \
+--dst-idp-name google
+----
+
+The destination URI `googledrive:` refers to the root folder of your Google
+Drive. It is possible to specify a path after the _googledrive:_ prefix; so you
+could sync only the sub folder `music` as follows:
+
+[source]
+----
+Sync /data/google/music googledrive:music \
+--dst-idp-storage-path $TOKEN_STORE \
+--dst-idp-name google
+----
+
+Of course, all other options provided by Stream Sync, like encryption or
+filters, are available as well.
 
 == Architecture
 
