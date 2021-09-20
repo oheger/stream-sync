@@ -11,7 +11,8 @@
       "parents": [
         "parent_id"
       ],
-      "size": "1001"
+      "size": "1001",
+      "trashed": false
     }
   ]
 }
