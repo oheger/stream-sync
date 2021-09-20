@@ -59,7 +59,7 @@ trait FileSystemProtocolConverter[ID, FILE, FOLDER] {
     * ''FileSystem''.
     *
     * @param fileElement the file element
-    * @param name        the file name (extracted from the path)
+    * @param name        the file name (can be '''null''' if irrelevant)
     * @param useID       flag whether the ID element should be taken into account
     * @return the file for this file system
     */

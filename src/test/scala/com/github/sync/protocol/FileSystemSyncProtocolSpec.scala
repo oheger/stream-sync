@@ -150,7 +150,7 @@ class FileSystemSyncProtocolSpec extends ScalaTestWithActorTestKit with AnyFlatS
 
   it should "update a file" in {
     val fileElem = FileSystemProtocolConverterTestImpl.testFileElement(3, "", 1)
-    val fsFile = FileSystemProtocolConverterTestImpl.testFile(3, optName = Some(""))
+    val fsFile = FileSystemProtocolConverterTestImpl.testFile(3, optName = Some(null))
     val content = fileContent
     val helper = new ProtocolTestHelper
 

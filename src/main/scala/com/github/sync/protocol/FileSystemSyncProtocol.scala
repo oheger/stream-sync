@@ -77,7 +77,7 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
   }
 
   override def updateFile(file: SyncTypes.FsFile, source: Source[ByteString, Any]): Future[Unit] =
-    run(fileSystem.updateFileAndContent(converter.toFsFile(file, "", useID = true), source))
+    run(fileSystem.updateFileAndContent(converter.toFsFile(file, null, useID = true), source))
 
   override def downloadFile(id: String): Future[Source[ByteString, Any]] =
     run(fileSystem.downloadFile(converter.elementIDFromString(id)) map (_.dataBytes))
