@@ -15,7 +15,7 @@
  */
 
 /** Definition of versions. */
-lazy val AkkaVersion = "2.6.16"
+lazy val AkkaVersion = "2.6.17"
 lazy val AkkaHttpVersion = "10.2.6"
 lazy val VersionScala = "2.13.6"
 lazy val VersionCloudFiles = "0.3"
@@ -23,7 +23,7 @@ lazy val VersionLog4j = "2.14.1"
 lazy val VersionLog4jScala = "12.0"
 lazy val VersionDisruptor = "3.4.4"
 lazy val VersionScalaTest = "3.2.9"
-lazy val VersionWireMock = "2.29.0"
+lazy val VersionWireMock = "2.31.0"
 lazy val VersionMockito = "1.9.5"
 lazy val VersionScalaTestMockito = "1.0.0-M2"
 lazy val VersionJunit = "4.13.2"  // needed by mockito
