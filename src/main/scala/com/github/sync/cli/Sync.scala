@@ -243,7 +243,7 @@ object Sync {
       Supervision.Resume
     }
 
-    RunnableGraph.fromGraph(GraphDSL.create(sinkCount, sinkCount, sinkLogFile)(combineMat) {
+    RunnableGraph.fromGraph(GraphDSL.createGraph(sinkCount, sinkCount, sinkLogFile)(combineMat) {
       implicit builder =>
         (sinkTotal, sinkSuccess, sinkLog) =>
           import GraphDSL.Implicits._
