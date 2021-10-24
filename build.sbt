@@ -37,8 +37,7 @@ lazy val akkaDependencies = Seq(
   "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
   "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-  "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-  "org.scala-lang" % "scala-reflect" % VersionScala
+  "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion
 )
 
 lazy val cloudFilesDependencies = Seq(
