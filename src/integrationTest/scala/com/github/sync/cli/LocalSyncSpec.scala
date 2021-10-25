@@ -537,8 +537,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     val f1 = createTestFile(srcFolder, "test1.txt")
     val f2 = createTestFile(srcFolder, "test2.txt")
     val f3 = createTestFile(dstFolder, "toBeRemoved.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--log-level", "debug")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--debug")
 
     val log = runSyncAndCaptureLogs(options)
     List(f1, f2, f3) foreach { file =>
@@ -550,8 +549,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val f = createTestFile(srcFolder, "test1.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--log-level", "info")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--info")
 
     val log = runSyncAndCaptureLogs(options)
     log should not include f.getFileName.toString
@@ -567,8 +565,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     createTestFile(dstSubFolder, "dest.dat")
     createTestFile(srcSubFolder1, "src.dat")
     createTestFile(srcSubFolder2, "moreData.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--log-level", "info")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--info")
 
     val log = runSyncAndCaptureLogs(options)
     List(srcSubFolder1, srcSubFolder2) foreach { folder =>
@@ -588,8 +585,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     createTestFile(dstFolder, UnchangedFile, fileTime = Some(Time1))
     createTestFile(srcFolder, ChangedFile, fileTime = Some(Time2))
     createTestFile(dstFolder, ChangedFile, fileTime = Some(Time3))
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--log-level", "debug")
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--debug")
 
     val log = runSyncAndCaptureLogs(options)
     log should not include Time1.toString

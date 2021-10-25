@@ -374,25 +374,28 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     config.logLevel should be(Level.WARN)
   }
 
-  it should "handle the log level option" in {
-    val argsMap = ArgsMap + (SyncParameterManager.LogLevelOption -> List("INFO"))
-    val (config, _) = futureResult(extractSyncConfig(argsMap))
+  it should "handle the switches determining the log level" in {
+    def checkLogLevel(switch: String, expectedLevel: Level): Unit = {
+      val argsMap = ArgsMap + (switch -> List("true"))
+      val (config, _) = futureResult(extractSyncConfig(argsMap))
 
-    config.logLevel should be(Level.INFO)
+      config.logLevel should be(expectedLevel)
+    }
+
+    checkLogLevel(SyncParameterManager.LogLevelDebug, Level.DEBUG)
+    checkLogLevel(SyncParameterManager.LogLevelInfo, Level.INFO)
+    checkLogLevel(SyncParameterManager.LogLevelWarn, Level.WARN)
+    checkLogLevel(SyncParameterManager.LogLevelError, Level.ERROR)
   }
 
-  it should "handle the log level option in a case-insensitive manner" in {
-    val argsMap = ArgsMap + (SyncParameterManager.LogLevelOption -> List("Error"))
-    val (config, _) = futureResult(extractSyncConfig(argsMap))
-
-    config.logLevel should be(Level.ERROR)
-  }
-
-  it should "handle an invalid log level value" in {
+  it should "allow overriding the log level" in {
     val InvalidLevel = "SILENT"
-    val argsMap = ArgsMap + (SyncParameterManager.LogLevelOption -> List(InvalidLevel))
+    val argsMap = ArgsMap + (SyncParameterManager.LogLevelError -> List("true")) +
+      (SyncParameterManager.LogLevelInfo -> List("true"))
 
-    expectFailedFuture(extractSyncConfig(argsMap), InvalidLevel, SyncParameterManager.LogLevelOption)
+    val (config, _) = futureResult(extractSyncConfig(argsMap))
+    // The order of the options in the map is not deterministic.
+    config.logLevel == Level.ERROR || config.logLevel == Level.INFO shouldBe true
   }
 
   it should "mark all options contained in the sync config as accessed" in {

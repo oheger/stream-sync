@@ -32,10 +32,11 @@ object ExtractorTestHelper {
     *
     * @param key    the parameter key for the elements
     * @param values the list of values
+    * @param index  the index of this option on the command line
     * @return a list of ''CliElement'' objects
     */
-  def toElements(key: ParameterKey, values: Iterable[String]): Iterable[CliElement] =
-    values map (v => OptionElement(key, Some(v)))
+  def toElements(key: ParameterKey, values: Iterable[String], index: Int = 0): Iterable[CliElement] =
+    values map (v => OptionElement(key, Some(v), index))
 
   /**
     * Transforms a map that associates only a single value to a parameter key
@@ -70,11 +71,11 @@ object ExtractorTestHelper {
     * @return the resulting ''Parameters'' map
     */
   def toParameters(map: Map[String, Iterable[String]]): Parameters = {
-    val paramsMap = map map { e =>
-      val key = toParameterKey(e._1)
-      key -> toElements(key, e._2)
+    val paramsMap = map.zipWithIndex map { e =>
+      val key = toParameterKey(e._1._1)
+      key -> toElements(key, e._1._2, e._2)
     }
-    Parameters(paramsMap, Set.empty)
+    Parameters(paramsMap.toMap, Set.empty)
   }
 
   /**

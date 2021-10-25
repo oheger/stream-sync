@@ -506,7 +506,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
 
   it should "log HTTP requests with log level INFO" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    val args = prepareSyncFromServer(dstFolder) ++ Array("--log-level", "INFO")
+    val args = prepareSyncFromServer(dstFolder) ++ Array("--INFO")
 
     val log = runSyncAndCaptureLogs(args)
     log should include("GET " + WebDavPath)
