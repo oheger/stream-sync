@@ -17,7 +17,7 @@
 /** Definition of versions. */
 lazy val AkkaVersion = "2.6.17"
 lazy val AkkaHttpVersion = "10.2.6"
-lazy val VersionScala = "2.13.6"
+lazy val VersionScala = "3.1.0"
 lazy val VersionCloudFiles = "0.3"
 lazy val VersionScli = "1.1.0"
 lazy val VersionLog4j = "2.14.1"
@@ -34,34 +34,34 @@ scalacOptions ++= Seq("-deprecation", "-feature")
 lazy val ITest = config("integrationTest") extend Test
 
 lazy val akkaDependencies = Seq(
-  "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
-  "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
-  "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-  "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-  "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion
+  ("com.typesafe.akka" %% "akka-actor" % AkkaVersion).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-stream" % AkkaVersion).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-http" % AkkaHttpVersion).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion).cross(CrossVersion.for3Use2_13)
 )
 
 lazy val cloudFilesDependencies = Seq(
-  "com.github.oheger" %% "cloud-files-core" % VersionCloudFiles,
-  "com.github.oheger" %% "cloud-files-crypt" % VersionCloudFiles,
-  "com.github.oheger" %% "cloud-files-cryptalg-aes" % VersionCloudFiles,
-  "com.github.oheger" %% "cloud-files-localfs" % VersionCloudFiles,
-  "com.github.oheger" %% "cloud-files-webdav" % VersionCloudFiles,
-  "com.github.oheger" %% "cloud-files-onedrive" % VersionCloudFiles,
-  "com.github.oheger" %% "cloud-files-googledrive" % VersionCloudFiles
+  ("com.github.oheger" %% "cloud-files-core" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
+  ("com.github.oheger" %% "cloud-files-crypt" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
+  ("com.github.oheger" %% "cloud-files-cryptalg-aes" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
+  ("com.github.oheger" %% "cloud-files-localfs" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
+  ("com.github.oheger" %% "cloud-files-webdav" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
+  ("com.github.oheger" %% "cloud-files-onedrive" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
+  ("com.github.oheger" %% "cloud-files-googledrive" % VersionCloudFiles).cross(CrossVersion.for3Use2_13)
 )
 
 lazy val loggingDependencies = Seq(
-  "org.apache.logging.log4j" %% "log4j-api-scala" % VersionLog4jScala,
+  ("org.apache.logging.log4j" %% "log4j-api-scala" % VersionLog4jScala).cross(CrossVersion.for3Use2_13),
   "org.apache.logging.log4j" % "log4j-slf4j-impl" % VersionLog4j,
   "com.lmax" % "disruptor" % VersionDisruptor
 )
 
 lazy val testDependencies = Seq(
-  "org.scalatest" %% "scalatest" % VersionScalaTest % Test,
-  "org.scalatestplus" %% "scalatestplus-mockito" % VersionScalaTestMockito % Test,
-  "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
-  "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
+  ("org.scalatest" %% "scalatest" % VersionScalaTest % Test).cross(CrossVersion.for3Use2_13),
+  ("org.scalatestplus" %% "scalatestplus-mockito" % VersionScalaTestMockito % Test).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test).cross(CrossVersion.for3Use2_13),
   "com.github.tomakehurst" % "wiremock-jre8" % VersionWireMock % Test,
   "org.mockito" % "mockito-core" % VersionMockito % Test,
   "junit" % "junit" % VersionJunit % Test
@@ -73,8 +73,9 @@ lazy val StreamSync = (project in file("."))
   .settings(
     version := "0.14-SNAPSHOT",
     scalaVersion := VersionScala,
+    crossScalaVersions ++= Seq("2.13.6", VersionScala),
     libraryDependencies ++= akkaDependencies,
-    libraryDependencies += "com.github.oheger" %% "scli" % VersionScli,
+    libraryDependencies += ("com.github.oheger" %% "scli" % VersionScli).cross(CrossVersion.for3Use2_13),
     libraryDependencies ++= cloudFilesDependencies,
     libraryDependencies ++= loggingDependencies,
     libraryDependencies ++= testDependencies,
