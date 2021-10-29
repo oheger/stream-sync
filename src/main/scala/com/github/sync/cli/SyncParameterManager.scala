@@ -266,21 +266,21 @@ object SyncParameterManager {
     */
   object CryptMode extends Enumeration {
 
-    protected case class Val(requiresPassword: Boolean = true) extends super.Val
+    protected case class CryptModeVal(requiresPassword: Boolean = true) extends super.Val
 
-    implicit def valueToCryptModeVal(x: Value): Val = x.asInstanceOf[Val]
+    implicit def valueToCryptModeVal(x: Value): CryptModeVal = x.asInstanceOf[CryptModeVal]
 
     /** Crypt mode indicating that encryption is disabled. */
-    val None: Val = Val(requiresPassword = false)
+    val None: CryptModeVal = CryptModeVal(requiresPassword = false)
 
     /** Crypt mode indicating that the content of files is encrypted. */
-    val Files: Val = Val()
+    val Files: CryptModeVal = CryptModeVal()
 
     /**
       * Crypt mode indicating that both the content of files and the names of
       * folders and files are encrypted.
       */
-    val FilesAndNames: Val = Val()
+    val FilesAndNames: CryptModeVal = CryptModeVal()
 
     /**
       * A map which allows retrieving an enum value from a string constant.
