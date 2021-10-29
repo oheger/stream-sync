@@ -29,7 +29,24 @@ lazy val VersionMockito = "1.9.5"
 lazy val VersionScalaTestMockito = "1.0.0-M2"
 lazy val VersionJunit = "4.13.2"  // needed by mockito
 
-scalacOptions ++= Seq("-deprecation", "-feature")
+scalacOptions ++= {
+  Seq(
+    "-encoding",
+    "UTF-8",
+    "-feature"
+  ) ++
+    (CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((3, _)) => Seq(
+        "-unchecked",
+        "-source:3.0-migration"
+      )
+      case _ => Seq(
+        "-deprecation",
+        "-Wunused:imports,privates,locals",
+        "-Wvalue-discard"
+      )
+    })
+}
 
 lazy val ITest = config("integrationTest") extend Test
 
