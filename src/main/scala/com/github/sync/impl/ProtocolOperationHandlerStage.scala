@@ -156,8 +156,8 @@ object ProtocolOperationHandlerStage {
 
     Flow[SyncOperation].mapAsync(parallelism) { op =>
       handlerActor.askWithStatus(ref => ExecuteOperationCommand(op, ref))
-        .map {
-          SyncOperationResult(_, None)
+        .map { res =>
+          SyncOperationResult(res.asInstanceOf[SyncOperation], None)
         } recover {
         case e => SyncOperationResult(op, Some(e))
       }
