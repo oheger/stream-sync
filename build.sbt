@@ -21,7 +21,6 @@ lazy val VersionScala = "3.1.0"
 lazy val VersionCloudFiles = "0.3"
 lazy val VersionScli = "1.1.0"
 lazy val VersionLog4j = "2.14.1"
-lazy val VersionLog4jScala = "12.0"
 lazy val VersionDisruptor = "3.4.4"
 lazy val VersionScalaTest = "3.2.9"
 lazy val VersionWireMock = "2.31.0"
@@ -69,7 +68,7 @@ lazy val cloudFilesDependencies = Seq(
 )
 
 lazy val loggingDependencies = Seq(
-  ("org.apache.logging.log4j" %% "log4j-api-scala" % VersionLog4jScala).cross(CrossVersion.for3Use2_13),
+  "org.apache.logging.log4j" % "log4j-api" % VersionLog4j,
   "org.apache.logging.log4j" % "log4j-slf4j-impl" % VersionLog4j,
   "com.lmax" % "disruptor" % VersionDisruptor
 )

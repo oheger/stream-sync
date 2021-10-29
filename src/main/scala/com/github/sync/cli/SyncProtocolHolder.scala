@@ -28,8 +28,8 @@ import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
 import com.github.sync.impl.{ProtocolElementSource, ProtocolOperationHandler, ProtocolOperationHandlerStage}
 import com.github.sync.oauth.SyncAuthConfig
 import com.github.sync.protocol.SyncProtocol
-import com.github.sync.protocol.config._
-import org.apache.logging.log4j.scala.Logging
+import com.github.sync.protocol.config.StructureCryptConfig
+import org.apache.logging.log4j.LogManager
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -124,8 +124,10 @@ object SyncProtocolHolder {
   * @param system                 the actor system
   */
 class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
-                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[_])
-  extends Logging {
+                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[_]) {
+  /** The logger. */
+  private val logger = LogManager.getLogger(classOf[SyncProtocolHolder])
+
   /**
     * Creates a source for iterating over the elements of the source structure.
     *
