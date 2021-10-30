@@ -16,14 +16,13 @@
 
 package com.github.sync.impl
 
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import com.github.sync.{AsyncTestHelper, FileTestHelper}
-import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.*
 import com.github.sync.protocol.SyncProtocol
+import com.github.sync.{ActorTestKitSupport, AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito.{verify, when}
-import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -72,10 +71,10 @@ object ProtocolOperationHandlerSpec {
 /**
   * Test class for ''ProtocolOperationHandler''.
   */
-class ProtocolOperationHandlerSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers
+class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
   with MockitoSugar with AsyncTestHelper {
 
-  import ProtocolOperationHandlerSpec._
+  import ProtocolOperationHandlerSpec.*
 
   /**
     * Exposes the actor system's execution context in implicit scope.

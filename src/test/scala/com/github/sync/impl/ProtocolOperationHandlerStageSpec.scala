@@ -17,16 +17,16 @@
 package com.github.sync.impl
 
 import akka.actor.DeadLetter
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.{ActorRef, Behavior, Props}
 import akka.stream.scaladsl.{Sink, Source}
+import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.Spawner
-import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes.*
+import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when
 import org.mockito.invocation.InvocationOnMock
-import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -105,10 +105,10 @@ object ProtocolOperationHandlerStageSpec {
 /**
   * Test class for ''ProtocolOperationHandlerStageSpec''.
   */
-class ProtocolOperationHandlerStageSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers
+class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
   with MockitoSugar with AsyncTestHelper {
 
-  import ProtocolOperationHandlerStageSpec._
+  import ProtocolOperationHandlerStageSpec.*
 
   /**
     * Tests whether a sync operation can only be executed after the completion
@@ -277,6 +277,7 @@ class ProtocolOperationHandlerStageSpec extends ScalaTestWithActorTestKit with A
       */
     def runStage(operations: List[SyncOperation]): Future[List[SyncOperationResult]] = {
       val source = Source(operations)
+      implicit val timeout: Timeout = Timeout(10.seconds)
       val stage = ProtocolOperationHandlerStage(createHandler(operationQueue), createSpawner(), Some(ActorName))
       val sink = Sink.fold[List[SyncOperationResult], SyncOperationResult](List.empty) { (lst, e) => e :: lst }
       source.via(stage).runWith(sink)

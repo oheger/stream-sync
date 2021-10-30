@@ -16,7 +16,6 @@
 
 package com.github.sync.protocol
 
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.{ActorRef, Behavior, Props}
 import akka.util.Timeout
 import com.github.cloudfiles.core.delegate.ExtensibleFileSystem
@@ -25,14 +24,15 @@ import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpReq
 import com.github.cloudfiles.core.{FileSystem, Model}
 import com.github.cloudfiles.crypt.alg.aes.Aes
 import com.github.cloudfiles.crypt.fs.{CryptConfig, CryptContentFileSystem, CryptNamesFileSystem}
+import com.github.sync.ActorTestKitSupport
 import com.github.sync.protocol.config.{StructureConfig, StructureCryptConfig}
 import org.mockito.Mockito.when
-import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 
 object FileSystemSyncProtocolFactorySpec {
   /** The protocol-specific URI used by tests. */
@@ -54,8 +54,7 @@ object FileSystemSyncProtocolFactorySpec {
 /**
   * Test class for ''FileSystemSyncProtocolFactory''.
   */
-class FileSystemSyncProtocolFactorySpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers
-  with MockitoSugar {
+class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSupport with Matchers with MockitoSugar {
 
   import FileSystemSyncProtocolFactorySpec._
 

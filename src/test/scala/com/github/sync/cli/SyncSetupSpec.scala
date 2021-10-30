@@ -16,16 +16,14 @@
 
 package com.github.sync.cli
 
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor as classic
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter.*
 import akka.stream.KillSwitch
 import akka.util.Timeout
-import akka.actor as classic
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.*
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
-import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig}
@@ -33,18 +31,19 @@ import com.github.sync.protocol.gdrive.GoogleDriveProtocolFactory
 import com.github.sync.protocol.local.LocalProtocolFactory
 import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
 import com.github.sync.protocol.webdav.DavProtocolFactory
+import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
 import org.apache.logging.log4j.Level
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{never, verify, verifyZeroInteractions, when}
-import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import java.io.IOException
 import java.nio.file.Paths
 import java.time.ZoneId
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.*
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 object SyncSetupSpec {
@@ -64,10 +63,10 @@ object SyncSetupSpec {
 /**
   * Test class for ''SyncSetup''.
   */
-class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers with MockitoSugar
+class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers with MockitoSugar
   with AsyncTestHelper {
 
-  import SyncSetupSpec._
+  import SyncSetupSpec.*
 
   /**
     * Returns the classic actor system in implicit scope. This is needed for

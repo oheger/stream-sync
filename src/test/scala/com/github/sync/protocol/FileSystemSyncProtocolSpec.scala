@@ -17,15 +17,14 @@
 package com.github.sync.protocol
 
 import akka.NotUsed
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.http.scaladsl.model.ResponseEntity
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.{FileSystem, Model}
-import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
+import com.github.sync.{ActorTestKitSupport, AsyncTestHelper, FileTestHelper, SyncTypes}
 import org.mockito.Mockito.{verify, when}
-import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -33,7 +32,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import scala.concurrent.Future
 
-class FileSystemSyncProtocolSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers
+class FileSystemSyncProtocolSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
   with MockitoSugar with AsyncTestHelper {
   /**
     * Returns a ''Source'' that simulates the content of a file.

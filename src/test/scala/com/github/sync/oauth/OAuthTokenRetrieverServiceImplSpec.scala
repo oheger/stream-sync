@@ -17,18 +17,17 @@
 package com.github.sync.oauth
 
 import akka.Done
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.*
 import akka.http.scaladsl.model.headers.`Content-Type`
 import akka.stream.scaladsl.Sink
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
-import com.github.sync.AsyncTestHelper
-import org.scalatest.flatspec.AnyFlatSpecLike
+import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.io.IOException
@@ -195,8 +194,8 @@ object OAuthTokenRetrieverServiceImplSpec {
 /**
   * Test class for ''OAuthTokenRetrieverServiceImpl''.
   */
-class OAuthTokenRetrieverServiceImplSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike
-  with Matchers with AsyncTestHelper {
+class OAuthTokenRetrieverServiceImplSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
+  with AsyncTestHelper {
 
   import OAuthTokenRetrieverServiceImplSpec._
 
