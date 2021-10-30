@@ -24,7 +24,7 @@ import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.oauth.OAuthParameterManager.InitCommandConfig
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncOAuthStorageConfig}
 import org.mockito.ArgumentCaptor
-import org.mockito.Matchers.{any, eq => eqArg}
+import org.mockito.ArgumentMatchers.{any, eq => eqArg}
 import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

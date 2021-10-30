@@ -18,12 +18,12 @@ package com.github.sync.cli
 
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.adapter._
+import akka.actor.typed.scaladsl.adapter.*
 import akka.stream.KillSwitch
 import akka.util.Timeout
-import akka.{actor => classic}
+import akka.actor as classic
 import com.github.cloudfiles.core.http.Secret
-import com.github.cloudfiles.core.http.auth._
+import com.github.cloudfiles.core.http.auth.*
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.SyncParameterManager.SyncConfig
@@ -34,7 +34,7 @@ import com.github.sync.protocol.local.LocalProtocolFactory
 import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
 import com.github.sync.protocol.webdav.DavProtocolFactory
 import org.apache.logging.log4j.Level
-import org.mockito.Matchers.any
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{never, verify, verifyZeroInteractions, when}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -44,7 +44,7 @@ import java.io.IOException
 import java.nio.file.Paths
 import java.time.ZoneId
 import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.util.{Failure, Success}
 
 object SyncSetupSpec {

@@ -22,7 +22,7 @@ import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
 import com.github.cloudfiles.localfs.LocalFileSystem
 import com.github.sync.protocol.config.FsStructureConfig
-import org.mockito.Matchers.{anyString, eq => argEq}
+import org.mockito.ArgumentMatchers.{anyString, eq => argEq}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

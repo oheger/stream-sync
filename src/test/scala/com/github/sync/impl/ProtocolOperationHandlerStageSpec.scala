@@ -22,8 +22,8 @@ import akka.actor.typed.{ActorRef, Behavior, Props}
 import akka.stream.scaladsl.{Sink, Source}
 import com.github.cloudfiles.core.http.factory.Spawner
 import com.github.sync.AsyncTestHelper
-import com.github.sync.SyncTypes._
-import org.mockito.Matchers.any
+import com.github.sync.SyncTypes.*
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when
 import org.mockito.invocation.InvocationOnMock
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -33,7 +33,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import java.io.IOException
 import java.time.Instant
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.concurrent.{Future, Promise}
 
 object ProtocolOperationHandlerStageSpec {
@@ -342,9 +342,10 @@ class ProtocolOperationHandlerStageSpec extends ScalaTestWithActorTestKit with A
       */
     private def createHandler(queue: BlockingQueue[OperationInProgress]): ProtocolOperationHandler = {
       val handler = mock[ProtocolOperationHandler]
-      when(handler.execute(any())).thenAnswer((invocation: InvocationOnMock) => {
+      when(handler.execute(any(classOf[SyncOperation]))).thenAnswer((invocation: InvocationOnMock) => {
         val promise = Promise[Unit]()
-        queue.offer(OperationInProgress(invocation.getArgumentAt(0, classOf[SyncOperation]), promise))
+        val op: SyncOperation = invocation.getArgument(0)
+        queue.offer(OperationInProgress(op, promise))
         promise.future
       })
       handler
