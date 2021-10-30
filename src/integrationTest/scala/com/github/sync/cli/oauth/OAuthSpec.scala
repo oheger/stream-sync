@@ -25,7 +25,7 @@ import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
 import com.github.sync.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, SyncOAuthStorageConfig}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.ArgumentCaptor
-import org.mockito.Matchers.{any, eq => argEq}
+import org.mockito.ArgumentMatchers.{any, eq => argEq}
 import org.mockito.Mockito._
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec

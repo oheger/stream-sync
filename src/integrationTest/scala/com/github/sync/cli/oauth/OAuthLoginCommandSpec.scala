@@ -30,7 +30,7 @@ import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
 import com.github.sync.oauth.{SyncOAuthStorageConfig, _}
 import com.github.sync.{AsyncTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock._
-import org.mockito.Matchers.any
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock

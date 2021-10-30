@@ -23,6 +23,7 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.oauth.{IDPConfig, OAuthStorageServiceImpl, SyncOAuthStorageConfig}
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, post, stubFor, urlPathEqualTo}
+import org.scalatest.Suite
 
 import scala.concurrent.ExecutionContext
 
@@ -51,7 +52,7 @@ object OAuthMockSupport {
   * OAuth as authentication mechanism.
   */
 trait OAuthMockSupport {
-  this: AsyncTestHelper with FileTestHelper with WireMockSupport =>
+  this: Suite with AsyncTestHelper with FileTestHelper with WireMockSupport =>
 
   import OAuthMockSupport._
 

@@ -19,21 +19,21 @@ package com.github.sync.cli
 import akka.http.scaladsl.model.StatusCodes
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.{HttpRequestSender, UriEncodingHelper}
-import com.github.sync.WireMockSupport._
+import com.github.sync.WireMockSupport.*
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
-import com.github.tomakehurst.wiremock.client.WireMock._
+import com.github.tomakehurst.wiremock.client.WireMock.*
 import com.github.tomakehurst.wiremock.http.RequestMethod
-import org.mockito.Matchers.{any, anyString}
+import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.scalatestplus.mockito.MockitoSugar
 
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContext, Future}
 
 object DavSyncSpec {
@@ -222,7 +222,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     val dstProtocol = createMockProtocol()
     val protocolFactory = mock[SyncProtocolFactory]
     when(protocolFactory.createProtocol(anyString(), any())).thenAnswer((invocation: InvocationOnMock) => {
-      val uri = invocation.getArgumentAt(0, classOf[String])
+      val uri: String = invocation.getArgument(0)
       if (uri == dstFolder.toString) dstProtocol else srcProtocol
     })
     val protocolSetupFunc: ProtocolFactorySetupFunc = (_, _, _, _) => protocolFactory

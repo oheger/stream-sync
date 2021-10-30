@@ -21,7 +21,7 @@ import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.cli.LocalSyncSpec.encodePath
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
-import org.mockito.Matchers.{any, anyString}
+import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.scalatestplus.mockito.MockitoSugar
@@ -303,7 +303,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     val dstProtocol = createMockProtocol()
     val protocolFactory = mock[SyncProtocolFactory]
     when(protocolFactory.createProtocol(anyString(), any())).thenAnswer((invocation: InvocationOnMock) => {
-      val uri = invocation.getArgumentAt(0, classOf[String])
+      val uri = invocation.getArgument[String](0)
       if (uri == dstFolder.toString) dstProtocol else srcProtocol
     })
     val protocolSetupFunc: ProtocolFactorySetupFunc = (_, _, _, _) => protocolFactory
