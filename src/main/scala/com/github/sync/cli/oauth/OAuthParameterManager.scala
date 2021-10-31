@@ -31,7 +31,7 @@ import scala.util.Try
   * The object defines command line extractors for extracting the information
   * from the command line required by the commands supported.
   */
-object OAuthParameterManager {
+object OAuthParameterManager:
   /** The command to initialize an IDP. */
   final val CommandInitIDP = "init"
 
@@ -175,14 +175,13 @@ object OAuthParameterManager {
     * configuration class exists that extends this trait. As a common property,
     * each command has a (sometimes limited) ''OAuthStorageConfig''.
     */
-  sealed trait CommandConfig {
+  sealed trait CommandConfig:
     /**
       * Returns the ''OAuthStorageConfig'' for the command.
       *
       * @return the ''OAuthStorageConfig''
       */
     def storageConfig: SyncOAuthStorageConfig
-  }
 
   /**
     * A data class collecting all the data required by the command to
@@ -235,17 +234,16 @@ object OAuthParameterManager {
     *
     * @return the ''CliExtractor'' for a ''CommandConfig''
     */
-  def commandConfigExtractor: CliExtractor[Try[CommandConfig]] = {
+  def commandConfigExtractor: CliExtractor[Try[CommandConfig]] =
     val groupMap = Map(CommandInitIDP -> commandInitExtractor,
       CommandLoginIDP -> commandLoginExtractor,
       CommandRemoveIDP -> commandRemoveExtractor)
     val cmdConfExt = conditionalGroupValue(commandExtractor, groupMap)
 
-    for {
+    for
       config <- cmdConfExt
       _ <- CliActorSystemLifeCycle.FileExtractor
-    } yield config
-  }
+    yield config
 
   /**
     * Returns a ''CliExtractor'' for extracting an ''OAuthStorageConfig''
@@ -259,7 +257,7 @@ object OAuthParameterManager {
     * @return the ''CliExtractor'' for the ''OAuthStorageConfig''
     */
   def storageConfigExtractor(needPassword: Boolean, prefix: String = ""):
-  CliExtractor[Try[SyncOAuthStorageConfig]] = {
+  CliExtractor[Try[SyncOAuthStorageConfig]] =
     val addAlias = prefix.isEmpty
     val procPath = withAlias(optionValue(prefix + StoragePathOption, help = Some(HelpStoragePathOption))
       .toPath
@@ -267,12 +265,11 @@ object OAuthParameterManager {
     val procName = withAlias(optionValue(prefix + NameOption, help = Some(HelpNameOption))
       .mandatory, "n", addAlias)
 
-    for {name <- procName
+    for name <- procName
          path <- procPath
          pwd <- storagePasswordExtractor(needPassword, prefix + EncryptOption, prefix + PasswordOption, addAlias)
          crypt <- cryptFlagExtractor(prefix + EncryptOption, addAlias)
-         } yield createStorageConfig(name, path, pwd, crypt)
-  }
+         yield createStorageConfig(name, path, pwd, crypt)
 
   /**
     * Returns a ''CliExtractor'' to extract the data for an IDP from the
@@ -281,14 +278,14 @@ object OAuthParameterManager {
     * @return the ''CliExtractor'' to extract IDP-related data
     */
   private def commandInitExtractor: CliExtractor[Try[CommandConfig]] =
-    for {triedAuthUrl <- mandatoryStringOption(AuthEndpointOption, HelpAuthEndpointOption)
+    for triedAuthUrl <- mandatoryStringOption(AuthEndpointOption, HelpAuthEndpointOption)
          triedTokenUrl <- mandatoryStringOption(TokenEndpointOption, HelpTokenEndpointOption)
          triedScope <- scopeExtractor
          triedRedirect <- mandatoryStringOption(RedirectUrlOption, HelpRedirectUrlOption)
          triedID <- mandatoryStringOption(ClientIDOption, HelpClientIDOption)
          triedSecret <- clientSecretExtractor
          triedStorage <- storageConfigExtractor(needPassword = true)
-         } yield createIdpConfig(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect, triedID,
+         yield createIdpConfig(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect, triedID,
       triedSecret, triedStorage)
 
   /**
@@ -325,14 +322,13 @@ object OAuthParameterManager {
     * @return the ''CliExtractor'' for the storage password
     */
   private def storagePasswordExtractor(needPassword: Boolean, encOption: String, pwdOption: String, addAlias: Boolean):
-  CliExtractor[SingleOptionValue[String]] = {
+  CliExtractor[SingleOptionValue[String]] =
     val elseExt = constantExtractor(Try(Option[String](null)))
-    if (needPassword) {
+    if needPassword then
       val condProc = cryptFlagExtractor(encOption, addAlias = false)
       withAlias(optionValue(pwdOption, help = Some(HelpPasswordOption)), "p", addAlias)
         .fallback(conditionalValue(condProc, consoleReaderValue(pwdOption, password = true), elseExt))
-    } else elseExt
-  }
+    else elseExt
 
   /**
     * Returns a ''CliExtractor'' for extracting the encryption flag of the
@@ -433,6 +429,5 @@ object OAuthParameterManager {
     * @return the modified extractor
     */
   private def withAlias[A](extractor: CliExtractor[A], alias: String, addAlias: Boolean): CliExtractor[A] =
-    if (addAlias) extractor.alias(alias)
+    if addAlias then extractor.alias(alias)
     else extractor
-}

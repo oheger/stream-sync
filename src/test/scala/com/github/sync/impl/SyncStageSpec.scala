@@ -31,7 +31,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-object SyncStageSpec {
+object SyncStageSpec:
   /** The default timestamp used for test files. */
   private val FileTime = Instant.parse("2018-08-05T14:22:55.00Z")
 
@@ -43,10 +43,9 @@ object SyncStageSpec {
     * @param source flag whether this is an ID for the source structure
     * @return the ID for this element
     */
-  private def elementID(uri: String, source: Boolean = true): String = {
-    val idPrefix = if (source) "src" else "dst"
+  private def elementID(uri: String, source: Boolean = true): String =
+    val idPrefix = if source then "src" else "dst"
     s"$idPrefix:$uri"
-  }
 
   /**
     * Generates a test file element with the specified settings.
@@ -78,13 +77,11 @@ object SyncStageSpec {
     * @param elem the element to convert
     * @return the element from the destination structure
     */
-  private def destinationElem(elem: FsElement): FsElement = {
+  private def destinationElem(elem: FsElement): FsElement =
     val newID = elementID(elem.relativeUri, source = false)
-    elem match {
+    elem match
       case fsFile: FsFile => fsFile.copy(id = newID)
       case fsFolder: FsFolder => fsFolder.copy(id = newID)
-    }
-  }
 
   /**
     * Returns a destination ID for the given element. The ID is derived from
@@ -119,18 +116,16 @@ object SyncStageSpec {
   private def createOp(element: FsElement, action: SyncAction, level: Int = 0,
                        optDstID: Option[String] = None): SyncOperation =
     SyncOperation(element, action, level, optDstID getOrElse "-")
-}
 
 /**
   * Test class for ''SyncStage''.
   */
 class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with Matchers {
+  with BeforeAndAfterAll with Matchers:
   def this() = this(ActorSystem("SyncStageSpec"))
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
-  }
 
   import SyncStageSpec._
 
@@ -144,7 +139,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     * @return the sequence with sync operations
     */
   private def runStage(source1: Source[FsElement, Any], source2: Source[FsElement, Any],
-                       ignoreTimeDelta: Int = 0): Seq[SyncOperation] = {
+                       ignoreTimeDelta: Int = 0): Seq[SyncOperation] =
     val foldSink =
       Sink.fold[List[SyncOperation], SyncOperation](List.empty[SyncOperation]) { (lst, e) =>
         e :: lst
@@ -161,7 +156,6 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
 
     val futSyncOps = g.run()
     Await.result(futSyncOps, 3.seconds).reverse
-  }
 
   "A SyncStage" should "correctly handle two empty sources" in {
     runStage(Source.empty, Source.empty) should have size 0
@@ -376,4 +370,3 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
 
     runStage(sourceOrg, sourceTarget) should contain theSameElementsAs expOps
   }
-}

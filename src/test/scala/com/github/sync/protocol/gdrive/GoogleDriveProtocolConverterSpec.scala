@@ -26,7 +26,7 @@ import java.time.Instant
 /**
   * Test class for ''GoogleDriveProtocolConverter''.
   */
-class GoogleDriveProtocolConverterSpec extends AnyFlatSpec with Matchers {
+class GoogleDriveProtocolConverterSpec extends AnyFlatSpec with Matchers:
   "GoogleDriveProtocolConverter" should "extract an element ID from a string" in {
     val StrID = "File-ID-123456789"
 
@@ -94,4 +94,3 @@ class GoogleDriveProtocolConverterSpec extends AnyFlatSpec with Matchers {
     val syncFile = GoogleDriveProtocolConverter.toFileElement(googleFile, FilePath, FileLevel)
     syncFile should be(ExpSyncFile)
   }
-}

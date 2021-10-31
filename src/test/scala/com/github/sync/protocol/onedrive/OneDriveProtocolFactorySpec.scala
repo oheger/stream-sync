@@ -29,7 +29,7 @@ import scala.concurrent.duration._
 /**
   * Test class for ''OneDriveProtocolFactory''.
   */
-class OneDriveProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class OneDriveProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar:
   "OneDriveProtocolFactory" should "correctly initialize the base class" in {
     val config = mock[OneDriveStructureConfig]
     val senderConfig = mock[HttpRequestSenderConfig]
@@ -43,4 +43,3 @@ class OneDriveProtocolFactorySpec extends AnyFlatSpec with Matchers with Mockito
     factory.timeout should be(timeout)
     factory.creator should be(OneDriveProtocolCreator)
   }
-}

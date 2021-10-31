@@ -44,7 +44,7 @@ import java.net.{ServerSocket, Socket}
 import java.nio.file.Paths
 import scala.concurrent.Future
 
-object OAuthLoginCommandSpec {
+object OAuthLoginCommandSpec:
   /** The authorization URI used by tests. */
   private val AuthorizationUri = "https://auth.idp.org/test?params=many"
 
@@ -90,15 +90,13 @@ object OAuthLoginCommandSpec {
     *
     * @return the port number
     */
-  private def fetchFreePort(): Int = {
+  private def fetchFreePort(): Int =
     var socket: ServerSocket = null
-    try {
+    try
       socket = new ServerSocket(0)
       socket.getLocalPort
-    } finally {
+    finally
       socket.close()
-    }
-  }
 
   /**
     * Checks whether the given port has been released. Tries to connect to the
@@ -108,30 +106,26 @@ object OAuthLoginCommandSpec {
     * @param port the port to be tested
     * @return a flag whether the given port has been released
     */
-  private def portIsReleased(port: Int): Boolean = {
+  private def portIsReleased(port: Int): Boolean =
     var socket: Socket = null
-    try {
+    try
       socket = new Socket("localhost", port)
       false
-    } catch {
+    catch
       case _: IOException => true
-    } finally {
-      if (socket != null) socket.close()
-    }
-  }
-}
+    finally
+      if socket != null then socket.close()
 
 /**
   * Test class for OAuth login functionality.
   */
 class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with Matchers with MockitoSugar with WireMockSupport with AsyncTestHelper {
+  with BeforeAndAfterAll with Matchers with MockitoSugar with WireMockSupport with AsyncTestHelper:
   def this() = this(ActorSystem("OAuthLoginCommandSpec"))
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     super.afterAll()
     TestKit shutdownActorSystem system
-  }
 
   import OAuthLoginCommandSpec._
   import system.dispatcher
@@ -141,7 +135,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
   /**
     * Prepares the mock server to answer a successful token request.
     */
-  private def stubTokenRequest(): Unit = {
+  private def stubTokenRequest(): Unit =
     stubFor(post(urlPathEqualTo(TokenEndpoint))
       .withHeader("Content-Type", equalTo("application/x-www-form-urlencoded"))
       .withRequestBody(containing(s"client_id=${BaseOAuthConfig.oauthConfig.clientID}"))
@@ -149,7 +143,6 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       .withRequestBody(containing(s"code=$Code"))
       .willReturn(aResponse().withStatus(200)
         .withBody(TokenResponse)))
-  }
 
   /**
     * Creates a test OAuth configuration from the basic configuration and the
@@ -166,9 +159,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     *
     * @param port the port the server has been listening on
     */
-  private def checkHttpServerClosed(port: Int): Unit = {
+  private def checkHttpServerClosed(port: Int): Unit =
     awaitCond(portIsReleased(port))
-  }
 
   "The login function" should "execute a successful login" in {
     stubTokenRequest()
@@ -236,7 +228,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     *
     * @param testOAutConfig the OAuth configuration to be used
     */
-  private class CommandTestHelper(val testOAutConfig: IDPConfig = createTestOAuthConfig()) {
+  private class CommandTestHelper(val testOAutConfig: IDPConfig = createTestOAuthConfig()):
     /** Mock for the token retriever service. */
     private val tokenService = createTokenService()
 
@@ -266,11 +258,10 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return the ''Future'' returned by the command
       */
-    def runCommandWithCodeInput(): Future[String] = {
+    def runCommandWithCodeInput(): Future[String] =
       implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
       when(consoleReader.readOption("Enter authorization code", password = true)).thenReturn(Code)
       runCommand()
-    }
 
     /**
       * Executes the test command and returns the message it produces.
@@ -285,12 +276,11 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return this test helper
       */
-    def runCommandSuccessfulCheckMessage(): CommandTestHelper = {
+    def runCommandSuccessfulCheckMessage(): CommandTestHelper =
       val result = runCommandSuccessful()
       result should include("Login")
       result should include("successful")
       this
-    }
 
     /**
       * Verifies that tokens have been stored after they had been retrieved
@@ -298,10 +288,9 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return this test helper
       */
-    def verifyTokenStored(): CommandTestHelper = {
+    def verifyTokenStored(): CommandTestHelper =
       Mockito.verify(storageService).saveTokens(TestStorageConfig, TestTokenData)
       this
-    }
 
     /**
       * Verifies that the browser helper has been called correctly to open the
@@ -309,10 +298,9 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return this test helper
       */
-    def verifyBrowserOpened(): CommandTestHelper = {
+    def verifyBrowserOpened(): CommandTestHelper =
       Mockito.verify(browserHandler).openBrowser(AuthorizationUri)
       this
-    }
 
     /**
       * Tests that the output generated by the command contains the given text.
@@ -320,10 +308,9 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @param sub the text to be matched
       * @return this test helper
       */
-    def commandOutputContaining(sub: String): CommandTestHelper = {
+    def commandOutputContaining(sub: String): CommandTestHelper =
       outputBuf.toString should include(sub)
       this
-    }
 
     /**
       * Tests that the output generated by the command does not contain the
@@ -332,10 +319,9 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @param sub the text to be matched
       * @return this test helper
       */
-    def commandOutputNotContaining(sub: String): CommandTestHelper = {
+    def commandOutputNotContaining(sub: String): CommandTestHelper =
       outputBuf.toString should not include sub
       this
-    }
 
     /**
       * Prepares the mock for the browser handler to invoke the redirect URI
@@ -345,7 +331,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @return this test helper
       */
     def prepareBrowserHandlerToCallRedirectUri(uri: String, expStatus: StatusCode = StatusCodes.OK):
-    CommandTestHelper = {
+    CommandTestHelper =
       when(browserHandler.openBrowser(AuthorizationUri)).thenAnswer((_: InvocationOnMock) => {
         val redirectRequest = HttpRequest(uri = uri)
         val response = futureResult(Http().singleRequest(redirectRequest))
@@ -353,17 +339,15 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
         true
       })
       this
-    }
 
     /**
       * Prepares the mock for the browser handler to return a failure result.
       *
       * @return this test helper
       */
-    def failBrowserHandler(): CommandTestHelper = {
+    def failBrowserHandler(): CommandTestHelper =
       initBrowserHandler(browserHandler, success = false)
       this
-    }
 
     /**
       * Prepares the mock for the token service to return a failed future when
@@ -372,10 +356,9 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @param ex the exception to fail the future with
       * @return this test helper
       */
-    def failAuthorizationUri(ex: Throwable): CommandTestHelper = {
+    def failAuthorizationUri(ex: Throwable): CommandTestHelper =
       initTokenServiceAuthorizationUri(tokenService, Future.failed(ex))
       this
-    }
 
     /**
       * Initializes the browser handler mock to return the given success result
@@ -384,9 +367,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @param handler the browser handler mock
       * @param success the success result
       */
-    private def initBrowserHandler(handler: BrowserHandler, success: Boolean): Unit = {
+    private def initBrowserHandler(handler: BrowserHandler, success: Boolean): Unit =
       when(handler.openBrowser(AuthorizationUri)).thenReturn(success)
-    }
 
     /**
       * Creates the mock for the browser handler and initializes it to return
@@ -394,11 +376,10 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return the mock for the browser handler
       */
-    private def createBrowserHandler(): BrowserHandler = {
+    private def createBrowserHandler(): BrowserHandler =
       val handler = mock[BrowserHandler]
       initBrowserHandler(handler, success = true)
       handler
-    }
 
     /**
       * Prepares the mock for the token service to return the the given result
@@ -408,9 +389,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * @param uriFuture the ''Future'' with the URI
       */
     private def initTokenServiceAuthorizationUri(service: OAuthTokenRetrieverService[IDPConfig, Secret,
-      OAuthTokenData], uriFuture: Future[Uri]): Unit = {
+      OAuthTokenData], uriFuture: Future[Uri]): Unit =
       when(service.authorizeUrl(testOAutConfig)).thenReturn(uriFuture)
-    }
 
     /**
       * Creates the mock for the token service and initializes it to return the
@@ -419,7 +399,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return the mock token service
       */
-    private def createTokenService(): OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData] = {
+    private def createTokenService(): OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData] =
       val service = mock[OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]]
       initTokenServiceAuthorizationUri(service, Future.successful(AuthorizationUri))
       when(service.fetchTokens(any(), any(), any(), any())(any()))
@@ -430,7 +410,6 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
             args(3).asInstanceOf[String])(args(4).asInstanceOf[akka.actor.typed.ActorSystem[_]])
         })
       service
-    }
 
     /**
       * Creates the mock for the storage service and initializes it to return
@@ -438,11 +417,8 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       *
       * @return the mock for the storage service
       */
-    private def createStorageService(): OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] = {
+    private def createStorageService(): OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] =
       val service = mock[OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
       when(service.loadIdpConfig(TestStorageConfig)).thenReturn(Future.successful(testOAutConfig))
       when(service.saveTokens(TestStorageConfig, TestTokenData)).thenReturn(Future.successful(Done))
       service
-    }
-  }
-}

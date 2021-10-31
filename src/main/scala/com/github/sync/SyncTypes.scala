@@ -25,7 +25,7 @@ import java.time.Instant
   * The object was introduced to have a central location of such central API
   * classes.
   */
-object SyncTypes {
+object SyncTypes:
 
   /**
     * A trait representing an element that can occur in the file system.
@@ -35,7 +35,7 @@ object SyncTypes {
     * that are handled by the sync engine; those can define additional attributes
     * that may be of interest.
     */
-  sealed trait FsElement {
+  sealed trait FsElement:
     /**
       * Returns an alphanumeric ID that uniquely identifies this element in the
       * file system it belongs to. This ID enables direct access to this
@@ -65,7 +65,6 @@ object SyncTypes {
       * @return the level of this element
       */
     def level: Int
-  }
 
   /**
     * A class representing a file in a file system to be synced.
@@ -162,11 +161,8 @@ object SyncTypes {
     *
     * @param folder the associated ''FsFolder'' object
     */
-  case class SyncFolderData(folder: FsFolder) extends Ordered[SyncFolderData] {
-    override def compare(that: SyncFolderData): Int = {
+  case class SyncFolderData(folder: FsFolder) extends Ordered[SyncFolderData]:
+    override def compare(that: SyncFolderData): Int =
       val deltaLevel = that.folder.level - folder.level
-      if (deltaLevel != 0) deltaLevel
+      if deltaLevel != 0 then deltaLevel
       else folder.relativeUri.compareTo(that.folder.relativeUri)
-    }
-  }
-}

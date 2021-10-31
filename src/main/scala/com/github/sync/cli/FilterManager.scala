@@ -36,7 +36,7 @@ import scala.util.{Success, Try}
   * operations can be specified. This service offers functionality for parsing
   * such parameters and evaluating filters during a sync process.
   */
-object FilterManager {
+object FilterManager:
   /** Definition of a predicate function to filter sync operations. */
   type SyncOperationFilter = SyncOperation => Boolean
 
@@ -171,15 +171,13 @@ object FilterManager {
     * @param filterData data about the filter configuration
     * @return a flag whether this operation is accepted by the filter data
     */
-  def applyFilter(op: SyncOperation, filterData: SyncFilterData): Boolean = {
+  def applyFilter(op: SyncOperation, filterData: SyncFilterData): Boolean =
     @tailrec def doApplyFilter(filters: List[SyncOperationFilter]): Boolean =
-      filters match {
+      filters match
         case h :: t => h(op) && doApplyFilter(t)
         case _ => true
-      }
 
     doApplyFilter(filterData.filters.getOrElse(op.action, Nil))
-  }
 
   /**
     * Returns a ''CliExtractor'' that extracts all command line options related
@@ -188,13 +186,13 @@ object FilterManager {
     * @return the ''CliExtractor'' for filter options
     */
   def filterDataExtractor: CliExtractor[Try[SyncFilterData]] =
-    for {
+    for
       exprCommon <- filterExpressionProcessor(ArgCommonFilter, HelpCommonFilter).alias("f")
       exprCreate <- filterExpressionProcessor(ArgCreateFilter, HelpCreateFilter)
       exprOverride <- filterExpressionProcessor(ArgOverrideFilter, HelpOverrideFilter)
       exprRemove <- filterExpressionProcessor(ArgRemoveFilter, HelpRemoveFilter)
       enabledActions <- actionFilterProcessor
-    } yield createSyncFilterData(exprCommon, exprCreate, exprOverride, exprRemove, enabledActions)
+    yield createSyncFilterData(exprCommon, exprCreate, exprOverride, exprRemove, enabledActions)
 
   /**
     * Returns a ''CliExtractor'' that extracts the filter expressions for a
@@ -242,10 +240,9 @@ object FilterManager {
         val commonsList = commonFilters.toList
 
         def createMapping(action: SyncAction, filters: Iterable[SyncOperationFilter]):
-        (SyncAction, List[SyncOperationFilter]) = {
+        (SyncAction, List[SyncOperationFilter]) =
           val resFilters = filters.toList ::: commonsList
           action -> resFilters
-        }
 
         val filtersMap = Map(createMapping(ActionCreate, createFilters),
           createMapping(ActionOverride, overrideFilters),
@@ -261,7 +258,7 @@ object FilterManager {
     * @return the filter function
     * @throws IllegalArgumentException if the expression cannot be parsed
     */
-  private def parseExpression(expr: String): SyncOperationFilter = expr match {
+  private def parseExpression(expr: String): SyncOperationFilter = expr match
     case RegMinLevel(level) =>
       op => op.level >= level.toInt
     case RegMaxLevel(level) =>
@@ -275,7 +272,6 @@ object FilterManager {
     case RegDateBefore(_, date, time) =>
       dateFilter(expr, date, time)(_ > 0)
     case _ => throw new IllegalArgumentException(expr)
-  }
 
   /**
     * Returns a ''SyncOperationFilter'' that filters for a file's last-modified
@@ -291,23 +287,20 @@ object FilterManager {
     * @throws IllegalArgumentException if the date cannot be parsed
     */
   private def dateFilter(expr: String, date: String, time: String)(comp: Int => Boolean):
-  SyncOperationFilter = {
-    val dtStr = date + "T" + (if (time == null) "00:00:00" else time)
+  SyncOperationFilter =
+    val dtStr = date + "T" + (if time == null then "00:00:00" else time)
     val query: TemporalQuery[LocalDateTime] = LocalDateTime.from _
-    try {
+    try
       val localDate = DateTimeFormatter.ISO_DATE_TIME.parse(dtStr, query)
       val instant = localDate.atZone(ZoneId.systemDefault()).toInstant
       op =>
-        op.element match {
+        op.element match
           case FsFile(_, _, _, modTime, _) =>
             comp(instant.compareTo(modTime))
           case _ => true
-        }
-    } catch {
+    catch
       case e: DateTimeParseException =>
         throw new IllegalArgumentException("Could not parse date in filter expression: " + expr, e)
-    }
-  }
 
   /**
     * Generates a filter that excludes all elements that match a given regular
@@ -316,14 +309,12 @@ object FilterManager {
     * @param pattern the glob expression
     * @return a filter to exclude matching elements
     */
-  private def exclusionFilter(pattern: String): SyncOperationFilter = {
+  private def exclusionFilter(pattern: String): SyncOperationFilter =
     val regex = generateGlobRexEx(pattern)
     op =>
-      op.element.relativeUri match {
+      op.element.relativeUri match
         case regex(_*) => false
         case _ => true
-      }
-  }
 
   /**
     * Generates a filter that includes all elements that match a given regular
@@ -333,10 +324,9 @@ object FilterManager {
     * @param pattern the glob expression
     * @return a filter that includes matching elements
     */
-  private def inclusionFilter(pattern: String): SyncOperationFilter = {
+  private def inclusionFilter(pattern: String): SyncOperationFilter =
     val exFilter = exclusionFilter(pattern)
     op => !exFilter(op)
-  }
 
   /**
     * Generates a RegEx from a glob expression. The characters '*' and '?' are
@@ -361,7 +351,7 @@ object FilterManager {
   private def applyActionFilter(enabledActionTypes: Set[SyncAction], filters: ActionFilters): ActionFilters =
     filters.map { e =>
       e._1 ->
-        (if (!enabledActionTypes.contains(e._1)) RejectFilter :: e._2
+        (if !enabledActionTypes.contains(e._1) then RejectFilter :: e._2
         else e._2)
     }
 
@@ -372,18 +362,16 @@ object FilterManager {
     * @param actions the string value of the action filter
     * @return the set with enabled action types
     */
-  private def parseActionNames(actions: String): Set[SyncAction] = {
+  private def parseActionNames(actions: String): Set[SyncAction] =
     val actionTypeNames = actions.split(ActionTypeSeparator)
       .map(_.trim.toLowerCase(Locale.ROOT))
     val invalidActionTypes = actionTypeNames filterNot ActionTypeNameMapping.contains
-    if (invalidActionTypes.nonEmpty) {
-      val plural = if (invalidActionTypes.length > 1) "s" else ""
+    if invalidActionTypes.nonEmpty then
+      val plural = if invalidActionTypes.length > 1 then "s" else ""
       throw new IllegalArgumentException(
         s"Invalid action type$plural: ${invalidActionTypes.mkString(ActionTypeSeparator)}")
-    }
     actionTypeNames.map(ActionTypeNameMapping(_))
       .toSet
-  }
 
   /**
     * Generates a regular expression to parse a filter expression. The
@@ -396,4 +384,3 @@ object FilterManager {
     */
   private def filterExpressionRegEx(property: String, dataType: String): Regex =
     raw"$property[:=]($dataType)".r
-}

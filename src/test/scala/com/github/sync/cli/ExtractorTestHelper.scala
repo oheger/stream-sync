@@ -25,7 +25,7 @@ import com.github.scli.ParameterParser.{CliElement, OptionElement}
   * A test helper module that provides functionality related to calling
   * ''CliExtractor'' objects with parameters.
   */
-object ExtractorTestHelper {
+object ExtractorTestHelper:
 
   /**
     * Converts a list of parameter values to CLI elements.
@@ -57,12 +57,11 @@ object ExtractorTestHelper {
     * @return the resulting ''ParameterKey''
     */
   def toParameterKey(key: String): ParameterKey =
-    key match {
+    key match
       case ParameterParser.InputParameter.key =>
         ParameterParser.InputParameter
       case _ =>
         ParameterKey(key, shortAlias = false)
-    }
 
   /**
     * Transforms a simple map with parameter values to the ''Parameters'' type.
@@ -70,13 +69,12 @@ object ExtractorTestHelper {
     * @param map the map to be transformed
     * @return the resulting ''Parameters'' map
     */
-  def toParameters(map: Map[String, Iterable[String]]): Parameters = {
+  def toParameters(map: Map[String, Iterable[String]]): Parameters =
     val paramsMap = map.zipWithIndex map { e =>
       val key = toParameterKey(e._1._1)
       key -> toElements(key, e._1._2, e._2)
     }
     Parameters(paramsMap.toMap, Set.empty)
-  }
 
   /**
     * Transforms a map that associates only a single value to a parameter key
@@ -116,4 +114,3 @@ object ExtractorTestHelper {
     */
   def accessedKeys(context: ExtractionContext): Set[String] =
     context.parameters.accessedParameters map (_.key)
-}

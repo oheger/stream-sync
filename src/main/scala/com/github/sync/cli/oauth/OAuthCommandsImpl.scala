@@ -37,7 +37,7 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
   * to be executed and its specific arguments. Based on this, the corresponding
   * function of this module is called.
   */
-object OAuthCommandsImpl extends OAuthCommands {
+object OAuthCommandsImpl extends OAuthCommands:
 
   import OAuthCommands._
 
@@ -57,15 +57,14 @@ object OAuthCommandsImpl extends OAuthCommands {
   override def login(loginConfig: LoginCommandConfig, storageService: StorageService, tokenService: TokenService,
                      browserHandler: BrowserHandler, consoleReader: ConsoleReader,
                      printFunc: PrintFunc = ConsolePrintFunc)
-                    (implicit ec: ExecutionContext, system: ActorSystem): Future[String] = {
+                    (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     implicit val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
-    for {config <- storageService.loadIdpConfig(loginConfig.storageConfig)
+    for config <- storageService.loadIdpConfig(loginConfig.storageConfig)
          authUri <- tokenService.authorizeUrl(config)
          code <- obtainCode(config, authUri, browserHandler, consoleReader, printFunc)
          tokens <- fetchTokens(config, code, tokenService)
          _ <- storageService.saveTokens(loginConfig.storageConfig, tokens)
-         } yield "Login into identity provider was successful. Token data has been stored."
-  }
+         yield "Login into identity provider was successful. Token data has been stored."
 
   override def removeIdp(removeConfig: RemoveCommandConfig, storageService: StorageService)
                         (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
@@ -95,7 +94,7 @@ object OAuthCommandsImpl extends OAuthCommands {
     */
   private def obtainCode(config: IDPConfig, authUri: Uri, browserHandler: BrowserHandler, reader: ConsoleReader,
                          printFunc: PrintFunc)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
-    checkLocalRedirectUri(config) match {
+    checkLocalRedirectUri(config) match
       case Some(port) =>
         val futCode = obtainCodeFromRedirect(port)
         openBrowser(authUri, browserHandler, printFunc)
@@ -105,7 +104,6 @@ object OAuthCommandsImpl extends OAuthCommands {
         Future {
           reader.readOption("Enter authorization code", password = true)
         }
-    }
 
   /**
     * Checks whether the redirect URI points to localhost. If so, the port is
@@ -114,13 +112,11 @@ object OAuthCommandsImpl extends OAuthCommands {
     * @param config the OAuth configuration
     * @return an ''Option'' with the extracted local redirect port
     */
-  private def checkLocalRedirectUri(config: IDPConfig): Option[Int] = {
+  private def checkLocalRedirectUri(config: IDPConfig): Option[Int] =
     val RegLocalPort = "http://localhost:(\\d+).*".r
-    config.oauthConfig.redirectUri match {
+    config.oauthConfig.redirectUri match
       case RegLocalPort(sPort) => Some(sPort.toInt)
       case _ => None
-    }
-  }
 
   /**
     * Tries to open the Web browser with the authorization URI. If this fails,
@@ -130,14 +126,12 @@ object OAuthCommandsImpl extends OAuthCommands {
     * @param browserHandler the ''BrowserHandler''
     * @param printFunc      the function to print strings
     */
-  private def openBrowser(authUri: Uri, browserHandler: BrowserHandler, printFunc: PrintFunc): Unit = {
+  private def openBrowser(authUri: Uri, browserHandler: BrowserHandler, printFunc: PrintFunc): Unit =
     printFunc("Opening Web browser to login into identity provider...")
-    if (!browserHandler.openBrowser(authUri.toString())) {
+    if !browserHandler.openBrowser(authUri.toString()) then
       printFunc("Could not open Web browser!")
       printFunc("Please open the browser manually and navigate to this URL:")
       printFunc(s"\t${authUri.toString()}")
-    }
-  }
 
   /**
     * Tries to obtain the authorization code from a redirect to a local port.
@@ -150,17 +144,16 @@ object OAuthCommandsImpl extends OAuthCommands {
     * @param system the actor system
     * @return a ''Future'' with the authorization code
     */
-  private def obtainCodeFromRedirect(port: Int)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] = {
+  private def obtainCodeFromRedirect(port: Int)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     val promiseCode = Promise[String]()
     val handler: HttpRequest => HttpResponse = request => {
-      val status = request.uri.query().get("code") match {
+      val status = request.uri.query().get("code") match
         case Some(code) =>
           promiseCode.trySuccess(code)
           StatusCodes.OK
         case None =>
           promiseCode.tryFailure(new IllegalStateException("No authorization code passed to redirect URI."))
           StatusCodes.BadRequest
-      }
       HttpResponse(status)
     }
 
@@ -172,7 +165,6 @@ object OAuthCommandsImpl extends OAuthCommands {
     promiseCode.future.andThen {
       case _ => bindFuture foreach (_.unbind())
     }
-  }
 
   /**
     * Invokes the token service to obtain a token pair for the given
@@ -187,11 +179,9 @@ object OAuthCommandsImpl extends OAuthCommands {
     */
   private def fetchTokens(config: IDPConfig, code: String, tokenService: TokenService)
                          (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[OAuthTokenData] = {
+  Future[OAuthTokenData] =
     implicit val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
     val httpActor = system.spawn(HttpRequestSender(config.oauthConfig.tokenEndpoint), "httpRequestActor")
     tokenService.fetchTokens(httpActor, config, config.oauthConfig.clientSecret, code) andThen {
       case _ => httpActor ! HttpRequestSender.Stop
     }
-  }
-}

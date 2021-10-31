@@ -20,7 +20,7 @@ import com.github.sync.SyncTypes.SyncFolderData
 
 import scala.collection.SortedSet
 
-private object SyncFolderQueue {
+private object SyncFolderQueue:
   /**
     * Creates a new instance of ''SyncFolderQueue'' with the given initial
     * element. This is typically the start folder for the iteration over the
@@ -29,10 +29,8 @@ private object SyncFolderQueue {
     * @param init the initial element
     * @return the new queue instance
     */
-  def apply(init: SyncFolderData): SyncFolderQueue = {
+  def apply(init: SyncFolderData): SyncFolderQueue =
     new SyncFolderQueue(SortedSet(init))
-  }
-}
 
 /**
   * A specialized queue class for managing pending folders during a sync
@@ -47,7 +45,7 @@ private object SyncFolderQueue {
   *
   * @param data the set with the data objects contained in this queue
   */
-private class SyncFolderQueue private(data: SortedSet[SyncFolderData]) {
+private class SyncFolderQueue private(data: SortedSet[SyncFolderData]):
   /**
     * Returns a new instance that contains the specified element.
     *
@@ -74,10 +72,9 @@ private class SyncFolderQueue private(data: SortedSet[SyncFolderData]) {
     * @return a tuple with the first element and the updated queue
     * @throws NoSuchElementException if the queue is empty
     */
-  def dequeue(): (SyncFolderData, SyncFolderQueue) = {
+  def dequeue(): (SyncFolderData, SyncFolderQueue) =
     val firstElem = data.firstKey
     (firstElem, new SyncFolderQueue(data.diff(Set(firstElem))))
-  }
 
   /**
     * Returns a flag whether this queue is empty.
@@ -92,4 +89,3 @@ private class SyncFolderQueue private(data: SortedSet[SyncFolderData]) {
     * @return '''true''' if this queue is not empty; '''false''' otherwise
     */
   def nonEmpty: Boolean = data.nonEmpty
-}

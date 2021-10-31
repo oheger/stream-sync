@@ -33,7 +33,7 @@ import java.time.temporal.ChronoUnit
 import scala.concurrent.Future
 
 class FileSystemSyncProtocolSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
-  with MockitoSugar with AsyncTestHelper {
+  with MockitoSugar with AsyncTestHelper:
   /**
     * Returns a ''Source'' that simulates the content of a file.
     *
@@ -196,7 +196,7 @@ class FileSystemSyncProtocolSpec extends AnyFlatSpec with ActorTestKitSupport wi
     * A test helper class managing a test protocol instance and its
     * dependencies.
     */
-  private class ProtocolTestHelper {
+  private class ProtocolTestHelper:
     /** The mock for the file system. */
     private val fileSystem = mock[FileSystem[String, Model.File[String], Model.Folder[String],
       Model.FolderContent[String, Model.File[String], Model.Folder[String]]]]
@@ -228,39 +228,34 @@ class FileSystemSyncProtocolSpec extends AnyFlatSpec with ActorTestKitSupport wi
       * @return this test helper
       */
     def withFileSystem(f: FileSystem[String, Model.File[String], Model.Folder[String],
-      Model.FolderContent[String, Model.File[String], Model.Folder[String]]] => Unit): ProtocolTestHelper = {
+      Model.FolderContent[String, Model.File[String], Model.Folder[String]]] => Unit): ProtocolTestHelper =
       f(fileSystem)
       this
-    }
 
     /**
       * Invokes the close() function on the test protocol.
       *
       * @return this test helper
       */
-    def closeProtocol(): ProtocolTestHelper = {
+    def closeProtocol(): ProtocolTestHelper =
       protocol.close()
       this
-    }
 
     /**
       * Expects that the request sender actor has been stopped.
       *
       * @return this test helper
       */
-    def expectHttpSenderStopped(): ProtocolTestHelper = {
+    def expectHttpSenderStopped(): ProtocolTestHelper =
       httpSender.expectMessage(HttpRequestSender.Stop)
       this
-    }
-  }
-}
 
 /**
   * A test converter implementation which does more or less direct conversions
   * of basic elements.
   */
 object FileSystemProtocolConverterTestImpl
-  extends FileSystemProtocolConverter[String, Model.File[String], Model.Folder[String]] {
+  extends FileSystemProtocolConverter[String, Model.File[String], Model.Folder[String]]:
   /** Prefix of a file system ID. */
   final val IDPrefix = "id:"
 
@@ -303,7 +298,7 @@ object FileSystemProtocolConverterTestImpl
     * @return the test file with this index
     */
   def testFile(idx: Int, optName: Option[String] = None, withID: Boolean = true): Model.File[String] =
-    TestFile(id = if (withID) IDPrefix + idx else null, name = optName getOrElse s"testFile$idx.tst",
+    TestFile(id = if withID then IDPrefix + idx else null, name = optName getOrElse s"testFile$idx.tst",
       description = null, createdAt = null, lastModifiedAt = modifiedDate(idx), 10 * idx)
 
   /**
@@ -341,7 +336,7 @@ object FileSystemProtocolConverterTestImpl
   override def elementIDFromString(strID: String): String = IDPrefix + strID
 
   override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): Model.File[String] =
-    TestFile(id = if (useID) elementID(fileElement) else null, name = name, description = null, createdAt = null,
+    TestFile(id = if useID then elementID(fileElement) else null, name = name, description = null, createdAt = null,
       lastModifiedAt = fileElement.lastModified, size = fileElement.size)
 
   override def toFsFolder(folderElement: SyncTypes.FsFolder, name: String): Model.Folder[String] =
@@ -354,4 +349,3 @@ object FileSystemProtocolConverterTestImpl
 
   override def toFolderElement(folder: Model.Folder[String], path: String, level: Int): SyncTypes.FsFolder =
     SyncTypes.FsFolder(id = folder.id.substring(IDPrefix.length), relativeUri = path + folder.name, level = level)
-}

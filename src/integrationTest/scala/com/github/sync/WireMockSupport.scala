@@ -24,7 +24,7 @@ import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
 import org.scalatest.{BeforeAndAfterEach, Suite}
 
-object WireMockSupport {
+object WireMockSupport:
   /** Test user ID. */
   val UserId = "scott"
 
@@ -107,7 +107,6 @@ object WireMockSupport {
     */
   private def basicAuth(mappingBuilder: MappingBuilder): MappingBuilder =
     mappingBuilder.withBasicAuth(UserId, Password)
-}
 
 /**
   * A trait that can be mixed into an integration test spec to get support for
@@ -119,7 +118,7 @@ object WireMockSupport {
   * use case for this project). The companion object defines some useful
   * constants.
   */
-trait WireMockSupport extends BeforeAndAfterEach {
+trait WireMockSupport extends BeforeAndAfterEach:
   this: Suite =>
 
   import WireMockSupport._
@@ -129,17 +128,15 @@ trait WireMockSupport extends BeforeAndAfterEach {
     .dynamicPort()
     .withRootDirectory(ResourceDir))
 
-  override protected def beforeEach(): Unit = {
+  override protected def beforeEach(): Unit =
     super.beforeEach()
     wireMockServer.start()
     configureFor(wireMockServer.port())
     resetAllRequests()
-  }
 
-  override protected def afterEach(): Unit = {
+  override protected def afterEach(): Unit =
     wireMockServer.stop()
     super.afterEach()
-  }
 
   /**
     * Generates an absolute URI to the managed WireMock server with the path
@@ -158,9 +155,7 @@ trait WireMockSupport extends BeforeAndAfterEach {
     *
     * @param authFunc the authorization function
     */
-  protected def stubSuccess(authFunc: AuthFunc = BasicAuthFunc): Unit = {
+  protected def stubSuccess(authFunc: AuthFunc = BasicAuthFunc): Unit =
     stubFor(authFunc(any(anyUrl()).atPriority(PriorityDefault))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withBody("<status>OK</status>")))
-  }
-}

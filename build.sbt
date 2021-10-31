@@ -30,7 +30,8 @@ scalacOptions ++=
   Seq(
     "-feature",
     "-unchecked",
-    "-Xfatal-warnings"
+    "-Xfatal-warnings",
+    "-new-syntax"
   )
 
 lazy val ITest = config("integrationTest") extend Test

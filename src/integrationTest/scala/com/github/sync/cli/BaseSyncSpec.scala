@@ -57,17 +57,15 @@ import scala.jdk.CollectionConverters.CollectionHasAsScala
   */
 abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem) with ImplicitSender
   with AnyFlatSpecLike with BeforeAndAfterAll with BeforeAndAfterEach with Matchers with FileTestHelper
-  with AsyncTestHelper {
+  with AsyncTestHelper:
   def this() = this(ActorSystem("SyncSpec"))
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
-  }
 
-  override protected def afterEach(): Unit = {
+  override protected def afterEach(): Unit =
     tearDownTestFile()
     super.afterEach()
-  }
 
   import system.dispatcher
 
@@ -90,13 +88,12 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @return the path to the newly created file
     */
   protected def createTestFile(dir: Path, name: String, fileTime: Option[Instant] = None,
-                               content: Option[String] = None): Path = {
+                               content: Option[String] = None): Path =
     val path = writeFileContent(dir.resolve(name), content getOrElse name)
     fileTime foreach { time =>
       Files.setLastModifiedTime(path, FileTime.from(time))
     }
     path
-  }
 
   /**
     * Reads the content of a file that is located in the given directory.
@@ -105,10 +102,9 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @param name the name of the file
     * @return the content of this file as string
     */
-  protected def readFileInPath(dir: Path, name: String): String = {
+  protected def readFileInPath(dir: Path, name: String): String =
     val file = dir.resolve(name)
     readDataFile(file)
-  }
 
   /**
     * Reads the content of a binary file that is located in the given directory
@@ -118,10 +114,9 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @param name the name of the file
     * @return the content of this file as byte array
     */
-  protected def readBinaryFileInPath(dir: Path, name: String): Array[Byte] = {
+  protected def readBinaryFileInPath(dir: Path, name: String): Array[Byte] =
     val file = dir.resolve(name)
     Files.readAllBytes(file)
-  }
 
   /**
     * Checks whether a file with the given name exists in the directory
@@ -130,9 +125,8 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @param dir  the parent directory
     * @param name the name of the file
     */
-  protected def checkFile(dir: Path, name: String): Unit = {
+  protected def checkFile(dir: Path, name: String): Unit =
     readFileInPath(dir, name) should be(name)
-  }
 
   /**
     * Checks that the file specified does not exist.
@@ -140,10 +134,9 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @param dir  the parent directory
     * @param name the name of the file
     */
-  protected def checkFileNotPresent(dir: Path, name: String): Unit = {
+  protected def checkFileNotPresent(dir: Path, name: String): Unit =
     val file = dir.resolve(name)
     Files.exists(file) shouldBe false
-  }
 
   /**
     * Performs a decrypt operation on the given data and returns the result.
@@ -152,12 +145,11 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @param data the data to be processed
     * @return the processed data
     */
-  protected def decrypt(key: String, data: ByteString): ByteString = {
+  protected def decrypt(key: String, data: ByteString): ByteString =
     val source = Source.single(data)
     val decryptSource = CryptService.decryptSource(Aes, Aes.keyFromString(key), source)
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     futureResult(decryptSource.runWith(sink))
-  }
 
   /**
     * Encrypts the given file name.
@@ -188,9 +180,9 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     */
   protected def runSync(args: Array[String],
                         optProtocolSetupFunc: Option[SyncSetup.ProtocolFactorySetupFunc] = None):
-  Future[SyncResult] = {
+  Future[SyncResult] =
     CliActorSystemLifeCycle.processCommandLine(args.toSeq, SyncParameterManager.syncConfigExtractor(),
-      "HelpHelp") match {
+      "HelpHelp") match
       case Left(_) =>
         Future.failed(new AssertionError("Could not parse command line."))
       case Right(value) =>
@@ -198,8 +190,6 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
         val authSetupFunc = SyncSetup.defaultAuthSetupFunc()
         val protocolSetupFunc = optProtocolSetupFunc getOrElse SyncSetup.defaultProtocolFactorySetupFunc
         Sync.syncProcess(value)(authSetupFunc)(protocolSetupFunc)
-    }
-  }
 
   /**
     * Executes a sync process with the given command line options and installs
@@ -213,7 +203,7 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @param args the array with command line options
     * @return the log output generated by the sync process as string
     */
-  protected def runSyncAndCaptureLogs(args: Array[String]): String = {
+  protected def runSyncAndCaptureLogs(args: Array[String]): String =
     val LogTimeout = 200
     val eventQueue = new LinkedBlockingQueue[LogEvent]
     val appender = new AbstractOutputStreamAppender[OutputStreamManager]("testAppender",
@@ -222,27 +212,23 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       override def append(event: LogEvent): Unit = eventQueue.offer(event.toImmutable)
     }
 
-    @tailrec def gatherLogOutput(output: String): String = {
+    @tailrec def gatherLogOutput(output: String): String =
       val event = eventQueue.poll(LogTimeout, TimeUnit.MILLISECONDS)
-      if(event == null) output
-      else {
+      if event == null then output
+      else
         val msg = s"${event.getLoggerName} ${event.getLevel.name()} ${event.getMessage.getFormattedMessage} " +
           event.getThrown + "\n"
         gatherLogOutput(output + msg)
-      }
-    }
 
     val context = LoggerContext.getContext(false)
     val config = context.getConfiguration
-    try {
+    try
       config.getLoggers.values().asScala.foreach(_.addAppender(appender, null, null))
       appender.start()
       runSync(args)
       gatherLogOutput("")
-    } finally {
+    finally
       Configurator.reconfigure()
-    }
-  }
 
   /**
     * Creates a new ''Sync'' instance that is configured to use the actor
@@ -256,7 +242,7 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       override implicit def actorSystem: ActorSystem = system
 
       override implicit def ec: ExecutionContext =
-        if (overrideDispatcher) system.dispatcher
+        if overrideDispatcher then system.dispatcher
         else super.ec
     }
 
@@ -269,7 +255,7 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @param expFragments text fragments that must be contained in the output
     * @return the output as string
     */
-  protected def checkSyncOutput(options: Array[String], expFragments: String*): String = {
+  protected def checkSyncOutput(options: Array[String], expFragments: String*): String =
     val sync = createSync(overrideDispatcher = true)
     val out = new ByteArrayOutputStream
     Console.withOut(out) {
@@ -281,5 +267,3 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       output should include(fragment)
     }
     output
-  }
-}

@@ -38,7 +38,7 @@ import scala.concurrent.Future
   * released when an instance is no longer needed, the trait extends
   * ''AutoCloseable''.
   */
-trait SyncProtocol extends AutoCloseable {
+trait SyncProtocol extends AutoCloseable:
   /**
     * Reads the content of the root folder and returns it as a list of
     * [[FsElement]] objects. With this function, the iteration over the folder
@@ -122,4 +122,3 @@ trait SyncProtocol extends AutoCloseable {
     * @return a ''Future'' with a source to obtain the file's content
     */
   def downloadFile(id: String): Future[Source[ByteString, Any]]
-}

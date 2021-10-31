@@ -35,9 +35,9 @@ import scala.concurrent.{ExecutionContext, Future}
   * @param ec               the execution context
   */
 class ProtocolOperationHandler(protocol: SyncProtocol, downloadProtocol: SyncProtocol)
-                              (implicit ec: ExecutionContext) {
+                              (implicit ec: ExecutionContext):
   def execute(op: SyncOperation): Future[Unit] =
-    op match {
+    op match
       case SyncOperation(_: FsFile, ActionRemove, _, dstID) =>
         protocol.removeFile(dstID)
 
@@ -61,7 +61,6 @@ class ProtocolOperationHandler(protocol: SyncProtocol, downloadProtocol: SyncPro
 
       case _ =>
         Future.failed(new IllegalStateException("Invalid SyncOperation: " + op))
-    }
 
   /**
     * Helper function to split the relative URI of an element into the parent
@@ -70,8 +69,6 @@ class ProtocolOperationHandler(protocol: SyncProtocol, downloadProtocol: SyncPro
     * @param element the element
     * @return a tuple with the parent URI and the decoded element name
     */
-  private def extractParentAndName(element: FsElement): (String, String) = {
+  private def extractParentAndName(element: FsElement): (String, String) =
     val (parent, encName) = UriEncodingHelper.splitParent(element.relativeUri)
     (parent, UriEncodingHelper.decode(encName))
-  }
-}

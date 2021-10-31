@@ -29,7 +29,7 @@ import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.duration._
 
-class GoogleDriveProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class GoogleDriveProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar:
   "GoogleDriveProtocolCreator" should "create a correct file system" in {
     val SyncPath = "/my/sync/path"
     val ServerUri = "https://google-drive.example.org"
@@ -38,32 +38,29 @@ class GoogleDriveProtocolCreatorSpec extends AnyFlatSpec with Matchers with Mock
     val expConfig = GoogleDriveConfig(serverUri = ServerUri, optRootPath = Some(SyncPath.drop(1)),
       timeout = SyncTimeout)
 
-    GoogleDriveProtocolCreator.createFileSystem("googledrive:" + SyncPath, structConfig, SyncTimeout) match {
+    GoogleDriveProtocolCreator.createFileSystem("googledrive:" + SyncPath, structConfig, SyncTimeout) match
       case fs: GoogleDriveFileSystem =>
         fs.config should be(expConfig)
       case fs => fail("Unexpected file system: " + fs)
-    }
   }
 
   it should "create a correct file system with default values" in {
     val structConfig = GoogleDriveStructureConfig(optServerUri = None)
 
-    GoogleDriveProtocolCreator.createFileSystem("googledrive:", structConfig, Timeout(30.seconds)) match {
+    GoogleDriveProtocolCreator.createFileSystem("googledrive:", structConfig, Timeout(30.seconds)) match
       case fs: GoogleDriveFileSystem =>
         fs.config.serverUri should be(GoogleDriveConfig.GoogleDriveServerUri)
         fs.config.optRootPath should be(None)
       case fs => fail("Unexpected file system: " + fs)
-    }
   }
 
   it should "handle a missing googledrive: prefix when creating the file system" in {
     val SyncPath = "/the/path"
 
-    GoogleDriveProtocolCreator.createFileSystem(SyncPath, GoogleDriveStructureConfig(None), Timeout(2.seconds)) match {
+    GoogleDriveProtocolCreator.createFileSystem(SyncPath, GoogleDriveStructureConfig(None), Timeout(2.seconds)) match
       case fs: GoogleDriveFileSystem =>
         fs.config.optRootPath should be(Some(SyncPath.drop(1)))
       case fs => fail("Unexpected file system: " + fs)
-    }
   }
 
   it should "create a correct HTTP sender actor" in {
@@ -97,4 +94,3 @@ class GoogleDriveProtocolCreatorSpec extends AnyFlatSpec with Matchers with Mock
 
     GoogleDriveProtocolCreator.createConverter(config) should be(GoogleDriveProtocolConverter)
   }
-}

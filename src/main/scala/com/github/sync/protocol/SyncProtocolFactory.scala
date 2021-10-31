@@ -24,7 +24,7 @@ import com.github.sync.protocol.config.StructureCryptConfig
   * The trait defines a single factory function that expects some configuration
   * data and creates a specific [[SyncProtocol]].
   */
-trait SyncProtocolFactory {
+trait SyncProtocolFactory:
   /**
     * Creates a concrete ''SyncProtocol'' instance based on the parameters
     * provided.
@@ -34,4 +34,3 @@ trait SyncProtocolFactory {
     * @return the resulting ''SyncProtocol''
     */
   def createProtocol(uri: String, cryptConfig: StructureCryptConfig): SyncProtocol
-}

@@ -32,7 +32,7 @@ import scala.util.Try
   * applied to the destination structure, but only written to a log file. The
   * logged actions can then later be executed on a target structure.
   */
-object ElementSerializer {
+object ElementSerializer:
   /** Tag to mark the serialized form of a folder element. */
   val TagFolder = "FOLDER"
 
@@ -63,12 +63,11 @@ object ElementSerializer {
     * @return the string representation for this element
     */
   def serializeElement(elem: FsElement): ByteString = ByteString {
-    elem match {
+    elem match
       case folder: FsFolder =>
         serializeBaseProperties(TagFolder, folder)
       case file@FsFile(_, _, _, lastModified, size) =>
         s"${serializeBaseProperties(TagFile, file)} $lastModified $size"
-    }
   }
 
   /**
@@ -94,14 +93,13 @@ object ElementSerializer {
   def deserializeElement(parts: Seq[String]): Try[FsElement] = Try {
     lazy val elemID = UriEncodingHelper decode parts(1)
     lazy val elemUri = UriEncodingHelper decode parts(2)
-    parts.head match {
+    parts.head match
       case TagFolder =>
         FsFolder(elemID, elemUri, parts(3).toInt)
       case TagFile =>
         FsFile(elemID, elemUri, parts(3).toInt, Instant.parse(parts(4)), parts(5).toLong)
       case tag =>
         throw new IllegalArgumentException("Unknown element tag: " + tag)
-    }
   }
 
   /**
@@ -110,10 +108,10 @@ object ElementSerializer {
     * @param raw the raw data with the serialized form of the operation
     * @return a ''Try'' with the resulting operation
     */
-  def deserializeOperation(raw: String): Try[SyncOperation] = for {
+  def deserializeOperation(raw: String): Try[SyncOperation] = for
     actionData <- deserializeAction(raw)
     elem <- deserializeElement(actionData._6)
-  } yield SyncOperation(elem, actionData._1, actionData._2, dstID = actionData._3)
+  yield SyncOperation(elem, actionData._1, actionData._2, dstID = actionData._3)
 
   /**
     * Encode the given string, so that it can be safely serialized.
@@ -123,7 +121,7 @@ object ElementSerializer {
     */
   private def encode(s: String): String =
   //TODO Remove the null check when CloudFiles has been fully integrated
-    if (s == null) "" else UriEncodingHelper.encode(s)
+    if s == null then "" else UriEncodingHelper.encode(s)
 
   /**
     * Generates a string representation for the given element with the given
@@ -151,9 +149,8 @@ object ElementSerializer {
     Try {
       val parts = raw.split("\\s").toSeq
       val indexTag = parts.indexWhere(p => TagFile == p || TagFolder == p)
-      if (indexTag <= 3)
+      if indexTag <= 3 then
         (TagActionMapping(parts.head), parts(1).toInt, UriEncodingHelper decode parts(2), None, None, parts drop 3)
       else (TagActionMapping(parts.head), parts(1).toInt, UriEncodingHelper decode parts(2),
         Some(UriEncodingHelper decode parts(3)), Some(UriEncodingHelper decode parts(4)), parts drop 5)
     }
-}

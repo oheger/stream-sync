@@ -26,7 +26,7 @@ import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.duration._
 
-class GoogleDriveProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class GoogleDriveProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar:
   "GoogleDriveProtocolFactory" should "correctly initialize the base class" in {
     val config = mock[GoogleDriveStructureConfig]
     val senderConfig = mock[HttpRequestSenderConfig]
@@ -40,4 +40,3 @@ class GoogleDriveProtocolFactorySpec extends AnyFlatSpec with Matchers with Mock
     factory.timeout should be(timeout)
     factory.creator should be(GoogleDriveProtocolCreator)
   }
-}

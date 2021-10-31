@@ -29,12 +29,12 @@ import com.github.sync.protocol.FileSystemProtocolConverter
   * properties needed, there is a direct correlation between the two models.
   */
 object GoogleDriveProtocolConverter
-  extends FileSystemProtocolConverter[String, GoogleDriveModel.GoogleDriveFile, GoogleDriveModel.GoogleDriveFolder] {
+  extends FileSystemProtocolConverter[String, GoogleDriveModel.GoogleDriveFile, GoogleDriveModel.GoogleDriveFolder]:
   override def elementIDFromString(strID: String): String = strID
 
   override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): GoogleDriveModel.GoogleDriveFile =
     GoogleDriveModel.newFile(name = name, lastModifiedAt = fileElement.lastModified, size = fileElement.size,
-      id = if (useID) fileElement.id else null)
+      id = if useID then fileElement.id else null)
 
   override def toFsFolder(folderElement: SyncTypes.FsFolder, name: String): GoogleDriveModel.GoogleDriveFolder =
     GoogleDriveModel.newFolder(name)
@@ -46,4 +46,3 @@ object GoogleDriveProtocolConverter
   override def toFolderElement(folder: GoogleDriveModel.GoogleDriveFolder, path: String, level: Int):
   SyncTypes.FsFolder =
     SyncTypes.FsFolder(id = folder.id, relativeUri = path + UriEncodingHelper.encode(folder.name), level = level)
-}

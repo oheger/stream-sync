@@ -25,7 +25,7 @@ import com.github.sync.oauth.{IDPConfig, OAuthStorageService, OAuthTokenRetrieve
 
 import scala.concurrent.{ExecutionContext, Future}
 
-object OAuthCommands {
+object OAuthCommands:
   /**
     * A short cut type definition for a fully parameterized
     * ''OAuthStorageService''.
@@ -50,7 +50,6 @@ object OAuthCommands {
     * string directly to the console.
     */
   final val ConsolePrintFunc: PrintFunc = println
-}
 
 /**
   * A trait defining a number of operations to manage OAuth identity providers
@@ -59,7 +58,7 @@ object OAuthCommands {
   * Data about identity providers can be added to the system, removed from it,
   * and access tokens can be obtained using the authorization grant flow.
   */
-trait OAuthCommands {
+trait OAuthCommands:
 
   import OAuthCommands._
 
@@ -111,4 +110,3 @@ trait OAuthCommands {
     */
   def removeIdp(removeConfig: RemoveCommandConfig, storageService: StorageService)
                (implicit ec: ExecutionContext, system: ActorSystem): Future[String]
-}

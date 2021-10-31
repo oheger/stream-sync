@@ -27,7 +27,7 @@ import java.nio.file.Files
 import java.util.UUID
 import scala.concurrent.ExecutionContext
 
-object OneDriveSyncSpec {
+object OneDriveSyncSpec:
   /** The drive ID used by tests. */
   private val DriveID = "test-drive"
 
@@ -58,13 +58,12 @@ object OneDriveSyncSpec {
     * @return the path of this URI as string
     */
   private def path(uri: Uri): String = uri.path.toString()
-}
 
 /**
   * Integration test class for sync processes that contains tests related to
   * OneDrive servers. The tests typically make use of a WireMock server.
   */
-class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockSupport {
+class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockSupport:
   override implicit val ec: ExecutionContext = system.dispatcher
 
   import OneDriveSyncSpec._
@@ -77,14 +76,13 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
     * @param authFunc  the authentication function
     */
   private def stubResolvePathRequest(elementID: String, status: Int = StatusCodes.OK.intValue,
-                                     authFunc: AuthFunc = WireMockSupport.NoAuthFunc): Unit = {
+                                     authFunc: AuthFunc = WireMockSupport.NoAuthFunc): Unit =
     val response = "{ \"id\": \"" + elementID + "\" }"
     stubFor(authFunc(get(urlEqualTo(ResolveFolderUri)))
       .withHeader("Accept", equalTo("application/json"))
       .willReturn(aResponse().withStatus(status)
         .withHeader("Content-Type", ContentType)
         .withBody(response)))
-  }
 
   /**
     * Adds a stubbing declaration for a request to a OneDrive folder that is
@@ -98,7 +96,7 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
     */
   private def stubOneDriveFolderRequestContent(id: String, status: Int = StatusCodes.OK.intValue,
                                                authFunc: AuthFunc = WireMockSupport.NoAuthFunc)
-                                              (fContent: ResponseFunc): String = {
+                                              (fContent: ResponseFunc): String =
     val stubUri = itemUri(id, "/children")
     stubFor(authFunc(get(urlEqualTo(path(stubUri))))
       .withHeader("Accept", equalTo("application/json"))
@@ -106,7 +104,6 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
         .withStatus(status)
         .withHeader("Content-Type", ContentType))))
     stubUri
-  }
 
   /**
     * Adds a stubbing declaration for a request to a OneDrive folder that is
@@ -119,19 +116,17 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
     * @return the URI to request the folder
     */
   private def stubOneDriveFolderRequest(id: String, responseFile: String, status: Int = StatusCodes.OK.intValue,
-                                        authFunc: AuthFunc = WireMockSupport.NoAuthFunc): String = {
+                                        authFunc: AuthFunc = WireMockSupport.NoAuthFunc): String =
     stubOneDriveFolderRequestContent(id, status, authFunc)(bodyFile(responseFile))
-  }
 
   private def stubDownloadRequest(id: String, authFunc: AuthFunc,
-                                  contentFunc: ResponseFunc = bodyString(FileTestHelper.TestData)): Unit = {
+                                  contentFunc: ResponseFunc = bodyString(FileTestHelper.TestData)): Unit =
     val downloadPath = "/" + UUID.randomUUID()
     stubFor(authFunc(get(urlEqualTo(itemUri(id, "/content"))))
       .willReturn(aResponse().withStatus(302)
         .withHeader("Location", serverUri(downloadPath))))
     stubFor(authFunc(get(urlPathEqualTo(downloadPath)))
       .willReturn(contentFunc(aResponse().withStatus(StatusCodes.OK.intValue))))
-  }
 
   "Sync" should "support a OneDrive URI for the source structure with OAuth" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -258,4 +253,3 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
       "src-" + SyncCliStructureConfig.PropAuthUser, "src-" + SyncCliStructureConfig.PropAuthPassword,
       "src-" + OAuthParameterManager.PasswordOption, "src-" + OAuthParameterManager.StoragePathOption)
   }
-}

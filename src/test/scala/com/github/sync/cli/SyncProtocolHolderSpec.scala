@@ -31,7 +31,7 @@ import scala.concurrent.Promise
   * functionality provided by this class is tested by integration tests.
   */
 class SyncProtocolHolderSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers with MockitoSugar
-  with AsyncTestHelper {
+  with AsyncTestHelper:
   "SyncProtocolHandler" should "register a handler that closes protocols on a successful completion" in {
     val srcProtocol = mock[SyncProtocol]
     val dstProtocol = mock[SyncProtocol]
@@ -60,4 +60,3 @@ class SyncProtocolHolderSpec extends AnyFlatSpec with ActorTestKitSupport with M
     verify(srcProtocol).close()
     verify(dstProtocol).close()
   }
-}

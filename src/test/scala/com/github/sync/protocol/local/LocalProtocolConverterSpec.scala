@@ -25,7 +25,7 @@ import java.nio.file.Paths
 import java.time.temporal.ChronoUnit
 import java.time.{Instant, ZoneId}
 
-object LocalProtocolConverterSpec {
+object LocalProtocolConverterSpec:
   /** A path used by some test cases. */
   private val TestPath = Paths.get("this", "is", "a", "test", "path")
 
@@ -40,12 +40,11 @@ object LocalProtocolConverterSpec {
 
   /** Test level for sync elements. */
   private val Level = 5
-}
 
 /**
   * Test class for ''LocalProtocolConverter''.
   */
-class LocalProtocolConverterSpec extends AnyFlatSpec with Matchers {
+class LocalProtocolConverterSpec extends AnyFlatSpec with Matchers:
 
   import LocalProtocolConverterSpec._
 
@@ -130,4 +129,3 @@ class LocalProtocolConverterSpec extends AnyFlatSpec with Matchers {
     val fsFile = converter.toFsFile(syncFile, FileName, useID = true)
     fsFile.lastModifiedUpdate.get should be(ModifiedTime.minus(2, ChronoUnit.HOURS))
   }
-}

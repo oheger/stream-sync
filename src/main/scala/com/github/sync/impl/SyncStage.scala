@@ -22,7 +22,7 @@ import akka.stream.{Attributes, FanInShape2, Inlet, Outlet}
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
 
-object SyncStage {
+object SyncStage:
   /**
     * Constant for a destination ID that is used when this property is
     * irrelevant.
@@ -72,7 +72,7 @@ object SyncStage {
                                syncFunc: SyncFunc,
                                finishedSources: Int,
                                deferredOps: List[SyncOperation],
-                               removedPaths: Set[FsElement]) {
+                               removedPaths: Set[FsElement]):
     /**
       * Creates a new sync state with the specified sync function and directly
       * invokes this function with the updated state and the parameters
@@ -98,9 +98,8 @@ object SyncStage {
       * @return the updated ''SyncState'' instance
       */
     def updateCurrentElement(element: FsElement): SyncState =
-      if (currentElem == element) this
+      if currentElem == element then this
       else copy(currentElem = element)
-  }
 
   /** Constant for an ''EmitData'' object that requires no action. */
   private val EmitNothing = EmitData(Nil, Nil)
@@ -127,7 +126,7 @@ object SyncStage {
   private def waitForElements(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
                               log: LoggingAdapter): (EmitData, SyncState) =
     handleNullElementDuringSync(state, stage, portIdx, element, log) getOrElse {
-      if (state.currentElem == null)
+      if state.currentElem == null then
         (EmitNothing, state.copy(currentElem = element))
       else state.updateAndCallSyncFunction(syncElements, stage, portIdx, element, log)
     }
@@ -166,13 +165,12 @@ object SyncStage {
     * @return data to emit and the next state
     */
   private def destinationFinished(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
-                                  log: LoggingAdapter): (EmitData, SyncState) = {
+                                  log: LoggingAdapter): (EmitData, SyncState) =
     def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
       (EmitData(List(createOp(elem)), stage.PullSource), s)
 
     handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
       handleElement(state, element)
-  }
 
   /**
     * A sync function that becomes active when the source for the source
@@ -187,15 +185,13 @@ object SyncStage {
     * @return data to emit and the next state
     */
   private def sourceDirFinished(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
-                                log: LoggingAdapter): (EmitData, SyncState) = {
-    def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) = {
+                                log: LoggingAdapter): (EmitData, SyncState) =
+    def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
       val (op, next) = removeElement(s, elem, removedPath = None)
       (EmitData(op, stage.PullDest), next)
-    }
 
     handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
       handleElement(state, element)
-  }
 
   /**
     * Compares the given elements from the source and destination inlets and
@@ -212,16 +208,15 @@ object SyncStage {
     */
   private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement,
                                        state: SyncState, stage: SyncStage):
-  Option[(EmitData, SyncState)] = {
+  Option[(EmitData, SyncState)] =
     lazy val delta = compareElements(elemSource, elemDest)
     val isRemoved = isInRemovedPath(state, elemDest)
-    if (isRemoved.isDefined || delta > 0) {
+    if isRemoved.isDefined || delta > 0 then
       val (op, next) = removeElement(state.updateCurrentElement(elemSource), elemDest, isRemoved)
       Some((EmitData(op, stage.PullDest), next))
-    } else if (delta < 0)
+    else if delta < 0 then
       Some((EmitData(List(createOp(elemSource)), stage.PullSource), state.updateCurrentElement(elemDest)))
     else None
-  }
 
   /**
     * Compares the given elements and returns an integer value determining
@@ -234,13 +229,12 @@ object SyncStage {
     * @param elemDest   the destination element
     * @return the result of the comparison
     */
-  private def compareElements(elemSource: FsElement, elemDest: FsElement): Int = {
+  private def compareElements(elemSource: FsElement, elemDest: FsElement): Int =
     val (srcParent, srcName) = UriEncodingHelper.splitParent(elemSource.relativeUri)
     val (dstParent, dstName) = UriEncodingHelper.splitParent(elemDest.relativeUri)
     val deltaParent = srcParent.compareTo(dstParent)
-    if (deltaParent != 0) deltaParent
+    if deltaParent != 0 then deltaParent
     else srcName.compareTo(dstName)
-  }
 
   /**
     * Handles advanced corner cases when comparing two elements that depend on
@@ -259,7 +253,7 @@ object SyncStage {
   private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement, state: SyncState,
                                              stage: SyncStage, ignoreTimeDelta: Int, log: LoggingAdapter):
   Option[(EmitData, SyncState)] =
-    (elemSource, elemDest) match {
+    (elemSource, elemDest) match
       case (eSrc: FsFile, eDst: FsFile)
         if differentFileTimes(eSrc, eDst, ignoreTimeDelta) || eSrc.size != eDst.size =>
         log.debug("Different file attributes: {} <=> {}.", eSrc, eDst)
@@ -276,7 +270,6 @@ object SyncStage {
         Some(emitAndPullBoth(Nil, next, stage))
 
       case _ => None
-    }
 
   /**
     * Creates ''EmitData'' and an updated state in case that both inlets have
@@ -307,10 +300,10 @@ object SyncStage {
     */
   private def handleNullElementDuringSync(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
                                           log: LoggingAdapter): Option[(EmitData, SyncState)] =
-    if (element == null) {
-      val stateFunc = if (portIdx == IdxSource) sourceDirFinished _ else destinationFinished _
+    if element == null then
+      val stateFunc = if portIdx == IdxSource then sourceDirFinished _ else destinationFinished _
       Some(state.updateAndCallSyncFunction(stateFunc, stage, portIdx, element, log))
-    } else None
+    else None
 
   /**
     * Deals with a null element in a state where one source has been finished.
@@ -328,15 +321,14 @@ object SyncStage {
                                                (emitFunc: (SyncState, FsElement) =>
                                                  (EmitData, SyncState)):
   Option[(EmitData, SyncState)] =
-    if (element == null) {
-      if (state.finishedSources > 0)
+    if element == null then
+      if state.finishedSources > 0 then
         Some(EmitData(state.deferredOps, Nil, complete = true), state)
-      else {
+      else
         val (emit, next) = Option(state.currentElem).map(emitFunc(state, _))
           .getOrElse((EmitNothing, state))
         Some(emit, next.copy(finishedSources = 1))
-      }
-    } else None
+    else None
 
   /**
     * Extracts the two elements to be compared for the current sync operation.
@@ -350,7 +342,7 @@ object SyncStage {
     */
   private def extractSyncPair(state: SyncState, portIdx: Int, element: FsElement):
   (FsElement, FsElement) =
-    if (portIdx == IdxDest) (state.currentElem, element)
+    if portIdx == IdxDest then (state.currentElem, element)
     else (element, state.currentElem)
 
   /**
@@ -379,17 +371,15 @@ object SyncStage {
     * @return data to emit and the updated state
     */
   private def removeElement(state: SyncState, element: FsElement, removedPath: Option[FsElement]):
-  (List[SyncOperation], SyncState) = {
+  (List[SyncOperation], SyncState) =
     val op = removeOp(element, removedPath map (_.level) getOrElse element.level)
-    element match {
+    element match
       case folder: FsFolder =>
-        val paths = if (removedPath.isDefined) state.removedPaths
+        val paths = if removedPath.isDefined then state.removedPaths
         else addRemovedFolder(state, folder)
         (Nil, state.copy(removedPaths = paths, deferredOps = op :: state.deferredOps))
       case _ =>
         (List(op), state)
-    }
-  }
 
   /**
     * Adds a folder to the set of removed root paths.
@@ -442,7 +432,6 @@ object SyncStage {
     * @return the modified time to be compared during a sync operations
     */
   private def extractTime(file: FsFile): Long = file.lastModified.getEpochSecond
-}
 
 /**
   * A special stage that generates sync operations for two input sources.
@@ -462,7 +451,7 @@ object SyncStage {
   *                           ignored when comparing two files
   */
 class SyncStage(val ignoreTimeDeltaSec: Int = 0)
-  extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]] {
+  extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]]:
 
   import SyncStage._
 
@@ -515,10 +504,9 @@ class SyncStage(val ignoreTimeDeltaSec: Int = 0)
         override def onPull(): Unit = {}
       })
 
-      override def preStart(): Unit = {
+      override def preStart(): Unit =
         pull(inSource)
         pull(inDest)
-      }
 
       /**
         * Updates the current state on receiving an element.
@@ -526,14 +514,13 @@ class SyncStage(val ignoreTimeDeltaSec: Int = 0)
         * @param portIdx the port index
         * @param element the element (may be '''null''' for completion)
         */
-      private def updateState(portIdx: Int, element: FsElement): Unit = {
+      private def updateState(portIdx: Int, element: FsElement): Unit =
         val (data, next) = state.syncFunc(state, SyncStage.this, portIdx, element, log)
         state = next
         emitMultiple(out, data.ops)
         pulledPorts(portIdx) = false
         pullPorts(data)
-        if (data.complete) complete(out)
-      }
+        if data.complete then complete(out)
 
       /**
         * Pulls the input ports referenced by the given ''EmitData''. This
@@ -543,15 +530,14 @@ class SyncStage(val ignoreTimeDeltaSec: Int = 0)
         *
         * @param data the ''EmitData'' object
         */
-      private def pullPorts(data: EmitData): Unit = {
+      private def pullPorts(data: EmitData): Unit =
         data.pullInletsIdx foreach { idx =>
           val in = inlet(idx)
           pulledPorts(idx) = true
-          if (isClosed(in))
+          if isClosed(in) then
             updateState(idx, null)
           else pull(in)
         }
-      }
 
       /**
         * Handles a notification about a finished input port. Such
@@ -565,10 +551,9 @@ class SyncStage(val ignoreTimeDeltaSec: Int = 0)
         *
         * @param portIdx the index of the port affected
         */
-      private def handleInletFinished(portIdx: Int): Unit = {
-        if (pulledPorts(portIdx))
+      private def handleInletFinished(portIdx: Int): Unit =
+        if pulledPorts(portIdx) then
           updateState(portIdx, null)
-      }
     }
 
   /**
@@ -578,5 +563,4 @@ class SyncStage(val ignoreTimeDeltaSec: Int = 0)
     * @return the inlet with this index
     */
   private def inlet(portIdx: Int): Inlet[FsElement] =
-    if (portIdx == IdxSource) inSource else inDest
-}
+    if portIdx == IdxSource then inSource else inDest

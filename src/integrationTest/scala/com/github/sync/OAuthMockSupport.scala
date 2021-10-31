@@ -27,7 +27,7 @@ import org.scalatest.Suite
 
 import scala.concurrent.ExecutionContext
 
-object OAuthMockSupport {
+object OAuthMockSupport:
   /** Path to the token endpoint of the simulated IDP. */
   val TokenEndpoint = "/token"
 
@@ -42,7 +42,6 @@ object OAuthMockSupport {
 
   /** The secret for encrypting the data of the test IDP. */
   val PwdIdpData: Secret = Secret("idpDataEncryption")
-}
 
 /**
   * A trait providing functionality related to OAuth and a mock IDP for
@@ -51,7 +50,7 @@ object OAuthMockSupport {
   * Using this trait, interactions with HTTP servers can be tested that use
   * OAuth as authentication mechanism.
   */
-trait OAuthMockSupport {
+trait OAuthMockSupport:
   this: Suite with AsyncTestHelper with FileTestHelper with WireMockSupport =>
 
   import OAuthMockSupport._
@@ -64,11 +63,10 @@ trait OAuthMockSupport {
     *
     * @return the test OAuth configuration
     */
-  protected def createOAuthConfig(): IDPConfig = {
+  protected def createOAuthConfig(): IDPConfig =
     val oauthConfig = OAuthConfig(tokenEndpoint = serverUri(TokenEndpoint), redirectUri = "https://redirect.org",
       clientID = "testClient", clientSecret = ClientSecret, initTokenData = CurrentTokenData)
     IDPConfig(authorizationEndpoint = "https://auth.org", scope = "test", oauthConfig = oauthConfig)
-  }
 
 
   /**
@@ -97,23 +95,21 @@ trait OAuthMockSupport {
     * @param optPassword optional password to encrypt IDP data
     * @return the OAuth storage configuration
     */
-  protected def prepareIdpConfig(optPassword: Option[Secret] = Some(PwdIdpData)): SyncOAuthStorageConfig = {
+  protected def prepareIdpConfig(optPassword: Option[Secret] = Some(PwdIdpData)): SyncOAuthStorageConfig =
     val storageConfig = createOAuthStorageConfig(optPassword)
     val oauthConfig = createOAuthConfig()
     saveIdpData(storageConfig, oauthConfig)
     storageConfig
-  }
 
   /**
     * Stubs a request to refresh an access token. The request is answered with
     * the refreshed token pair.
     */
-  protected def stubTokenRefresh(): Unit = {
+  protected def stubTokenRefresh(): Unit =
     stubFor(post(urlPathEqualTo(TokenEndpoint))
       .willReturn(aResponse().withStatus(StatusCodes.OK.intValue)
         .withHeader(`Content-Type`.name, ContentTypes.`application/json`.value)
         .withBodyFile("token_response.json")))
-  }
 
   /**
     * Generates an array with the given options plus options related to OAuth
@@ -125,12 +121,9 @@ trait OAuthMockSupport {
     * @return the resulting array with options
     */
   protected def withOAuthOptions(storageConfig: SyncOAuthStorageConfig, prefix: String, options: String*):
-  Array[String] = {
-    val pwdOptions = storageConfig.optPassword match {
+  Array[String] =
+    val pwdOptions = storageConfig.optPassword match
       case Some(pwd) => Array(prefix + "idp-password", pwd.secret)
       case None => Array(prefix + "store-unencrypted")
-    }
     options.toArray ++ pwdOptions ++ Array(prefix + "idp-name", storageConfig.baseName,
       prefix + "idp-storage-path", testDirectory.toAbsolutePath.toString)
-  }
-}

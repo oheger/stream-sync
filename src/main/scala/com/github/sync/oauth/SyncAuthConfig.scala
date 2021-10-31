@@ -56,7 +56,7 @@ case class SyncBasicAuthConfig(user: String, password: Secret) extends SyncAuthC
   */
 case class SyncOAuthStorageConfig(rootDir: Path,
                                   baseName: String,
-                                  optPassword: Option[Secret]) extends SyncAuthConfig {
+                                  optPassword: Option[Secret]) extends SyncAuthConfig:
   /**
     * Returns a path in the root directory that is derived from the base name
     * with the given suffix. This is useful to locate concrete files related to
@@ -67,7 +67,6 @@ case class SyncOAuthStorageConfig(rootDir: Path,
     */
   def resolveFileName(suffix: String): Path =
     rootDir.resolve(baseName + suffix)
-}
 
 /**
   * An object representing no authentication mechanism.

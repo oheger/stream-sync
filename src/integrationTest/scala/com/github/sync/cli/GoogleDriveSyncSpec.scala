@@ -25,17 +25,16 @@ import com.github.tomakehurst.wiremock.client.WireMock._
 import java.nio.file.Files
 import scala.concurrent.ExecutionContext
 
-object GoogleDriveSyncSpec {
+object GoogleDriveSyncSpec:
   /** The endpoint for accessing the GoogleDrive API. */
   private val GoogleDriveAPI = "/drive/v3/files"
-}
 
 /**
   * Integration test class for sync processes against a GoogleDrive account.
   * Here only basic operations are tested to make sure that the GoogleDrive
   * protocol has been correctly setup.
   */
-class GoogleDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockSupport {
+class GoogleDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockSupport:
   override protected implicit val ec: ExecutionContext = system.dispatcher
 
   import GoogleDriveSyncSpec._
@@ -47,13 +46,12 @@ class GoogleDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMo
     * @param authFunc the authentication function
     * @param status   the status code to return
     */
-  private def stubGoogleDriveFolderRequest(authFunc: AuthFunc, status: StatusCode = StatusCodes.OK): Unit = {
+  private def stubGoogleDriveFolderRequest(authFunc: AuthFunc, status: StatusCode = StatusCodes.OK): Unit =
     stubFor(authFunc(get(urlPathEqualTo(GoogleDriveAPI))
       .withQueryParam("q", equalTo("'root' in parents and trashed = false")))
       .willReturn(aResponse().withStatus(status.intValue())
         .withHeader("Content-Type", "application/json")
         .withBodyFile("gdrive_folder.json")))
-  }
 
   "Sync" should "support a GoogleDrive URI for the source structure with OAuth" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -95,4 +93,3 @@ class GoogleDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMo
     result.totalOperations should be(1)
     verify(deleteRequestedFor(urlPathEqualTo(s"$GoogleDriveAPI/$FileID")))
   }
-}

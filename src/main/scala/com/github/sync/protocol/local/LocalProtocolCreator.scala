@@ -38,12 +38,11 @@ import scala.concurrent.ExecutionContext
   * @param executionContext the execution context for the local file system
   */
 private class LocalProtocolCreator(val executionContext: ExecutionContext)
-  extends FileSystemProtocolCreator[Path, LocalFsModel.LocalFile, LocalFsModel.LocalFolder, FsStructureConfig] {
-  override def createFileSystem(uri: String, config: FsStructureConfig, timeout: Timeout): LocalFileSystem = {
+  extends FileSystemProtocolCreator[Path, LocalFsModel.LocalFile, LocalFsModel.LocalFolder, FsStructureConfig]:
+  override def createFileSystem(uri: String, config: FsStructureConfig, timeout: Timeout): LocalFileSystem =
     val config = LocalFsConfig(basePath = Paths get uri, sanitizePaths = true,
       executionContext = executionContext)
     new LocalFileSystem(config)
-  }
 
   override def createHttpSender(spawner: Spawner, factory: HttpRequestSenderFactory, uri: String,
                                 config: FsStructureConfig, senderConfig: HttpRequestSenderConfig):
@@ -53,4 +52,3 @@ private class LocalProtocolCreator(val executionContext: ExecutionContext)
   override def createConverter(config: FsStructureConfig):
   FileSystemProtocolConverter[Path, LocalFsModel.LocalFile, LocalFsModel.LocalFolder] =
     new LocalProtocolConverter(config.optTimeZone)
-}

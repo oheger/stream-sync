@@ -35,7 +35,7 @@ import scala.concurrent.{ExecutionContext, Future}
   * @tparam CLIENT_SECRET  the type representing the client secret
   * @tparam TOKENS         the type representing token data
   */
-trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS] {
+trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS]:
   /**
     * Saves all data stored in the given OAuth configuration in a way as
     * defined by the storage configuration. The data contained in the OAuth
@@ -90,4 +90,3 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS] {
     * @return a ''Future'' with the paths that have been removed
     */
   def removeStorage(storageConfig: STORAGE_CONFIG)(implicit ec: ExecutionContext): Future[List[Path]]
-}

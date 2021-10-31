@@ -42,7 +42,7 @@ import scala.util.Try
 /**
   * Main object to start the sync process.
   */
-object Sync {
+object Sync:
   /** The help text for the switch to display help information. */
   private val HelpOptionHelp =
     """Displays a help screen for the Sync application. Note that the content of this help screen \
@@ -63,10 +63,9 @@ object Sync {
     */
   case class SyncResult(totalOperations: Int, successfulOperations: Int)
 
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit =
     val sync = new Sync
     sync.run(args)
-  }
 
   /**
     * Implements a sync process based on the parameters provided. Result is a
@@ -82,13 +81,12 @@ object Sync {
     * @return a future with information about the result of the process
     */
   def syncProcess(config: SyncConfig)(authSetupFunc: AuthSetupFunc)(protocolSetupFunc: ProtocolFactorySetupFunc)
-                 (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] = {
+                 (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] =
     val spawner: Spawner = system
-    for {
+    for
       holder <- SyncProtocolHolder(config, spawner)(authSetupFunc)(protocolSetupFunc)(system.toTyped)
       result <- runSync(config, spawner, holder)
-    } yield result
-  }
+    yield result
 
   /**
     * Runs the stream that represents the sync process.
@@ -101,17 +99,16 @@ object Sync {
     * @return a future with information about the result of the process
     */
   private def runSync(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
-                     (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] = {
+                     (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] =
     Configurator.setRootLevel(config.logLevel)
 
-    protocolHolder.registerCloseHandler(for {
+    protocolHolder.registerCloseHandler(for
       source <- createSyncSource(config, protocolHolder)
       decoratedSource <- decorateSource(source, config, protocolHolder)
       stage <- createApplyStage(config, spawner, protocolHolder)
       g <- createSyncStream(decoratedSource, stage, config.logFilePath)
       res <- g.run()
-    } yield SyncResult(res._1, res._2))
-  }
+    yield SyncResult(res._1, res._2))
 
   /**
     * Creates the source for the sync process based on the given configuration.
@@ -127,14 +124,13 @@ object Sync {
     */
   private def createSyncSource(config: SyncConfig, protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[Source[SyncOperation, Any]] = config.syncLogPath match {
+  Future[Source[SyncOperation, Any]] = config.syncLogPath match
     case Some(path) =>
       createSyncSourceFromLog(config, path)
     case None =>
       val srcSource = protocolHolder.createSourceElementSource()
       val dstSource = protocolHolder.createDestinationElementSource()
       Future.successful(createGraphForSyncSource(srcSource, dstSource, config.ignoreTimeDelta getOrElse 1))
-  }
 
   /**
     * Creates a ''Source'' that produces ''SyncOperation'' objects to sync the
@@ -167,15 +163,13 @@ object Sync {
     * @return the decorated source
     */
   private def decorateSource(source: Source[SyncOperation, Any], config: SyncConfig,
-                             protocolHolder: SyncProtocolHolder): Future[Source[SyncOperation, Any]] = {
+                             protocolHolder: SyncProtocolHolder): Future[Source[SyncOperation, Any]] =
     val filteredSource = source.filter(createSyncFilter(config.filterData))
-    val throttledSource = config.opsPerSecond match {
+    val throttledSource = config.opsPerSecond match
       case Some(value) =>
         filteredSource.throttle(value, 1.second)
       case None => filteredSource
-    }
     Future.successful(throttledSource.via(protocolHolder.oAuthRefreshKillSwitch.flow))
-  }
 
   /**
     * Creates the source for the sync process if a sync log is provided. The
@@ -189,12 +183,11 @@ object Sync {
     */
   private def createSyncSourceFromLog(config: SyncConfig, syncLogPath: Path)
                                      (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[Source[SyncOperation, Any]] = config.logFilePath match {
+  Future[Source[SyncOperation, Any]] = config.logFilePath match
     case Some(processedLog) =>
       SerializerStreamHelper.createSyncOperationSourceWithProcessedLog(syncLogPath, processedLog)
     case None =>
       Future.successful(SerializerStreamHelper.createSyncOperationSource(syncLogPath))
-  }
 
   /**
     * Creates the flow stage that applies sync operations based on the given
@@ -211,7 +204,7 @@ object Sync {
   private def createApplyStage(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Flow[SyncOperation, SyncOperation, NotUsed]] = Future {
-    if (config.dryRun) Flow[SyncOperation].map(identity)
+    if config.dryRun then Flow[SyncOperation].map(identity)
     else protocolHolder.createApplyStage(config, spawner)
   }
 
@@ -273,12 +266,11 @@ object Sync {
     * @param logFile the path to the log file
     * @return the sink to write the log file
     */
-  private def createLogFileSink(logFile: Path): Sink[SyncOperation, Future[Any]] = {
+  private def createLogFileSink(logFile: Path): Sink[SyncOperation, Future[Any]] =
     val sink = FileIO.toPath(logFile, options = Set(StandardOpenOption.WRITE,
       StandardOpenOption.CREATE, StandardOpenOption.APPEND))
     val serialize = Flow[SyncOperation].map(ElementSerializer.serializeOperation)
     serialize.toMat(sink)(Keep.right)
-  }
 
   /**
     * A function to combine the materialized values of the runnable graph for
@@ -294,11 +286,11 @@ object Sync {
     */
   private def combineMat(futTotal: Future[Int], futSuccess: Future[Int], futLog: Future[Any])
                         (implicit ec: ExecutionContext):
-  Future[(Int, Int)] = for {
+  Future[(Int, Int)] = for
     total <- futTotal
     success <- futSuccess
     _ <- futLog
-  } yield (total, success)
+  yield (total, success)
 
   /**
     * Generates a predicate that filters out undesired sync operations based on
@@ -318,7 +310,7 @@ object Sync {
     * @return a message about the outcome of the sync operation
     */
   private def processedMessage(totalCount: Int, successCount: Int): String =
-    if (totalCount == successCount)
+    if totalCount == successCount then
       s"Successfully completed all ($totalCount) sync operations."
     else
       s"$successCount operations from $totalCount were successful."
@@ -341,7 +333,6 @@ object Sync {
                                    (implicit system: ActorSystem, ec: ExecutionContext): Future[String] =
     syncProcess(config)(authSetupFunc)(protocolSetupFunc)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
-}
 
 /**
   * The main class to execute sync processes.
@@ -350,7 +341,7 @@ object Sync {
   * in the companion object. By extending [[CliActorSystemLifeCycle]], this class
   * has access to an actor system and can therefore initiate the sync process.
   */
-class Sync extends CliActorSystemLifeCycle[SyncConfig] {
+class Sync extends CliActorSystemLifeCycle[SyncConfig]:
   override val name: String = "Sync"
 
   override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =
@@ -362,20 +353,17 @@ class Sync extends CliActorSystemLifeCycle[SyncConfig] {
 
   override protected def helpOptionHelp: String = Sync.HelpOptionHelp
 
-  override protected def optionsGroupFilter(context: ProcessingContext): ParameterFilter = {
+  override protected def optionsGroupFilter(context: ProcessingContext): ParameterFilter =
     val srcExt = SyncCliStructureConfig.structureTypeSelectorExtractor(SourceRoleType, "uri")
     val dstExt = SyncCliStructureConfig.structureTypeSelectorExtractor(DestinationRoleType, "uri")
     val contextFilter = HelpGenerator.contextGroupFilterForExtractors(context.parameterContext,
       List(srcExt, dstExt))
     HelpGenerator.andFilter(HelpGenerator.negate(HelpGenerator.InputParamsFilterFunc), contextFilter)
-  }
 
   /**
     * @inheritdoc This implementation starts the sync process using the actor
     *             system in implicit scope.
     */
-  override protected[cli] def runApp(config: SyncConfig): Future[String] = {
+  override protected[cli] def runApp(config: SyncConfig): Future[String] =
     implicit val typedActorSystem: typed.ActorSystem[_] = actorSystem.toTyped
     Sync.syncWithResultMessage(config)(SyncSetup.defaultAuthSetupFunc())(SyncSetup.defaultProtocolFactorySetupFunc)
-  }
-}

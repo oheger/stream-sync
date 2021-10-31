@@ -34,7 +34,7 @@ import java.io.IOException
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success, Try}
 
-object OAuthTokenRetrieverServiceImplSpec {
+object OAuthTokenRetrieverServiceImplSpec:
   /** The host name of the test IDP. */
   private val Host = "my-idp.org"
 
@@ -97,18 +97,14 @@ object OAuthTokenRetrieverServiceImplSpec {
   private def validateRequestProperties(request: HttpRequestSender.SendRequest, expPath: String)
                                        (implicit ec: ExecutionContext): Future[Done] = Future {
     val req = request.request
-    if (req.uri.path.toString() != expPath) {
+    if req.uri.path.toString() != expPath then
       throw new IllegalArgumentException(s"Wrong path: got ${req.uri.path}, want $expPath")
-    }
-    if (req.method != HttpMethods.POST) {
+    if req.method != HttpMethods.POST then
       throw new IllegalArgumentException(s"Wrong method; got ${req.method}, want POST")
-    }
-    if (!req.header[`Content-Type`].map(_.contentType).contains(ContentTypes.`application/x-www-form-urlencoded`)) {
+    if !req.header[`Content-Type`].map(_.contentType).contains(ContentTypes.`application/x-www-form-urlencoded`) then
       throw new IllegalArgumentException(s"Wrong content type; got ${req.header[`Content-Type`]}")
-    }
-    if (request.discardEntityMode != HttpRequestSender.DiscardEntityMode.OnFailure) {
+    if request.discardEntityMode != HttpRequestSender.DiscardEntityMode.OnFailure then
       throw new IllegalArgumentException(s"Unexpected discard mode: ${request.discardEntityMode}.")
-    }
     Done
   }
 
@@ -123,17 +119,15 @@ object OAuthTokenRetrieverServiceImplSpec {
     * @return the validation result
     */
   private def validateFormParameters(req: HttpRequest, expParams: Map[String, String])
-                                    (implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Done] = {
+                                    (implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Done] =
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     req.entity.dataBytes.runWith(sink)
       .map(bs => Query(bs.utf8String))
       .map { query =>
-        if (query.toMap != expParams) {
+        if query.toMap != expParams then
           throw new IllegalArgumentException(s"Wrong parameters; got ${query.toMap}, want $expParams")
-        }
         Done
       }
-  }
 
   /**
     * Validates an HTTP request against given criteria.
@@ -147,9 +141,9 @@ object OAuthTokenRetrieverServiceImplSpec {
     */
   private def validateRequest(req: HttpRequestSender.SendRequest, expPath: String, expParams: Map[String, String])
                              (implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Done] =
-    for {_ <- validateRequestProperties(req, expPath)
+    for _ <- validateRequestProperties(req, expPath)
          res <- validateFormParameters(req.request, expParams)
-         } yield res
+         yield res
 
   /**
     * Generates a result for the given request with the content specified.
@@ -159,10 +153,9 @@ object OAuthTokenRetrieverServiceImplSpec {
     * @return the result object
     */
   private def createResponse(req: HttpRequestSender.SendRequest, content: String):
-  Future[HttpRequestSender.Result] = {
+  Future[HttpRequestSender.Result] =
     val response = HttpResponse(entity = content)
     Future.successful(HttpRequestSender.SuccessResult(req, response))
-  }
 
   /**
     * Returns the behavior of an actor that simulates processing of an HTTP
@@ -179,23 +172,22 @@ object OAuthTokenRetrieverServiceImplSpec {
     case (ctx, req: HttpRequestSender.SendRequest) =>
       implicit val system: ActorSystem[Nothing] = ctx.system
       implicit val ec: ExecutionContextExecutor = system.executionContext
-      (for {_ <- validateRequest(req, expPath, expParams)
+      (for _ <- validateRequest(req, expPath, expParams)
             respStr <- Future.fromTry(response)
             resp <- createResponse(req, respStr)
-            } yield resp) onComplete {
+            yield resp) onComplete {
         case Success(result) => req.replyTo ! result
         case Failure(exception) =>
           req.replyTo ! HttpRequestSender.FailedResult(req, exception)
       }
       Behaviors.same
   }
-}
 
 /**
   * Test class for ''OAuthTokenRetrieverServiceImpl''.
   */
 class OAuthTokenRetrieverServiceImplSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
-  with AsyncTestHelper {
+  with AsyncTestHelper:
 
   import OAuthTokenRetrieverServiceImplSpec._
 
@@ -261,4 +253,3 @@ class OAuthTokenRetrieverServiceImplSpec extends AnyFlatSpec with ActorTestKitSu
     futureResult(OAuthTokenRetrieverServiceImpl.refreshToken(httpActor, TestConfig, Secret(ClientSecret),
       TestTokens.refreshToken)) should be(TestTokens)
   }
-}

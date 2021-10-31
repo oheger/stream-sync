@@ -46,7 +46,7 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
   FOLDER <: Model.Folder[ID]](val fileSystem: FileSystem[ID, FILE, FOLDER, Model.FolderContent[ID, FILE, FOLDER]],
                               val httpSender: ActorRef[HttpRequestSender.HttpCommand],
                               val converter: FileSystemProtocolConverter[ID, FILE, FOLDER])
-                             (implicit system: ActorSystem[_]) extends SyncProtocol {
+                             (implicit system: ActorSystem[_]) extends SyncProtocol:
   override def readRootFolder(): Future[List[SyncTypes.FsElement]] =
     run(fileSystem.rootID) flatMap (id => readFolderWithID(id, "/", 0))
 
@@ -59,22 +59,20 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
   override def removeFolder(id: String): Future[Unit] =
     run(fileSystem.deleteFolder(converter.elementIDFromString(id)))
 
-  override def createFolder(parentPath: String, name: String, folder: SyncTypes.FsFolder): Future[Unit] = {
+  override def createFolder(parentPath: String, name: String, folder: SyncTypes.FsFolder): Future[Unit] =
     val fsFolder = converter.toFsFolder(folder, name)
-    run(for {
+    run(for
       parentID <- fileSystem.resolvePath(parentPath)
       _ <- fileSystem.createFolder(parentID, fsFolder)
-    } yield ())
-  }
+    yield ())
 
   override def createFile(parentPath: String, name: String, file: SyncTypes.FsFile,
-                          source: Source[ByteString, Any]): Future[Unit] = {
+                          source: Source[ByteString, Any]): Future[Unit] =
     val fsFile = converter.toFsFile(file, name, useID = false)
-    run(for {
+    run(for
       parentID <- fileSystem.resolvePath(parentPath)
       _ <- fileSystem.createFile(parentID, fsFile, source)
-    } yield ())
-  }
+    yield ())
 
   override def updateFile(file: SyncTypes.FsFile, source: Source[ByteString, Any]): Future[Unit] =
     run(fileSystem.updateFileAndContent(converter.toFsFile(file, null, useID = true), source))
@@ -82,10 +80,9 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
   override def downloadFile(id: String): Future[Source[ByteString, Any]] =
     run(fileSystem.downloadFile(converter.elementIDFromString(id)) map (_.dataBytes))
 
-  override def close(): Unit = {
+  override def close(): Unit =
     fileSystem.close()
     httpSender ! HttpRequestSender.Stop
-  }
 
   /**
     * Reads the content of the folder with the given ID, converts the elements
@@ -119,4 +116,3 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
     * @return the ''ExecutionContext''
     */
   private implicit def executionContext(implicit system: ActorSystem[_]): ExecutionContext = system.executionContext
-}

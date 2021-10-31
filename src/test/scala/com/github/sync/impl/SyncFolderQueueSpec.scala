@@ -20,7 +20,7 @@ import com.github.sync.SyncTypes.{FsFolder, SyncFolderData}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-object SyncFolderQueueSpec {
+object SyncFolderQueueSpec:
 
   /**
     * Reads all elements stored in the given queue and returns them ordered in
@@ -29,18 +29,16 @@ object SyncFolderQueueSpec {
     * @param queue the queue to be read
     * @return a list with the elements extracted from the queue
     */
-  private def readQueue(queue: SyncFolderQueue): List[SyncFolderData] = {
+  private def readQueue(queue: SyncFolderQueue): List[SyncFolderData] =
     @scala.annotation.tailrec
     def dequeueElement(q: SyncFolderQueue,
                        resultList: List[SyncFolderData]): List[SyncFolderData] =
-      if (q.isEmpty) resultList.reverse
-      else {
+      if q.isEmpty then resultList.reverse
+      else
         val (d, q2) = q.dequeue()
         dequeueElement(q2, d :: resultList)
-      }
 
     dequeueElement(queue, Nil)
-  }
 
   /**
     * Convenience function to create a folder data object with the given
@@ -50,16 +48,14 @@ object SyncFolderQueueSpec {
     * @param level the folder level
     * @return the resulting ''SyncFolderData''
     */
-  private def folderData(uri: String, level: Int): SyncFolderData = {
+  private def folderData(uri: String, level: Int): SyncFolderData =
     val theFolder = FsFolder(null, uri, level)
     SyncFolderData(theFolder)
-  }
-}
 
 /**
   * Test class for ''SyncFolderQueue''.
   */
-class SyncFolderQueueSpec extends AnyFlatSpec with Matchers {
+class SyncFolderQueueSpec extends AnyFlatSpec with Matchers:
 
   import SyncFolderQueueSpec._
 
@@ -93,4 +89,3 @@ class SyncFolderQueueSpec extends AnyFlatSpec with Matchers {
     val (_, queueEmpty) = queueFull.dequeue()
     queueEmpty.nonEmpty shouldBe false
   }
-}

@@ -30,11 +30,11 @@ import com.github.sync.protocol.FileSystemProtocolConverter
   * default properties.
   */
 object OneDriveProtocolConverter
-  extends FileSystemProtocolConverter[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder] {
+  extends FileSystemProtocolConverter[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder]:
   override def elementIDFromString(strID: String): String = strID
 
   override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): OneDriveModel.OneDriveFile =
-    OneDriveModel.newFile(id = if (useID) fileElement.id else null, name = name, size = fileElement.size,
+    OneDriveModel.newFile(id = if useID then fileElement.id else null, name = name, size = fileElement.size,
       info = Some(OneDriveJsonProtocol.WritableFileSystemInfo(lastModifiedDateTime = Some(fileElement.lastModified))))
 
   override def toFsFolder(folderElement: SyncTypes.FsFolder, name: String): OneDriveModel.OneDriveFolder =
@@ -46,4 +46,3 @@ object OneDriveProtocolConverter
 
   override def toFolderElement(folder: OneDriveModel.OneDriveFolder, path: String, level: Int): SyncTypes.FsFolder =
     SyncTypes.FsFolder(id = folder.id, relativeUri = path + UriEncodingHelper.encode(folder.name), level = level)
-}

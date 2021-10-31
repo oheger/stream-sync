@@ -44,7 +44,7 @@ import scala.util.{Failure, Success}
   * defined via command line arguments and to convert them to active components
   * that take part in the sync process.
   */
-object SyncSetup {
+object SyncSetup:
   /**
     * A function type for creating a CloudFiles ''AuthConfig'' object based on
     * a ''SyncAuthConfig'' read from the command line. The creation is an
@@ -75,12 +75,12 @@ object SyncSetup {
     * @return the function to setup authentication
     */
   def defaultAuthSetupFunc(storageService: SyncOAuthStorageService = OAuthStorageServiceImpl)
-                          (implicit system: ActorSystem[_]): AuthSetupFunc = {
+                          (implicit system: ActorSystem[_]): AuthSetupFunc =
     implicit val classicSystem: classic.ActorSystem = system.toClassic
     implicit val executionContext: ExecutionContext = system.executionContext
 
     (authConfig, killSwitch) =>
-      authConfig match {
+      authConfig match
         case SyncBasicAuthConfig(user, password) =>
           Future.successful(BasicAuthConfig(user, password))
         case storageConfig: SyncOAuthStorageConfig =>
@@ -89,8 +89,6 @@ object SyncSetup {
 
         case _ =>
           Future.successful(NoAuthConfig)
-      }
-  }
 
   /**
     * Creates a function that is invoked when OAuth tokens are refreshed. If
@@ -109,15 +107,13 @@ object SyncSetup {
                                                  storageConfig: SyncOAuthStorageConfig,
                                                  killSwitch: KillSwitch)
                                                 (implicit system: classic.ActorSystem, ec: ExecutionContext):
-  TokenRefreshNotificationFunc = {
-    val refreshFunc: TokenRefreshNotificationFunc = {
+  TokenRefreshNotificationFunc =
+    val refreshFunc: TokenRefreshNotificationFunc =
       case Success(tokens) =>
         storageService.saveTokens(storageConfig, tokens)
       case Failure(exception) =>
         killSwitch.abort(exception)
-    }
     refreshFunc
-  }
 
   /**
     * Returns a default setup function for a protocol factory. As some concrete
@@ -132,7 +128,7 @@ object SyncSetup {
   def defaultProtocolFactorySetupFunc(implicit system: ActorSystem[_], ec: ExecutionContext):
   ProtocolFactorySetupFunc = (structConfig, syncConfig, senderConfig, spawner) => {
     val syncTimeout = syncConfig.timeout
-    structConfig match {
+    structConfig match
       case fsConfig: FsStructureConfig =>
         new LocalProtocolFactory(fsConfig, senderConfig, syncTimeout, spawner, ec)
       case davConfig: DavStructureConfig =>
@@ -141,6 +137,4 @@ object SyncSetup {
         new OneDriveProtocolFactory(oneConfig, senderConfig, syncTimeout, spawner)
       case googleConfig: GoogleDriveStructureConfig =>
         new GoogleDriveProtocolFactory(googleConfig, senderConfig, syncTimeout, spawner)
-    }
   }
-}

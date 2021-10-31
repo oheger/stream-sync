@@ -27,7 +27,7 @@ import scala.util.{Failure, Success}
 /**
   * Test class for ''ElementSerializer''.
   */
-class ElementSerializerSpec extends AnyFlatSpec with Matchers {
+class ElementSerializerSpec extends AnyFlatSpec with Matchers:
   /**
     * Returns the line-ending character.
     *
@@ -71,13 +71,12 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
     * @param action    the action
     * @param strAction the string representation of this action
     */
-  private def checkSerializedOperation(action: SyncAction, strAction: String): Unit = {
+  private def checkSerializedOperation(action: SyncAction, strAction: String): Unit =
     val elem = FsFolder("1a", "my_folder", 8)
     val op = SyncOperation(elem, action, 4, dstID = "someDstID")
 
     val s = ElementSerializer.serializeOperation(op).utf8String
     s should be(s"$strAction ${op.level} ${op.dstID} FOLDER ${elem.id} ${elem.relativeUri} ${elem.level}$lineEnd")
-  }
 
   it should "serialize a create operation" in {
     checkSerializedOperation(ActionCreate, "CREATE")
@@ -111,12 +110,11 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
   it should "handle a deserialization of an unknown element tag" in {
     val parts = Seq("FOLDER_FILE", "123", "/test/data", "1")
 
-    ElementSerializer.deserializeElement(parts) match {
+    ElementSerializer.deserializeElement(parts) match
       case Failure(exception) =>
         exception shouldBe a[IllegalArgumentException]
         exception.getMessage should include("FOLDER_FILE")
       case r => fail("Unexpected result: " + r)
-    }
   }
 
   it should "handle a deserialization of an element with not enough parts" in {
@@ -138,19 +136,17 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
     *
     * @param action    the action
     */
-  private def checkDeserializeOperation(action: SyncAction): Unit = {
+  private def checkDeserializeOperation(action: SyncAction): Unit =
     val file = FsFile("the ID", "my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
       20180906193152L)
     val operation = SyncOperation(file, action, 22, dstID = "the destination ID")
     val opRaw = ElementSerializer serializeOperation operation
 
-    ElementSerializer.deserializeOperation(opRaw.utf8String) match {
+    ElementSerializer.deserializeOperation(opRaw.utf8String) match
       case Success(op) =>
         op should be(operation)
       case r =>
         fail("Unexpected result: " + r)
-    }
-  }
 
   it should "deserialize a create operation" in {
     checkDeserializeOperation(ActionCreate)
@@ -170,4 +166,3 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers {
     val triedOperation = ElementSerializer.deserializeOperation(raw)
     triedOperation.isSuccess shouldBe false
   }
-}

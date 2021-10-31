@@ -33,7 +33,7 @@ import scala.concurrent.Future
   * @tparam CLIENT_SECRET the type representing the client secret
   * @tparam TOKENS        the type representing token data
   */
-trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS] {
+trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS]:
   /**
     * Generates the URI for an authorization request based on the given OAuth
     * configuration.
@@ -71,4 +71,3 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS] {
     */
   def refreshToken(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: CONFIG, secret: CLIENT_SECRET,
                    refreshToken: String)(implicit system: ActorSystem[_]): Future[TOKENS]
-}

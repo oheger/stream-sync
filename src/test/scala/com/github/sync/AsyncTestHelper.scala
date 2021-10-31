@@ -28,7 +28,7 @@ import scala.util.Failure
   * This trait offers methods to obtain the result of a future with a timeout
   * and to check for failed future operations.
   */
-trait AsyncTestHelper {
+trait AsyncTestHelper:
   /**
     * The default timeout when waiting for a future result. If derived classes
     * need a different timeout value, this property can be overridden.
@@ -53,13 +53,10 @@ trait AsyncTestHelper {
     * @tparam E the type of the expected exception
     * @return the exception
     */
-  def expectFailedFuture[E](future: Future[_])(implicit ct: ClassTag[E]): E = {
+  def expectFailedFuture[E](future: Future[_])(implicit ct: ClassTag[E]): E =
     Await.ready(future, asyncTimeout)
-    future.value match {
+    future.value match
       case Some(Failure(exception)) if ct.runtimeClass.isInstance(exception) =>
         ct.runtimeClass.cast(exception).asInstanceOf[E]
       case r =>
         throw new AssertionError("Unexpected result: " + r)
-    }
-  }
-}

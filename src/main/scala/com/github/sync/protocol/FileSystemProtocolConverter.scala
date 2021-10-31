@@ -35,7 +35,7 @@ import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
   * @tparam FILE   the type used for files
   * @tparam FOLDER the type used for folders
   */
-trait FileSystemProtocolConverter[ID, FILE, FOLDER] {
+trait FileSystemProtocolConverter[ID, FILE, FOLDER]:
   /**
     * Converts the given string to an ID used by the associated file system.
     *
@@ -98,4 +98,3 @@ trait FileSystemProtocolConverter[ID, FILE, FOLDER] {
     * @return the sync folder element
     */
   def toFolderElement(folder: FOLDER, path: String, level: Int): FsFolder
-}

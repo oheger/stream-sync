@@ -37,7 +37,7 @@ import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpReq
   * @tparam FOLDER the type of folders used by the file system
   * @tparam C      the type of the protocol-specific configuration
   */
-trait FileSystemProtocolCreator[ID, FILE <: Model.File[ID], FOLDER <: Model.Folder[ID], C] {
+trait FileSystemProtocolCreator[ID, FILE <: Model.File[ID], FOLDER <: Model.Folder[ID], C]:
   /**
     * Creates the ''FileSystem'' this protocol is based upon.
     *
@@ -75,4 +75,3 @@ trait FileSystemProtocolCreator[ID, FILE <: Model.File[ID], FOLDER <: Model.Fold
     * @return the ''FileSystemProtocolConverter'' for this protocol
     */
   def createConverter(config: C): FileSystemProtocolConverter[ID, FILE, FOLDER]
-}

@@ -29,7 +29,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import java.time.Instant
 import scala.concurrent.{ExecutionContext, Future}
 
-object ProtocolOperationHandlerSpec {
+object ProtocolOperationHandlerSpec:
   /** The ID of a test element. */
   private val ElementID = "testElementID"
 
@@ -66,13 +66,12 @@ object ProtocolOperationHandlerSpec {
     */
   private def createOp(elem: FsElement, action: SyncAction, dstID: String = ElementID): SyncOperation =
     SyncOperation(elem, action, dstID = dstID, level = 0)
-}
 
 /**
   * Test class for ''ProtocolOperationHandler''.
   */
 class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
-  with MockitoSugar with AsyncTestHelper {
+  with MockitoSugar with AsyncTestHelper:
 
   import ProtocolOperationHandlerSpec.*
 
@@ -145,4 +144,3 @@ class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport 
     val exception = expectFailedFuture[IllegalStateException](handler.execute(op))
     exception.getMessage should include(op.toString)
   }
-}

@@ -33,7 +33,7 @@ import java.time.temporal.ChronoUnit
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, TimeoutException}
 
-object LocalSyncSpec {
+object LocalSyncSpec:
   /**
     * Returns a string representation of the element ID referring to the given
     * path.
@@ -42,13 +42,12 @@ object LocalSyncSpec {
     * @return the encoded string for this path
     */
   private def encodePath(p: Path): String = UriEncodingHelper encode p.toString
-}
 
 /**
   * Integration test class for sync processes that mainly deals with operations
   * on the local file system.
   */
-class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
+class LocalSyncSpec extends BaseSyncSpec with MockitoSugar:
   "Sync" should "synchronize two directory structures" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -291,11 +290,10 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
   }
 
   it should "properly close the protocols after a sync process" in {
-    def createMockProtocol(): SyncProtocol = {
+    def createMockProtocol(): SyncProtocol =
       val protocol = mock[SyncProtocol]
       when(protocol.readRootFolder()).thenReturn(Future.successful(Nil))
       protocol
-    }
 
     val srcFolder = Files.createDirectory(createPathInDirectory("source")).toAbsolutePath
     val dstFolder = Files.createDirectory(createPathInDirectory("dest")).toAbsolutePath
@@ -304,7 +302,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     val protocolFactory = mock[SyncProtocolFactory]
     when(protocolFactory.createProtocol(anyString(), any())).thenAnswer((invocation: InvocationOnMock) => {
       val uri = invocation.getArgument[String](0)
-      if (uri == dstFolder.toString) dstProtocol else srcProtocol
+      if uri == dstFolder.toString then dstProtocol else srcProtocol
     })
     val protocolSetupFunc: ProtocolFactorySetupFunc = (_, _, _, _) => protocolFactory
     val options = Array(srcFolder.toString, dstFolder.toString)
@@ -484,11 +482,10 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
 
-    def findDirectory(content: Array[File]): File = {
+    def findDirectory(content: Array[File]): File =
       val dirs = content.filter(_.isDirectory)
       dirs should have length 1
       dirs.head
-    }
 
     val topContent = dstFolder.toFile.listFiles()
     topContent should have length 2
@@ -592,4 +589,3 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar {
     log should include(Time2.toString)
     log should include(Time3.toString)
   }
-}

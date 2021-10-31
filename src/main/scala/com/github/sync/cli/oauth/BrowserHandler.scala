@@ -19,7 +19,7 @@ package com.github.sync.cli.oauth
 import java.awt.Desktop
 import java.net.URI
 
-object BrowserHandler {
+object BrowserHandler:
   /**
     * Creates a new instance of ''BrowserHandler'' that is initialized with
     * the ''Desktop'' object for the current platform if it is available.
@@ -27,11 +27,9 @@ object BrowserHandler {
     *
     * @return the newly created ''BrowserHandler''
     */
-  def apply(): BrowserHandler = {
-    val optDesktop = if (Desktop.isDesktopSupported) Some(Desktop.getDesktop) else None
+  def apply(): BrowserHandler =
+    val optDesktop = if Desktop.isDesktopSupported then Some(Desktop.getDesktop) else None
     new BrowserHandler(optDesktop)
-  }
-}
 
 /**
   * A helper class for the OAuth CLI that supports opening a Web Browser on a
@@ -44,7 +42,7 @@ object BrowserHandler {
   * @param optDesktop an ''Option'' with the ''Desktop'' object; this is
   *                   undefined if the current platform does not support it
   */
-class BrowserHandler(val optDesktop: Option[Desktop]) {
+class BrowserHandler(val optDesktop: Option[Desktop]):
   /**
     * Opens the browser at the specified URI. As this functionality may not be
     * available on all platforms, a ''Boolean'' is returned indicating whether
@@ -54,15 +52,12 @@ class BrowserHandler(val optDesktop: Option[Desktop]) {
     * @param uri the URI to be opened in the browser
     * @return a flag whether the browser could be opened
     */
-  def openBrowser(uri: String): Boolean = {
+  def openBrowser(uri: String): Boolean =
     optDesktop.filter(_.isSupported(Desktop.Action.BROWSE))
       .exists { desktop =>
-        try {
+        try
           desktop.browse(URI.create(uri))
           true
-        } catch {
+        catch
           case _: Exception => false
-        }
       }
-  }
-}

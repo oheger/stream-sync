@@ -34,7 +34,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration.*
 
-object FileSystemSyncProtocolFactorySpec {
+object FileSystemSyncProtocolFactorySpec:
   /** The protocol-specific URI used by tests. */
   private val ProtocolUri = "https://test.protocol.example.org"
 
@@ -49,12 +49,11 @@ object FileSystemSyncProtocolFactorySpec {
 
   /** Constant for a file system timeout. */
   private val FsTimeout = Timeout(2.minutes)
-}
 
 /**
   * Test class for ''FileSystemSyncProtocolFactory''.
   */
-class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSupport with Matchers with MockitoSugar {
+class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSupport with Matchers with MockitoSugar:
 
   import FileSystemSyncProtocolFactorySpec._
 
@@ -63,12 +62,11 @@ class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSup
     *
     * @param config the config to be checked
     */
-  private def checkCryptConfig(config: CryptConfig): Unit = {
+  private def checkCryptConfig(config: CryptConfig): Unit =
     config.algorithm should be(Aes)
     config.keyDecrypt should be(CryptKey)
     config.keyEncrypt should be(CryptKey)
     config.secRandom should not be null
-  }
 
   "FileSystemSyncProtocolFactory" should "create a correct protocol without encryption" in {
     val cryptConfig = StructureCryptConfig(password = None, cryptNames = true, cryptCacheSize = 0)
@@ -84,12 +82,11 @@ class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSup
     val helper = new ProtocolFactoryHelper
 
     val protocol = helper.createAndCheckProtocol(cryptConfig)
-    protocol.fileSystem match {
+    protocol.fileSystem match
       case fs: CryptContentFileSystem[_, _, _] =>
         checkCryptConfig(fs.config)
         helper.checkFileSystem(fs.delegate)
       case o => fail("Unexpected file system: " + o)
-    }
     helper.numberOfSpawns should be(0)
   }
 
@@ -98,24 +95,22 @@ class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSup
     val helper = new ProtocolFactoryHelper
 
     val protocol = helper.createAndCheckProtocol(cryptConfig)
-    protocol.fileSystem match {
+    protocol.fileSystem match
       case fsn: CryptNamesFileSystem[_, _, _] =>
         checkCryptConfig(fsn.config)
-        fsn.delegate match {
+        fsn.delegate match
           case fsc: CryptContentFileSystem[_, _, _] =>
             checkCryptConfig(fsc.config)
             helper.checkFileSystem(fsc.delegate)
           case o => fail("Unexpected delegate of CryptNamesFileSystem: " + o)
-        }
       case o => fail("Unexpected file system: " + o)
-    }
     helper.numberOfSpawns should be(1)
   }
 
   /**
     * A test helper class managing an object to test and its dependencies.
     */
-  private class ProtocolFactoryHelper {
+  private class ProtocolFactoryHelper:
     /** A counter for spawn operations. */
     private val spawnCounter = new AtomicInteger
 
@@ -156,13 +151,12 @@ class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSup
       */
     def createAndCheckProtocol(cryptConfig: StructureCryptConfig):
     FileSystemSyncProtocol[_, _, _] =
-      factory.createProtocol(ProtocolUri, cryptConfig) match {
+      factory.createProtocol(ProtocolUri, cryptConfig) match
         case p: FileSystemSyncProtocol[_, _, _] =>
           p.converter should be(converter)
           p.httpSender should be(httpSender)
           p
         case o => fail("Unexpected protocol: " + o)
-      }
 
     /**
       * Checks whether the passed in file system is the expected base file
@@ -170,9 +164,8 @@ class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSup
       *
       * @param fs the actual file system to be tested
       */
-    def checkFileSystem(fs: FileSystem[_, _, _, _]): Unit = {
+    def checkFileSystem(fs: FileSystem[_, _, _, _]): Unit =
       fs should be(fileSystem)
-    }
 
     /**
       * Returns the number of actors that have been created via the test
@@ -192,11 +185,10 @@ class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSup
       * @return the ''Spawner'' instance
       */
     private def createSpawner(): Spawner = new Spawner {
-      override def spawn[T](behavior: Behavior[T], optName: Option[String], props: Props): ActorRef[T] = {
+      override def spawn[T](behavior: Behavior[T], optName: Option[String], props: Props): ActorRef[T] =
         spawnCounter.incrementAndGet()
         optName should be(None)
         testKit.spawn(behavior)
-      }
     }
 
     /**
@@ -206,13 +198,10 @@ class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSup
       * @return the ''FileSystemProtocolCreator'' mock
       */
     private def createCreator():
-    FileSystemProtocolCreator[String, Model.File[String], Model.Folder[String], StructureConfig] = {
+    FileSystemProtocolCreator[String, Model.File[String], Model.Folder[String], StructureConfig] =
       val c = mock[FileSystemProtocolCreator[String, Model.File[String], Model.Folder[String], StructureConfig]]
       when(c.createFileSystem(ProtocolUri, protocolConfig, FsTimeout)).thenReturn(fileSystem)
       when(c.createHttpSender(spawner, senderFactory, ProtocolUri, protocolConfig, SenderConfig))
         .thenReturn(httpSender)
       when(c.createConverter(protocolConfig)).thenReturn(converter)
       c
-    }
-  }
-}

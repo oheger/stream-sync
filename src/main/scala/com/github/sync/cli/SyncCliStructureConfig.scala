@@ -38,7 +38,7 @@ import scala.util.{Success, Try}
   * They are parsed dynamically from the command line; this is done via a
   * conditional ''CliExtractor'' that evaluates the URI defining the structure.
   */
-object SyncCliStructureConfig {
+object SyncCliStructureConfig:
   /** URI prefix indicating a WebDav structure. */
   final val PrefixWebDav = "dav:"
 
@@ -213,7 +213,7 @@ object SyncCliStructureConfig {
     * input parameter that needs to be evaluated to determine the role type -
     * the source or the destination URI.
     */
-  sealed trait RoleType {
+  sealed trait RoleType:
     /**
       * Returns a name of this role type.
       *
@@ -239,25 +239,22 @@ object SyncCliStructureConfig {
       * @return the full property name for this source type
       */
     def configPropertyName(property: String): String = s"$name$property"
-  }
 
   /**
     * A concrete ''RoleType'' representing the source structure.
     */
-  case object SourceRoleType extends RoleType {
+  case object SourceRoleType extends RoleType:
     override val name: String = "src-"
 
     override val parameterIndex: Int = 0
-  }
 
   /**
     * A concrete ''RoleType'' representing the destination structure.
     */
-  case object DestinationRoleType extends RoleType {
+  case object DestinationRoleType extends RoleType:
     override val name: String = "dst-"
 
     override val parameterIndex: Int = 1
-  }
 
   /**
     * A class that combines a configuration for a sync structure with the
@@ -290,13 +287,12 @@ object SyncCliStructureConfig {
     * @param uriOptionName the name of the option for the structure URI
     * @return the ''CliExtractor'' to extract the config of this role
     */
-  def structureConfigExtractor(roleType: RoleType, uriOptionName: String): CliExtractor[Try[StructureAuthConfig]] = {
+  def structureConfigExtractor(roleType: RoleType, uriOptionName: String): CliExtractor[Try[StructureAuthConfig]] =
     val extMap = Map(structureGroup(GroupLocalFs, roleType) -> localFsConfigExtractor(roleType),
       structureGroup(GroupDav, roleType) -> davConfigExtractor(roleType),
       structureGroup(GroupOneDrive, roleType) -> oneDriveConfigExtractor(roleType),
       structureGroup(GroupGoogleDrive, roleType) -> googleDriveConfigExtractor(roleType))
     conditionalGroupValue(structureTypeSelectorExtractor(roleType, uriOptionName), extMap)
-  }
 
   /**
     * Returns a ''CliExtractor'' that maps the input parameter for the URI of
@@ -337,7 +333,7 @@ object SyncCliStructureConfig {
     * @param roleType the role type
     * @return the ''CliExtractor'' for the WebDav configuration
     */
-  private def davConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] = {
+  private def davConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] =
     val extModProp = optionValue(roleType.configPropertyName(PropDavModifiedProperty),
       help = Some(HelpDavModifiedProperty))
     val extModNs = optionValue(roleType.configPropertyName(PropDavModifiedNamespace),
@@ -347,13 +343,12 @@ object SyncCliStructureConfig {
       .toBoolean
       .fallbackValue(false)
       .mandatory
-    for {
+    for
       triedModProp <- extModProp
       triedModNs <- extModNs
       triedDel <- extDel
       triedAuth <- authConfigExtractor(roleType)
-    } yield createDavConfig(triedModProp, triedModNs, triedDel, triedAuth)
-  }
+    yield createDavConfig(triedModProp, triedModNs, triedDel, triedAuth)
 
   /**
     * Returns a ''CliExtractor'' that extracts the configuration for a OneDrive
@@ -362,7 +357,7 @@ object SyncCliStructureConfig {
     * @param roleType the structure type
     * @return the ''CliExtractor'' for the OneDrive configuration
     */
-  private def oneDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] = {
+  private def oneDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] =
     val extPath = optionValue(roleType.configPropertyName(PropOneDrivePath), help = Some(HelpOneDrivePath))
       .mandatory
     val extChunkSize = optionValue(roleType.configPropertyName(PropOneDriveUploadChunkSize),
@@ -370,13 +365,12 @@ object SyncCliStructureConfig {
       .toInt
     val extServer = optionValue(roleType.configPropertyName(PropOneDriveServer),
       help = Some(HelpOneDriveServer))
-    for {
+    for
       triedPath <- extPath
       triedChunkSize <- extChunkSize
       triedServer <- extServer
       triedAuth <- authConfigExtractor(roleType)
-    } yield createOneDriveConfig(triedPath, triedChunkSize, triedServer, triedAuth)
-  }
+    yield createOneDriveConfig(triedPath, triedChunkSize, triedServer, triedAuth)
 
   /**
     * Returns a ''CliExtractor'' that extracts the configuration for a
@@ -385,14 +379,13 @@ object SyncCliStructureConfig {
     * @param roleType the structure type
     * @return the ''CliExtractor'' for the GoogleDrive configuration
     */
-  private def googleDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] = {
+  private def googleDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] =
     val extServer = optionValue(roleType.configPropertyName(PropGoogleDriveServer),
       help = Some(HelpGoogleDriveServer))
-    for {
+    for
       triedServer <- extServer
       triedAuth <- authConfigExtractor(roleType)
-    } yield createGoogleDriveConfig(triedServer, triedAuth)
-  }
+    yield createGoogleDriveConfig(triedServer, triedAuth)
 
   /**
     * Returns a ''CliExtractor'' for obtaining the authentication
@@ -402,7 +395,7 @@ object SyncCliStructureConfig {
     * @param roleType the role type
     * @return the ''CliExtractor'' for the auth config
     */
-  private def authConfigExtractor(roleType: RoleType): CliExtractor[Try[SyncAuthConfig]] = {
+  private def authConfigExtractor(roleType: RoleType): CliExtractor[Try[SyncAuthConfig]] =
     val extBasicDefined = isDefinedExtractor(roleType.configPropertyName(PropAuthUser))
     val extOAuthDefined = isDefinedExtractor(roleType.configPropertyName(
       OAuthParameterManager.NameOption))
@@ -418,7 +411,6 @@ object SyncCliStructureConfig {
       GroupOAuth -> oauthConfigExtractor(roleType),
       GroupNoAuth -> constantExtractor(Success(SyncNoAuth)))
     conditionalGroupValue(groupSelector, groupMap)
-  }
 
   /**
     * Returns a ''CliExtractor'' for obtaining the basic auth configuration.
@@ -426,14 +418,13 @@ object SyncCliStructureConfig {
     * @param roleType the role type
     * @return the ''CliExtractor'' for the basic auth config
     */
-  private def basicAuthExtractor(roleType: RoleType): CliExtractor[Try[SyncAuthConfig]] = {
+  private def basicAuthExtractor(roleType: RoleType): CliExtractor[Try[SyncAuthConfig]] =
     val extUser = optionValue(roleType.configPropertyName(PropAuthUser), help = Some(HelpAuthUser))
       .mandatory
-    for {
+    for
       triedUser <- extUser
       triedPassword <- davPasswordOption(roleType)
-    } yield createBasicAuthConfig(triedUser, triedPassword)
-  }
+    yield createBasicAuthConfig(triedUser, triedPassword)
 
   /**
     * Returns a ''CliExtractor'' for obtaining the password for Basic Auth.
@@ -443,12 +434,11 @@ object SyncCliStructureConfig {
     * @param roleType the role type
     * @return the ''CliExtractor'' for the Basic Auth password
     */
-  private def davPasswordOption(roleType: RoleType): CliExtractor[Try[String]] = {
+  private def davPasswordOption(roleType: RoleType): CliExtractor[Try[String]] =
     val prop = roleType.configPropertyName(PropAuthPassword)
     optionValue(prop, help = Some(HelpAuthPassword))
       .fallback(consoleReaderValue(prop, password = true))
       .mandatory
-  }
 
   /**
     * Returns a ''CliExtractor'' for obtaining the OAuth configuration.
@@ -456,12 +446,11 @@ object SyncCliStructureConfig {
     * @param roleType the role type
     * @return the ''CliExtractor'' for the OAuth configuration
     */
-  private def oauthConfigExtractor(roleType: RoleType): CliExtractor[Try[SyncAuthConfig]] = {
+  private def oauthConfigExtractor(roleType: RoleType): CliExtractor[Try[SyncAuthConfig]] =
     OAuthParameterManager.storageConfigExtractor(needPassword = true, prefix = roleType.name)
       .map { triedConfig =>
         triedConfig map (config => config.asInstanceOf[SyncAuthConfig])
       }
-  }
 
   /**
     * Creates an ''OptionValue'' with a ''BasicAuthConfig'' based on the given
@@ -491,12 +480,11 @@ object SyncCliStructureConfig {
   private def createDavConfig(triedOptModifiedProp: Try[Option[String]],
                               triedOptModifiedNamespace: Try[Option[String]],
                               triedDelBeforeOverride: Try[Boolean],
-                              triedAuthConfig: Try[SyncAuthConfig]): Try[StructureAuthConfig] = {
+                              triedAuthConfig: Try[SyncAuthConfig]): Try[StructureAuthConfig] =
     createRepresentation(triedOptModifiedProp, triedOptModifiedNamespace,
       triedDelBeforeOverride, triedAuthConfig) { (modProp, modNs, fDel, auth) =>
       StructureAuthConfig(DavStructureConfig(modProp, modNs, fDel), auth)
     }
-  }
 
   /**
     * Creates a ''StructureAuthConfig'' with a [[OneDriveStructureConfig]]
@@ -530,4 +518,3 @@ object SyncCliStructureConfig {
     createRepresentation(triedServer, triedAuth) { (server, auth) =>
       StructureAuthConfig(GoogleDriveStructureConfig(server), auth)
     }
-}

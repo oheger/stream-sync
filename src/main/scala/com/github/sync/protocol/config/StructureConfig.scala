@@ -72,7 +72,7 @@ case class OneDriveStructureConfig(syncPath: String,
   *
   * @param optServerUri optional (alternative) server URI
   */
-case class GoogleDriveStructureConfig(optServerUri: Option[String]) extends StructureConfig {
+case class GoogleDriveStructureConfig(optServerUri: Option[String]) extends StructureConfig:
   /**
     * Returns the URI of the GoogleDrive server to access. If the optional
     * server URI is defined, it is returned; otherwise, result is the default
@@ -81,4 +81,3 @@ case class GoogleDriveStructureConfig(optServerUri: Option[String]) extends Stru
     * @return the URI of the GoogleDrive server
     */
   def serverUri: String = optServerUri getOrElse GoogleDriveConfig.GoogleDriveServerUri
-}

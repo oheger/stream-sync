@@ -46,7 +46,7 @@ import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
-object SyncSetupSpec {
+object SyncSetupSpec:
   /** Constant for a sync timeout. */
   private val SyncTimeout = Timeout(2.minutes)
 
@@ -58,13 +58,12 @@ object SyncSetupSpec {
 
   /** A test configuration for HTTP actors. */
   private val TestSenderConfig = HttpRequestSenderConfig(actorName = Some("testActor"))
-}
 
 /**
   * Test class for ''SyncSetup''.
   */
 class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers with MockitoSugar
-  with AsyncTestHelper {
+  with AsyncTestHelper:
 
   import SyncSetupSpec.*
 
@@ -118,13 +117,12 @@ class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers w
     *
     * @return the test configuration
     */
-  private def createIDPConfig(): IDPConfig = {
+  private def createIDPConfig(): IDPConfig =
     val oauthConfig = OAuthConfig(tokenEndpoint = "someTokenEndpoint", clientID = "someClientID",
       redirectUri = "someRedirectURI", clientSecret = Secret("someSecret"),
       initTokenData = OAuthTokenData("someAccessToken", "someRefreshToken"))
     val idpConfig = IDPConfig(oauthConfig, "someAuthorizationEndpoint", "someScope")
     idpConfig
-  }
 
   /**
     * Asserts the given factory result is an OAuth configuration.
@@ -133,10 +131,9 @@ class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers w
     * @return the extracted OAuth configuration
     */
   private def expectOAuthConfig(factoryResult: Future[AuthConfig]): OAuthConfig =
-    futureResult(factoryResult) match {
+    futureResult(factoryResult) match
       case authConfig: OAuthConfig => authConfig
       case c => fail("Unexpected result: " + c)
-    }
 
   it should "convert a SyncOAuth config" in {
     val storageService = createStorageService()
@@ -184,13 +181,12 @@ class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers w
     val structConfig = FsStructureConfig(Some(ZoneId.of("Z")))
     val spawner = mock[Spawner]
 
-    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match {
+    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match
       case f: LocalProtocolFactory =>
         f.config should be(structConfig)
         f.timeout should be(SyncTimeout)
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
-    }
   }
 
   it should "provide a setup function that creates a WebDav sync protocol" in {
@@ -198,13 +194,12 @@ class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers w
       optLastModifiedNamespace = Some("my-ns"), deleteBeforeOverride = false)
     val spawner = mock[Spawner]
 
-    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match {
+    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match
       case f: DavProtocolFactory =>
         f.config should be(structConfig)
         f.timeout should be(SyncTimeout)
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
-    }
   }
 
   it should "provide a setup function that creates a OneDrive sync protocol" in {
@@ -212,25 +207,22 @@ class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers w
       optServerUri = None)
     val spawner = mock[Spawner]
 
-    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match {
+    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match
       case f: OneDriveProtocolFactory =>
         f.config should be(structConfig)
         f.timeout should be(SyncTimeout)
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
-    }
   }
 
   it should "provide a setup function that creates a GoogleDrive sync protocol" in {
     val structConfig = GoogleDriveStructureConfig(optServerUri = Some("https://google-drive.example.org"))
     val spawner = mock[Spawner]
 
-    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match {
+    SyncSetup.defaultProtocolFactorySetupFunc.apply(structConfig, TestSyncConfig, TestSenderConfig, spawner) match
       case f: GoogleDriveProtocolFactory =>
         f.config should be(structConfig)
         f.timeout should be(SyncTimeout)
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
-    }
   }
-}

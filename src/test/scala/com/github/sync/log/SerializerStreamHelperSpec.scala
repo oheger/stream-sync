@@ -33,13 +33,12 @@ import scala.concurrent.Future
   * Test class for ''SerializerStreamHelper''.
   */
 class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSystem)
-  with AnyFlatSpecLike with BeforeAndAfterAll with Matchers with FileTestHelper with AsyncTestHelper {
+  with AnyFlatSpecLike with BeforeAndAfterAll with Matchers with FileTestHelper with AsyncTestHelper:
   def this() = this(ActorSystem("SerializerStreamHelperSpec"))
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
     tearDownTestFile()
-  }
 
   /**
     * Executes a stream that reads from the source and writes into the sink.
@@ -93,4 +92,3 @@ class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSy
     val lines = futureResult(SerializerStreamHelper.readProcessedLog(logFile))
     lines should contain theSameElementsAs List("Line4", "Line3", "Line2", "Line1")
   }
-}

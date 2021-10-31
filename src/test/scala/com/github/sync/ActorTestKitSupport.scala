@@ -30,7 +30,7 @@ import org.scalatest.{BeforeAndAfterAll, Suite}
   *
   * The plan is to switch back to ''ScalaTestWithActorTestKit'' when possible.
   */
-trait ActorTestKitSupport extends BeforeAndAfterAll {
+trait ActorTestKitSupport extends BeforeAndAfterAll:
   this: Suite =>
 
   /** The test kit managed by this class. */
@@ -43,8 +43,6 @@ trait ActorTestKitSupport extends BeforeAndAfterAll {
     */
   protected implicit def system: ActorSystem[Nothing] = testKit.system
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     testKit.shutdownTestKit()
     super.afterAll()
-  }
-}

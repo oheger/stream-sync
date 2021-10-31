@@ -31,7 +31,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import java.time.ZoneId
 import scala.util.{Failure, Success, Try}
 
-object SyncCliStructureConfigSpec {
+object SyncCliStructureConfigSpec:
   /** Test user name. */
   private val User = "scott"
 
@@ -62,10 +62,9 @@ object SyncCliStructureConfigSpec {
     * @param urlParams the list with URLs passed as input parameters
     * @return the ''Parameters'' object
     */
-  private def toParameters(argsMap: Map[String, String], urlParams: List[String]): Parameters = {
+  private def toParameters(argsMap: Map[String, String], urlParams: List[String]): Parameters =
     val allArgs = ExtractorTestHelper.toParametersMap(argsMap) + (ParameterParser.InputParameter.key -> urlParams)
     ExtractorTestHelper.toParameters(allArgs)
-  }
 
   /**
     * Generates the values of the input parameters option. The option contains
@@ -77,12 +76,11 @@ object SyncCliStructureConfigSpec {
     * @return the resulting input parameter values
     */
   private def createUrlParameter(structureUrl: String, roleType: RoleType): List[String] =
-    roleType match {
+    roleType match
       case SourceRoleType =>
         List(structureUrl, "ignored")
       case DestinationRoleType =>
         List("ignored", structureUrl)
-    }
 
   /**
     * Executes the extractor for the structure config against the parameters
@@ -96,13 +94,12 @@ object SyncCliStructureConfigSpec {
     */
   private def runConfigExtractor(args: Map[String, String], structureUrl: String, roleType: RoleType,
                                  optReader: Option[ConsoleReader] = None):
-  (Try[StructureAuthConfig], ExtractionContext) = {
+  (Try[StructureAuthConfig], ExtractionContext) =
     val reader = optReader getOrElse DummyConsoleReader
     val paramCtx = toExtractionContext(toParameters(args, createUrlParameter(structureUrl, roleType)),
       reader = reader)
     ParameterExtractor.runExtractor(SyncCliStructureConfig.structureConfigExtractor(roleType, "uri"),
       paramCtx)
-  }
 
   /**
     * Executes the extractor for the structure config against the parameters
@@ -116,14 +113,12 @@ object SyncCliStructureConfigSpec {
     * @return the success result returned by the extractor
     */
   private def extractConfig(args: Map[String, String], structureUrl: String, roleType: RoleType,
-                            optReader: Option[ConsoleReader] = None): (StructureAuthConfig, ExtractionContext) = {
+                            optReader: Option[ConsoleReader] = None): (StructureAuthConfig, ExtractionContext) =
     val (triedConfig, nextContext) = runConfigExtractor(args, structureUrl, roleType, optReader)
-    triedConfig match {
+    triedConfig match
       case Success(config) => (config, nextContext)
       case Failure(exception) =>
         throw new AssertionError("Failed to extract structure config", exception)
-    }
-  }
 
   /**
     * Executes the extractor for the structure config against the parameters
@@ -136,20 +131,17 @@ object SyncCliStructureConfigSpec {
     * @return the exception and the updated extraction context
     */
   private def expectFailure(args: Map[String, String], structureUrl: String, roleType: RoleType):
-  (Throwable, ExtractionContext) = {
+  (Throwable, ExtractionContext) =
     val (triedConfig, nextContext) = runConfigExtractor(args, structureUrl, roleType)
-    triedConfig match {
+    triedConfig match
       case Failure(exception) => (exception, nextContext)
       case Success(value) =>
         throw new AssertionError("Unexpected success result: " + value)
-    }
-  }
-}
 
 /**
   * Test class for ''SyncStructureConfig''.
   */
-class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoSugar:
 
   import SyncCliStructureConfigSpec._
 
@@ -160,10 +152,9 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     * @param context   the extraction context
     * @param expParams the set with expected option names
     */
-  private def checkAccessedParameters(context: ExtractionContext, expParams: Set[String]): Unit = {
+  private def checkAccessedParameters(context: ExtractionContext, expParams: Set[String]): Unit =
     val accessedParams = expParams + ParameterParser.InputParameter.key
     ExtractorTestHelper.accessedKeys(context) should contain theSameElementsAs accessedParams
-  }
 
   /**
     * Checks whether the passed in parameter keys have been accessed by the
@@ -173,10 +164,9 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     * @param roleType  the role type
     * @param expParams the names of the expected parameters
     */
-  private def checkAccessedParameters(context: ExtractionContext, roleType: RoleType, expParams: String*): Unit = {
+  private def checkAccessedParameters(context: ExtractionContext, roleType: RoleType, expParams: String*): Unit =
     val accessedParams = expParams.map(roleType.configPropertyName).toSet
     checkAccessedParameters(context, accessedParams)
-  }
 
   /**
     * Checks whether the given auth configuration is for basic auth with the
@@ -184,11 +174,10 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     *
     * @param authConfig the auth config to be checked
     */
-  private def checkBasicAuthConfig(authConfig: SyncAuthConfig): Unit = {
+  private def checkBasicAuthConfig(authConfig: SyncAuthConfig): Unit =
     val basicAuthConfig = authConfig.asInstanceOf[SyncBasicAuthConfig]
     basicAuthConfig.user should be(User)
     basicAuthConfig.password.secret should be(Password)
-  }
 
   "SyncStructureConfig" should "create a correct file system config for the source structure" in {
     val TimeZoneId = "UTC+02:00"
@@ -243,14 +232,13 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config.structureConfig match {
+    config.structureConfig match
       case davConfig: DavStructureConfig =>
         davConfig.optLastModifiedProperty should be(Some(LastModifiedProperty))
         davConfig.optLastModifiedNamespace should be(Some(LastModifiedNamespace))
         davConfig.deleteBeforeOverride shouldBe true
         checkBasicAuthConfig(config.authConfig)
       case c => fail("Unexpected result: " + c)
-    }
   }
 
   it should "create a correct DavConfig for the source structure with defaults" in {
@@ -259,13 +247,12 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
 
     val (config, _) =
       extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
-    config.structureConfig match {
+    config.structureConfig match
       case davConfig: DavStructureConfig =>
         davConfig.optLastModifiedProperty should be(None)
         davConfig.optLastModifiedNamespace should be(None)
         davConfig.deleteBeforeOverride shouldBe false
       case c => fail("Unexpected result: " + c)
-    }
   }
 
   it should "generate a failure for invalid parameters of a DavConfig" in {
@@ -329,14 +316,13 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, DestinationRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config.structureConfig match {
+    config.structureConfig match
       case davConfig: DavStructureConfig =>
         checkBasicAuthConfig(config.authConfig)
         davConfig.optLastModifiedProperty should be(Some(LastModifiedProperty))
         davConfig.optLastModifiedNamespace should be(Some(LastModifiedNamespace))
         davConfig.deleteBeforeOverride shouldBe true
       case r => fail("Unexpected result: " + r)
-    }
   }
 
   it should "read the Auth password from the console if it is not specified" in {
@@ -363,14 +349,13 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
 
     val (config, processedArgs) = extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config.structureConfig match {
+    config.structureConfig match
       case oneConfig: OneDriveStructureConfig =>
         oneConfig.optUploadChunkSizeMB should be(Some(ChunkSize))
         oneConfig.syncPath should be(StoragePath)
         oneConfig.optServerUri should be(Some(TestUri))
         checkBasicAuthConfig(config.authConfig)
       case r => fail("Unexpected config " + r)
-    }
   }
 
   it should "create a correct OneDriveConfig for the source structure with defaults" in {
@@ -426,14 +411,13 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, DestinationRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config.structureConfig match {
+    config.structureConfig match
       case oneConfig: OneDriveStructureConfig =>
         oneConfig.optUploadChunkSizeMB should be(Some(ChunkSize))
         oneConfig.syncPath should be(StoragePath)
         oneConfig.optServerUri should be(Some(TestUri))
         checkBasicAuthConfig(config.authConfig)
       case r => fail("Unexpected config " + r)
-    }
   }
 
   it should "create a correct GoogleDriveConfig for the source structure with basic auth properties" in {
@@ -444,12 +428,11 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, SourceRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config.structureConfig match {
+    config.structureConfig match
       case googleConfig: GoogleDriveStructureConfig =>
         googleConfig.optServerUri should be(Some(TestUri))
         checkBasicAuthConfig(config.authConfig)
       case r => fail("Unexpected config " + r)
-    }
   }
 
   it should "create a correct GoogleDriveConfig for the source structure with defaults" in {
@@ -487,11 +470,9 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, DestinationRoleType)
     checkAccessedParameters(processedArgs, args.keySet)
-    config.structureConfig match {
+    config.structureConfig match
       case googleConfig: GoogleDriveStructureConfig =>
         googleConfig.optServerUri should be(Some(TestUri))
         checkBasicAuthConfig(config.authConfig)
       case r => fail("Unexpected config " + r)
-    }
   }
-}

@@ -25,18 +25,17 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
-object BrowserHandlerSpec {
+object BrowserHandlerSpec:
   /** A test URI as string. */
   private val TestUriStr = "https://my-test-idp.org/authorize"
 
   /** A test URI in parsed form. */
   private val TestUri = URI.create(TestUriStr)
-}
 
 /**
   * Test class for ''BrowserHandler''.
   */
-class BrowserHandlerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class BrowserHandlerSpec extends AnyFlatSpec with Matchers with MockitoSugar:
 
   import BrowserHandlerSpec._
 
@@ -78,4 +77,3 @@ class BrowserHandlerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
     handler.openBrowser(TestUriStr) shouldBe false
   }
-}

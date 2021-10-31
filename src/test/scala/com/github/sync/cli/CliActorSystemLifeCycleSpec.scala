@@ -34,7 +34,7 @@ import scala.util.Try
 /**
   * Test class for ''ActorSystemLifeCycle''.
   */
-class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
+class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers:
   "ActorSystemLifeCycle" should "manage the life-cycle of an actor system" in {
     val SrcPath = "/src/sync/data"
     val DstPath = "/dst/sync/target"
@@ -42,7 +42,7 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
     val myApp = new CliActorSystemLifeCycleTestImpl {
       override val name: String = "TestApp"
 
-      override protected def runApp(config: SyncConfig): Future[String] = {
+      override protected def runApp(config: SyncConfig): Future[String] =
         val actor = actorSystem.actorOf(Props(new Actor {
           override def receive: Receive = {
             case conf: SyncConfig =>
@@ -52,7 +52,6 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
 
         implicit val timeout: Timeout = Timeout(3.seconds)
         (actor ? config).mapTo[String]
-      }
     }
 
     val outStream = new ByteArrayOutputStream
@@ -87,7 +86,7 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
     * A test implementation of ''ActorSystemLifeCycle'' that provides dummy
     * implementations for methods that are not used by the tests.
     */
-  private abstract class CliActorSystemLifeCycleTestImpl extends CliActorSystemLifeCycle[SyncConfig] {
+  private abstract class CliActorSystemLifeCycleTestImpl extends CliActorSystemLifeCycle[SyncConfig]:
     override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =
       SyncParameterManager.syncConfigExtractor()
 
@@ -95,6 +94,4 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers {
       "Test usage caption"
 
     override protected def helpOptionHelp: String = "Test help option help"
-  }
 
-}

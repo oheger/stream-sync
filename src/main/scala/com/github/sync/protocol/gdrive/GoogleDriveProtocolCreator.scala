@@ -34,7 +34,7 @@ import com.github.sync.protocol.{FileSystemProtocolConverter, FileSystemProtocol
   */
 object GoogleDriveProtocolCreator
   extends FileSystemProtocolCreator[String, GoogleDriveModel.GoogleDriveFile, GoogleDriveModel.GoogleDriveFolder,
-    GoogleDriveStructureConfig] {
+    GoogleDriveStructureConfig]:
   /**
     * The prefix of URIs indicating the GoogleDrive protocol. This prefix needs
     * to be removed when determining the sync path.
@@ -43,14 +43,13 @@ object GoogleDriveProtocolCreator
 
   override def createFileSystem(uri: String, config: GoogleDriveStructureConfig, timeout: Timeout):
   ExtensibleFileSystem[String, GoogleDriveModel.GoogleDriveFile, GoogleDriveModel.GoogleDriveFolder,
-    Model.FolderContent[String, GoogleDriveModel.GoogleDriveFile, GoogleDriveModel.GoogleDriveFolder]] = {
+    Model.FolderContent[String, GoogleDriveModel.GoogleDriveFile, GoogleDriveModel.GoogleDriveFolder]] =
     val optRootPath = Some(UriEncodingHelper.removeLeadingSeparator(uri.stripPrefix(GoogleDriveUriPrefix)))
       .filter(_.nonEmpty)
     val googleConfig = GoogleDriveConfig(timeout = timeout,
       serverUri = config.serverUri,
       optRootPath = optRootPath)
     new GoogleDriveFileSystem(googleConfig)
-  }
 
   override def createHttpSender(spawner: Spawner, factory: HttpRequestSenderFactory, uri: String,
                                 config: GoogleDriveStructureConfig, senderConfig: HttpRequestSenderConfig):
@@ -60,4 +59,3 @@ object GoogleDriveProtocolCreator
   override def createConverter(config: GoogleDriveStructureConfig):
   FileSystemProtocolConverter[String, GoogleDriveModel.GoogleDriveFile, GoogleDriveModel.GoogleDriveFolder] =
     GoogleDriveProtocolConverter
-}

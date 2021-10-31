@@ -29,7 +29,7 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.util.{Failure, Success, Try}
 
-object FilterManagerSpec {
+object FilterManagerSpec:
   /**
     * Constant for an element that can be used when no element-specific checks
     * are executed.
@@ -46,13 +46,11 @@ object FilterManagerSpec {
     * @param s the date-time string
     * @return the ''Instant''
     */
-  private def toInstant(s: String): Instant = {
-    s match {
+  private def toInstant(s: String): Instant =
+    s match
       case RegTime(year, month, day, hour, min, sec) =>
         LocalDateTime.of(year.toInt, month.toInt, day.toInt, hour.toInt, min.toInt, sec.toInt)
           .atZone(ZoneId.systemDefault()).toInstant
-    }
-  }
 
   /**
     * Generates an element with the given name and last modification time.
@@ -84,12 +82,11 @@ object FilterManagerSpec {
     */
   private def parseFilters(args: Parameters): Try[(SyncFilterData, ExtractionContext)] =
     ParameterExtractor.tryExtractor(FilterManager.filterDataExtractor, toExtractionContext(args))
-}
 
 /**
   * Test class for ''FilterManager''.
   */
-class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
+class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper:
 
   import FilterManagerSpec._
 
@@ -101,10 +98,9 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * @return the result of the parse operation
     */
   private def parseFiltersSuccess(args: Parameters): (SyncFilterData, ExtractionContext) =
-    parseFilters(args) match {
+    parseFilters(args) match
       case Success(value) => value
       case r => fail("Unexpected parse result: " + r)
-    }
 
   /**
     * Expects a failed result from a parsing operation. The exception of the
@@ -114,11 +110,10 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * @return the extracted exception
     */
   private def expectParsingFailure(result: Try[_]): ParameterExtractionException =
-    result match {
+    result match
       case Failure(exception: ParameterExtractionException) =>
         exception
       case r => fail("Unexpected result: " + r)
-    }
 
   /**
     * Expects a failed result from a parsing operation and does some checks on
@@ -130,25 +125,23 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * @param msg    texts to be expected in the exception message
     * @return the extracted exception
     */
-  private def expectAndCheckParsingFailure(result: Try[_], msg: String*): ParameterExtractionException = {
+  private def expectAndCheckParsingFailure(result: Try[_], msg: String*): ParameterExtractionException =
     val exception = expectParsingFailure(result)
     exception.failures should have size 1
     msg foreach { m =>
       exception.getMessage should include(m)
     }
     exception
-  }
 
   /**
     * Checks that a given filter expression is rejected.
     *
     * @param expression the expression to be checked
     */
-  private def expectInvalidFilterExpression(expression: String): Unit = {
+  private def expectInvalidFilterExpression(expression: String): Unit =
     val args = Map(FilterManager.ArgOverrideFilter -> List(expression))
     val exception = expectAndCheckParsingFailure(parseFilters(toParameters(args)))
     exception.failures.head.key.key should be(FilterManager.ArgOverrideFilter)
-  }
 
   /**
     * Helper method to check whether a single filter expression is correctly
@@ -162,10 +155,9 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     * @return the resulting list with parsed filters
     */
   private def checkParsedFilterExpression(expression: String, opAccepted: => SyncOperation,
-                                          opRejected: => SyncOperation): Unit = {
+                                          opRejected: => SyncOperation): Unit =
     val argsMap = Map(FilterManager.ArgCreateFilter -> List(expression))
     checkParseFilterArguments(argsMap, List(opAccepted), List(opRejected))
-  }
 
   /**
     * Helper method to check whether valid filter parameters can be parsed. The
@@ -180,7 +172,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     */
   private def checkParseFilterArguments(filterArgs: Map[String, Iterable[String]],
                                         acceptedOps: List[SyncOperation],
-                                        rejectedOps: List[SyncOperation]): Unit = {
+                                        rejectedOps: List[SyncOperation]): Unit =
     val otherParam = "foo" -> List("bar")
     val args = filterArgs + otherParam
     val (filterData, nextContext) = parseFiltersSuccess(toParameters(args))
@@ -188,7 +180,6 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     rejectedOps foreach (op => FilterManager.applyFilter(op, filterData) shouldBe false)
     accessedKeys(nextContext) should contain only(ArgCreateFilter, ArgOverrideFilter, ArgRemoveFilter,
       ArgCommonFilter, ArgActionFilter)
-  }
 
   "FilterManager" should "parse an empty list of filter definitions" in {
     val expData = SyncFilterData(Map(ActionCreate -> Nil, ActionOverride -> Nil,
@@ -493,4 +484,3 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper {
     failuresMap(FilterManager.ArgOverrideFilter) should include(InvalidEx2)
     failuresMap(FilterManager.ArgOverrideFilter) should include(InvalidEx3)
   }
-}

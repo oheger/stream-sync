@@ -31,7 +31,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.concurrent.Future
 import scala.language.implicitConversions
 
-object OAuthParameterManagerSpec {
+object OAuthParameterManagerSpec:
   /** Test base name of an OAuth provider. */
   private val ProviderName = "testIDP"
 
@@ -80,10 +80,9 @@ object OAuthParameterManagerSpec {
     * @return a ''Future'' with the config and updated extraction context
     */
   private def extractCommandConfigParams(parameters: Parameters, reader: ConsoleReader = DummyConsoleReader):
-  Future[(CommandConfig, ExtractionContext)] = {
+  Future[(CommandConfig, ExtractionContext)] =
     val context = ExtractorTestHelper.toExtractionContext(parameters, reader)
     Future.fromTry(tryExtractor(OAuthParameterManager.commandConfigExtractor, context))
-  }
 
   /**
     * Convenience function to run the OAuth command config extractor on a map
@@ -94,10 +93,9 @@ object OAuthParameterManagerSpec {
     * @return a ''Future'' with the config and updated extraction context
     */
   private def extractCommandConfig(paramsMap: Map[String, String], reader: ConsoleReader = DummyConsoleReader):
-  Future[(CommandConfig, ExtractionContext)] = {
+  Future[(CommandConfig, ExtractionContext)] =
     val params = ExtractorTestHelper.toParameters(ExtractorTestHelper.toParametersMap(paramsMap))
     extractCommandConfigParams(params, reader)
-  }
 
   /**
     * Creates a map with command line options for an init command.
@@ -116,12 +114,11 @@ object OAuthParameterManagerSpec {
     * @return the string with scope values
     */
   private def scopeString(separator: String): String = Scopes.mkString(separator)
-}
 
 /**
   * Test class for ''OAuthParameterManager''.
   */
-class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper with MockitoSugar {
+class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper with MockitoSugar:
 
   import OAuthParameterManagerSpec._
   import com.github.scli.ParameterExtractor._
@@ -135,12 +132,11 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     * @param msgParts text parts to be expected in the exception message
     * @return the error message from the exception
     */
-  private def expectFailedFuture(future: Future[_], msgParts: String*): String = {
+  private def expectFailedFuture(future: Future[_], msgParts: String*): String =
     val exception = expectFailedFuture[ParameterExtractionException](future)
     val message = exception.failures.mkString(" ")
     msgParts foreach (part => message should include(part))
     message
-  }
 
   /**
     * Checks whether the correct options for the storage configuration have
@@ -149,27 +145,24 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     * @param storageConfig the configuration to be checked
     * @param withPwd       flag whether a password is expected in the configuration
     */
-  private def checkStorageConfig(storageConfig: SyncOAuthStorageConfig, withPwd: Boolean = true): Unit = {
+  private def checkStorageConfig(storageConfig: SyncOAuthStorageConfig, withPwd: Boolean = true): Unit =
     storageConfig.rootDir should be(Paths.get(StoragePath))
     storageConfig.baseName should be(ProviderName)
-    if (withPwd) {
+    if withPwd then
       storageConfig.optPassword.get.secret should be(Password)
-    } else {
+    else
       storageConfig.optPassword should be(None)
-    }
-  }
 
   "OAuthParameterManager" should "extract a valid remove command config" in {
     val params = createBasicParametersMap(OAuthParameterManager.CommandRemoveIDP) -
       OAuthParameterManager.PasswordOption
     val (config, nextCtx) = futureResult(extractCommandConfig(params))
 
-    config match {
+    config match
       case RemoveCommandConfig(storageConfig) =>
         checkStorageConfig(storageConfig, withPwd = false)
       case c =>
         fail("Unexpected result: " + c)
-    }
     ExtractorTestHelper.accessedKeys(nextCtx) should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.NameOption, OAuthParameterManager.EncryptOption,
       ParameterParser.InputParameter.key, CliActorSystemLifeCycle.FileOption)
@@ -179,12 +172,11 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     val params = createBasicParametersMap(OAuthParameterManager.CommandLoginIDP)
     val (config, nextCtx) = futureResult(extractCommandConfig(params))
 
-    config match {
+    config match
       case LoginCommandConfig(storageConfig) =>
         checkStorageConfig(storageConfig)
       case c =>
         fail("Unexpected result: " + c)
-    }
     ExtractorTestHelper.accessedKeys(nextCtx) should contain only(OAuthParameterManager.StoragePathOption,
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
       OAuthParameterManager.EncryptOption, ParameterParser.InputParameter.key, CliActorSystemLifeCycle.FileOption)
@@ -258,7 +250,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     *
     * @param scopeSeparator the separator for scope values
     */
-  private def checkExtractValidIdpConfiguration(scopeSeparator: String): Unit = {
+  private def checkExtractValidIdpConfiguration(scopeSeparator: String): Unit =
     val initArgs = Map(OAuthParameterManager.AuthEndpointOption -> AuthEndpointUrl,
       OAuthParameterManager.TokenEndpointOption -> TokenEndpointUrl,
       OAuthParameterManager.RedirectUrlOption -> Redirect,
@@ -272,7 +264,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       OAuthParameterManager.TokenEndpointOption, OAuthParameterManager.RedirectUrlOption,
       OAuthParameterManager.ScopeOption, OAuthParameterManager.ClientIDOption,
       OAuthParameterManager.ClientSecretOption)
-    config match {
+    config match
       case InitCommandConfig(idpConfig, storageConfig) =>
         idpConfig.authorizationEndpoint should be(AuthEndpointUrl)
         idpConfig.oauthConfig.tokenEndpoint should be(TokenEndpointUrl)
@@ -283,8 +275,6 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
         checkStorageConfig(storageConfig)
       case c =>
         fail("Unexpected configuration: " + c)
-    }
-  }
 
   it should "extract a valid IDP configuration" in {
     checkExtractValidIdpConfiguration(" ")
@@ -307,14 +297,13 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
 
     val (config, next) = futureResult(extractCommandConfig(args, reader))
     ExtractorTestHelper.accessedKeys(next) should contain(OAuthParameterManager.ClientSecretOption)
-    config match {
+    config match
       case InitCommandConfig(idpConfig, storageConfig) =>
         idpConfig.oauthConfig.clientID should be(ClientID)
         idpConfig.oauthConfig.clientSecret.secret should be(ClientSecret)
         checkStorageConfig(storageConfig)
       case c =>
         fail("Unexpected configuration:" + c)
-    }
   }
 
   it should "report errors for missing mandatory properties of an init command config" in {
@@ -326,4 +315,3 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       OAuthParameterManager.RedirectUrlOption, OAuthParameterManager.ScopeOption,
       OAuthParameterManager.ClientIDOption)
   }
-}

@@ -42,7 +42,7 @@ import scala.util.Try
   * used. All parameters not assigned to options are grouped under a reserved
   * option key.
   */
-object SyncParameterManager {
+object SyncParameterManager:
   /** Name of the input option for the URI of the source structure. */
   final val SourceUriOption = "sourceURI"
 
@@ -264,7 +264,7 @@ object SyncParameterManager {
     * With a value of this enumeration it is determined if and which parts of
     * a structure are encrypted.
     */
-  object CryptMode extends Enumeration {
+  object CryptMode extends Enumeration:
 
     protected case class CryptModeVal(requiresPassword: Boolean = true) extends super.Val
 
@@ -288,7 +288,6 @@ object SyncParameterManager {
       */
     final val Literals: Map[String, CryptMode.Value] =
       values.map(v => (v.toString.toUpperCase(Locale.ROOT), v)).toMap
-  }
 
   /**
     * A class that combines the properties related to encryption during a sync
@@ -346,7 +345,7 @@ object SyncParameterManager {
                         opsPerSecond: Option[Int],
                         filterData: SyncFilterData,
                         logLevel: Level,
-                        switched: Boolean) {
+                        switched: Boolean):
     /**
       * Returns a normalized ''SyncConfig'' for this instance. If the
       * ''switched'' flag is '''false''', the normalized instance is the same
@@ -356,11 +355,10 @@ object SyncParameterManager {
       * @return the normalized ''SyncConfig''
       */
     def normalized: SyncConfig =
-      if (switched)
+      if switched then
         copy(srcUri = dstUri, dstUri = srcUri, srcConfig = dstConfig, dstConfig = srcConfig,
           cryptConfig = switchCryptConfig(cryptConfig), switched = false)
       else this
-  }
 
   /**
     * Returns an extractor that extracts the ''SyncConfig'' from the command
@@ -368,7 +366,7 @@ object SyncParameterManager {
     *
     * @return the extractor to extract the ''SyncConfig''
     */
-  def syncConfigExtractor(): CliExtractor[Try[SyncConfig]] = for {
+  def syncConfigExtractor(): CliExtractor[Try[SyncConfig]] = for
     srcUri <- srcUriExtractor()
     dstUri <- dstUriExtractor()
     srcConfig <- SyncCliStructureConfig.structureConfigExtractor(SyncCliStructureConfig.SourceRoleType, SourceUriOption)
@@ -385,7 +383,7 @@ object SyncParameterManager {
     switched <- switchValue(SwitchOption, optHelp = Some(SwitchOptionHelp)).alias("S")
     logLevel <- logLevelExtractor()
     _ <- CliActorSystemLifeCycle.FileExtractor
-  } yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, dryRun, timeout, logFile, syncLog, timeDelta,
+  yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, dryRun, timeout, logFile, syncLog, timeDelta,
     opsPerSec, cryptConf, filters, switched, logLevel) map (_.normalized)
 
   /**
@@ -497,13 +495,13 @@ object SyncParameterManager {
     * @return the extractor for the ''CryptConfig''
     */
   private def cryptConfigExtractor: CliExtractor[Try[CryptConfig]] =
-    for {
+    for
       srcPwd <- cryptPasswordExtractor(SourceCryptModeOption, SourcePasswordOption)
       dstPwd <- cryptPasswordExtractor(DestCryptModeOption, DestPasswordOption)
       srcCrypt <- cryptModeExtractor(SourceCryptModeOption)
       dstCrypt <- cryptModeExtractor(DestCryptModeOption)
       cacheSize <- cryptCacheSizeExtractor()
-    } yield createCryptConfig(srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
+    yield createCryptConfig(srcPwd, srcCrypt, dstPwd, dstCrypt, cacheSize)
 
   /**
     * Returns an extractor that extracts the value of the option for the crypt
@@ -516,7 +514,7 @@ object SyncParameterManager {
     optionValue(CryptCacheSizeOption, Some(CryptCacheSizeHelp))
       .toInt
       .mapTo { size =>
-        if (size < MinCryptCacheSize)
+        if size < MinCryptCacheSize then
           throw new IllegalArgumentException(s"Crypt cache size must be greater or equal $MinCryptCacheSize.")
         else size
       }.fallbackValue(DefaultCryptCacheSize)
@@ -533,13 +531,12 @@ object SyncParameterManager {
     * @return the extractor to extract the encryption password
     */
   private def cryptPasswordExtractor(keyCryptMode: String, keyPwd: String):
-  CliExtractor[SingleOptionValue[String]] = {
+  CliExtractor[SingleOptionValue[String]] =
     val condExt = cryptModeExtractor(keyCryptMode).map(_.map(mode => mode.requiresPassword))
     val pwdExt = optionValue(keyPwd, Some(CryptPasswordHelp))
       .fallback(consoleReaderValue(keyPwd, password = true))
     val elseExt = constantExtractor(Try(Option[String](null)))
     conditionalValue(condExt, pwdExt, elseExt)
-  }
 
   /**
     * Tries to create a ''CryptConfig'' object from the given components.
@@ -580,7 +577,7 @@ object SyncParameterManager {
     *
     * @return the extractor for the log level
     */
-  private def logLevelExtractor(): CliExtractor[Try[Level]] = {
+  private def logLevelExtractor(): CliExtractor[Try[Level]] =
     val switchDebug = switchValue(LogLevelDebug, optHelp = Some(LogLevelDebugHelp))
     val switchInfo = switchValue(LogLevelInfo, optHelp = Some(LogLevelInfoHelp))
     val switchWarn = switchValue(LogLevelWarn, optHelp = Some(LogLevelWarnHelp))
@@ -590,7 +587,6 @@ object SyncParameterManager {
       .toEnum(LogLevels.get)
       .fallbackValue(Level.WARN)
       .mandatory
-  }
 
   /**
     * Switches the fields related to source and destination structures in the
@@ -603,4 +599,3 @@ object SyncParameterManager {
   private def switchCryptConfig(config: CryptConfig): CryptConfig =
     config.copy(srcCryptMode = config.dstCryptMode, dstCryptMode = config.srcCryptMode,
       srcPassword = config.dstPassword, dstPassword = config.srcPassword)
-}

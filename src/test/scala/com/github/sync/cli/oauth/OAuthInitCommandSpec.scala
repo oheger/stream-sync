@@ -35,7 +35,7 @@ import java.nio.file.Paths
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{ExecutionContext, Future}
 
-object OAuthInitCommandSpec {
+object OAuthInitCommandSpec:
   /** A name for the test IDP. */
   private val IdpName = "myTestIDP"
 
@@ -53,12 +53,11 @@ object OAuthInitCommandSpec {
 
   /** The default configuration for the init command. */
   private val InitConfig = InitCommandConfig(oauthConfig = TestConfig, storageConfig = StorageConfig)
-}
 
 /**
   * Test class for the functionality to initialize an IDP.
   */
-class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar with AsyncTestHelper {
+class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar with AsyncTestHelper:
 
   import OAuthInitCommandSpec._
 
@@ -84,7 +83,7 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
   /**
     * A test helper class managing dependencies of the execution.
     */
-  private class CommandTestHelper {
+  private class CommandTestHelper:
     /** Implicit actor system required for command execution. */
     private implicit val actorSystem: ActorSystem = mock[ActorSystem]
 
@@ -99,11 +98,10 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       * @param saveConfigResult result for saving the config
       * @return this test helper
       */
-    def prepareStorageService(saveConfigResult: Future[Done] = Future.successful(Done)): CommandTestHelper = {
+    def prepareStorageService(saveConfigResult: Future[Done] = Future.successful(Done)): CommandTestHelper =
       when(storageService.saveIdpConfig(eqArg(StorageConfig), any())(eqArg(implicitly[ExecutionContext]),
         eqArg(actorSystem))).thenReturn(saveConfigResult)
       this
-    }
 
     /**
       * Verifies that the storage service has been correctly invoked for saving
@@ -111,7 +109,7 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       *
       * @return this test helper
       */
-    def verifyStorageService(): CommandTestHelper = {
+    def verifyStorageService(): CommandTestHelper =
       val capt = ArgumentCaptor.forClass(classOf[IDPConfig])
       verify(storageService).saveIdpConfig(eqArg(StorageConfig), capt.capture())(any(), any())
       val idpConfig = capt.getValue
@@ -119,7 +117,6 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       idpConfig.oauthConfig.copy(clientSecret = null) should be(TestConfig.oauthConfig.copy(clientSecret = null))
       idpConfig.oauthConfig.clientSecret.secret should be(ClientSecret)
       this
-    }
 
     /**
       * Executes the command to be tested.
@@ -127,6 +124,4 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       * @return the result of the execution
       */
     def runCommand(): Future[String] = OAuthCommandsImpl.initIdp(InitConfig, storageService)
-  }
 
-}

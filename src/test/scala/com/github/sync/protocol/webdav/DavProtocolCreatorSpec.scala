@@ -29,7 +29,7 @@ import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.duration._
 
-object DavProtocolCreatorSpec {
+object DavProtocolCreatorSpec:
   /** The URI of the dav server used by tests. */
   private val TestUri = "https://dav.example.org/data"
 
@@ -39,12 +39,11 @@ object DavProtocolCreatorSpec {
 
   /** A test timeout value. */
   private val TestTimeout = Timeout(44.seconds)
-}
 
 /**
   * Test class for ''DavProtocolCreator''.
   */
-class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar:
 
   import DavProtocolCreatorSpec._
 
@@ -52,22 +51,20 @@ class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar
     val expDavConfig = DavConfig(rootUri = TestUri, deleteBeforeOverride = TestConfig.deleteBeforeOverride,
       timeout = TestTimeout)
 
-    DavProtocolCreator.createFileSystem(TestUri, TestConfig, TestTimeout) match {
+    DavProtocolCreator.createFileSystem(TestUri, TestConfig, TestTimeout) match
       case fs: DavFileSystem =>
         fs.config should be(expDavConfig)
       case fs => fail("Unexpected file system: " + fs)
-    }
   }
 
   it should "remove the dav: prefix from the URI when creating the file system" in {
     val expDavConfig = DavConfig(rootUri = TestUri, deleteBeforeOverride = TestConfig.deleteBeforeOverride,
       timeout = TestTimeout)
 
-    DavProtocolCreator.createFileSystem("dav:" + TestUri, TestConfig, TestTimeout) match {
+    DavProtocolCreator.createFileSystem("dav:" + TestUri, TestConfig, TestTimeout) match
       case fs: DavFileSystem =>
         fs.config should be(expDavConfig)
       case fs => fail("Unexpected file system: " + fs)
-    }
   }
 
   it should "create a correct HTTP sender actor" in {
@@ -92,10 +89,8 @@ class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar
   }
 
   it should "create a correct protocol converter" in {
-    DavProtocolCreator.createConverter(TestConfig) match {
+    DavProtocolCreator.createConverter(TestConfig) match
       case davConverter: DavProtocolConverter =>
         davConverter.davConfig should be(TestConfig)
       case c => fail("Unexpected converter: " + c)
-    }
   }
-}

@@ -32,7 +32,7 @@ import java.io.IOException
 import java.time.Instant
 import scala.concurrent.{ExecutionContext, Future}
 
-object ProtocolElementSourceSpec {
+object ProtocolElementSourceSpec:
   /**
     * Helper function to create a file element.
     *
@@ -76,19 +76,17 @@ object ProtocolElementSourceSpec {
     */
   private def createFolder(parent: FsFolder, id: String, name: String): FsFolder =
     createFolder(id, parent.relativeUri + "/" + name, parent.level + 1)
-}
 
 /**
   * Test class for ''ProtocolElementSource''.
   */
 class ProtocolElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with Matchers with MockitoSugar with AsyncTestHelper {
+  with BeforeAndAfterAll with Matchers with MockitoSugar with AsyncTestHelper:
   def this() = this(ActorSystem("ProtocolElementSourceSpec"))
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
     super.afterAll()
-  }
 
   import ProtocolElementSourceSpec._
 
@@ -172,7 +170,7 @@ class ProtocolElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSys
   /**
     * A test helper class managing a source to be tested and its dependencies.
     */
-  private class SourceTestHelper {
+  private class SourceTestHelper:
     /** Mock for the sync protocol. */
     private val protocol = mock[SyncProtocol]
 
@@ -184,10 +182,9 @@ class ProtocolElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSys
       * @param elements the elements in the root folder
       * @return this test helper
       */
-    def initRootFolder(elements: FsElement*): SourceTestHelper = {
+    def initRootFolder(elements: FsElement*): SourceTestHelper =
       when(protocol.readRootFolder()).thenReturn(Future.successful(elements.toList))
       this
-    }
 
     /**
       * Prepares the mock for the protocol to return the content of a specific
@@ -218,12 +215,11 @@ class ProtocolElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSys
       *
       * @return the future result of the stream execution
       */
-    def executeStream(): Future[List[FsElement]] = {
+    def executeStream(): Future[List[FsElement]] =
       implicit val ec: ExecutionContext = system.dispatcher
       val source = new ProtocolElementSource(protocol)
       val sink = Sink.fold[List[FsElement], FsElement](Nil)((lst, e) => e :: lst)
       Source.fromGraph(source).runWith(sink)
-    }
 
     /**
       * Runs a stream with the test source and returns the result.
@@ -241,9 +237,6 @@ class ProtocolElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSys
       * @param result the result to return for this request
       * @return this test helper
       */
-    private def prepareFolderRequest(folder: FsFolder, result: Future[List[FsElement]]): SourceTestHelper = {
+    private def prepareFolderRequest(folder: FsFolder, result: Future[List[FsElement]]): SourceTestHelper =
       when(protocol.readFolder(folder.id, folder.relativeUri + "/", folder.level + 1)).thenReturn(result)
       this
-    }
-  }
-}

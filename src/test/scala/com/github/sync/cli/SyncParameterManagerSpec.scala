@@ -41,7 +41,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Failure
 
-object SyncParameterManagerSpec {
+object SyncParameterManagerSpec:
   /** Test source URI. */
   private val SourceUri = "/test/source/uri"
 
@@ -65,11 +65,9 @@ object SyncParameterManagerSpec {
     */
   private def extractSyncConfig(argsMap: Map[String, Iterable[String]],
                                 consoleReader: ConsoleReader = DummyConsoleReader):
-  Future[(SyncConfig, ExtractionContext)] = {
+  Future[(SyncConfig, ExtractionContext)] =
     val context = toExtractionContext(toParameters(argsMap), consoleReader)
     Future.fromTry(ParameterExtractor.tryExtractor(syncConfigExtractor(), context))
-  }
-}
 
 /**
   * Test class for ''SyncParameterManager''. This class also tests
@@ -77,12 +75,11 @@ object SyncParameterManagerSpec {
   */
 class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper with MockitoSugar
-  with AsyncTestHelper {
+  with AsyncTestHelper:
   def this() = this(ActorSystem("SyncParameterManagerSpec"))
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
-  }
 
   after {
     tearDownTestFile()
@@ -99,11 +96,10 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @param msgParts text parts to be expected in the exception message
     * @return the error message from the exception
     */
-  private def expectFailedFuture(future: Future[_], msgParts: String*): String = {
+  private def expectFailedFuture(future: Future[_], msgParts: String*): String =
     val exception = expectFailedFuture[ParameterExtractionException](future)
     msgParts foreach (part => exception.getMessage should include(part))
     exception.getMessage
-  }
 
   "SyncParameterManager" should "extract URI parameters if they are present" in {
     val (config, params) = futureResult(extractSyncConfig(ArgsMap))
@@ -336,12 +332,11 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (SyncParameterManager.DestPasswordOption -> List("dstSecret"))
 
     val (_, next) = futureResult(extractSyncConfig(argsMap))
-    ParameterExtractor.checkParametersConsumed(next) match {
+    ParameterExtractor.checkParametersConsumed(next) match
       case Failure(exception: ParameterExtractionException) =>
         exception.failures.map(_.key.key) should contain only(SyncParameterManager.SourcePasswordOption,
           SyncParameterManager.DestPasswordOption)
       case r => fail("Unexpected result: " + r)
-    }
   }
 
   it should "read the crypt passwords from the console if necessary" in {
@@ -375,12 +370,11 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "handle the switches determining the log level" in {
-    def checkLogLevel(switch: String, expectedLevel: Level): Unit = {
+    def checkLogLevel(switch: String, expectedLevel: Level): Unit =
       val argsMap = ArgsMap + (switch -> List("true"))
       val (config, _) = futureResult(extractSyncConfig(argsMap))
 
       config.logLevel should be(expectedLevel)
-    }
 
     checkLogLevel(SyncParameterManager.LogLevelDebug, Level.DEBUG)
     checkLogLevel(SyncParameterManager.LogLevelInfo, Level.INFO)
@@ -438,4 +432,3 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
     orgConfig.normalized should be(expNormalized)
   }
-}

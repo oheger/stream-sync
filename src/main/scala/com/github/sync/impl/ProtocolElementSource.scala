@@ -39,7 +39,7 @@ import scala.util.{Failure, Success, Try}
   * @param ec       the execution context
   */
 class ProtocolElementSource(protocol: SyncProtocol)
-                           (implicit ec: ExecutionContext) extends GraphStage[SourceShape[FsElement]] {
+                           (implicit ec: ExecutionContext) extends GraphStage[SourceShape[FsElement]]:
   val out: Outlet[FsElement] = Outlet("ElementSource")
 
   override def shape: SourceShape[FsElement] = SourceShape(out)
@@ -61,20 +61,18 @@ class ProtocolElementSource(protocol: SyncProtocol)
         * available, the encountered elements are passed downstream. After all
         * folders have been processed, the stage is completed.
         */
-      private def processNextFolder(): Unit = {
-        if (pendingFolders.isEmpty) completeStage()
-        else {
+      private def processNextFolder(): Unit =
+        if pendingFolders.isEmpty then completeStage()
+        else
           val (data, queue) = pendingFolders.dequeue()
           pendingFolders = queue
           val folder = data.folder
           log.info("Processing {}.", folder.relativeUri)
           val callback = getAsyncCallback[Try[List[FsElement]]](handleFolderResults)
-          val futFolderResult = if (folder.level < 0) protocol.readRootFolder()
+          val futFolderResult = if folder.level < 0 then protocol.readRootFolder()
           else protocol.readFolder(folder.id, UriEncodingHelper.withTrailingSeparator(folder.relativeUri),
             folder.level + 1)
           futFolderResult onComplete callback.invoke
-        }
-      }
 
       /**
         * Handles the result of a query for a folder's content. The elements
@@ -84,8 +82,8 @@ class ProtocolElementSource(protocol: SyncProtocol)
         *
         * @param triedResults a ''Try'' with the folder content
         */
-      private def handleFolderResults(triedResults: Try[List[FsElement]]): Unit = {
-        triedResults match {
+      private def handleFolderResults(triedResults: Try[List[FsElement]]): Unit =
+        triedResults match
           case Success(results) if results.nonEmpty =>
             emitMultiple(out, results.sortWith(_.relativeUri < _.relativeUri))
             val folders = results.filter(_.isInstanceOf[FsFolder])
@@ -97,7 +95,4 @@ class ProtocolElementSource(protocol: SyncProtocol)
 
           case Failure(exception) =>
             failStage(exception)
-        }
-      }
     }
-}

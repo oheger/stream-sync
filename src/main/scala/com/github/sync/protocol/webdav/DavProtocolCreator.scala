@@ -34,7 +34,7 @@ import com.github.sync.protocol.config.DavStructureConfig
   * It creates a ''DavFileSystem'' and compatible components.
   */
 private object DavProtocolCreator
-  extends FileSystemProtocolCreator[Uri, DavModel.DavFile, DavModel.DavFolder, DavStructureConfig] {
+  extends FileSystemProtocolCreator[Uri, DavModel.DavFile, DavModel.DavFolder, DavStructureConfig]:
   /**
     * The prefix of URIs indicating the DAV protocol. This prefix needs to be
     * removed when passing the URI to the file system.
@@ -43,11 +43,10 @@ private object DavProtocolCreator
 
   override def createFileSystem(uri: String, config: DavStructureConfig, timeout: Timeout):
   ExtensibleFileSystem[Uri, DavModel.DavFile, DavModel.DavFolder,
-    Model.FolderContent[Uri, DavModel.DavFile, DavModel.DavFolder]] = {
+    Model.FolderContent[Uri, DavModel.DavFile, DavModel.DavFolder]] =
     val davConfig = DavConfig(rootUri = uri.stripPrefix(DavUriPrefix), timeout = timeout,
       deleteBeforeOverride = config.deleteBeforeOverride)
     new DavFileSystem(davConfig)
-  }
 
   override def createHttpSender(spawner: Spawner, factory: HttpRequestSenderFactory, uri: String,
                                 config: DavStructureConfig, senderConfig: HttpRequestSenderConfig):
@@ -57,4 +56,3 @@ private object DavProtocolCreator
   override def createConverter(config: DavStructureConfig):
   FileSystemProtocolConverter[Uri, DavModel.DavFile, DavModel.DavFolder] =
     new DavProtocolConverter(config)
-}

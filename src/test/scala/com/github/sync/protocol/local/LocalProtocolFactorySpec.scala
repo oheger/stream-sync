@@ -30,7 +30,7 @@ import scala.concurrent.duration._
 /**
   * Test class for ''LocalProtocolFactory''.
   */
-class LocalProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class LocalProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar:
   "LocalProtocolFactory" should "correctly initialize the base class" in {
     val config = mock[FsStructureConfig]
     val senderConfig = mock[HttpRequestSenderConfig]
@@ -43,10 +43,8 @@ class LocalProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSug
     factory.config should be(config)
     factory.httpSenderConfig should be(senderConfig)
     factory.timeout should be(timeout)
-    factory.creator match {
+    factory.creator match
       case c: LocalProtocolCreator =>
         c.executionContext should be(ec)
       case o => fail("Unexpected protocol creator: " + o)
-    }
   }
-}

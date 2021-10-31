@@ -34,7 +34,7 @@ import com.github.sync.protocol.config.OneDriveStructureConfig
   */
 private object OneDriveProtocolCreator
   extends FileSystemProtocolCreator[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder,
-    OneDriveStructureConfig] {
+    OneDriveStructureConfig]:
   /**
     * The prefix of URIs indicating the OneDrive protocol. This prefix needs to
     * be removed when determining the drive ID.
@@ -43,14 +43,13 @@ private object OneDriveProtocolCreator
 
   override def createFileSystem(uri: String, config: OneDriveStructureConfig, timeout: Timeout):
   ExtensibleFileSystem[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder,
-    Model.FolderContent[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder]] = {
+    Model.FolderContent[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder]] =
     val driveID = uri.stripPrefix(OneDriveUriPrefix)
     val baseConfig = OneDriveConfig(driveID = driveID, timeout = timeout, optRootPath = Some(config.syncPath))
     val chunkedConfig = config.optUploadChunkSizeMB.map(_ * 1024 * 1024).map(c => baseConfig.copy(uploadChunkSize = c))
       .getOrElse(baseConfig)
     val oneDriveConfig = config.optServerUri.map(u => chunkedConfig.copy(serverUri = u)).getOrElse(chunkedConfig)
     new OneDriveFileSystem(oneDriveConfig)
-  }
 
   override def createHttpSender(spawner: Spawner, factory: HttpRequestSenderFactory, uri: String,
                                 config: OneDriveStructureConfig, senderConfig: HttpRequestSenderConfig):
@@ -60,4 +59,3 @@ private object OneDriveProtocolCreator
   override def createConverter(config: OneDriveStructureConfig):
   FileSystemProtocolConverter[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder] =
     OneDriveProtocolConverter
-}

@@ -24,7 +24,7 @@ import com.github.sync.protocol.FileSystemProtocolConverter
 import java.nio.file.{Path, Paths}
 import java.time.{Instant, ZoneId, ZonedDateTime}
 
-object LocalProtocolConverter {
+object LocalProtocolConverter:
   /** Constant for the UTC time zone. */
   private val ZoneUTC = ZoneId.of("Z")
 
@@ -74,7 +74,6 @@ object LocalProtocolConverter {
   private def instantTimeZoneConversion(instant: Instant, optZone: Option[ZoneId])
                                        (f: (Instant, ZoneId) => Instant): Instant =
     optZone map (f(instant, _)) getOrElse instant
-}
 
 /**
   * A [[FileSystemProtocolConverter]] implementation for the local file system.
@@ -91,17 +90,16 @@ object LocalProtocolConverter {
   * @param optTimeZone the optional time zone for timestamps
   */
 private class LocalProtocolConverter(val optTimeZone: Option[ZoneId])
-  extends FileSystemProtocolConverter[Path, LocalFsModel.LocalFile, LocalFsModel.LocalFolder] {
+  extends FileSystemProtocolConverter[Path, LocalFsModel.LocalFile, LocalFsModel.LocalFolder]:
 
   import LocalProtocolConverter._
 
   override def elementIDFromString(strID: String): Path = Paths get strID
 
-  override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): LocalFsModel.LocalFile = {
-    val path = if (useID) Paths.get(fileElement.id) else null
+  override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): LocalFsModel.LocalFile =
+    val path = if useID then Paths.get(fileElement.id) else null
     LocalFsModel.newFile(path = path, name = name,
       lastModifiedAt = Some(instantToTimeZone(fileElement.lastModified, optTimeZone)))
-  }
 
   override def toFsFolder(folderElement: SyncTypes.FsFolder, name: String): LocalFsModel.LocalFolder =
     LocalFsModel.newFolder(name = name)
@@ -113,4 +111,3 @@ private class LocalProtocolConverter(val optTimeZone: Option[ZoneId])
   override def toFolderElement(folder: LocalFsModel.LocalFolder, path: String, level: Int): SyncTypes.FsFolder =
     SyncTypes.FsFolder(id = folder.id.toString, relativeUri = path + UriEncodingHelper.encode(folder.name),
       level = level)
-}

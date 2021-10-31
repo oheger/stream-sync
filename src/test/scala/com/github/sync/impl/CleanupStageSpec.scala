@@ -30,12 +30,11 @@ import org.scalatest.matchers.should.Matchers
   * Test class for ''CleanupStage''.
   */
 class CleanupStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with Matchers with AsyncTestHelper {
+  with BeforeAndAfterAll with Matchers with AsyncTestHelper:
   def this() = this(ActorSystem("CleanupStageSpec"))
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
-  }
 
   "A CleanupStage" should "forward stream elements and invoke the cleanup action" in {
     val Elements = List(1, 2, 3, 4, 42)
@@ -48,4 +47,3 @@ class CleanupStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
     result should contain theSameElementsInOrderAs Elements
     cleanUpCount.get() should be(1)
   }
-}

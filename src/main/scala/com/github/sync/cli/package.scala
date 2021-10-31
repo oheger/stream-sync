@@ -18,7 +18,7 @@ package com.github.sync
 
 import java.util.Locale
 
-package object cli {
+package object cli:
   /**
     * Converts a string to lower case.
     *
@@ -34,4 +34,3 @@ package object cli {
     * @return the string in uppercase
     */
   def toUpperCase(s: String): String = s.toUpperCase(Locale.ROOT)
-}

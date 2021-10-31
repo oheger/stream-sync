@@ -23,7 +23,7 @@ import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
 import scala.io.Source
 
-object FileTestHelper {
+object FileTestHelper:
   /** A string with defined test data. */
   val TestData: String =
     """|Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy
@@ -69,7 +69,6 @@ object FileTestHelper {
     * @return the test bytes
     */
   def testBytes(): Array[Byte] = toBytes(TestData)
-}
 
 /**
   * A helper trait which can be used by test classes that need access to a file
@@ -80,7 +79,7 @@ object FileTestHelper {
   * later (for tests of writing functionality). There is also a cleanup method
   * for removing the file when it is no longer needed.
   */
-trait FileTestHelper {
+trait FileTestHelper:
 
   import FileTestHelper._
 
@@ -90,10 +89,9 @@ trait FileTestHelper {
   /**
     * Removes the temporary file if it exists.
     */
-  def tearDownTestFile(): Unit = {
+  def tearDownTestFile(): Unit =
     optTestDirectory foreach deleteTree
     optTestDirectory = None
-  }
 
   /**
     * Returns the path to the temporary directory managed by this trait.
@@ -117,11 +115,10 @@ trait FileTestHelper {
     * @param content the content to be written
     * @return the path to the file that was written
     */
-  def writeFileContent(path: Path, content: String): Path = {
+  def writeFileContent(path: Path, content: String): Path =
     Files.createDirectories(path.getParent)
     Files.write(path, toBytes(content))
     path
-  }
 
   /**
     * Creates a new temporary file physically on disk which has the specified content.
@@ -129,10 +126,9 @@ trait FileTestHelper {
     * @param content the content of the file
     * @return the path to the new file
     */
-  def createDataFile(content: String = FileTestHelper.TestData): Path = {
+  def createDataFile(content: String = FileTestHelper.TestData): Path =
     val path = createFileReference()
     writeFileContent(path, content)
-  }
 
   /**
     * Creates a path with the given name in the temporary directory managed by
@@ -150,12 +146,11 @@ trait FileTestHelper {
     * @param path the path to the file to be read
     * @return the content read from the data file
     */
-  def readDataFile(path: Path): String = {
+  def readDataFile(path: Path): String =
     val source = Source.fromFile(path.toFile)
     val result = source.getLines().mkString(NL)
     source.close()
     result
-  }
 
   /**
     * Returns a set with all paths that are found in the managed temporary
@@ -163,7 +158,7 @@ trait FileTestHelper {
     *
     * @return a set with all encountered paths (excluding the root directory)
     */
-  def listManagedDirectory(): collection.mutable.Set[Path] = {
+  def listManagedDirectory(): collection.mutable.Set[Path] =
     val result = collection.mutable.Set.empty[Path]
     Files.walkFileTree(testDirectory, new SimpleFileVisitor[Path] {
       override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult =
@@ -180,14 +175,13 @@ trait FileTestHelper {
 
     result -= testDirectory
     result
-  }
 
   /**
     * Deletes a directory and all its content.
     *
     * @param path the directory to be deleted
     */
-  def deleteDirectory(path: Path): Unit = {
+  def deleteDirectory(path: Path): Unit =
     Files.walkFileTree(path, new SimpleFileVisitor[Path] {
       override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
         Files delete file
@@ -195,13 +189,12 @@ trait FileTestHelper {
       }
 
       override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
-        if (exc == null) {
+        if exc == null then {
           Files delete dir
           FileVisitResult.CONTINUE
         } else throw exc
       }
     })
-  }
 
   /**
     * Deletes a whole directory tree. If the specified path is a directory, it
@@ -210,13 +203,11 @@ trait FileTestHelper {
     *
     * @param path the path in question
     */
-  def deleteTree(path: Path): Unit = {
-    if (Files exists path) {
-      if (Files.isDirectory(path))
+  def deleteTree(path: Path): Unit =
+    if Files exists path then
+      if Files.isDirectory(path) then
         deleteDirectory(path)
       else Files delete path
-    }
-  }
 
   /**
     * Checks whether the temporary directory has been created. If not, it is
@@ -224,10 +215,9 @@ trait FileTestHelper {
     *
     * @return the path to the managed temporary directory
     */
-  private def ensureTempDirectory(): Path = {
+  private def ensureTempDirectory(): Path =
     optTestDirectory = optTestDirectory orElse Some(createTempDirectory())
     optTestDirectory.get
-  }
 
   /**
     * Creates a temporary directory which is the root folder of all temporary
@@ -237,4 +227,3 @@ trait FileTestHelper {
     */
   private def createTempDirectory(): Path =
     Files createTempDirectory TempFilePrefix
-}

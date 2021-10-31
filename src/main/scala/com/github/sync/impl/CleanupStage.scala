@@ -36,7 +36,7 @@ import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
   * @param cleanup the clean-up action to be invoked
   * @tparam T the type of stream elements
   */
-class CleanupStage[T](cleanup: () => Unit) extends GraphStage[FlowShape[T, T]] {
+class CleanupStage[T](cleanup: () => Unit) extends GraphStage[FlowShape[T, T]]:
   val in: Inlet[T] = Inlet[T]("CleanupStage.in")
   val out: Outlet[T] = Outlet[T]("CleanupStage.out")
 
@@ -56,9 +56,7 @@ class CleanupStage[T](cleanup: () => Unit) extends GraphStage[FlowShape[T, T]] {
         }
       })
 
-      override def postStop(): Unit = {
+      override def postStop(): Unit =
         cleanup()
         super.postStop()
-      }
     }
-}

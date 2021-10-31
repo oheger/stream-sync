@@ -33,15 +33,14 @@ import java.time.ZoneId
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 
-object LocalProtocolCreatorSpec {
+object LocalProtocolCreatorSpec:
   /** The root path of the test local file system as string. */
   private val RootPathStr = "/data/root"
-}
 
 /**
   * Test class for ''LocalProtocolCreator''.
   */
-class LocalProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class LocalProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar:
 
   import LocalProtocolCreatorSpec._
 
@@ -50,10 +49,9 @@ class LocalProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSug
     *
     * @return the initialized test instance
     */
-  private def newCreator(): LocalProtocolCreator = {
+  private def newCreator(): LocalProtocolCreator =
     val exec = mock[ExecutionContext]
     new LocalProtocolCreator(exec)
-  }
 
   "LocalProtocolCreator" should "create a correct file system" in {
     val config = FsStructureConfig(None)
@@ -71,11 +69,10 @@ class LocalProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSug
     val config = FsStructureConfig(optZone)
     val creator = newCreator()
 
-    creator.createConverter(config) match {
+    creator.createConverter(config) match
       case conv: LocalProtocolConverter =>
         conv.optTimeZone should be(optZone)
       case c => fail("Unexpected converter: " + c)
-    }
   }
 
   it should "return a dummy as the HTTP sender actor" in {
@@ -88,4 +85,3 @@ class LocalProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSug
 
     creator.createHttpSender(spawner, factory, RootPathStr, FsStructureConfig(None), senderConfig) should be(mockActor)
   }
-}

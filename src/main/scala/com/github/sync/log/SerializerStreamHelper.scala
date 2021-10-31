@@ -32,7 +32,7 @@ import scala.concurrent.{ExecutionContext, Future}
   * The functions defined here are used in streams that need to read sync
   * operations from log files.
   */
-object SerializerStreamHelper {
+object SerializerStreamHelper:
   /** The byte string representing a line end character. */
   private val LineEnd = ByteString("\n")
 
@@ -74,10 +74,9 @@ object SerializerStreamHelper {
     * @param system the actor system
     * @return a future with a set of the single lines read from the file
     */
-  def readProcessedLog(file: Path)(implicit system: ActorSystem): Future[Set[String]] = {
+  def readProcessedLog(file: Path)(implicit system: ActorSystem): Future[Set[String]] =
     val sink = Sink.fold[Set[String], String](Set.empty)(_ + _)
     createLogFileSource(file).runWith(sink)
-  }
 
   /**
     * Creates a source from a sync log file that ignores operations contained
@@ -109,4 +108,3 @@ object SerializerStreamHelper {
     */
   private def toOperationSource(source: Source[String, Any]): Source[SyncOperation, Any] =
     source.map(strOp => ElementSerializer.deserializeOperation(strOp).get)
-}

@@ -56,7 +56,7 @@ import scala.util.{Failure, Success}
   * they depend on the completion of others. To manage the dynamic state
   * required for this book-keeping, an actor is created temporarily.
   */
-object ProtocolOperationHandlerStage {
+object ProtocolOperationHandlerStage:
   /** The configuration property for the size of the connection pool. */
   private val PropMaxConnections = "akka.http.host-connection-pool.max-connections"
 
@@ -101,7 +101,7 @@ object ProtocolOperationHandlerStage {
     */
   private case class ExecutionState(handler: ProtocolOperationHandler,
                                     opsInProgress: Set[SyncOperation],
-                                    pending: List[ExecuteOperationCommand]) {
+                                    pending: List[ExecuteOperationCommand]):
     /**
       * Returns a new instance that has the given operation in the set of
       * operations in progress.
@@ -131,7 +131,6 @@ object ProtocolOperationHandlerStage {
       */
     def operationPending(command: ExecuteOperationCommand): ExecutionState =
       copy(pending = command :: pending)
-  }
 
   /**
     * Returns a flow stage that processes [[SyncOperation]] objects using the
@@ -148,7 +147,7 @@ object ProtocolOperationHandlerStage {
     * @return the flow stage
     */
   def apply(handler: ProtocolOperationHandler, spawner: Spawner, optHandlerActorName: Option[String] = None)
-           (implicit system: ActorSystem[_], timeout: Timeout): Flow[SyncOperation, SyncOperationResult, NotUsed] = {
+           (implicit system: ActorSystem[_], timeout: Timeout): Flow[SyncOperation, SyncOperationResult, NotUsed] =
     implicit val ec: ExecutionContext = system.executionContext
     val parallelism = system.settings.config.getInt(PropMaxConnections)
     val handlerActor = spawner.spawn(operationHandlerActor(ExecutionState(handler, Set.empty, Nil)),
@@ -162,7 +161,6 @@ object ProtocolOperationHandlerStage {
         case e => SyncOperationResult(op, Some(e))
       }
     } via new CleanupStage[SyncOperationResult](() => handlerActor ! CloseActorCommand)
-  }
 
   /**
     * The handler function of an internal actor that takes care of the
@@ -201,7 +199,7 @@ object ProtocolOperationHandlerStage {
     */
   private def handleExecutionCommand(ctx: ActorContext[OperationHandlerCommand], state: ExecutionState,
                                      cmd: ExecuteOperationCommand): ExecutionState =
-    cmd.op match {
+    cmd.op match
       case SyncOperation(elem, ActionCreate, level, _) =>
         handleIfPossible(ctx, state, cmd, notifyOnComplete = elem.isInstanceOf[FsFolder]) {
           case SyncOperation(_: FsFolder, ActionCreate, otherLevel, _) if otherLevel < level => true
@@ -218,7 +216,6 @@ object ProtocolOperationHandlerStage {
         handleOperation(ctx, state, cmd, notifyOnComplete = true)
 
       case _ => handleOperation(ctx, state, cmd, notifyOnComplete = false)
-    }
 
   /**
     * Handles the given operation. This means that the operation is passed to
@@ -236,11 +233,11 @@ object ProtocolOperationHandlerStage {
     */
   private def handleOperation(ctx: ActorContext[OperationHandlerCommand], state: ExecutionState,
                               command: ExecuteOperationCommand, notifyOnComplete: Boolean):
-  ExecutionState = {
+  ExecutionState =
     implicit val ec: ExecutionContext = ctx.executionContext
     ctx.log.debug("Processing operation {}.", command.op)
     val futExecute = state.handler.execute(command.op)
-    val (futComplete, next) = if (notifyOnComplete)
+    val (futComplete, next) = if notifyOnComplete then
       (futExecute.andThen(_ => ctx.self ! OperationCompletedCommand(command.op)), state.operationStarted(command.op))
     else (futExecute, state)
 
@@ -250,7 +247,6 @@ object ProtocolOperationHandlerStage {
     }
 
     next
-  }
 
   /**
     * Checks whether the given operation can now be handled based on the check
@@ -268,8 +264,6 @@ object ProtocolOperationHandlerStage {
   private def handleIfPossible(ctx: ActorContext[OperationHandlerCommand], state: ExecutionState,
                                command: ExecuteOperationCommand, notifyOnComplete: Boolean)
                               (check: SyncOperation => Boolean): ExecutionState =
-    state.opsInProgress.find(check) match {
+    state.opsInProgress.find(check) match
       case Some(_) => state.operationPending(command)
       case None => handleOperation(ctx, state, command, notifyOnComplete)
-    }
-}

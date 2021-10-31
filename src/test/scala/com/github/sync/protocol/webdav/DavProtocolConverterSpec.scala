@@ -25,7 +25,7 @@ import org.scalatest.matchers.should.Matchers
 
 import java.time.Instant
 
-object DavProtocolConverterSpec {
+object DavProtocolConverterSpec:
   /** A test element URI as string. */
   private val TestUriStr = "https://stream.sync.example.org/test"
 
@@ -52,12 +52,11 @@ object DavProtocolConverterSpec {
     * @return the URI string for this element
     */
   private def elementUri(name: String): String = TestUriStr + name
-}
 
 /**
   * Test class for ''DavProtocolConverter''.
   */
-class DavProtocolConverterSpec extends AnyFlatSpec with Matchers {
+class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
 
   import DavProtocolConverterSpec._
 
@@ -179,4 +178,3 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers {
     val syncFile = converter.toFileElement(fsFile, "/path/", TestLevel)
     syncFile.lastModified should be(LastModifiedTime)
   }
-}

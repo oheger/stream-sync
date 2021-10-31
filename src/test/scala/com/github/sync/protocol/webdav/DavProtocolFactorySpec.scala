@@ -29,7 +29,7 @@ import scala.concurrent.duration._
 /**
   * Test class for ''DavProtocolFactory''.
   */
-class DavProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class DavProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar:
   "DavProtocolFactory" should "correctly initialize the base class" in {
     val config = mock[DavStructureConfig]
     val senderConfig = mock[HttpRequestSenderConfig]
@@ -43,4 +43,3 @@ class DavProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar
     factory.httpSenderConfig should be(senderConfig)
     factory.creator should be(DavProtocolCreator)
   }
-}

@@ -30,7 +30,7 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
 
-object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData] {
+object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]:
   /** Parameter for the client ID. */
   private val ParamClientId = "client_id"
 
@@ -81,19 +81,17 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
 
   override def fetchTokens(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
                            secret: Secret, code: String)
-                          (implicit system: ActorSystem[_]): Future[OAuthTokenData] = {
+                          (implicit system: ActorSystem[_]): Future[OAuthTokenData] =
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamRedirectUri -> config.oauthConfig.redirectUri,
       ParamClientSecret -> secret.secret, ParamCode -> code, ParamGrantType -> GrantTypeAuthorizationCode)
     sendTokenRequest(httpActor, config, params)
-  }
 
   override def refreshToken(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
                             secret: Secret, refreshToken: String)
-                           (implicit system: ActorSystem[_]): Future[OAuthTokenData] = {
+                           (implicit system: ActorSystem[_]): Future[OAuthTokenData] =
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamRedirectUri -> config.oauthConfig.redirectUri,
       ParamClientSecret -> secret.secret, ParamRefreshToken -> refreshToken, ParamGrantType -> GrantTypeRefreshToken)
     sendTokenRequest(httpActor, config, params)
-  }
 
   /**
     * Sends a request to the token endpoint of the referenced IDP with the
@@ -108,14 +106,13 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     */
   private def sendTokenRequest(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
                                params: Map[String, String])
-                              (implicit system: ActorSystem[_]): Future[OAuthTokenData] = {
+                              (implicit system: ActorSystem[_]): Future[OAuthTokenData] =
     val futResult = HttpRequestSender.sendRequestSuccess(request = HttpRequest(uri = config.oauthConfig.tokenEndpoint,
       entity = FormData(params).toEntity, method = HttpMethods.POST), requestData = null, sender = httpActor)
-    for {result <- futResult
+    for result <- futResult
          content <- responseBody(result)
          tokenData <- extractTokenData(content)
-         } yield tokenData
-  }
+         yield tokenData
 
   /**
     * Extracts the text content from the given result object.
@@ -125,10 +122,9 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     * @return the text content of the response
     */
   private def responseBody(result: HttpRequestSender.SuccessResult)
-                          (implicit system: ActorSystem[_]): Future[String] = {
+                          (implicit system: ActorSystem[_]): Future[String] =
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     result.response.entity.dataBytes.runWith(sink).map(_.utf8String)
-  }
 
   /**
     * Tries to extract the token information from the given response from an
@@ -138,13 +134,12 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     * @param response the IDP response
     * @return a future with the extracted token data
     */
-  private def extractTokenData(response: String): Future[OAuthTokenData] = {
-    val optTokens = for {access <- regAccessToken.findFirstMatchIn(response)
+  private def extractTokenData(response: String): Future[OAuthTokenData] =
+    val optTokens = for access <- regAccessToken.findFirstMatchIn(response)
                          refresh <- regRefreshToken.findFirstMatchIn(response)
-                         } yield OAuthTokenData(accessToken = access.group(1), refreshToken = refresh.group(1))
+                         yield OAuthTokenData(accessToken = access.group(1), refreshToken = refresh.group(1))
     optTokens.fold[Future[OAuthTokenData]](Future.failed(new IOException(
       s"Could not extract token data from IDP response: '$response'.")))(Future.successful)
-  }
 
   /**
     * Creates a regular expression that matches the value of the given JSON
@@ -164,4 +159,3 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     */
   private implicit def executionContext(implicit system: ActorSystem[_]): ExecutionContext =
     system.executionContext
-}

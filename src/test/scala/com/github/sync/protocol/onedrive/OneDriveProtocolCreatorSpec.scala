@@ -32,7 +32,7 @@ import scala.concurrent.duration._
 /**
   * Test class for ''OneDriveProtocolCreator''.
   */
-class OneDriveProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class OneDriveProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar:
   "OneDriveProtocolCreator" should "create a correct file system" in {
     val DriveId = "myDriveID"
     val SyncPath = "/path/to/sync"
@@ -44,23 +44,21 @@ class OneDriveProtocolCreatorSpec extends AnyFlatSpec with Matchers with Mockito
     val expConfig = OneDriveConfig(driveID = DriveId, serverUri = ServerUri, optRootPath = Some(SyncPath),
       uploadChunkSize = ChunkSize * 1024 * 1024, timeout = SyncTimeout)
 
-    OneDriveProtocolCreator.createFileSystem(DriveId, structConfig, SyncTimeout) match {
+    OneDriveProtocolCreator.createFileSystem(DriveId, structConfig, SyncTimeout) match
       case fs: OneDriveFileSystem =>
         fs.config should be(expConfig)
       case fs => fail("Unexpected file system: " + fs)
-    }
   }
 
   it should "create a correct file system with default properties" in {
     val structConfig = OneDriveStructureConfig(syncPath = "/some/path", optServerUri = None,
       optUploadChunkSizeMB = None)
 
-    OneDriveProtocolCreator.createFileSystem("SomeDriveID", structConfig, Timeout(1.minute)) match {
+    OneDriveProtocolCreator.createFileSystem("SomeDriveID", structConfig, Timeout(1.minute)) match
       case fs: OneDriveFileSystem =>
         fs.config.serverUri should be(OneDriveConfig.OneDriveServerUri)
         fs.config.uploadChunkSize should be(OneDriveConfig.DefaultUploadChunkSize)
       case fs => fail("Unexpected file system: " + fs)
-    }
   }
 
   it should "create a correct file system if the driveID has the onedrive prefix" in {
@@ -68,11 +66,10 @@ class OneDriveProtocolCreatorSpec extends AnyFlatSpec with Matchers with Mockito
       optUploadChunkSizeMB = None)
     val DriveID = "theRealDriveID"
 
-    OneDriveProtocolCreator.createFileSystem("onedrive:" + DriveID, structConfig, Timeout(1.minute)) match {
+    OneDriveProtocolCreator.createFileSystem("onedrive:" + DriveID, structConfig, Timeout(1.minute)) match
       case fs: OneDriveFileSystem =>
         fs.config.driveID should be(DriveID)
       case fs => fail("Unexpected file system: " + fs)
-    }
   }
 
   it should "create a correct HTTP sender actor" in {
@@ -91,4 +88,3 @@ class OneDriveProtocolCreatorSpec extends AnyFlatSpec with Matchers with Mockito
   it should "create a correct converter" in {
     OneDriveProtocolCreator.createConverter(null) should be(OneDriveProtocolConverter)
   }
-}

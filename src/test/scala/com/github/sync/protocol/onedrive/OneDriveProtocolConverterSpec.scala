@@ -23,7 +23,7 @@ import org.scalatest.matchers.should.Matchers
 
 import java.time.Instant
 
-object OneDriveProtocolConverterSpec {
+object OneDriveProtocolConverterSpec:
   /** A test element ID. */
   private val ElementID = "a-one-drive-element"
 
@@ -38,12 +38,11 @@ object OneDriveProtocolConverterSpec {
 
   /** A test file size. */
   private val FileSize = 33445
-}
 
 /**
   * Test class for ''OneDriveProtocolConverter''.
   */
-class OneDriveProtocolConverterSpec extends AnyFlatSpec with Matchers {
+class OneDriveProtocolConverterSpec extends AnyFlatSpec with Matchers:
 
   import OneDriveProtocolConverterSpec._
 
@@ -105,4 +104,3 @@ class OneDriveProtocolConverterSpec extends AnyFlatSpec with Matchers {
     val syncFile = OneDriveProtocolConverter.toFileElement(oneDriveFile, ParentPath, TestLevel)
     syncFile should be(expSyncFile)
   }
-}

@@ -36,7 +36,7 @@ import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 import scala.concurrent.duration.*
 import scala.concurrent.{Future, Promise}
 
-object ProtocolOperationHandlerStageSpec {
+object ProtocolOperationHandlerStageSpec:
   /** A test operation passed to the test stage. */
   private val TestOp = createOp(createFolder(1), ActionRemove)
 
@@ -60,17 +60,15 @@ object ProtocolOperationHandlerStageSpec {
     * @param operation the operation to handle
     * @param promise   a promise to complete the operation
     */
-  case class OperationInProgress(operation: SyncOperation, promise: Promise[Unit]) {
+  case class OperationInProgress(operation: SyncOperation, promise: Promise[Unit]):
     /**
       * Marks this operation has handled by completing the promise either
       * successfully or with a failure.
       *
       * @param optFailure an optional failure to report
       */
-    def handle(optFailure: Option[Throwable] = None): Unit = {
+    def handle(optFailure: Option[Throwable] = None): Unit =
       optFailure.fold(promise.success(()))(promise.failure)
-    }
-  }
 
   /**
     * Generates a test folder based on the given index.
@@ -100,13 +98,12 @@ object ProtocolOperationHandlerStageSpec {
     */
   private def createOp(elem: FsElement, action: SyncAction, level: Int = Level): SyncOperation =
     SyncOperation(element = elem, action = action, level = level)
-}
 
 /**
   * Test class for ''ProtocolOperationHandlerStageSpec''.
   */
 class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
-  with MockitoSugar with AsyncTestHelper {
+  with MockitoSugar with AsyncTestHelper:
 
   import ProtocolOperationHandlerStageSpec.*
 
@@ -117,7 +114,7 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
     * @param op1 the first operation (which blocks the other)
     * @param op2 the second operation
     */
-  private def checkSerialExecution(op1: SyncOperation, op2: SyncOperation): Unit = {
+  private def checkSerialExecution(op1: SyncOperation, op2: SyncOperation): Unit =
     val helper = new StageTestHelper
 
     val futResult = helper.runStage(List(op1, op2))
@@ -127,7 +124,6 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
     helper.expectAndHandleOperation(op2)
     futureResult(futResult) should contain only(SyncOperationResult(op1, None),
       SyncOperationResult(op2, None))
-  }
 
   /**
     * Tests whether two sync operations can be executed in parallel; i.e. the
@@ -136,7 +132,7 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
     * @param op1 the first operation
     * @param op2 the second operation
     */
-  private def checkParallelExecution(op1: SyncOperation, op2: SyncOperation): Unit = {
+  private def checkParallelExecution(op1: SyncOperation, op2: SyncOperation): Unit =
     val helper = new StageTestHelper
 
     val futResult = helper.runStage(List(op1, op2))
@@ -148,7 +144,6 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
     opInP2.handle()
     futureResult(futResult) should contain only(SyncOperationResult(op1, None),
       SyncOperationResult(op2, None))
-  }
 
   "ProtocolOperationHandlerStage" should "process a successful operation" in {
     val helper = new StageTestHelper
@@ -260,7 +255,7 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
   /**
     * A test helper class managing a stage to be tested and its dependencies.
     */
-  private class StageTestHelper {
+  private class StageTestHelper:
     /** The queue for tracking the operations to be handled. */
     private val operationQueue = new LinkedBlockingQueue[OperationInProgress]
 
@@ -275,13 +270,12 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
       * @param operations the operations to execute
       * @return a ''Future'' with the resulting operations
       */
-    def runStage(operations: List[SyncOperation]): Future[List[SyncOperationResult]] = {
+    def runStage(operations: List[SyncOperation]): Future[List[SyncOperationResult]] =
       val source = Source(operations)
       implicit val timeout: Timeout = Timeout(10.seconds)
       val stage = ProtocolOperationHandlerStage(createHandler(operationQueue), createSpawner(), Some(ActorName))
       val sink = Sink.fold[List[SyncOperationResult], SyncOperationResult](List.empty) { (lst, e) => e :: lst }
       source.via(stage).runWith(sink)
-    }
 
     /**
       * Expects that an operation was passed to the handler and returns data
@@ -289,11 +283,10 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
       *
       * @return the data about the operation
       */
-    def expectOperation(): OperationInProgress = {
+    def expectOperation(): OperationInProgress =
       val op = operationQueue.poll(QueueTimeout.toMillis, TimeUnit.MILLISECONDS)
       op should not be null
       op
-    }
 
     /**
       * Expects that the given operation was passed next to the protocol
@@ -303,12 +296,11 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
       * @param optFailure optional failure to mark the op as failed
       * @return this test helper
       */
-    def expectAndHandleOperation(expOp: SyncOperation, optFailure: Option[Throwable] = None): StageTestHelper = {
+    def expectAndHandleOperation(expOp: SyncOperation, optFailure: Option[Throwable] = None): StageTestHelper =
       val op = expectOperation()
       op.operation should be(expOp)
       op.handle(optFailure)
       this
-    }
 
     /**
       * Expects that no operation has been passed to the protocol handler for
@@ -317,10 +309,9 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
       *
       * @return this test helper
       */
-    def expectNoOperation(): StageTestHelper = {
+    def expectNoOperation(): StageTestHelper =
       operationQueue.poll(NoOperationTimeout.toMillis, TimeUnit.MILLISECONDS) should be(null)
       this
-    }
 
     /**
       * Returns the reference to the internal handler actor that was created
@@ -328,11 +319,10 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
       *
       * @return the internal handler actor
       */
-    def handlerActorRef(): ActorRef[ProtocolOperationHandlerStage.OperationHandlerCommand] = {
+    def handlerActorRef(): ActorRef[ProtocolOperationHandlerStage.OperationHandlerCommand] =
       val ref = actorQueue.poll(QueueTimeout.toMillis, TimeUnit.MILLISECONDS)
       ref should not be null
       ref
-    }
 
     /**
       * Creates a mock operation handler that records the operations to execute
@@ -341,7 +331,7 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
       * @param queue the queue to record operations
       * @return the mock operation handler
       */
-    private def createHandler(queue: BlockingQueue[OperationInProgress]): ProtocolOperationHandler = {
+    private def createHandler(queue: BlockingQueue[OperationInProgress]): ProtocolOperationHandler =
       val handler = mock[ProtocolOperationHandler]
       when(handler.execute(any(classOf[SyncOperation]))).thenAnswer((invocation: InvocationOnMock) => {
         val promise = Promise[Unit]()
@@ -350,7 +340,6 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
         promise.future
       })
       handler
-    }
 
     /**
       * Creates a spawner that spawns new actors using the test kit.
@@ -359,12 +348,9 @@ class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSup
       */
     private def createSpawner(): Spawner =
       new Spawner {
-        override def spawn[T](behavior: Behavior[T], optName: Option[String], props: Props): ActorRef[T] = {
+        override def spawn[T](behavior: Behavior[T], optName: Option[String], props: Props): ActorRef[T] =
           optName should be(Some(ActorName))
           val ref = testKit.spawn(behavior)
           actorQueue.offer(ref.asInstanceOf[ActorRef[ProtocolOperationHandlerStage.OperationHandlerCommand]])
           ref
-        }
       }
-  }
-}

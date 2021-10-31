@@ -28,7 +28,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.xml.SAXParseException
 
-object OAuthStorageServiceImplSpec {
+object OAuthStorageServiceImplSpec:
   /** Constant for the base name of a provider configuration. */
   private val BaseName = "myTestProvider"
 
@@ -57,19 +57,17 @@ object OAuthStorageServiceImplSpec {
     c1.copy(oauthConfig = null) == c2.copy(oauthConfig = null) &&
       c1.oauthConfig.copy(clientSecret = null) == c2.oauthConfig.copy(clientSecret = null) &&
       c1.oauthConfig.clientSecret.secret == c2.oauthConfig.clientSecret.secret
-}
 
 /**
   * Test class for ''OAuthStorageServiceImpl''.
   */
 class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with BeforeAndAfter with Matchers with AsyncTestHelper with FileTestHelper {
+  with BeforeAndAfterAll with BeforeAndAfter with Matchers with AsyncTestHelper with FileTestHelper:
   def this() = this(ActorSystem("OAuthStorageServiceSpec"))
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
     super.afterAll()
-  }
 
   after {
     tearDownTestFile()
@@ -92,9 +90,9 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
   "OAuthStorageServiceImpl" should "support a round-trip with storing and loading an OAuthConfig" in {
     val storageConfig = createStorageConfig()
 
-    val futConfig = for {_ <- OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig)
+    val futConfig = for _ <- OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig)
                          readConfig <- OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
-                         } yield readConfig
+                         yield readConfig
     val config = futureResult(futConfig)
     config should not be theSameInstanceAs(TestConfig)
     configEquals(TestConfig, config) shouldBe true
@@ -167,9 +165,9 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
   it should "support a round-trip with saving and loading encrypted data" in {
     val storageConfig = createStorageConfig(optPassword = Some("secure_storage"))
 
-    val futSecret = for {_ <- OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig)
+    val futSecret = for _ <- OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig)
                          loadedConfig <- OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
-                         } yield loadedConfig
+                         yield loadedConfig
     val secretConfig = futureResult(futSecret)
     configEquals(secretConfig, TestConfig) shouldBe true
     val bytes = Files.readAllBytes(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixSecretFile))
@@ -225,4 +223,3 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     removeResult should have size 0
     Files.exists(tokenPath) shouldBe true
   }
-}

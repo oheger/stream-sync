@@ -27,13 +27,12 @@ import com.github.sync.protocol.webdav.DavProtocolConverter.PatchTimeFormatter
 import java.time.{Instant, ZoneId}
 import java.time.format.DateTimeFormatter
 
-private object DavProtocolConverter {
+private object DavProtocolConverter:
   /**
     * A formatter instance used to generate the time representation for the
     * last modified attribute.
     */
   private val PatchTimeFormatter = DateTimeFormatter.RFC_1123_DATE_TIME.withZone(ZoneId.of("Z"))
-}
 
 /**
   * A [[FileSystemProtocolConverter]] implementation for the WebDAV file
@@ -47,7 +46,7 @@ private object DavProtocolConverter {
   * @param davConfig the WebDAV configuration
   */
 private class DavProtocolConverter(val davConfig: DavStructureConfig)
-  extends FileSystemProtocolConverter[Uri, DavModel.DavFile, DavModel.DavFolder] {
+  extends FileSystemProtocolConverter[Uri, DavModel.DavFile, DavModel.DavFolder]:
   /** An optional custom property to access the last modified time. */
   private val optModifiedAttribute = davConfig.optLastModifiedProperty map { property =>
     val namespace = davConfig.optLastModifiedNamespace getOrElse DavParser.NS_DAV
@@ -59,12 +58,11 @@ private class DavProtocolConverter(val davConfig: DavStructureConfig)
 
   override def elementIDFromString(strID: String): Uri = strID
 
-  override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): DavModel.DavFile = {
+  override def toFsFile(fileElement: SyncTypes.FsFile, name: String, useID: Boolean): DavModel.DavFile =
     val lastModifiedStr = PatchTimeFormatter.format(fileElement.lastModified)
     val attributes = Map(setModifiedAttribute -> lastModifiedStr)
-    val fileUri = if (useID) Uri(fileElement.id) else null
+    val fileUri = if useID then Uri(fileElement.id) else null
     DavModel.newFile(name, fileElement.size, id = fileUri, attributes = DavModel.Attributes(attributes))
-  }
 
   override def toFsFolder(folderElement: SyncTypes.FsFolder, name: String): DavModel.DavFolder =
     DavModel.newFolder(name = name)
@@ -88,4 +86,3 @@ private class DavProtocolConverter(val davConfig: DavStructureConfig)
   private def fetchModifiedTime(file: DavModel.DavFile): Instant =
     optModifiedAttribute flatMap file.attributes.values.get map DavParser.parseTimeAttribute getOrElse
       file.lastModifiedAt
-}

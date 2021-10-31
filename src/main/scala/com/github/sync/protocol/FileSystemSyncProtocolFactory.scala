@@ -29,7 +29,7 @@ import com.github.sync.protocol.config.{StructureConfig, StructureCryptConfig}
 
 import java.security.SecureRandom
 
-object FileSystemSyncProtocolFactory {
+object FileSystemSyncProtocolFactory:
   /**
     * A ''SecureRandom'' object that is used as source for randomness for all
     * cryptographic operations.
@@ -43,11 +43,9 @@ object FileSystemSyncProtocolFactory {
     * @param password the password
     * @return the ''CryptConfig'' using this password
     */
-  private def createCryptConfig(password: String): CryptConfig = {
+  private def createCryptConfig(password: String): CryptConfig =
     val key = Aes.keyFromString(password)
     CryptConfig(Aes, key, key, RandomSource)
-  }
-}
 
 /**
   * An implementation of [[SyncProtocolFactory]] that creates a protocol based
@@ -80,14 +78,13 @@ class FileSystemSyncProtocolFactory[ID, FILE <: Model.File[ID], FOLDER <: Model.
                         val timeout: Timeout,
                         spawner: Spawner,
                         httpSenderFactory: HttpRequestSenderFactory = HttpRequestSenderFactoryImpl)
-                       (implicit system: ActorSystem[_]) extends SyncProtocolFactory {
-  override def createProtocol(uri: String, cryptConfig: StructureCryptConfig): SyncProtocol = {
+                       (implicit system: ActorSystem[_]) extends SyncProtocolFactory:
+  override def createProtocol(uri: String, cryptConfig: StructureCryptConfig): SyncProtocol =
     val fileSystem = decorateFileSystem(creator.createFileSystem(uri, config, timeout), cryptConfig)
     val httpSender = creator.createHttpSender(spawner, httpSenderFactory, uri, config, httpSenderConfig)
     val converter = creator.createConverter(config)
 
     new FileSystemSyncProtocol(fileSystem, httpSender, converter)
-  }
 
   /**
     * Decorates the passed in extensible file system to support the desired
@@ -103,10 +100,9 @@ class FileSystemSyncProtocolFactory[ID, FILE <: Model.File[ID], FOLDER <: Model.
     structCryptConfig.password.fold(fs) { password =>
       val cryptConfig = createCryptConfig(password)
       val fsc = new CryptContentFileSystem(fs, cryptConfig)
-      if (structCryptConfig.cryptNames) {
+      if structCryptConfig.cryptNames then
         implicit val resolverTimeout: Timeout = timeout
         new CryptNamesFileSystem(fsc, cryptConfig,
           resolver = CachePathComponentsResolver(spawner, structCryptConfig.cryptCacheSize))
-      } else fsc
+      else fsc
     }
-}

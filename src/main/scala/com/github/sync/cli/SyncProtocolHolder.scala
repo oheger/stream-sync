@@ -33,7 +33,7 @@ import org.apache.logging.log4j.LogManager
 
 import scala.concurrent.{ExecutionContext, Future}
 
-object SyncProtocolHolder {
+object SyncProtocolHolder:
   /**
     * A factory function for creating a [[SyncProtocolHolder]] instance with
     * the protocols to use for the current sync process. This function
@@ -49,16 +49,16 @@ object SyncProtocolHolder {
     */
   def apply(syncConfig: SyncConfig, spawner: Spawner)(authSetupFunc: AuthSetupFunc)
            (protocolSetupFunc: ProtocolFactorySetupFunc)
-           (implicit system: ActorSystem[_]): Future[SyncProtocolHolder] = {
+           (implicit system: ActorSystem[_]): Future[SyncProtocolHolder] =
     implicit val ec: ExecutionContext = system.executionContext
     val killSwitch = KillSwitches.shared("oauth-token-refresh")
     val futSenderConfigSrc = createHttpSenderConfig(authSetupFunc, syncConfig.srcConfig.authConfig, killSwitch)
     val futSenderConfigDst = createHttpSenderConfig(authSetupFunc, syncConfig.dstConfig.authConfig, killSwitch)
 
-    for {
+    for
       senderConfigSrc <- futSenderConfigSrc
       senderConfigDst <- futSenderConfigDst
-    } yield {
+    yield
       val srcProtocolFactory =
         protocolSetupFunc(syncConfig.srcConfig.structureConfig, syncConfig, senderConfigSrc, spawner)
       val srcCryptConfig = createStructureCryptConfig(syncConfig.cryptConfig, syncConfig.cryptConfig.srcPassword,
@@ -70,8 +70,6 @@ object SyncProtocolHolder {
         syncConfig.cryptConfig.dstCryptMode)
       val dstProtocol = dstProtocolFactory.createProtocol(syncConfig.dstUri, dstCryptConfig)
       new SyncProtocolHolder(srcProtocol, dstProtocol, killSwitch)
-    }
-  }
 
   /**
     * Creates the configuration for the HTTP request sender actor to be used
@@ -99,7 +97,6 @@ object SyncProtocolHolder {
   private def createStructureCryptConfig(cryptConfig: CryptConfig, password: Option[String],
                                          cryptMode: CryptMode.Value): StructureCryptConfig =
     StructureCryptConfig(password, cryptMode == CryptMode.FilesAndNames, cryptConfig.cryptCacheSize)
-}
 
 /**
   * A class that holds the [[SyncProtocol]] objects used by the current sync
@@ -124,7 +121,7 @@ object SyncProtocolHolder {
   * @param system                 the actor system
   */
 class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
-                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[_]) {
+                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[_]):
   /** The logger. */
   private val logger = LogManager.getLogger(classOf[SyncProtocolHolder])
 
@@ -151,7 +148,7 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     * @param spawner    an object to create actors
     * @return the apply stage
     */
-  def createApplyStage(syncConfig: SyncConfig, spawner: Spawner): Flow[SyncOperation, SyncOperation, NotUsed] = {
+  def createApplyStage(syncConfig: SyncConfig, spawner: Spawner): Flow[SyncOperation, SyncOperation, NotUsed] =
     val protocolHandler = new ProtocolOperationHandler(dstProtocol, srcProtocol)
     implicit val timeout: Timeout = syncConfig.timeout
 
@@ -164,7 +161,6 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
         op.optFailure.isEmpty
       }
       .map(_.op)
-  }
 
   /**
     * Registers a handler at the given ''Future'' that closes the managed
@@ -200,4 +196,3 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     * @return the execution context
     */
   private implicit def executionContext: ExecutionContext = system.executionContext
-}
