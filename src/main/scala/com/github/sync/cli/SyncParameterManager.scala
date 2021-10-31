@@ -426,7 +426,7 @@ object SyncParameterManager {
                                triedLogLevel: Try[Level]): Try[SyncConfig] =
     createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
       triedDryRun, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedCryptConfig,
-      triedOpsPerSec, triedFilterData, triedLogLevel, triedSwitch)(SyncConfig)
+      triedOpsPerSec, triedFilterData, triedLogLevel, triedSwitch)(SyncConfig.apply)
 
   /**
     * Returns an extractor that extracts the source URI from the first input
@@ -555,7 +555,7 @@ object SyncParameterManager {
                                 triedDstPwd: Try[Option[String]], triedDstCryptMode: Try[CryptMode.Value],
                                 triedCryptCacheSize: Try[Int]): Try[CryptConfig] =
     createRepresentation(triedSrcPwd, triedSrcCryptMode, triedDstPwd, triedDstCryptMode,
-      triedCryptCacheSize)(CryptConfig)
+      triedCryptCacheSize)(CryptConfig.apply)
 
   /**
     * Returns an extractor that extracts the timeout from the command line.

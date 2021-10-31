@@ -299,7 +299,7 @@ object OAuthParameterManager {
     */
   private def commandLoginExtractor: CliExtractor[Try[CommandConfig]] =
     storageConfigExtractor(needPassword = true)
-      .map(_.map(LoginCommandConfig))
+      .map(_.map(LoginCommandConfig.apply))
 
   /**
     * Returns a ''CliExtractor'' to extract the configuration for the remove
@@ -309,7 +309,7 @@ object OAuthParameterManager {
     */
   private def commandRemoveExtractor: CliExtractor[Try[CommandConfig]] =
     storageConfigExtractor(needPassword = false)
-      .map(_.map(RemoveCommandConfig))
+      .map(_.map(RemoveCommandConfig.apply))
 
   /**
     * Returns a ''CliExtractor'' for extracting the password of the storage
