@@ -124,8 +124,8 @@ object SyncStageSpec {
 /**
   * Test class for ''SyncStage''.
   */
-class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike with
-  BeforeAndAfterAll with Matchers {
+class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
+  with BeforeAndAfterAll with Matchers {
   def this() = this(ActorSystem("SyncStageSpec"))
 
   override protected def afterAll(): Unit = {

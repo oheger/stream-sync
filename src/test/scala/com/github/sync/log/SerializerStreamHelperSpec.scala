@@ -32,8 +32,8 @@ import scala.concurrent.Future
 /**
   * Test class for ''SerializerStreamHelper''.
   */
-class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSystem) with
-  AnyFlatSpecLike with BeforeAndAfterAll with Matchers with FileTestHelper with AsyncTestHelper {
+class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSystem)
+  with AnyFlatSpecLike with BeforeAndAfterAll with Matchers with FileTestHelper with AsyncTestHelper {
   def this() = this(ActorSystem("SerializerStreamHelperSpec"))
 
   override protected def afterAll(): Unit = {

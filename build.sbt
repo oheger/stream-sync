@@ -28,24 +28,12 @@ lazy val VersionMockito = "1.9.5"
 lazy val VersionScalaTestMockito = "3.2.10.0"
 lazy val VersionJunit = "4.13.2"  // needed by mockito
 
-scalacOptions ++= {
+scalacOptions ++=
   Seq(
-    "-encoding",
-    "UTF-8",
-    "-feature"
-  ) ++
-    (CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((3, _)) => Seq(
-        "-unchecked",
-        "-source:3.0-migration"
-      )
-      case _ => Seq(
-        "-deprecation",
-        "-Wunused:imports,privates,locals",
-        "-Wvalue-discard"
-      )
-    })
-}
+    "-feature",
+    "-unchecked",
+    "-Xfatal-warnings"
+  )
 
 lazy val ITest = config("integrationTest") extend Test
 
@@ -89,7 +77,6 @@ lazy val StreamSync = (project in file("."))
   .settings(
     version := "0.14-SNAPSHOT",
     scalaVersion := VersionScala,
-    crossScalaVersions ++= Seq("2.13.6", VersionScala),
     libraryDependencies ++= akkaDependencies,
     libraryDependencies += ("com.github.oheger" %% "scli" % VersionScli).cross(CrossVersion.for3Use2_13),
     libraryDependencies ++= cloudFilesDependencies,
