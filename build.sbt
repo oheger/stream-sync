@@ -24,9 +24,7 @@ lazy val VersionLog4j = "2.14.1"
 lazy val VersionDisruptor = "3.4.4"
 lazy val VersionScalaTest = "3.2.10"
 lazy val VersionWireMock = "2.31.0"
-lazy val VersionMockito = "1.9.5"
 lazy val VersionScalaTestMockito = "3.2.10.0"
-lazy val VersionJunit = "4.13.2"  // needed by mockito
 
 scalacOptions ++=
   Seq(
@@ -66,9 +64,7 @@ lazy val testDependencies = Seq(
   "org.scalatestplus" %% "mockito-3-12" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
   ("com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test).cross(CrossVersion.for3Use2_13),
   ("com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test).cross(CrossVersion.for3Use2_13),
-  "com.github.tomakehurst" % "wiremock-jre8" % VersionWireMock % Test,
-  "org.mockito" % "mockito-core" % VersionMockito % Test,
-  "junit" % "junit" % VersionJunit % Test
+  "com.github.tomakehurst" % "wiremock-jre8" % VersionWireMock % Test
 )
 
 lazy val StreamSync = (project in file("."))
