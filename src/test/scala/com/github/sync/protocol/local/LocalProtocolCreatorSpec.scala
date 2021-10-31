@@ -22,7 +22,7 @@ import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
 import com.github.cloudfiles.localfs.LocalFileSystem
 import com.github.sync.protocol.config.FsStructureConfig
-import org.mockito.ArgumentMatchers.{anyString, eq => argEq}
+import org.mockito.ArgumentMatchers.{any, eq as argEq}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -31,7 +31,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import java.nio.file.Paths
 import java.time.ZoneId
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 
 object LocalProtocolCreatorSpec {
   /** The root path of the test local file system as string. */
@@ -59,14 +59,11 @@ class LocalProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSug
     val config = FsStructureConfig(None)
     val creator = newCreator()
 
-    creator.createFileSystem(RootPathStr, config, Timeout(10.seconds)) match {
-      case lfs: LocalFileSystem =>
-        val lfsConfig = lfs.config
-        lfsConfig.basePath should be(Paths.get(RootPathStr))
-        lfsConfig.sanitizePaths shouldBe true
-        lfsConfig.executionContext should be(creator.executionContext)
-      case fs => fail("Unexpected file system: " + fs)
-    }
+    val lfs = creator.createFileSystem(RootPathStr, config, Timeout(10.seconds))
+    val lfsConfig = lfs.config
+    lfsConfig.basePath should be(Paths.get(RootPathStr))
+    lfsConfig.sanitizePaths shouldBe true
+    lfsConfig.executionContext should be(creator.executionContext)
   }
 
   it should "create a correct converter" in {
@@ -86,7 +83,7 @@ class LocalProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSug
     val factory = mock[HttpRequestSenderFactory]
     val mockActor = mock[ActorRef[HttpRequestSender.HttpCommand]]
     val senderConfig = mock[HttpRequestSenderConfig]
-    when(factory.createRequestSender(argEq(spawner), anyString(), argEq(senderConfig))).thenReturn(mockActor)
+    when(factory.createRequestSender(argEq(spawner), any(), argEq(senderConfig))).thenReturn(mockActor)
     val creator = newCreator()
 
     creator.createHttpSender(spawner, factory, RootPathStr, FsStructureConfig(None), senderConfig) should be(mockActor)
