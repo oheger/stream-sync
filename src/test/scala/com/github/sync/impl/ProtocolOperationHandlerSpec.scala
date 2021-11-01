@@ -22,7 +22,7 @@ import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper, FileTestHelper}
-import org.mockito.Mockito.{verify, when}
+import org.mockito.Mockito.{verify, verifyNoInteractions, when}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
@@ -72,7 +72,7 @@ object ProtocolOperationHandlerSpec:
   * Test class for ''ProtocolOperationHandler''.
   */
 class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
-  with MockitoSugar with AsyncTestHelper:
+  with MockitoSugar with AsyncTestHelper :
 
   import ProtocolOperationHandlerSpec.*
 
@@ -136,6 +136,15 @@ class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport 
 
     futureResult(handler.execute(op))
     verify(protocol).updateFile(DstFile, FileContent)
+  }
+
+  it should "handle a Noop" in {
+    val op = createOp(TestFile, ActionNoop)
+    val protocol = mock[SyncProtocol]
+    val handler = new ProtocolOperationHandler(protocol, null)
+
+    futureResult(handler.execute(op))
+    verifyNoInteractions(protocol)
   }
 
   it should "handle an unexpected operation" in {

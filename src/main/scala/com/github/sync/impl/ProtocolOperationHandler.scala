@@ -60,6 +60,9 @@ class ProtocolOperationHandler(protocol: SyncProtocol, downloadProtocol: SyncPro
           protocol.updateFile(file.copy(id = dstID), source)
         }
 
+      case SyncOperation(_, ActionNoop, _, _) =>
+        Future.successful(())
+
       case _ =>
         Future.failed(new IllegalStateException("Invalid SyncOperation: " + op))
 
