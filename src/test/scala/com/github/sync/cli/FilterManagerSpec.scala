@@ -21,9 +21,10 @@ import java.time.{Instant, LocalDateTime, ZoneId}
 import com.github.scli.ParameterExtractor
 import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractionException, Parameters}
 import com.github.sync.AsyncTestHelper
-import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
-import com.github.sync.cli.FilterManager._
+import com.github.sync.cli.FilterManager.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

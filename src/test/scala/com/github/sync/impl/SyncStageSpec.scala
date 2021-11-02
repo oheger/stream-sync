@@ -23,13 +23,14 @@ import akka.actor.ActorSystem
 import akka.stream.ClosedShape
 import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
 import akka.testkit.TestKit
-import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Await
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 
 object SyncStageSpec:
   /** The default timestamp used for test files. */

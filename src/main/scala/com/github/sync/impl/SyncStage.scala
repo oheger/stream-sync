@@ -21,6 +21,7 @@ import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler, St
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet}
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.SyncAction.*
 
 object SyncStage:
   /**

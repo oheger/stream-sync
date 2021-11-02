@@ -22,6 +22,7 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.Spawner
 import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when

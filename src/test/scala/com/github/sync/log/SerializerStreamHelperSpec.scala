@@ -21,8 +21,9 @@ import java.time.Instant
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
-import com.github.sync.SyncTypes._
-import com.github.sync._
+import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
+import com.github.sync.*
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers

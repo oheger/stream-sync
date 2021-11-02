@@ -17,7 +17,8 @@
 package com.github.sync.impl
 
 import com.github.cloudfiles.core.http.UriEncodingHelper
-import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.protocol.SyncProtocol
 
 import scala.concurrent.{ExecutionContext, Future}

@@ -18,7 +18,8 @@ package com.github.sync.log
 
 import java.time.Instant
 
-import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

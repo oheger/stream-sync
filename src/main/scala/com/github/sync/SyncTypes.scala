@@ -71,11 +71,11 @@ object SyncTypes:
     *
     * This class defines some additional attributes relevant for files.
     *
-    * @param id             the ID of this file
-    * @param relativeUri    the relative URI of this file
-    * @param level          the level of this file
-    * @param lastModified   the time of the last modification
-    * @param size           the file size (in bytes)
+    * @param id           the ID of this file
+    * @param relativeUri  the relative URI of this file
+    * @param level        the level of this file
+    * @param lastModified the time of the last modification
+    * @param size         the file size (in bytes)
     */
   case class FsFile(override val id: String,
                     override val relativeUri: String,
@@ -86,37 +86,36 @@ object SyncTypes:
   /**
     * A class representing a folder in a file system to be synced.
     *
-    * @param id             the ID of this folder
-    * @param relativeUri    the relative URI of this folder
-    * @param level          the level of this folder
+    * @param id          the ID of this folder
+    * @param relativeUri the relative URI of this folder
+    * @param level       the level of this folder
     */
   case class FsFolder(override val id: String,
                       override val relativeUri: String,
                       override val level: Int) extends FsElement
 
   /**
-    * A trait representing an action to be applied on an element during a sync
-    * operation.
+    * An enumeration representing an action to be applied on an element during
+    * a sync operation.
     */
-  sealed trait SyncAction
+  enum SyncAction:
+    /**
+      * A special ''SyncAction'' stating that an element should be newly created in
+      * the destination structure.
+      */
+    case ActionCreate
 
-  /**
-    * A special ''SyncAction'' stating that an element should be newly created in
-    * the destination structure.
-    */
-  case object ActionCreate extends SyncAction
+    /**
+      * A special ''SyncAction'' stating that an element from the source structure
+      * should replace the corresponding one in the destination structure.
+      */
+    case ActionOverride
 
-  /**
-    * A special ''SyncAction'' stating that an element from the source structure
-    * should replace the corresponding one in the destination structure.
-    */
-  case object ActionOverride extends SyncAction
-
-  /**
-    * A special ''SyncAction'' stating that an element should be removed from the
-    * destination structure.
-    */
-  case object ActionRemove extends SyncAction
+    /**
+      * A special ''SyncAction'' stating that an element should be removed from the
+      * destination structure.
+      */
+    case ActionRemove
 
   /**
     * A class that stores all information for a single sync operation.
@@ -161,7 +160,7 @@ object SyncTypes:
     *
     * @param folder the associated ''FsFolder'' object
     */
-  case class SyncFolderData(folder: FsFolder) extends Ordered[SyncFolderData]:
+  case class SyncFolderData(folder: FsFolder) extends Ordered[SyncFolderData] :
     override def compare(that: SyncFolderData): Int =
       val deltaLevel = that.folder.level - folder.level
       if deltaLevel != 0 then deltaLevel

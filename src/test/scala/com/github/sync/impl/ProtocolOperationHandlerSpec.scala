@@ -19,6 +19,7 @@ package com.github.sync.impl
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper, FileTestHelper}
 import org.mockito.Mockito.{verify, when}

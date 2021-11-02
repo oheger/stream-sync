@@ -24,7 +24,8 @@ import akka.actor.typed.scaladsl.AskPattern._
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.Spawner
-import com.github.sync.SyncTypes.{ActionCreate, ActionRemove, FsFolder, SyncOperation, SyncOperationResult}
+import com.github.sync.SyncTypes.{FsFolder, SyncOperation, SyncOperationResult}
+import com.github.sync.SyncTypes.SyncAction.*
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}

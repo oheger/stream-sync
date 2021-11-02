@@ -19,7 +19,8 @@ package com.github.sync.log
 import java.time.Instant
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.UriEncodingHelper
-import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
 
 import scala.util.Try
 

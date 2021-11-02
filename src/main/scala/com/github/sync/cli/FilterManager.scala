@@ -22,7 +22,8 @@ import java.time.{LocalDateTime, ZoneId}
 import java.util.Locale
 import java.util.regex.Pattern
 
-import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
 import com.github.scli.ParameterExtractor._
 
 import scala.annotation.tailrec
