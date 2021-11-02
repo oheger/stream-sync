@@ -100,6 +100,14 @@ object SyncTypes:
     */
   enum SyncAction:
     /**
+      * A special ''SyncAction'' stating that no changes are required for a
+      * specific element. This pseudo action is used for files that are identical
+      * for both structures. Such files pass the sync stream, but they do not
+      * cause any manipulations.
+      */
+    case ActionNoop
+
+    /**
       * A special ''SyncAction'' stating that an element should be newly created in
       * the destination structure.
       */
