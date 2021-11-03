@@ -17,20 +17,21 @@
 package com.github.sync.cli
 
 import akka.NotUsed
-import akka.actor.typed.scaladsl.adapter._
+import akka.actor.typed.scaladsl.adapter.*
 import akka.actor.{ActorSystem, typed}
-import akka.stream._
+import akka.stream.*
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import com.github.cloudfiles.core.http.factory.Spawner
 import com.github.scli.HelpGenerator.ParameterFilter
 import com.github.scli.ParameterManager.ProcessingContext
 import com.github.scli.{HelpGenerator, ParameterExtractor}
-import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.*
+import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStructureConfig.{DestinationRoleType, SourceRoleType}
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
-import com.github.sync.impl._
+import com.github.sync.impl.*
 import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
 import org.apache.logging.log4j.core.config.Configurator
 
@@ -231,6 +232,8 @@ object Sync:
   Future[RunnableGraph[Future[(Int, Int)]]] = Future {
     val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
     val sinkLogFile = createLogSink(logFile)
+    // TODO: Produce more meaningful results with Noop actions. 
+    val filterNoop = Flow[SyncOperation].filterNot(_.action == ActionNoop)
     val decider: Supervision.Decider = ex => {
       ex.printStackTrace()
       Supervision.Resume
@@ -242,8 +245,8 @@ object Sync:
           import GraphDSL.Implicits._
           val broadcastSink = builder.add(Broadcast[SyncOperation](2))
           val broadcastSuccess = builder.add(Broadcast[SyncOperation](2))
-          source ~> broadcastSink ~> sinkTotal.in
-          broadcastSink ~> flowProc ~> broadcastSuccess ~> sinkSuccess.in
+          source ~> broadcastSink ~> filterNoop ~> sinkTotal.in
+          broadcastSink ~> flowProc ~> filterNoop ~> broadcastSuccess ~> sinkSuccess.in
           broadcastSuccess ~> sinkLog
           ClosedShape
     }).withAttributes(ActorAttributes.supervisionStrategy(decider))

@@ -147,11 +147,12 @@ object SyncStage:
     */
   private def syncElements(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
                            log: LoggingAdapter): (EmitData, SyncState) =
-    handleNullElementDuringSync(state, stage, portIdx, element, log) orElse {
+    handleNullElementDuringSync(state, stage, portIdx, element, log) getOrElse {
       val (elemSource, elemDest) = extractSyncPair(state, portIdx, element)
       syncOperationForElements(elemSource, elemDest, state, stage) orElse
-        syncOperationForFileFolderDiff(elemSource, elemDest, state, stage, stage.ignoreTimeDeltaSec, log)
-    } getOrElse emitAndPullBoth(Nil, state, stage)
+        syncOperationForFileFolderDiff(elemSource, elemDest, state, stage, stage.ignoreTimeDeltaSec, log) getOrElse
+        emitAndPullBoth(List(SyncOperation(elemSource, ActionNoop, element.level, DstIDUnknown)), state, stage)
+    }
 
   /**
     * A sync function that becomes active when the source for the destination
@@ -452,7 +453,7 @@ object SyncStage:
   *                           ignored when comparing two files
   */
 class SyncStage(val ignoreTimeDeltaSec: Int = 0)
-  extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]]:
+  extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]] :
 
   import SyncStage._
 

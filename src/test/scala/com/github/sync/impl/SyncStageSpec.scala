@@ -108,10 +108,10 @@ object SyncStageSpec:
     * Convenience function to create a sync operation. The function applies
     * some defaults for missing properties.
     *
-    * @param element   the element subject to the operation
-    * @param action    the action
-    * @param level     the level
-    * @param optDstID  an optional destination ID
+    * @param element  the element subject to the operation
+    * @param action   the action
+    * @param level    the level
+    * @param optDstID an optional destination ID
     * @return the sync operation
     */
   private def createOp(element: FsElement, action: SyncAction, level: Int = 0,
@@ -122,7 +122,7 @@ object SyncStageSpec:
   * Test class for ''SyncStage''.
   */
 class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with Matchers:
+  with BeforeAndAfterAll with Matchers :
   def this() = this(ActorSystem("SyncStageSpec"))
 
   override protected def afterAll(): Unit =
@@ -188,13 +188,14 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     runStage(Source(files), sourceTarget) should contain theSameElementsAs expOps
   }
 
-  it should "generate an empty stream if both structures are identical" in {
+  it should "produce Noop actions if both structures are identical" in {
     val files = List(createFile("song1.mp3"), createFile("song2.mp3"),
       createFile("songOther.ogg"))
     val sourceOrg = Source(files)
     val sourceTarget = Source(destinationElems(files))
+    val expOps = files map (e => createOp(element = e, action = ActionNoop))
 
-    runStage(sourceOrg, sourceTarget) should have size 0
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsAs expOps
   }
 
   it should "sync simple file structures" in {
@@ -204,6 +205,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val filesSource = List(file1, file2)
     val filesDest = destinationElems(List(file2, file3))
     val expSync = List(createOp(file1, ActionCreate),
+      createOp(file2, ActionNoop),
       createOp(destinationElem(file3), ActionRemove, optDstID = destinationID(file3)))
 
     runStage(Source(filesSource), Source(filesDest)) should contain theSameElementsAs expSync
@@ -216,6 +218,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val filesSource = List(file1, file2)
     val filesDest = destinationElems(List(file2, file3))
     val expSync = List(createOp(file1, ActionCreate),
+      createOp(file2, ActionNoop),
       createOp(destinationElem(file3), ActionRemove, optDstID = destinationID(file3)))
 
     runStage(Source(filesSource), Source(filesDest)) should contain theSameElementsAs expSync
@@ -253,8 +256,9 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
       lastModified = FileTime.plus(TimeDelta - 1, ChronoUnit.SECONDS).plusMillis(999))
     val sourceOrg = Source.single(fileSrc)
     val sourceTarget = Source.single(fileDest)
+    val expOp = createOp(fileSrc, ActionNoop)
 
-    runStage(sourceOrg, sourceTarget, TimeDelta) should have size 0
+    runStage(sourceOrg, sourceTarget, TimeDelta) should contain only expOp
   }
 
   it should "sync files with a different size" in {
@@ -282,10 +286,11 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val sourceOrg = Source(List(elemA, elemB, elemD, elemF, elemFSubFileA, elemFSubFileB))
     val sourceTarget = Source(destinationElems(List(elemA, elemC, elemE, elemCSubFile, elemCSubFolder,
       elemCSubSubFile, elemF, elemFSubFileA)))
-    val expOps = List(createOp(elemB, ActionCreate), createOp(elemD, ActionCreate),
+    val expOps = List(createOp(elemA, ActionNoop), createOp(elemB, ActionCreate), createOp(elemD, ActionCreate),
       createOp(destinationElem(elemE), ActionRemove, optDstID = destinationID(elemE)),
       createOp(destinationElem(elemCSubFile), ActionRemove, optDstID = destinationID(elemCSubFile)),
       createOp(destinationElem(elemCSubSubFile), ActionRemove, optDstID = destinationID(elemCSubSubFile)),
+      createOp(elemF, ActionNoop), createOp(elemFSubFileA, ActionNoop, 1),
       createOp(elemFSubFileB, ActionCreate, 1),
       createOp(destinationElem(elemCSubFolder), ActionRemove, optDstID = destinationID(elemCSubFolder)),
       createOp(destinationElem(elemC), ActionRemove, optDstID = destinationID(elemC)))
@@ -329,9 +334,10 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val elemFileAPlus = createFile("aFile.txt")
     val sourceOrg = Source(List(elemFileAPlus))
     val sourceTarget = Source(destinationElems(List(elemFolderA, elemFileAPlus)))
-    val expOp = createOp(destinationElem(elemFolderA), ActionRemove, optDstID = destinationID(elemFolderA))
+    val expOps = List(createOp(elemFileAPlus, ActionNoop),
+      createOp(destinationElem(elemFolderA), ActionRemove, optDstID = destinationID(elemFolderA)))
 
-    runStage(sourceOrg, sourceTarget) should contain only expOp
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsInOrderAs expOps
   }
 
   it should "handle a comparison with source level < destination level" in {
@@ -340,9 +346,10 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val elemFolderB = createFolder("b")
     val sourceOrg = Source(List(elemFolderA, elemFolderB, elemFolderSub))
     val sourceTarget = Source(List(elemFolderA, elemFolderSub))
-    val expOp = createOp(elemFolderB, ActionCreate)
+    val expOps = List(createOp(elemFolderA, ActionNoop), createOp(elemFolderB, ActionCreate),
+      createOp(elemFolderSub, ActionNoop, 1))
 
-    runStage(sourceOrg, sourceTarget) should contain only expOp
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsInOrderAs expOps
   }
 
   it should "handle a comparison with source level > destination level" in {
@@ -351,9 +358,11 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val elemFolderB = createFolder("b")
     val sourceOrg = Source(List(elemFolderA, elemFolderSub))
     val sourceTarget = Source(destinationElems(List(elemFolderA, elemFolderB, elemFolderSub)))
-    val expOp = createOp(destinationElem(elemFolderB), ActionRemove, optDstID = destinationID(elemFolderB))
+    val expOps = List(createOp(elemFolderA, ActionNoop),
+      createOp(elemFolderSub, ActionNoop, 1),
+      createOp(destinationElem(elemFolderB), ActionRemove, optDstID = destinationID(elemFolderB)))
 
-    runStage(sourceOrg, sourceTarget) should contain only expOp
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsInOrderAs expOps
   }
 
   it should "handle new files in a sub directory correctly" in {
@@ -367,7 +376,10 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val folder2 = createFolder("/folder2")
     val sourceOrg = Source(List(file1, folder1, folder2, sub1, sub2, file2, file3, file4))
     val sourceTarget = Source(List(file1, folder1, folder2, sub1, sub2, file4))
-    val expOps = List(createOp(file2, ActionCreate, level = 2), createOp(file3, ActionCreate, level = 2))
+    val expOps = List(createOp(file1, ActionNoop), createOp(folder1, ActionNoop), createOp(folder2, ActionNoop),
+      createOp(sub1, ActionNoop, level = 1), createOp(sub2, ActionNoop, level = 1),
+      createOp(file2, ActionCreate, level = 2), createOp(file3, ActionCreate, level = 2),
+      createOp(file4, ActionNoop, level = 2))
 
     runStage(sourceOrg, sourceTarget) should contain theSameElementsAs expOps
   }
