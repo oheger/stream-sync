@@ -23,7 +23,7 @@ import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 
-object SyncStage:
+object MirrorStage:
   /**
     * Constant for a destination ID that is used when this property is
     * irrelevant.
@@ -42,7 +42,7 @@ object SyncStage:
     * When the function is invoked with a '''null''' element, this means that
     * the upstream for this port is finished.
     */
-  private type SyncFunc = (SyncState, SyncStage, Int, FsElement, LoggingAdapter) => (EmitData, SyncState)
+  private type SyncFunc = (SyncState, MirrorStage, Int, FsElement, LoggingAdapter) => (EmitData, SyncState)
 
   /**
     * A class with details about elements to be emitted downstream.
@@ -86,7 +86,7 @@ object SyncStage:
       * @param log     the logger
       * @return the result of the sync function
       */
-    def updateAndCallSyncFunction(f: SyncFunc, stage: SyncStage, portIdx: Int, element: FsElement,
+    def updateAndCallSyncFunction(f: SyncFunc, stage: MirrorStage, portIdx: Int, element: FsElement,
                                   log: LoggingAdapter): (EmitData, SyncState) =
       f(copy(syncFunc = f), stage, portIdx, element, log)
 
@@ -124,7 +124,7 @@ object SyncStage:
     * @param log     the logger
     * @return data to emit and the next state
     */
-  private def waitForElements(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+  private def waitForElements(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
                               log: LoggingAdapter): (EmitData, SyncState) =
     handleNullElementDuringSync(state, stage, portIdx, element, log) getOrElse {
       if state.currentElem == null then
@@ -145,7 +145,7 @@ object SyncStage:
     * @param log     the logger
     * @return data to emit and the next state
     */
-  private def syncElements(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+  private def syncElements(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
                            log: LoggingAdapter): (EmitData, SyncState) =
     handleNullElementDuringSync(state, stage, portIdx, element, log) getOrElse {
       val (elemSource, elemDest) = extractSyncPair(state, portIdx, element)
@@ -166,7 +166,7 @@ object SyncStage:
     * @param log     the logger
     * @return data to emit and the next state
     */
-  private def destinationFinished(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+  private def destinationFinished(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
                                   log: LoggingAdapter): (EmitData, SyncState) =
     def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
       (EmitData(List(createOp(elem)), stage.PullSource), s)
@@ -186,7 +186,7 @@ object SyncStage:
     * @param log     the logger
     * @return data to emit and the next state
     */
-  private def sourceDirFinished(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+  private def sourceDirFinished(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
                                 log: LoggingAdapter): (EmitData, SyncState) =
     def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
       val (op, next) = removeElement(s, elem, removedPath = None)
@@ -209,7 +209,7 @@ object SyncStage:
     * @return an ''Option'' with data how to handle these elements
     */
   private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement,
-                                       state: SyncState, stage: SyncStage):
+                                       state: SyncState, stage: MirrorStage):
   Option[(EmitData, SyncState)] =
     lazy val delta = compareElements(elemSource, elemDest)
     val isRemoved = isInRemovedPath(state, elemDest)
@@ -253,7 +253,7 @@ object SyncStage:
     * @return an ''Option'' with data how to handle these elements
     */
   private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement, state: SyncState,
-                                             stage: SyncStage, ignoreTimeDelta: Int, log: LoggingAdapter):
+                                             stage: MirrorStage, ignoreTimeDelta: Int, log: LoggingAdapter):
   Option[(EmitData, SyncState)] =
     (elemSource, elemDest) match
       case (eSrc: FsFile, eDst: FsFile)
@@ -282,7 +282,7 @@ object SyncStage:
     * @param stage the stage
     * @return data to emit and the next state
     */
-  private def emitAndPullBoth(op: List[SyncOperation], state: SyncState, stage: SyncStage):
+  private def emitAndPullBoth(op: List[SyncOperation], state: SyncState, stage: MirrorStage):
   (EmitData, SyncState) =
     (EmitData(op, stage.PullBoth), state.copy(currentElem = null, syncFunc = waitForElements))
 
@@ -300,7 +300,7 @@ object SyncStage:
     * @return an ''Option'' with data to change to the next state in case an
     *         input source is finished
     */
-  private def handleNullElementDuringSync(state: SyncState, stage: SyncStage, portIdx: Int, element: FsElement,
+  private def handleNullElementDuringSync(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
                                           log: LoggingAdapter): Option[(EmitData, SyncState)] =
     if element == null then
       val stateFunc = if portIdx == IdxSource then sourceDirFinished _ else destinationFinished _
@@ -452,10 +452,10 @@ object SyncStage:
   * @param ignoreTimeDeltaSec a time difference in seconds that is to be
   *                           ignored when comparing two files
   */
-class SyncStage(val ignoreTimeDeltaSec: Int = 0)
+class MirrorStage(val ignoreTimeDeltaSec: Int = 0)
   extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]] :
 
-  import SyncStage._
+  import MirrorStage._
 
   val out: Outlet[SyncOperation] = Outlet[SyncOperation]("SyncStage.out")
   val inSource: Inlet[FsElement] = Inlet[FsElement]("SyncStage.inSource")
@@ -517,7 +517,7 @@ class SyncStage(val ignoreTimeDeltaSec: Int = 0)
         * @param element the element (may be '''null''' for completion)
         */
       private def updateState(portIdx: Int, element: FsElement): Unit =
-        val (data, next) = state.syncFunc(state, SyncStage.this, portIdx, element, log)
+        val (data, next) = state.syncFunc(state, MirrorStage.this, portIdx, element, log)
         state = next
         emitMultiple(out, data.ops)
         pulledPorts(portIdx) = false

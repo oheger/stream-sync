@@ -148,7 +148,7 @@ object Sync:
     Source.fromGraph(GraphDSL.create() {
       implicit builder =>
         import GraphDSL.Implicits._
-        val syncStage = builder.add(new SyncStage(ignoreTimeDelta))
+        val syncStage = builder.add(new MirrorStage(ignoreTimeDelta))
         srcSource ~> syncStage.in0
         dstSource ~> syncStage.in1
         SourceShape(syncStage.out)

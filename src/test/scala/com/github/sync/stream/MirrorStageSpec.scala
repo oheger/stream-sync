@@ -32,7 +32,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.Await
 import scala.concurrent.duration.*
 
-object SyncStageSpec:
+object MirrorStageSpec:
   /** The default timestamp used for test files. */
   private val FileTime = Instant.parse("2018-08-05T14:22:55.00Z")
 
@@ -121,14 +121,14 @@ object SyncStageSpec:
 /**
   * Test class for ''SyncStage''.
   */
-class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
+class MirrorStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with Matchers :
   def this() = this(ActorSystem("SyncStageSpec"))
 
   override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
 
-  import SyncStageSpec._
+  import MirrorStageSpec._
 
   /**
     * Runs the sync stage with the sources specified and returns the resulting
@@ -148,17 +148,17 @@ class SyncStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with An
     val g = RunnableGraph.fromGraph(GraphDSL.createGraph(foldSink) { implicit builder =>
       sink =>
         import GraphDSL.Implicits._
-        val syncStage = builder.add(new SyncStage(ignoreTimeDelta))
-        source1 ~> syncStage.in0
-        source2 ~> syncStage.in1
-        syncStage.out ~> sink
+        val mirrorStage = builder.add(new MirrorStage(ignoreTimeDelta))
+        source1 ~> mirrorStage.in0
+        source2 ~> mirrorStage.in1
+        mirrorStage.out ~> sink
         ClosedShape
     })
 
     val futSyncOps = g.run()
     Await.result(futSyncOps, 3.seconds).reverse
 
-  "A SyncStage" should "correctly handle two empty sources" in {
+  "A MirrorStage" should "correctly handle two empty sources" in {
     runStage(Source.empty, Source.empty) should have size 0
   }
 
