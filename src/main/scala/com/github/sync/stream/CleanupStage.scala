@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.impl
+package com.github.sync.stream
 
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}

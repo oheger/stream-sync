@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.impl
+package com.github.sync.stream
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.impl
+package com.github.sync.stream
 
 import akka.stream.scaladsl.Source
 import akka.util.ByteString

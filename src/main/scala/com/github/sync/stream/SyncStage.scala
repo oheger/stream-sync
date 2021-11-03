@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package com.github.sync.impl
+package com.github.sync.stream
 
 import akka.event.LoggingAdapter
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler, StageLogging}
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet}
 import com.github.cloudfiles.core.http.UriEncodingHelper
-import com.github.sync.SyncTypes._
+import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 
 object SyncStage:

@@ -31,7 +31,7 @@ import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStructureConfig.{DestinationRoleType, SourceRoleType}
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
-import com.github.sync.impl.*
+import com.github.sync.stream.*
 import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
 import org.apache.logging.log4j.core.config.Configurator
 

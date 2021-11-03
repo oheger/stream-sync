@@ -25,7 +25,7 @@ import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner
 import com.github.sync.SyncTypes.{FsElement, SyncOperation}
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, CryptMode, SyncConfig}
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
-import com.github.sync.impl.{ProtocolElementSource, ProtocolOperationHandler, ProtocolOperationHandlerStage}
+import com.github.sync.stream.{ProtocolElementSource, ProtocolOperationHandler, ProtocolOperationHandlerStage}
 import com.github.sync.oauth.SyncAuthConfig
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.protocol.config.StructureCryptConfig

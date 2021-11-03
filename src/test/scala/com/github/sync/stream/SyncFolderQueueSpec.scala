@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.impl
+package com.github.sync.stream
 
 import com.github.sync.SyncTypes.{FsFolder, SyncFolderData}
 import org.scalatest.flatspec.AnyFlatSpec

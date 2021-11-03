@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.impl
+package com.github.sync.stream
 
 import akka.NotUsed
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
@@ -65,7 +65,7 @@ object ProtocolOperationHandlerStage:
     * A base trait for the hierarchy of commands supported by the internal
     * actor to execute sync operations.
     */
-  private[impl] sealed trait OperationHandlerCommand
+  private[stream] sealed trait OperationHandlerCommand
 
   /**
     * A command to the internal actor that triggers the execution of a sync
