@@ -28,7 +28,7 @@ import scala.util.{Failure, Success}
 /**
   * Test class for ''ElementSerializer''.
   */
-class ElementSerializerSpec extends AnyFlatSpec with Matchers:
+class ElementSerializerSpec extends AnyFlatSpec with Matchers :
   /**
     * Returns the line-ending character.
     *
@@ -91,6 +91,30 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers:
     checkSerializedOperation(ActionRemove, "REMOVE")
   }
 
+  it should "serialize a successful sync operation result" in {
+    val elem = FsFolder("folderID", "testFolder", 8)
+    val op = SyncOperation(elem, ActionCreate, 4, dstID = "someDstID")
+    val result = SyncOperationResult(op, None)
+
+    val s = ElementSerializer.serializeOperationResult(result).utf8String
+    s should be(s"CREATE ${op.level} ${op.dstID} FOLDER ${elem.id} ${elem.relativeUri} ${elem.level}$lineEnd")
+  }
+
+  it should "serialize the exception of a failed sync operation result" in {
+    val elem = FsFolder("errorFolderID", "brokenFolder", 3)
+    val op = SyncOperation(elem, ActionCreate, 4, dstID = "brokenDstID")
+    try
+      throw new IllegalStateException("Test exception")
+    catch
+      case e: Exception =>
+        val result = SyncOperationResult(op, Some(e))
+
+        val s = ElementSerializer.serializeOperationResult(result).utf8String.split(lineEnd)
+        s should have size e.getStackTrace.length + 2
+        s(0) should be(s"CREATE ${op.level} ${op.dstID} FOLDER ${elem.id} ${elem.relativeUri} ${elem.level}")
+        s(1) should include(e.getMessage)
+  }
+
   it should "deserialize a folder element" in {
     val folder = FsFolder("theFolderID", "some/test/folder", 9)
     val parts = ElementSerializer.serializeElement(folder).utf8String.split("\\s").toSeq
@@ -135,7 +159,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers:
     * Helper method for testing the deserialization of a sync operation using
     * a specific action.
     *
-    * @param action    the action
+    * @param action the action
     */
   private def checkDeserializeOperation(action: SyncAction): Unit =
     val file = FsFile("the ID", "my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),

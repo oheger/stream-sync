@@ -22,6 +22,7 @@ import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 
+import java.io.{ByteArrayOutputStream, PrintWriter, StringWriter}
 import scala.util.Try
 
 /**
@@ -82,6 +83,25 @@ object ElementSerializer:
   def serializeOperation(operation: SyncOperation): ByteString =
     ByteString(s"${ActionTagMapping(operation.action)} ${operation.level} ${encode(operation.dstID)} ") ++
       serializeElement(operation.element) ++ CR
+
+  /**
+    * Generates a string representation for the given result of a sync
+    * operation. In case of a failed operation, the exception is logged as
+    * well. Otherwise, the log is the same as produced by
+    * ''serializeOperation()''.
+    *
+    * @param result the result to serialize
+    * @return the string representation for this result
+    */
+  def serializeOperationResult(result: SyncOperationResult): ByteString =
+    val serializedOp = serializeOperation(result.op)
+    result.optFailure.fold(serializedOp) { exception =>
+      val stringWriter = new StringWriter()
+      val out = new PrintWriter(stringWriter)
+      exception.printStackTrace(out)
+      out.flush()
+      serializedOp ++ ByteString(stringWriter.toString)
+    }
 
   /**
     * Tries to create an ''FsElement'' from its serialized form. Note that the
