@@ -20,14 +20,17 @@ import akka.Done
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.testkit.TestKit
-import com.github.sync.{AsyncTestHelper, SyncTypes}
+import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
 import com.github.sync.SyncTypes.{FsFile, SyncOperation, SyncOperationResult}
-import org.scalatest.BeforeAndAfterAll
+import com.github.sync.log.ElementSerializer
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
+import java.nio.file.Files
 import java.time.Instant
 import scala.concurrent.Future
+import scala.util.Success
 
 object SyncStreamSpec:
   /** Name of an element that produce a failed operation result. */
@@ -115,12 +118,16 @@ object SyncStreamSpec:
   * Test class for ''SyncStream''.
   */
 class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlatSpecLike, BeforeAndAfterAll,
-  Matchers, AsyncTestHelper :
+  BeforeAndAfterEach, Matchers, AsyncTestHelper, FileTestHelper :
   def this() = this(ActorSystem("SyncStreamSpec"))
 
   override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
     super.afterAll()
+
+  override protected def afterEach(): Unit =
+    super.afterEach()
+    tearDownTestFile()
 
   import SyncStreamSpec.*
 
@@ -156,4 +163,45 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val result = runStream(params)
     result.totalSinkMat.reverse should contain theSameElementsInOrderAs expTotalResults
     result.errorSinkMat should contain only createOperationResult(operations(1))
+  }
+
+  it should "support the creation of a log sink" in {
+    val operations = List(createOperation(1), createOperation(2, success = false), createOperation(3))
+    val logFile = createFileReference()
+    val params = syncParams(operations, SyncStream.createLogSink(logFile))
+
+    val result = runStream(params)
+    result.totalSinkMat.status should be(Success(Done))
+    val logLines = Files.readAllLines(logFile)
+    logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serializeOperation(operations.head)
+      .utf8String)
+    logLines.get(2) should include(operations(1).toString + " failed")
+  }
+
+  it should "create a log sink that appends to an existing log file" in {
+    val OriginalContent = "This is an existing log line."
+    val operations = List(createOperation(1))
+    val logFile = writeFileContent(createFileReference(), OriginalContent + System.lineSeparator())
+    val params = syncParams(operations, SyncStream.createLogSink(logFile))
+
+    val result = runStream(params)
+    val logLines = Files.readAllLines(logFile)
+    logLines.get(0) should be(OriginalContent)
+    logLines.get(1) + System.lineSeparator() should be(ElementSerializer.serializeOperation(operations.head)
+      .utf8String)
+  }
+
+  it should "add a logging sink to an existing sink" in {
+    import system.dispatcher
+    val operations = List(createOperation(1), createOperation(2))
+    val expTotalResults = operations map createOperationResult
+    val logFile = createFileReference()
+    val sink = SyncStream.sinkWithLogging(collectingSink, logFile)
+    val params = syncParams(operations, sink)
+
+    val result = runStream(params)
+    result.totalSinkMat.reverse should contain theSameElementsInOrderAs expTotalResults
+    val logLines = Files.readAllLines(logFile)
+    logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serializeOperation(operations.head)
+      .utf8String)
   }

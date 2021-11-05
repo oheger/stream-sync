@@ -16,11 +16,14 @@
 
 package com.github.sync.stream
 
-import akka.stream.ClosedShape
-import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, RunnableGraph, Sink, Source}
+import akka.Done
+import akka.stream.{ClosedShape, IOResult, SinkShape}
+import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import com.github.sync.SyncTypes.{SyncOperation, SyncOperationResult}
 import com.github.sync.cli.Sync.combineMat
+import com.github.sync.log.ElementSerializer
 
+import java.nio.file.{Path, StandardOpenOption}
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -82,7 +85,7 @@ object SyncStream:
                                     (implicit ec: ExecutionContext):
   RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]] =
     val filterError = Flow[SyncOperationResult].filter(_.optFailure.isDefined)
-    RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError)(createMat) {
+    RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError)(createStreamMat) {
       implicit builder =>
         (sinkTotal, sinkError) =>
           import GraphDSL.Implicits._
@@ -90,6 +93,39 @@ object SyncStream:
           params.source ~> params.processFlow ~> broadcastSink ~> sinkTotal.in
           broadcastSink ~> filterError ~> sinkError.in
           ClosedShape
+    })
+
+  /**
+    * Creates a ''Sink'' that logs the received [[SyncOperation]]s to a file.
+    *
+    * @param logFile the path to the log file
+    * @return the ''Sink'' that writes the log file
+    */
+  def createLogSink(logFile: Path): Sink[SyncOperationResult, Future[IOResult]] =
+    val sink = FileIO.toPath(logFile, options = Set(StandardOpenOption.WRITE,
+      StandardOpenOption.CREATE, StandardOpenOption.APPEND))
+    val serialize = Flow[SyncOperationResult].map(ElementSerializer.serializeOperationResult)
+    serialize.toMat(sink)(Keep.right)
+
+  /**
+    * Creates a combined ''Sink'' from the given sink that also logs all
+    * received [[SyncOperationResult]]s to a file.
+    *
+    * @param sink    the sink to be decorated
+    * @param logFile the path to the log file
+    * @tparam MAT the type of the materialized value of the original sink
+    * @return the combined sink that performs logging
+    */
+  def sinkWithLogging[MAT](sink: Sink[SyncOperationResult, Future[MAT]], logFile: Path)
+                          (implicit ec: ExecutionContext): Sink[SyncOperationResult, Future[MAT]] =
+    Sink.fromGraph(GraphDSL.createGraph(createLogSink(logFile), sink)(createLogSinkMat) {
+      implicit builder =>
+        (logSink, orgSink) =>
+          import GraphDSL.Implicits._
+          val broadcast = builder.add(Broadcast[SyncOperationResult](2))
+          broadcast ~> logSink.in
+          broadcast ~> orgSink.in
+          SinkShape(broadcast.in)
     })
 
   /**
@@ -104,9 +140,27 @@ object SyncStream:
     * @tparam ERROR the type of the error sink
     * @return a ''SyncStreamMat'' object with the combined result
     */
-  private def createMat[TOTAL, ERROR](matTotal: Future[TOTAL], matError: Future[ERROR])
-                                     (implicit ec: ExecutionContext): Future[SyncStreamMat[TOTAL, ERROR]] =
+  private def createStreamMat[TOTAL, ERROR](matTotal: Future[TOTAL], matError: Future[ERROR])
+                                           (implicit ec: ExecutionContext): Future[SyncStreamMat[TOTAL, ERROR]] =
     for
       total <- matTotal
       error <- matError
     yield SyncStreamMat(total, error)
+
+  /**
+    * Constructs the materialized value of a sink that has been combined with a
+    * log sink. Although only the value of the original sink is relevant, it is
+    * necessary to wait for the completion of the log sink, too.
+    *
+    * @param matLog the materialized value of the log sink
+    * @param matOrg the materialized value of the original sink
+    * @param ec     the execution context
+    * @tparam MAT the type of the original materialized value
+    * @return the combined materialized value
+    */
+  private def createLogSinkMat[MAT](matLog: Future[Any], matOrg: Future[MAT])
+                                   (implicit ec: ExecutionContext): Future[MAT] =
+    for
+      _ <- matLog
+      result <- matOrg
+    yield result
