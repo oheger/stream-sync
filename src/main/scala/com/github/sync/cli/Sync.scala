@@ -57,12 +57,19 @@ object Sync:
     *
     * From the properties of this class client code can learn how many sync
     * operations have been executed during the sync process and how many have
-    * been successful.
+    * been successful or failed.
     *
-    * @param totalOperations      the total number of sync operations
     * @param successfulOperations the number of successful operations
+    * @param failedOperations     the number of failed operations
     */
-  case class SyncResult(totalOperations: Int, successfulOperations: Int)
+  case class SyncResult(successfulOperations: Int, failedOperations: Int):
+    /**
+      * Returns the total number of operations that have been executed during
+      * this sync process.
+      *
+      * @return the total number of sync operations
+      */
+    def totalOperations: Int = successfulOperations + failedOperations
 
   def main(args: Array[String]): Unit =
     val sync = new Sync
@@ -109,7 +116,7 @@ object Sync:
       stage <- createApplyStage(config, spawner, protocolHolder)
       g <- createSyncStream(decoratedSource, stage, config.logFilePath)
       res <- g.run()
-    yield SyncResult(res._1, res._2))
+    yield SyncResult(res.totalSinkMat, res.errorSinkMat))
 
   /**
     * Creates the source for the sync process based on the given configuration.
@@ -204,20 +211,19 @@ object Sync:
     */
   private def createApplyStage(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[Flow[SyncOperation, SyncOperation, NotUsed]] = Future {
-    if config.dryRun then Flow[SyncOperation].map(identity)
+  Future[Flow[SyncOperation, SyncOperationResult, NotUsed]] = Future {
+    if config.dryRun then Flow[SyncOperation].map(op => SyncOperationResult(op, None))
     else protocolHolder.createApplyStage(config, spawner)
   }
 
   /**
     * Creates a ''RunnableGraph'' representing the stream for a sync process.
     * The source for the ''SyncOperation'' objects to be processed is passed
-    * in. The stream has three sinks that also determine the materialized
-    * values of the graph: one sink counts all sync operations that need to be
-    * executed; the second sink counts the sync operations that have been
-    * processed successfully by the processing flow; the third sink is used to
-    * write a log file, which contains all successfully executed sync
-    * operations (it is active only if a path to a log file is provided).
+    * in. The stream has two sinks that also determine the materialized
+    * values of the graph: one sink counts all successful sync operations,
+    * the second sink counts the failed ones. If a log file path has been
+    * provided, the successful sync operations are also written to this log
+    * file.
     *
     * @param source   the source producing ''SyncOperation'' objects
     * @param flowProc the flow that processes sync operations
@@ -225,75 +231,26 @@ object Sync:
     * @param ec       the execution context
     * @return a future with the runnable graph
     */
-  def createSyncStream(source: Source[SyncOperation, Any],
-                       flowProc: Flow[SyncOperation, SyncOperation, Any],
-                       logFile: Option[Path])
-                      (implicit ec: ExecutionContext):
-  Future[RunnableGraph[Future[(Int, Int)]]] = Future {
-    val sinkCount = Sink.fold[Int, SyncOperation](0) { (c, _) => c + 1 }
-    val sinkLogFile = createLogSink(logFile)
-    // TODO: Produce more meaningful results with Noop actions. 
-    val filterNoop = Flow[SyncOperation].filterNot(_.action == ActionNoop)
+  private def createSyncStream(source: Source[SyncOperation, Any],
+                               flowProc: Flow[SyncOperation, SyncOperationResult, Any],
+                               logFile: Option[Path])
+                              (implicit ec: ExecutionContext):
+  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] = Future {
+    val sinkCount = SyncStream.createCountSink()
+    val sinkTotal = logFile.fold(sinkCount)(path => SyncStream.sinkWithLogging(sinkCount, path))
+    val sinkSuccess = Flow[SyncOperationResult].filterNot { result =>
+      result.optFailure.isDefined || result.op.action == ActionNoop
+    }.toMat(sinkTotal)(Keep.right)
+
+    val params = SyncStream.SyncStreamParams(source = source, processFlow = flowProc,
+      sinkTotal = sinkSuccess, sinkError = sinkCount)
     val decider: Supervision.Decider = ex => {
       ex.printStackTrace()
       Supervision.Resume
     }
 
-    RunnableGraph.fromGraph(GraphDSL.createGraph(sinkCount, sinkCount, sinkLogFile)(combineMat) {
-      implicit builder =>
-        (sinkTotal, sinkSuccess, sinkLog) =>
-          import GraphDSL.Implicits._
-          val broadcastSink = builder.add(Broadcast[SyncOperation](2))
-          val broadcastSuccess = builder.add(Broadcast[SyncOperation](2))
-          source ~> broadcastSink ~> filterNoop ~> sinkTotal.in
-          broadcastSink ~> flowProc ~> filterNoop ~> broadcastSuccess ~> sinkSuccess.in
-          broadcastSuccess ~> sinkLog
-          ClosedShape
-    }).withAttributes(ActorAttributes.supervisionStrategy(decider))
+    SyncStream.createSyncStream(params).withAttributes(ActorAttributes.supervisionStrategy(decider))
   }
-
-  /**
-    * Generates the sink to write sync operations to a log file if a log file
-    * path is specified. Otherwise, a dummy sink that ignores all data is
-    * returned.
-    *
-    * @param logFile the option with the path to the log file
-    * @return a sink to write a log file
-    */
-  private def createLogSink(logFile: Option[Path]): Sink[SyncOperation, Future[Any]] =
-    logFile.map(createLogFileSink).getOrElse(Sink.ignore)
-
-  /**
-    * Generates the sink to write sync operations to a log file.
-    *
-    * @param logFile the path to the log file
-    * @return the sink to write the log file
-    */
-  private def createLogFileSink(logFile: Path): Sink[SyncOperation, Future[Any]] =
-    val sink = FileIO.toPath(logFile, options = Set(StandardOpenOption.WRITE,
-      StandardOpenOption.CREATE, StandardOpenOption.APPEND))
-    val serialize = Flow[SyncOperation].map(ElementSerializer.serializeOperation)
-    serialize.toMat(sink)(Keep.right)
-
-  /**
-    * A function to combine the materialized values of the runnable graph for
-    * the sync operation. The sinks used by the graph produce 3 future results.
-    * This function converts this to a single future for a tuple of the
-    * relevant values.
-    *
-    * @param futTotal   the future with the total number of operations
-    * @param futSuccess the future with the number of successful operations
-    * @param futLog     the future with the result of the log sink
-    * @param ec         the execution context
-    * @return a future with the results of the count sinks
-    */
-  private def combineMat(futTotal: Future[Int], futSuccess: Future[Int], futLog: Future[Any])
-                        (implicit ec: ExecutionContext):
-  Future[(Int, Int)] = for
-    total <- futTotal
-    success <- futSuccess
-    _ <- futLog
-  yield (total, success)
 
   /**
     * Generates a predicate that filters out undesired sync operations based on
@@ -344,7 +301,7 @@ object Sync:
   * in the companion object. By extending [[CliActorSystemLifeCycle]], this class
   * has access to an actor system and can therefore initiate the sync process.
   */
-class Sync extends CliActorSystemLifeCycle[SyncConfig]:
+class Sync extends CliActorSystemLifeCycle[SyncConfig] :
   override val name: String = "Sync"
 
   override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =

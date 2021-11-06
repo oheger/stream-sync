@@ -22,7 +22,7 @@ import akka.stream.scaladsl.{Flow, Source}
 import akka.stream.{KillSwitch, KillSwitches, SharedKillSwitch}
 import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
-import com.github.sync.SyncTypes.{FsElement, SyncOperation}
+import com.github.sync.SyncTypes.{FsElement, SyncOperation, SyncOperationResult}
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, CryptMode, SyncConfig}
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
 import com.github.sync.stream.{ProtocolElementSource, ProtocolOperationHandler, ProtocolOperationHandlerStage}
@@ -148,19 +148,17 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     * @param spawner    an object to create actors
     * @return the apply stage
     */
-  def createApplyStage(syncConfig: SyncConfig, spawner: Spawner): Flow[SyncOperation, SyncOperation, NotUsed] =
+  def createApplyStage(syncConfig: SyncConfig, spawner: Spawner): Flow[SyncOperation, SyncOperationResult, NotUsed] =
     val protocolHandler = new ProtocolOperationHandler(dstProtocol, srcProtocol)
     implicit val timeout: Timeout = syncConfig.timeout
 
     ProtocolOperationHandlerStage(protocolHandler, spawner)
-      .filter { op =>
-        // TODO: In future, failed operations may be passed to a dedicated sub flow.
+      .map { op =>
         op.optFailure foreach {
           logger.error(s"Failed to apply operation '${op.op}'.", _)
         }
-        op.optFailure.isEmpty
+        op
       }
-      .map(_.op)
 
   /**
     * Registers a handler at the given ''Future'' that closes the managed
