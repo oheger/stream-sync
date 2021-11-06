@@ -129,6 +129,16 @@ object SyncStream:
     })
 
   /**
+    * Creates a ''Sink'' that counts the received results for sync
+    * operations. This can be useful to gather statistics about the
+    * operations that were executed.
+    *
+    * @return the ''Sink'' that counts the received elements
+    */
+  def createCountSink(): Sink[SyncOperationResult, Future[Int]] =
+    Sink.fold[Int, SyncOperationResult](0) { (cnt, _) => cnt + 1 }
+
+  /**
     * Constructs the materialized value of the sync stream from the results of
     * the two sinks. The values of the sinks are obtained and stored in a
     * [[SyncStreamMat]] object.

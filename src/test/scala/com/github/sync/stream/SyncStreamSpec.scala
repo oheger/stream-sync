@@ -205,3 +205,13 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serializeOperation(operations.head)
       .utf8String)
   }
+
+  it should "create a counting sink" in {
+    val OperationCount = 16
+    val operations = (1 to OperationCount) map (idx => createOperation(idx))
+    val params = syncParams(operations.toList, SyncStream.createCountSink())
+
+    val result = runStream(params)
+    result.totalSinkMat should be(OperationCount)
+  }
+  
