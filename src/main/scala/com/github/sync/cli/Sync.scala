@@ -114,7 +114,7 @@ object Sync:
       source <- createSyncSource(config, protocolHolder)
       decoratedSource <- decorateSource(source, config, protocolHolder)
       stage <- createApplyStage(config, spawner, protocolHolder)
-      g <- createSyncStream(decoratedSource, stage, config.logFilePath)
+      g <- createSyncStream(decoratedSource, stage, config.logFilePath, config.errorLogFilePath)
       res <- g.run()
     yield SyncResult(res.totalSinkMat, res.errorSinkMat))
 
@@ -225,25 +225,28 @@ object Sync:
     * provided, the successful sync operations are also written to this log
     * file.
     *
-    * @param source   the source producing ''SyncOperation'' objects
-    * @param flowProc the flow that processes sync operations
-    * @param logFile  an optional path to a log file to write
-    * @param ec       the execution context
+    * @param source       the source producing ''SyncOperation'' objects
+    * @param flowProc     the flow that processes sync operations
+    * @param logFile      an optional path to a log file to write
+    * @param errorLogFile an optional path to a log file for errors
+    * @param ec           the execution context
     * @return a future with the runnable graph
     */
   private def createSyncStream(source: Source[SyncOperation, Any],
                                flowProc: Flow[SyncOperation, SyncOperationResult, Any],
-                               logFile: Option[Path])
+                               logFile: Option[Path],
+                               errorLogFile: Option[Path])
                               (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] = Future {
     val sinkCount = SyncStream.createCountSink()
-    val sinkTotal = logFile.fold(sinkCount)(path => SyncStream.sinkWithLogging(sinkCount, path))
+    val sinkTotal = createCountSinkWithOptionalLogging(logFile)
+    val sinkError = createCountSinkWithOptionalLogging(errorLogFile)
     val sinkSuccess = Flow[SyncOperationResult].filterNot { result =>
       result.optFailure.isDefined || result.op.action == ActionNoop
     }.toMat(sinkTotal)(Keep.right)
 
     val params = SyncStream.SyncStreamParams(source = source, processFlow = flowProc,
-      sinkTotal = sinkSuccess, sinkError = sinkCount)
+      sinkTotal = sinkSuccess, sinkError = sinkError)
     val decider: Supervision.Decider = ex => {
       ex.printStackTrace()
       Supervision.Resume
@@ -251,6 +254,20 @@ object Sync:
 
     SyncStream.createSyncStream(params).withAttributes(ActorAttributes.supervisionStrategy(decider))
   }
+
+  /**
+    * Creates a ''Sink'' that counts the elements received and optionally adds
+    * logging if a log file is specified. This function is used to create the
+    * sinks for all operations and the failed operations.
+    *
+    * @param logFile the optional path to the log file
+    * @param ec      the excution context
+    * @return the resulting sink
+    */
+  private def createCountSinkWithOptionalLogging(logFile: Option[Path])(implicit ec: ExecutionContext):
+  Sink[SyncOperationResult, Future[Int]] =
+    val sinkCount = SyncStream.createCountSink()
+    logFile.fold(sinkCount)(path => SyncStream.sinkWithLogging(sinkCount, path))
 
   /**
     * Generates a predicate that filters out undesired sync operations based on
