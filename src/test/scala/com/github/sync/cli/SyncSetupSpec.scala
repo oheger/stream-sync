@@ -54,7 +54,7 @@ object SyncSetupSpec:
   private val TestSyncConfig = SyncConfig(srcUri = "someSrcUri", dstUri = "someDstUri", srcConfig = null,
     dstConfig = null, timeout = SyncTimeout, dryRun = false, logFilePath = None, syncLogPath = None,
     ignoreTimeDelta = None, cryptConfig = null, opsPerSecond = None, filterData = null, switched = false,
-    logLevel = Level.DEBUG)
+    logLevel = Level.DEBUG, errorLogFilePath = None)
 
   /** A test configuration for HTTP actors. */
   private val TestSenderConfig = HttpRequestSenderConfig(actorName = Some("testActor"))

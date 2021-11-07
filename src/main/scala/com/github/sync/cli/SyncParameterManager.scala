@@ -91,6 +91,14 @@ object SyncParameterManager:
       |not provided, no log file is written.
       |""".stripMargin
 
+  /** Name of the option that defines the path to the error log file. */
+  final val ErrorLogFileOption: String = "error-log"
+
+  /** Help text for the error log file option. */
+  final val ErrorLogFileHelp =
+    """Defines the path to a log file where failed sync operations (together with the corresponding \
+      |exceptions are logged. If this option is not provided, no error log file is written.""".stripMargin
+
   /** Name of the option that defines the path to the sync log file. */
   final val SyncLogOption: String = "sync-log"
 
@@ -264,7 +272,7 @@ object SyncParameterManager:
     * With a value of this enumeration it is determined if and which parts of
     * a structure are encrypted.
     */
-  object CryptMode extends Enumeration:
+  object CryptMode extends Enumeration :
 
     protected case class CryptModeVal(requiresPassword: Boolean = true) extends super.Val
 
@@ -313,24 +321,25 @@ object SyncParameterManager:
     * An instance of this class is created from the command line options passed
     * to the program.
     *
-    * @param srcUri          the source URI of the sync process
-    * @param dstUri          the destination URI of the sync process
-    * @param srcConfig       the config for the source structure
-    * @param dstConfig       the config for the destination structure
-    * @param dryRun          flag whether only a dry-run should be done
-    * @param timeout         a timeout for sync operations
-    * @param logFilePath     an option with the path to the log file if defined
-    * @param syncLogPath     an option with the path to a file containing sync
-    *                        operations to be executed
-    * @param ignoreTimeDelta optional threshold for a time difference between
-    *                        two files that should be ignored
-    * @param cryptConfig     the configuration related to encryption
-    * @param opsPerSecond    optional restriction for the number of sync
-    *                        operations per second
-    * @param filterData      an object with information about filters
-    * @param logLevel        the log level for the sync process
-    * @param switched        a flag whether src and dst configs should be
-    *                        switched
+    * @param srcUri           the source URI of the sync process
+    * @param dstUri           the destination URI of the sync process
+    * @param srcConfig        the config for the source structure
+    * @param dstConfig        the config for the destination structure
+    * @param dryRun           flag whether only a dry-run should be done
+    * @param timeout          a timeout for sync operations
+    * @param logFilePath      an option with the path to the log file if defined
+    * @param errorLogFilePath an option with the path to an error log file
+    * @param syncLogPath      an option with the path to a file containing sync
+    *                         operations to be executed
+    * @param ignoreTimeDelta  optional threshold for a time difference between
+    *                         two files that should be ignored
+    * @param cryptConfig      the configuration related to encryption
+    * @param opsPerSecond     optional restriction for the number of sync
+    *                         operations per second
+    * @param filterData       an object with information about filters
+    * @param logLevel         the log level for the sync process
+    * @param switched         a flag whether src and dst configs should be
+    *                         switched
     */
   case class SyncConfig(srcUri: String,
                         dstUri: String,
@@ -339,6 +348,7 @@ object SyncParameterManager:
                         dryRun: Boolean,
                         timeout: Timeout,
                         logFilePath: Option[Path],
+                        errorLogFilePath: Option[Path],
                         syncLogPath: Option[Path],
                         ignoreTimeDelta: Option[Int],
                         cryptConfig: CryptConfig,
@@ -375,6 +385,7 @@ object SyncParameterManager:
     dryRun <- dryRunExtractor()
     timeout <- timeoutExtractor()
     logFile <- optionValue(LogFileOption, Some(LogFileHelp)).alias("l").toPath
+    errLog <- optionValue(ErrorLogFileOption, Some(ErrorLogFileHelp)).toPath
     syncLog <- optionValue(SyncLogOption, Some(SyncLogHelp)).toPath
     timeDelta <- ignoreTimeDeltaExtractor()
     opsPerSec <- opsPerSecondExtractor()
@@ -383,8 +394,8 @@ object SyncParameterManager:
     switched <- switchValue(SwitchOption, optHelp = Some(SwitchOptionHelp)).alias("S")
     logLevel <- logLevelExtractor()
     _ <- CliActorSystemLifeCycle.FileExtractor
-  yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, dryRun, timeout, logFile, syncLog, timeDelta,
-    opsPerSec, cryptConf, filters, switched, logLevel) map (_.normalized)
+  yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, dryRun, timeout, logFile, errLog, syncLog,
+    timeDelta, opsPerSec, cryptConf, filters, switched, logLevel) map (_.normalized)
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all
@@ -399,6 +410,7 @@ object SyncParameterManager:
     * @param triedDryRun      the dry-run component
     * @param triedTimeout     the timeout component
     * @param triedLogFile     the log file component
+    * @param triedErrorLog    the error log file component
     * @param triedSyncLog     the sync log component
     * @param triedTimeDelta   the ignore file time delta component
     * @param triedOpsPerSec   the ops per second component
@@ -415,6 +427,7 @@ object SyncParameterManager:
                                triedDryRun: Try[Boolean],
                                triedTimeout: Try[Timeout],
                                triedLogFile: Try[Option[Path]],
+                               triedErrorLog: Try[Option[Path]],
                                triedSyncLog: Try[Option[Path]],
                                triedTimeDelta: Try[Option[Int]],
                                triedOpsPerSec: Try[Option[Int]],
@@ -423,7 +436,7 @@ object SyncParameterManager:
                                triedSwitch: Try[Boolean],
                                triedLogLevel: Try[Level]): Try[SyncConfig] =
     createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
-      triedDryRun, triedTimeout, triedLogFile, triedSyncLog, triedTimeDelta, triedCryptConfig,
+      triedDryRun, triedTimeout, triedLogFile, triedErrorLog, triedSyncLog, triedTimeDelta, triedCryptConfig,
       triedOpsPerSec, triedFilterData, triedLogLevel, triedSwitch)(SyncConfig.apply)
 
   /**

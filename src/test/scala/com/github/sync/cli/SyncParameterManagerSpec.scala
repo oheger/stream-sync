@@ -75,7 +75,7 @@ object SyncParameterManagerSpec:
   */
 class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper with MockitoSugar
-  with AsyncTestHelper:
+  with AsyncTestHelper :
   def this() = this(ActorSystem("SyncParameterManagerSpec"))
 
   override protected def afterAll(): Unit =
@@ -218,6 +218,19 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
     expectFailedFuture(extractSyncConfig(argsMap),
       SyncParameterManager.LogFileOption, "Single value expected")
+  }
+
+  it should "have an undefined error log file option if none is specified" in {
+    val (config, _) = futureResult(extractSyncConfig(ArgsMap))
+    config.errorLogFilePath should be(None)
+  }
+
+  it should "store the path to the error log file in the sync config" in {
+    val logFile = Paths.get("var", "logs", "error-sync.log").toAbsolutePath
+    val argsMap = ArgsMap + (SyncParameterManager.ErrorLogFileOption -> List(logFile.toString))
+
+    val (config, _) = futureResult(extractSyncConfig(argsMap))
+    config.errorLogFilePath should be(Some(logFile))
   }
 
   it should "have an undefined sync log option if none is specified" in {
@@ -383,7 +396,6 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "allow overriding the log level" in {
-    val InvalidLevel = "SILENT"
     val argsMap = ArgsMap + (SyncParameterManager.LogLevelError -> List("true")) +
       (SyncParameterManager.LogLevelInfo -> List("true"))
 
@@ -425,7 +437,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
       dstConfig = mock[StructureAuthConfig], dryRun = false, timeout = 1.minute, logFilePath = None,
       syncLogPath = None, ignoreTimeDelta = Some(100), cryptConfig = orgCryptConfig, opsPerSecond = Some(100),
-      filterData = mock[SyncFilterData], logLevel = Level.INFO, switched = true)
+      filterData = mock[SyncFilterData], logLevel = Level.INFO, switched = true, errorLogFilePath = None)
     val expNormalized = orgConfig.copy(srcUri = orgConfig.dstUri, dstUri = orgConfig.srcUri,
       srcConfig = orgConfig.dstConfig, dstConfig = orgConfig.srcConfig, cryptConfig = expCryptConfig,
       switched = false)
