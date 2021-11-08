@@ -303,6 +303,18 @@ later. When restarted with these options the process ignores all sync
 operations listed in the progress log and only executes those that are still
 pending. This is further outlined in the _Examples_ section.
 
+There is another kind of log file that can be written during a sync process: an
+error log. This file contains all sync operations that could not be applied due
+to some exception, followed by this exception. This gives an overview over what
+went wrong and which files may not be up-to-date. To enable this error log, use
+the `--error-log` option and provide the path to the error log file.
+
+In the incremental mode, as described above, the error log file has no further
+function than reporting errors. Sync operations that appear in the error log
+are not written to the normal log and are not considered to be completed. So
+when running another sync process from the sync log, these operations are
+retried (and if they fail again, they are written anew to the error log).
+
 === Adjust granularity of timestamps
 
 In order to decide whether a file needs to be copied to the destination
