@@ -33,10 +33,11 @@ import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
 import com.github.sync.stream.*
 import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
+import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.core.config.Configurator
 
 import java.nio.file.{Path, StandardOpenOption}
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
@@ -240,7 +241,7 @@ object Sync:
   Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] = Future {
     val sinkCount = SyncStream.createCountSink()
     val sinkTotal = createCountSinkWithOptionalLogging(logFile)
-    val sinkError = createCountSinkWithOptionalLogging(errorLogFile)
+    val sinkError = createErrorSink(errorLogFile)
     val sinkSuccess = Flow[SyncOperationResult].filterNot { result =>
       result.optFailure.isDefined || result.op.action == ActionNoop
     }.toMat(sinkTotal)(Keep.right)
@@ -254,6 +255,27 @@ object Sync:
 
     SyncStream.createSyncStream(params).withAttributes(ActorAttributes.supervisionStrategy(decider))
   }
+
+  /**
+    * Creates the ''Sink'' that receives all failed sync operation results. The
+    * main functionality of this sink is to count these elements. If a path to
+    * a log file is specified, the sink is decorated to write the failed
+    * operations into this log file. In any case, failures are logged to the
+    * console with ERROR level.
+    *
+    * @param errorLogFile optional path to an error log file
+    * @param ec           the execution context
+    * @return the ''Sink'' for failed operations
+    */
+  private def createErrorSink(errorLogFile: Option[Path])(implicit ec: ExecutionContext):
+  Sink[SyncOperationResult, Future[Int]] =
+    val countSink = createCountSinkWithOptionalLogging(errorLogFile)
+    val logger = LogManager.getLogger(classOf[Sync])
+    val consoleLogSink = Sink.foreach[SyncOperationResult] { result =>
+      logger.error(s"Failed to apply operation '${result.op}'.", result.optFailure.get)
+    }
+
+    SyncStream.combinedSink(countSink, consoleLogSink)
 
   /**
     * Creates a ''Sink'' that counts the elements received and optionally adds

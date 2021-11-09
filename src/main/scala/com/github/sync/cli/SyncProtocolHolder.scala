@@ -29,7 +29,6 @@ import com.github.sync.stream.{ProtocolElementSource, ProtocolOperationHandler, 
 import com.github.sync.oauth.SyncAuthConfig
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.protocol.config.StructureCryptConfig
-import org.apache.logging.log4j.LogManager
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -122,9 +121,6 @@ object SyncProtocolHolder:
   */
 class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
                          val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[_]):
-  /** The logger. */
-  private val logger = LogManager.getLogger(classOf[SyncProtocolHolder])
-
   /**
     * Creates a source for iterating over the elements of the source structure.
     *
@@ -153,12 +149,6 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     implicit val timeout: Timeout = syncConfig.timeout
 
     ProtocolOperationHandlerStage(protocolHandler, spawner)
-      .map { op =>
-        op.optFailure foreach {
-          logger.error(s"Failed to apply operation '${op.op}'.", _)
-        }
-        op
-      }
 
   /**
     * Registers a handler at the given ''Future'' that closes the managed

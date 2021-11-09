@@ -20,7 +20,6 @@ import akka.Done
 import akka.stream.{ClosedShape, IOResult, SinkShape}
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import com.github.sync.SyncTypes.{SyncOperation, SyncOperationResult}
-import com.github.sync.cli.Sync.combineMat
 import com.github.sync.log.ElementSerializer
 
 import java.nio.file.{Path, StandardOpenOption}
@@ -118,15 +117,7 @@ object SyncStream:
     */
   def sinkWithLogging[MAT](sink: Sink[SyncOperationResult, Future[MAT]], logFile: Path)
                           (implicit ec: ExecutionContext): Sink[SyncOperationResult, Future[MAT]] =
-    Sink.fromGraph(GraphDSL.createGraph(createLogSink(logFile), sink)(createLogSinkMat) {
-      implicit builder =>
-        (logSink, orgSink) =>
-          import GraphDSL.Implicits._
-          val broadcast = builder.add(Broadcast[SyncOperationResult](2))
-          broadcast ~> logSink.in
-          broadcast ~> orgSink.in
-          SinkShape(broadcast.in)
-    })
+    combinedSink(sink, createLogSink(logFile))
 
   /**
     * Creates a ''Sink'' that counts the received results for sync
@@ -137,6 +128,34 @@ object SyncStream:
     */
   def createCountSink(): Sink[SyncOperationResult, Future[Int]] =
     Sink.fold[Int, SyncOperationResult](0) { (cnt, _) => cnt + 1 }
+
+  /**
+    * Creates a combined ''Sink'' for [[SyncOperationResult]]s that produces
+    * the same materialized result as the original sink. For the second sink,
+    * the result is obtained - thus making sure that it is completed -, but it
+    * is dropped and not further evaluated. The main idea behind this function
+    * is to enable some kind of logging for sink operations, in addition to a
+    * sink that actually produces a value.
+    *
+    * @param orgSink   the original ''Sink'' that produces a value
+    * @param otherSink another ''Sink'' to be combined
+    * @param ec        the execution context
+    * @tparam MAT the type of the materialized result of the first sink
+    * @tparam T   the type of the other sink
+    * @return the combined sink
+    */
+  def combinedSink[MAT, T](orgSink: Sink[SyncOperationResult, Future[MAT]],
+                           otherSink: Sink[SyncOperationResult, Future[T]])
+                          (implicit ec: ExecutionContext): Sink[SyncOperationResult, Future[MAT]] =
+    Sink.fromGraph(GraphDSL.createGraph(otherSink, orgSink)(createCombinedSinkMat) {
+      implicit builder =>
+        (ignoreSink, resultSink) =>
+          import GraphDSL.Implicits._
+          val broadcast = builder.add(Broadcast[SyncOperationResult](2))
+          broadcast ~> ignoreSink.in
+          broadcast ~> resultSink.in
+          SinkShape(broadcast.in)
+    })
 
   /**
     * Constructs the materialized value of the sync stream from the results of
@@ -159,18 +178,20 @@ object SyncStream:
 
   /**
     * Constructs the materialized value of a sink that has been combined with a
-    * log sink. Although only the value of the original sink is relevant, it is
-    * necessary to wait for the completion of the log sink, too.
+    * another sink whose materialized value is to be ignred. Although only the
+    * value of the original sink is relevant, it is necessary to wait for the
+    * completion of the other sink, too.
     *
-    * @param matLog the materialized value of the log sink
-    * @param matOrg the materialized value of the original sink
-    * @param ec     the execution context
+    * @param matIgnore the materialized value of the sink to be ignored
+    * @param matOrg    the materialized value of the original sink
+    * @param ec        the execution context
     * @tparam MAT the type of the original materialized value
+    * @tparam T   the type of the materialized value to be ignored
     * @return the combined materialized value
     */
-  private def createLogSinkMat[MAT](matLog: Future[Any], matOrg: Future[MAT])
-                                   (implicit ec: ExecutionContext): Future[MAT] =
+  private def createCombinedSinkMat[MAT, T](matIgnore: Future[T], matOrg: Future[MAT])
+                                           (implicit ec: ExecutionContext): Future[MAT] =
     for
-      _ <- matLog
+      _ <- matIgnore
       result <- matOrg
     yield result
