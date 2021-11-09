@@ -61,7 +61,7 @@ object SyncStreamSpec:
     val elemName = if success then SuccessFileName else ErrorFileName
     val element = FsFile("id" + index, s"/$elemName$index", level = index / 10,
       lastModified = Instant.parse("2021-11-04T12:22:45Z"), size = 100 * index + 1)
-    SyncOperation(element, SyncTypes.SyncAction.ActionOverride, element.level)
+    SyncOperation(element, SyncTypes.SyncAction.ActionOverride, element.level, "id" + index)
 
   /**
     * Creates the result for a ''SyncOperation''. Depending on the URL of the

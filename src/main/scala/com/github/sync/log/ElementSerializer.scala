@@ -19,6 +19,7 @@ package com.github.sync.log
 import java.time.Instant
 import akka.util.ByteString
 import com.github.cloudfiles.core.http.UriEncodingHelper
+import com.github.cloudfiles.core.http.UriEncodingHelper.encode
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 
@@ -133,16 +134,6 @@ object ElementSerializer:
     actionData <- deserializeAction(raw)
     elem <- deserializeElement(actionData._6)
   yield SyncOperation(elem, actionData._1, actionData._2, dstID = actionData._3)
-
-  /**
-    * Encode the given string, so that it can be safely serialized.
-    *
-    * @param s the string to encode
-    * @return the encoded string
-    */
-  private def encode(s: String): String =
-  //TODO Remove the null check when CloudFiles has been fully integrated
-    if s == null then "" else UriEncodingHelper.encode(s)
 
   /**
     * Generates a string representation for the given element with the given
