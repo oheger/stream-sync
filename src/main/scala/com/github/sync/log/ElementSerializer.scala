@@ -37,10 +37,10 @@ import scala.util.Try
   */
 object ElementSerializer:
   /** Tag to mark the serialized form of a folder element. */
-  val TagFolder = "FOLDER"
+  final val TagFolder = "FOLDER"
 
   /** Tag to mark the serialized form of a file element. */
-  val TagFile = "FILE"
+  final val TagFile = "FILE"
 
   /**
     * A mapping from action types to corresponding strings. This is used to
@@ -58,6 +58,21 @@ object ElementSerializer:
 
   /** Constant for the line-ending characters. */
   private val CR = ByteString(System.lineSeparator())
+
+  /**
+    * An internally used data class to represent the components of a serialized
+    * sync action. From this data, a [[SyncOperation]] and the element it
+    * refers to can be constructed.
+    *
+    * @param syncAction   the action of this operation
+    * @param level        the level of the operation
+    * @param destID       the ID of the destination object
+    * @param elementParts the serialized components of the element
+    */
+  private case class SerialOperationData(syncAction: SyncAction,
+                                         level: Int,
+                                         destID: String,
+                                         elementParts: Seq[String])
 
   /**
     * Generates a string representation for the given element.
@@ -132,8 +147,8 @@ object ElementSerializer:
     */
   def deserializeOperation(raw: String): Try[SyncOperation] = for
     actionData <- deserializeAction(raw)
-    elem <- deserializeElement(actionData._6)
-  yield SyncOperation(elem, actionData._1, actionData._2, dstID = actionData._3)
+    elem <- deserializeElement(actionData.elementParts)
+  yield SyncOperation(elem, actionData.syncAction, actionData.level, dstID = actionData.destID)
 
   /**
     * Generates a string representation for the given element with the given
@@ -154,15 +169,16 @@ object ElementSerializer:
     * can be used to further process the serialized element.
     *
     * @param raw the raw data with the serialized form of the operation
-    * @return a ''Try'' with elements that could be parsed
+    * @return a ''Try'' with a data object holding the components that could be
+    *         parsed
     */
-  private def deserializeAction(raw: String):
-  Try[(SyncAction, Int, String, Option[String], Option[String], Seq[String])] =
+  private def deserializeAction(raw: String): Try[SerialOperationData] =
     Try {
       val parts = raw.split("\\s").toSeq
       val indexTag = parts.indexWhere(p => TagFile == p || TagFolder == p)
       if indexTag <= 3 then
-        (TagActionMapping(parts.head), parts(1).toInt, UriEncodingHelper decode parts(2), None, None, parts drop 3)
-      else (TagActionMapping(parts.head), parts(1).toInt, UriEncodingHelper decode parts(2),
-        Some(UriEncodingHelper decode parts(3)), Some(UriEncodingHelper decode parts(4)), parts drop 5)
+        SerialOperationData(TagActionMapping(parts.head), parts(1).toInt, UriEncodingHelper decode parts(2),
+          parts drop 3)
+      else SerialOperationData(TagActionMapping(parts.head), parts(1).toInt, UriEncodingHelper decode parts(2),
+        parts drop 5)
     }
