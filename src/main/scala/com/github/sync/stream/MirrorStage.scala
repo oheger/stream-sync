@@ -18,10 +18,11 @@ package com.github.sync.stream
 
 import akka.event.LoggingAdapter
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler, StageLogging}
-import akka.stream.{Attributes, FanInShape2, Inlet, Outlet}
+import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
+import com.github.sync.stream.BaseMergeStage.Input
 
 object MirrorStage:
   /**
@@ -31,409 +32,381 @@ object MirrorStage:
   private val DstIDUnknown = "-"
 
   /**
-    * A function to handle state transitions when an element from upstream
-    * is received.
+    * The internal class representing the logic and the state of the mirror
+    * stage.
     *
-    * The function is passed the old sync state, a reference to the
-    * ''SyncStage'', the element from upstream, the index of the inlet from
-    * which the element was received, and a logger. It then determines the
-    * actions to execute and returns an updated sync state.
-    *
-    * When the function is invoked with a '''null''' element, this means that
-    * the upstream for this port is finished.
+    * @param shape              the shape
+    * @param in1                the inlet for the first input source
+    * @param in2                the inlet for the second input source
+    * @param out                the outlet of this stage
+    * @param ignoreTimeDeltaSec a time difference in seconds that is to be
+    *                           ignored when comparing two files
     */
-  private type SyncFunc = (SyncState, MirrorStage, Int, FsElement, LoggingAdapter) => (EmitData, SyncState)
-
-  /**
-    * A class with details about elements to be emitted downstream.
-    *
-    * @param ops           the operations to be pushed downstream
-    * @param pullInletsIdx the indices of inlets to be pulled
-    * @param complete      flag whether the stream should be completed
-    */
-  private case class EmitData(ops: collection.immutable.Iterable[SyncOperation],
-                              pullInletsIdx: Iterable[Int],
-                              complete: Boolean = false)
-
-  /**
-    * The state of the sync stage.
-    *
-    * This class holds state information that is required when processing a
-    * sync stream.
-    *
-    * @param currentElem     a current element to be synced
-    * @param syncFunc        the current sync function
-    * @param finishedSources the number of sources that have been finished
-    * @param deferredOps     sync operations that will be pushed out at the
-    *                        very end of the stream
-    * @param removedPaths    root elements that have been removed in the
-    *                        destination structure
-    */
-  private case class SyncState(currentElem: FsElement,
-                               syncFunc: SyncFunc,
-                               finishedSources: Int,
-                               deferredOps: List[SyncOperation],
-                               removedPaths: Set[FsElement]):
+  private class MirrorStageLogic(shape: Shape,
+                                 in1: Inlet[FsElement],
+                                 in2: Inlet[FsElement],
+                                 out: Outlet[SyncOperation],
+                                 ignoreTimeDeltaSec: Int)
+    extends GraphStageLogic(shape) with BaseMergeStage[FsElement, FsElement, SyncOperation](in1, in2, out)
+      with StageLogging :
     /**
-      * Creates a new sync state with the specified sync function and directly
-      * invokes this function with the updated state and the parameters
-      * provided. This is useful when switching to another sync function.
+      * The state of the [[MirrorStage]].
       *
-      * @param f       the new sync function
-      * @param stage   the sync stage
-      * @param portIdx the port index
+      * This class holds state information that is required when processing a
+      * sync stream.
+      *
+      * @param currentElem     a current element to be synced
+      * @param mergeFunc       the current merge function
+      * @param finishedSources the number of sources that have been finished
+      * @param deferredOps     sync operations that will be pushed out at the
+      *                        very end of the stream
+      * @param removedPaths    root elements that have been removed in the
+      *                        destination structure
+      */
+    case class MirrorState(override val mergeFunc: MergeFunc,
+                           currentElem: FsElement,
+                           finishedSources: Int,
+                           deferredOps: List[SyncOperation],
+                           removedPaths: Set[FsElement]) extends BaseMergeState :
+      /**
+        * Creates a new sync state with the specified merge function and
+        * directly invokes this function with the updated state and the
+        * parameters provided. This is useful when switching to another merge
+        * function.
+        *
+        * @param f       the new merge function
+        * @param input   defines the current input source
+        * @param element the new element
+        * @return the result of the merge function
+        */
+      def updateAndCallMergeFunction(f: MergeFunc, input: Input, element: FsElement): (EmitData, MirrorState) =
+        f(copy(mergeFunc = f), input, element)
+
+      /**
+        * Updates the current element of this state instance if necessary. If
+        * there is no change in the current element, the state instance is
+        * returned without changes.
+        *
+        * @param element the new current element
+        * @return the updated ''SyncState'' instance
+        */
+      def updateCurrentElement(element: FsElement): MirrorState =
+        if currentElem == element then this
+        else copy(currentElem = element)
+    end MirrorState
+
+    override type MergeState = MirrorState
+
+    /** The specific state of the ''MirrorStage''. */
+    private var mirrorState = MirrorState(waitForElements, null, 0, Nil, Set.empty)
+
+    override protected def state: MirrorState = mirrorState
+
+    override protected def updateState(newState: MirrorState): Unit =
+      mirrorState = newState
+
+    /**
+      * A merge function to wait until elements from both sources are received.
+      * This function is set initially. It switches to another function when for
+      * both input elements elements are available or one of the input ports is
+      * already finished.
+      *
+      * @param state   the current sync state
+      * @param input   defines the current input source
+      * @param element the new element
+      * @return data to emit and the next state
+      */
+    private def waitForElements(state: MirrorState, input: Input, element: FsElement): (EmitData, MirrorState) =
+      handleNullElementDuringSync(state, input, element) getOrElse {
+        if state.currentElem == null then
+          (EmitNothing, state.copy(currentElem = element))
+        else state.updateAndCallMergeFunction(syncElements, input, element)
+      }
+
+    /**
+      * A merge function that is active when both input sources deliver
+      * elements. Here the actual sync logic is implemented: the current
+      * elements from both inputs are compared, and it is decided which sync
+      * operations need to be performed.
+      *
+      * @param state   the current sync state
+      * @param input   defines the current input source
+      * @param element the new element
+      * @return data to emit and the next state
+      */
+    private def syncElements(state: MirrorState, input: Input, element: FsElement): (EmitData, MirrorState) =
+      handleNullElementDuringSync(state, input, element) getOrElse {
+        val (elemSource, elemDest) = extractSyncPair(state, input, element)
+        syncOperationForElements(elemSource, elemDest, state) orElse
+          syncOperationForFileFolderDiff(elemSource, elemDest, state) getOrElse
+          emitAndPullBoth(List(SyncOperation(elemSource, ActionNoop, element.level, DstIDUnknown)), state)
+      }
+
+    /**
+      * A merge function that becomes active when the source for the
+      * destination structure is finished. All elements that are now
+      * encountered have to be created in this structure.
+      *
+      * @param state   the current sync state
+      * @param input   defines the current input source
+      * @param element the new element
+      * @return data to emit and the next state
+      */
+    private def destinationFinished(state: MirrorState, input: Input, element: FsElement): (EmitData, MirrorState) =
+      def handleElement(s: MirrorState, elem: FsElement): (EmitData, MirrorState) =
+        (EmitData(List(createOp(elem)), BaseMergeStage.Pull1), s)
+
+      handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
+        handleElement(state, element)
+
+    /**
+      * A merge function that becomes active when the source for the source
+      * structure is finished. Remaining elements in the destination structure
+      * now have to be removed.
+      *
+      * @param state   the current sync state
+      * @param input   defines the current input source
+      * @param element the new element
+      * @return data to emit and the next state
+      */
+    private def sourceDirFinished(state: MirrorState, input: Input, element: FsElement): (EmitData, MirrorState) =
+      def handleElement(s: MirrorState, elem: FsElement): (EmitData, MirrorState) =
+        val (op, next) = removeElement(s, elem, removedPath = None)
+        (EmitData(op, BaseMergeStage.Pull2), next)
+
+      handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
+        handleElement(state, element)
+
+    /**
+      * Compares the given elements from the source and destination inlets and
+      * returns an ''Option'' with data how these elements have to be handled.
+      * If a sync operation is required for these elements, the resulting option
+      * is defined; otherwise, the elements do not require an action, and can be
+      * skipped.
+      *
+      * @param elemSource the element from the source inlet
+      * @param elemDest   the element from the destination inlet
+      * @param state      the current sync state
+      * @return an ''Option'' with data how to handle these elements
+      */
+    private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement, state: MirrorState):
+    Option[(EmitData, MirrorState)] =
+      lazy val delta = compareElements(elemSource, elemDest)
+      val isRemoved = isInRemovedPath(state, elemDest)
+      if isRemoved.isDefined || delta > 0 then
+        val (op, next) = removeElement(state.updateCurrentElement(elemSource), elemDest, isRemoved)
+        Some((EmitData(op, BaseMergeStage.Pull2), next))
+      else if delta < 0 then
+        Some((EmitData(List(createOp(elemSource)), BaseMergeStage.Pull1), state.updateCurrentElement(elemDest)))
+      else None
+
+    /**
+      * Compares the given elements and returns an integer value determining
+      * which one is before the other: a value less than zero means that the
+      * source element is before the destination element; a value greater than
+      * zero means that the destination element is before the source element; the
+      * value 0 means that elements are equivalent.
+      *
+      * @param elemSource the source element
+      * @param elemDest   the destination element
+      * @return the result of the comparison
+      */
+    private def compareElements(elemSource: FsElement, elemDest: FsElement): Int =
+      val (srcParent, srcName) = UriEncodingHelper.splitParent(elemSource.relativeUri)
+      val (dstParent, dstName) = UriEncodingHelper.splitParent(elemDest.relativeUri)
+      val deltaParent = srcParent.compareTo(dstParent)
+      if deltaParent != 0 then deltaParent
+      else srcName.compareTo(dstName)
+
+    /**
+      * Handles advanced corner cases when comparing two elements that depend on
+      * the element type. This function also deals with constellations that a
+      * file in the source structure corresponds to a folder in the destination
+      * structure and vice versa.
+      *
+      * @param elemSource the element from the source inlet
+      * @param elemDest   the element from the destination inlet
+      * @param state      the current sync state
+      * @return an ''Option'' with data how to handle these elements
+      */
+    private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement, state: MirrorState):
+    Option[(EmitData, MirrorState)] =
+      (elemSource, elemDest) match
+        case (eSrc: FsFile, eDst: FsFile)
+          if differentFileTimes(eSrc, eDst) || eSrc.size != eDst.size =>
+          log.debug("Different file attributes: {} <=> {}.", eSrc, eDst)
+          Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, dstID = eDst.id)), state))
+
+        case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
+          val ops = List(removeOp(fileDst, fileDst.level), createOp(folderSrc))
+          Some(emitAndPullBoth(ops, state))
+
+        case (fileSrc: FsFile, folderDst: FsFolder) => // folder converted to file
+          val defOps = removeOp(folderDst, fileSrc.level) :: createOp(fileSrc) :: state.deferredOps
+          val next = state.copy(deferredOps = defOps,
+            removedPaths = addRemovedFolder(state, folderDst))
+          Some(emitAndPullBoth(Nil, next))
+
+        case _ => None
+
+    /**
+      * Creates ''EmitData'' and an updated state in case that both inlets have
+      * to be pulled.
+      *
+      * @param op    a sequence with sync operations
+      * @param state the current sync state
+      * @return data to emit and the next state
+      */
+    private def emitAndPullBoth(op: List[SyncOperation], state: MirrorState): (EmitData, MirrorState) =
+      (EmitData(op, BaseMergeStage.PullBoth), state.copy(currentElem = null, mergeFunc = waitForElements))
+
+    /**
+      * Deals with a null element while in sync mode. This means that one of
+      * the input sources is now complete. Depending on the source affected,
+      * the state is updated to switch to the correct finished merge function.
+      * If the passed in element is not null, result is ''None''.
+      *
+      * @param state   the current sync state
+      * @param input   defines the current input source
       * @param element the new element
       * @param log     the logger
-      * @return the result of the sync function
+      * @return an ''Option'' with data to change to the next state in case an
+      *         input source is finished
       */
-    def updateAndCallSyncFunction(f: SyncFunc, stage: MirrorStage, portIdx: Int, element: FsElement,
-                                  log: LoggingAdapter): (EmitData, SyncState) =
-      f(copy(syncFunc = f), stage, portIdx, element, log)
+    private def handleNullElementDuringSync(state: MirrorState, input: Input, element: FsElement):
+    Option[(EmitData, MirrorState)] =
+      if element == null then
+        val stateFunc = if input == Input.Inlet1 then sourceDirFinished _ else destinationFinished _
+        Some(state.updateAndCallMergeFunction(stateFunc, input, element))
+      else None
 
     /**
-      * Updates the current element of this state instance if necessary. If
-      * there is no change in the current element, the state instance is
-      * returned without changes.
+      * Deals with a null element in a state where one source has been finished.
+      * This function handles the cases that the state was newly entered or that
+      * the stream can now be completed. If result is an empty option, a non null
+      * element was passed that needs to be processed by the caller.
       *
-      * @param element the new current element
-      * @return the updated ''SyncState'' instance
+      * @param state    the current sync state
+      * @param element  the element to be handled
+      * @param emitFunc function to generate emit data for an element
+      * @return an option with emit data and the next state that is not empty if
+      *         this function could handle the element
       */
-    def updateCurrentElement(element: FsElement): SyncState =
-      if currentElem == element then this
-      else copy(currentElem = element)
+    private def handleNullElementOnFinishedSource(state: MirrorState, element: FsElement)
+                                                 (emitFunc: (MirrorState, FsElement) => (EmitData, MirrorState)):
+    Option[(EmitData, MirrorState)] =
+      if element == null then
+        if state.finishedSources > 0 then
+          Some(EmitData(state.deferredOps, Nil, complete = true), state)
+        else
+          val (emit, next) = Option(state.currentElem).map(emitFunc(state, _))
+            .getOrElse((EmitNothing, state))
+          Some(emit, next.copy(finishedSources = 1))
+      else None
 
-  /** Constant for an ''EmitData'' object that requires no action. */
-  private val EmitNothing = EmitData(Nil, Nil)
+    /**
+      * Extracts the two elements to be compared for the current sync operation.
+      * This function returns a tuple with the first element from the source
+      * inlet and the second element from the destination inlet.
+      *
+      * @param state   the current sync state
+      * @param input   defines the current input source
+      * @param element the new element
+      * @return a tuple with the elements to be synced
+      */
+    private def extractSyncPair(state: MirrorState, input: Input, element: FsElement):
+    (FsElement, FsElement) =
+      if input == Input.Inlet2 then (state.currentElem, element)
+      else (element, state.currentElem)
 
-  /** The index for the inlet with the source structure. */
-  private val IdxSource = 0
+    /**
+      * Checks whether the given element belongs to a path in the destination
+      * structure that has been removed before. Such elements can be removed
+      * directly.
+      *
+      * @param state   the current sync state
+      * @param element the element to be checked
+      * @return a flag whether this element is in a removed path
+      */
+    private def isInRemovedPath(state: MirrorState, element: FsElement): Option[FsElement] =
+      state.removedPaths find { e =>
+        element.relativeUri.startsWith(e.relativeUri)
+      }
 
-  /** The index for the inlet with the destination structure. */
-  private val IdxDest = 1
+    /**
+      * Generates emit data for an element to be removed. The exact actions to
+      * delete the element depend on the element type: files can be deleted
+      * directly, the deletion of folders is deferred. So in case of a folder,
+      * the properties of the state are updated accordingly.
+      *
+      * @param state       the current sync state
+      * @param element     the element to be removed
+      * @param removedPath a removed root path containing the current element
+      * @return data to emit and the updated state
+      */
+    private def removeElement(state: MirrorState, element: FsElement, removedPath: Option[FsElement]):
+    (List[SyncOperation], MirrorState) =
+      val op = removeOp(element, removedPath map (_.level) getOrElse element.level)
+      element match
+        case folder: FsFolder =>
+          val paths = if removedPath.isDefined then state.removedPaths
+          else addRemovedFolder(state, folder)
+          (Nil, state.copy(removedPaths = paths, deferredOps = op :: state.deferredOps))
+        case _ =>
+          (List(op), state)
 
-  /**
-    * A sync function to wait until elements from both sources are received.
-    * This function is set initially. It switches to another function when for
-    * both input elements elements are available or one of the input ports is
-    * already finished.
-    *
-    * @param state   the current sync state
-    * @param stage   the stage
-    * @param portIdx the port index
-    * @param element the new element
-    * @param log     the logger
-    * @return data to emit and the next state
-    */
-  private def waitForElements(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
-                              log: LoggingAdapter): (EmitData, SyncState) =
-    handleNullElementDuringSync(state, stage, portIdx, element, log) getOrElse {
-      if state.currentElem == null then
-        (EmitNothing, state.copy(currentElem = element))
-      else state.updateAndCallSyncFunction(syncElements, stage, portIdx, element, log)
-    }
+    /**
+      * Adds a folder to the set of removed root paths.
+      *
+      * @param state  the current sync state
+      * @param folder the folder to be added
+      * @return the updated set with root paths
+      */
+    private def addRemovedFolder(state: MirrorState, folder: FsFolder): Set[FsElement] =
+      state.removedPaths + folder.copy(relativeUri = folder.relativeUri +
+        UriEncodingHelper.UriSeparator)
 
-  /**
-    * A sync function that is active when both input sources deliver elements.
-    * Here the actual sync logic is implemented: the current elements from both
-    * inputs are compared, and it is decided which sync operations need to be
-    * performed.
-    *
-    * @param state   the current sync state
-    * @param stage   the stage
-    * @param portIdx the port index
-    * @param element the new element
-    * @param log     the logger
-    * @return data to emit and the next state
-    */
-  private def syncElements(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
-                           log: LoggingAdapter): (EmitData, SyncState) =
-    handleNullElementDuringSync(state, stage, portIdx, element, log) getOrElse {
-      val (elemSource, elemDest) = extractSyncPair(state, portIdx, element)
-      syncOperationForElements(elemSource, elemDest, state, stage) orElse
-        syncOperationForFileFolderDiff(elemSource, elemDest, state, stage, stage.ignoreTimeDeltaSec, log) getOrElse
-        emitAndPullBoth(List(SyncOperation(elemSource, ActionNoop, element.level, DstIDUnknown)), state, stage)
-    }
+    /**
+      * Creates an operation that indicates that an element needs to be created.
+      *
+      * @param elem the element affected
+      * @return the operation
+      */
+    private def createOp(elem: FsElement): SyncOperation =
+      SyncOperation(elem, ActionCreate, elem.level, DstIDUnknown)
 
-  /**
-    * A sync function that becomes active when the source for the destination
-    * structure is finished. All elements that are now encountered have to be
-    * created in this structure.
-    *
-    * @param state   the current sync state
-    * @param stage   the stage
-    * @param portIdx the port index
-    * @param element the new element
-    * @param log     the logger
-    * @return data to emit and the next state
-    */
-  private def destinationFinished(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
-                                  log: LoggingAdapter): (EmitData, SyncState) =
-    def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
-      (EmitData(List(createOp(elem)), stage.PullSource), s)
+    /**
+      * Creates an operation that indicates that an element needs to be removed.
+      *
+      * @param element the element affected
+      * @param level   the level of the operation
+      * @return the operation
+      */
+    private def removeOp(element: FsElement, level: Int): SyncOperation =
+      SyncOperation(element, ActionRemove, level, dstID = element.id)
 
-    handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
-      handleElement(state, element)
+    /**
+      * Checks whether the timestamps of the given files are different, taking
+      * the configured threshold for the time delta into account.
+      *
+      * @param eSrc            the source file
+      * @param eDst            the destination file
+      * @param ignoreTimeDelta the delta in file times to be ignored
+      * @return a flag whether these files have a different timestamp
+      */
+    private def differentFileTimes(eSrc: FsFile, eDst: FsFile): Boolean =
+      math.abs(extractTime(eSrc) - extractTime(eDst)) > ignoreTimeDeltaSec
 
-  /**
-    * A sync function that becomes active when the source for the source
-    * structure is finished. Remaining elements in the destination structure
-    * now have to be removed.
-    *
-    * @param state   the current sync state
-    * @param stage   the stage
-    * @param portIdx the port index
-    * @param element the new element
-    * @param log     the logger
-    * @return data to emit and the next state
-    */
-  private def sourceDirFinished(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
-                                log: LoggingAdapter): (EmitData, SyncState) =
-    def handleElement(s: SyncState, elem: FsElement): (EmitData, SyncState) =
-      val (op, next) = removeElement(s, elem, removedPath = None)
-      (EmitData(op, stage.PullDest), next)
-
-    handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
-      handleElement(state, element)
-
-  /**
-    * Compares the given elements from the source and destination inlets and
-    * returns an ''Option'' with data how these elements have to be handled.
-    * If a sync operation is required for these elements, the resulting option
-    * is defined; otherwise, the elements do not require an action, and can be
-    * skipped.
-    *
-    * @param elemSource the element from the source inlet
-    * @param elemDest   the element from the destination inlet
-    * @param state      the current sync state
-    * @param stage      the stage
-    * @return an ''Option'' with data how to handle these elements
-    */
-  private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement,
-                                       state: SyncState, stage: MirrorStage):
-  Option[(EmitData, SyncState)] =
-    lazy val delta = compareElements(elemSource, elemDest)
-    val isRemoved = isInRemovedPath(state, elemDest)
-    if isRemoved.isDefined || delta > 0 then
-      val (op, next) = removeElement(state.updateCurrentElement(elemSource), elemDest, isRemoved)
-      Some((EmitData(op, stage.PullDest), next))
-    else if delta < 0 then
-      Some((EmitData(List(createOp(elemSource)), stage.PullSource), state.updateCurrentElement(elemDest)))
-    else None
-
-  /**
-    * Compares the given elements and returns an integer value determining
-    * which one is before the other: a value less than zero means that the
-    * source element is before the destination element; a value greater than
-    * zero means that the destination element is before the source element; the
-    * value 0 means that elements are equivalent.
-    *
-    * @param elemSource the source element
-    * @param elemDest   the destination element
-    * @return the result of the comparison
-    */
-  private def compareElements(elemSource: FsElement, elemDest: FsElement): Int =
-    val (srcParent, srcName) = UriEncodingHelper.splitParent(elemSource.relativeUri)
-    val (dstParent, dstName) = UriEncodingHelper.splitParent(elemDest.relativeUri)
-    val deltaParent = srcParent.compareTo(dstParent)
-    if deltaParent != 0 then deltaParent
-    else srcName.compareTo(dstName)
-
-  /**
-    * Handles advanced corner cases when comparing two elements that depend on
-    * the element type. This function also deals with constellations that a
-    * file in the source structure corresponds to a folder in the destination
-    * structure and vice versa.
-    *
-    * @param elemSource      the element from the source inlet
-    * @param elemDest        the element from the destination inlet
-    * @param state           the current sync state
-    * @param stage           the stage
-    * @param ignoreTimeDelta the delta in file times to be ignored
-    * @param log             the logger
-    * @return an ''Option'' with data how to handle these elements
-    */
-  private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement, state: SyncState,
-                                             stage: MirrorStage, ignoreTimeDelta: Int, log: LoggingAdapter):
-  Option[(EmitData, SyncState)] =
-    (elemSource, elemDest) match
-      case (eSrc: FsFile, eDst: FsFile)
-        if differentFileTimes(eSrc, eDst, ignoreTimeDelta) || eSrc.size != eDst.size =>
-        log.debug("Different file attributes: {} <=> {}.", eSrc, eDst)
-        Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, dstID = eDst.id)), state, stage))
-
-      case (folderSrc: FsFolder, fileDst: FsFile) => // file converted to folder
-        val ops = List(removeOp(fileDst, fileDst.level), createOp(folderSrc))
-        Some(emitAndPullBoth(ops, state, stage))
-
-      case (fileSrc: FsFile, folderDst: FsFolder) => // folder converted to file
-        val defOps = removeOp(folderDst, fileSrc.level) :: createOp(fileSrc) :: state.deferredOps
-        val next = state.copy(deferredOps = defOps,
-          removedPaths = addRemovedFolder(state, folderDst))
-        Some(emitAndPullBoth(Nil, next, stage))
-
-      case _ => None
-
-  /**
-    * Creates ''EmitData'' and an updated state in case that both inlets have
-    * to be pulled.
-    *
-    * @param op    a sequence with sync operations
-    * @param state the current sync state
-    * @param stage the stage
-    * @return data to emit and the next state
-    */
-  private def emitAndPullBoth(op: List[SyncOperation], state: SyncState, stage: MirrorStage):
-  (EmitData, SyncState) =
-    (EmitData(op, stage.PullBoth), state.copy(currentElem = null, syncFunc = waitForElements))
-
-  /**
-    * Deals with a null element while in sync mode. This means that one of the
-    * input sources is now complete. Depending on the source affected, the
-    * state is updated to switch to the correct finished sync function. If the
-    * passed in element is not null, result is ''None''.
-    *
-    * @param state   the current sync state
-    * @param stage   the stage
-    * @param portIdx the port index
-    * @param element the new element
-    * @param log     the logger
-    * @return an ''Option'' with data to change to the next state in case an
-    *         input source is finished
-    */
-  private def handleNullElementDuringSync(state: SyncState, stage: MirrorStage, portIdx: Int, element: FsElement,
-                                          log: LoggingAdapter): Option[(EmitData, SyncState)] =
-    if element == null then
-      val stateFunc = if portIdx == IdxSource then sourceDirFinished _ else destinationFinished _
-      Some(state.updateAndCallSyncFunction(stateFunc, stage, portIdx, element, log))
-    else None
-
-  /**
-    * Deals with a null element in a state where one source has been finished.
-    * This function handles the cases that the state was newly entered or that
-    * the stream can now be completed. If result is an empty option, a non null
-    * element was passed that needs to be processed by the caller.
-    *
-    * @param state    the current sync state
-    * @param element  the element to be handled
-    * @param emitFunc function to generate emit data for an element
-    * @return an option with emit data and the next state that is not empty if
-    *         this function could handle the element
-    */
-  private def handleNullElementOnFinishedSource(state: SyncState, element: FsElement)
-                                               (emitFunc: (SyncState, FsElement) =>
-                                                 (EmitData, SyncState)):
-  Option[(EmitData, SyncState)] =
-    if element == null then
-      if state.finishedSources > 0 then
-        Some(EmitData(state.deferredOps, Nil, complete = true), state)
-      else
-        val (emit, next) = Option(state.currentElem).map(emitFunc(state, _))
-          .getOrElse((EmitNothing, state))
-        Some(emit, next.copy(finishedSources = 1))
-    else None
-
-  /**
-    * Extracts the two elements to be compared for the current sync operation.
-    * This function returns a tuple with the first element from the source
-    * inlet and the second element from the destination inlet.
-    *
-    * @param state   the current sync state
-    * @param portIdx the port index
-    * @param element the new element
-    * @return a tuple with the elements to be synced
-    */
-  private def extractSyncPair(state: SyncState, portIdx: Int, element: FsElement):
-  (FsElement, FsElement) =
-    if portIdx == IdxDest then (state.currentElem, element)
-    else (element, state.currentElem)
-
-  /**
-    * Checks whether the given element belongs to a path in the destination
-    * structure that has been removed before. Such elements can be removed
-    * directly.
-    *
-    * @param state   the current sync state
-    * @param element the element to be checked
-    * @return a flag whether this element is in a removed path
-    */
-  private def isInRemovedPath(state: SyncState, element: FsElement): Option[FsElement] =
-    state.removedPaths find { e =>
-      element.relativeUri.startsWith(e.relativeUri)
-    }
-
-  /**
-    * Generates emit data for an element to be removed. The exact actions to
-    * delete the element depend on the element type: files can be deleted
-    * directly, the deletion of folders is deferred. So in case of a folder,
-    * the properties of the state are updated accordingly.
-    *
-    * @param state       the current sync state
-    * @param element     the element to be removed
-    * @param removedPath a removed root path containing the current element
-    * @return data to emit and the updated state
-    */
-  private def removeElement(state: SyncState, element: FsElement, removedPath: Option[FsElement]):
-  (List[SyncOperation], SyncState) =
-    val op = removeOp(element, removedPath map (_.level) getOrElse element.level)
-    element match
-      case folder: FsFolder =>
-        val paths = if removedPath.isDefined then state.removedPaths
-        else addRemovedFolder(state, folder)
-        (Nil, state.copy(removedPaths = paths, deferredOps = op :: state.deferredOps))
-      case _ =>
-        (List(op), state)
-
-  /**
-    * Adds a folder to the set of removed root paths.
-    *
-    * @param state  the current sync state
-    * @param folder the folder to be added
-    * @return the updated set with root paths
-    */
-  private def addRemovedFolder(state: SyncState, folder: FsFolder): Set[FsElement] =
-    state.removedPaths + folder.copy(relativeUri = folder.relativeUri +
-      UriEncodingHelper.UriSeparator)
-
-  /**
-    * Creates an operation that indicates that an element needs to be created.
-    *
-    * @param elem the element affected
-    * @return the operation
-    */
-  private def createOp(elem: FsElement): SyncOperation =
-    SyncOperation(elem, ActionCreate, elem.level, DstIDUnknown)
-
-  /**
-    * Creates an operation that indicates that an element needs to be removed.
-    *
-    * @param element the element affected
-    * @param level   the level of the operation
-    * @return the operation
-    */
-  private def removeOp(element: FsElement, level: Int): SyncOperation =
-    SyncOperation(element, ActionRemove, level, dstID = element.id)
-
-  /**
-    * Checks whether the timestamps of the given files are different, taking
-    * the configured threshold for the time delta into account.
-    *
-    * @param eSrc            the source file
-    * @param eDst            the destination file
-    * @param ignoreTimeDelta the delta in file times to be ignored
-    * @return a flag whether these files have a different timestamp
-    */
-  private def differentFileTimes(eSrc: FsFile, eDst: FsFile, ignoreTimeDelta: Int): Boolean =
-    math.abs(extractTime(eSrc) - extractTime(eDst)) > ignoreTimeDelta
-
-  /**
-    * Extracts the time of a file that needs to be compared to detect modified
-    * files. This method ignores milliseconds as some structures that can be
-    * synced do not support file modification times with this granularity.
-    *
-    * @param file a file
-    * @return the modified time to be compared during a sync operations
-    */
-  private def extractTime(file: FsFile): Long = file.lastModified.getEpochSecond
+    /**
+      * Extracts the time of a file that needs to be compared to detect modified
+      * files. This method ignores milliseconds as some structures that can be
+      * synced do not support file modification times with this granularity.
+      *
+      * @param file a file
+      * @return the modified time to be compared during a sync operations
+      */
+    private def extractTime(file: FsFile): Long = file.lastModified.getEpochSecond
+  end MirrorStageLogic
 
 /**
   * A special stage that generates sync operations for two input sources.
@@ -457,112 +430,12 @@ class MirrorStage(val ignoreTimeDeltaSec: Int = 0)
 
   import MirrorStage._
 
-  val out: Outlet[SyncOperation] = Outlet[SyncOperation]("SyncStage.out")
-  val inSource: Inlet[FsElement] = Inlet[FsElement]("SyncStage.inSource")
-  val inDest: Inlet[FsElement] = Inlet[FsElement]("SyncStage.inDest")
-
-  /** Convenience field to indicate that the source inlet should be pulled. */
-  val PullSource: List[Int] = List(IdxSource)
-
-  /** Convenience field to indicate that the dest inlet should be pulled. */
-  val PullDest: List[Int] = List(IdxDest)
-
-  /** Convenience field to indicate that both inlets should be pulled. */
-  val PullBoth: List[Int] = List(IdxSource, IdxDest)
+  val out: Outlet[SyncOperation] = Outlet[SyncOperation]("MirrorStage.out")
+  val inSource: Inlet[FsElement] = Inlet[FsElement]("MirrorStage.inSource")
+  val inDest: Inlet[FsElement] = Inlet[FsElement]("MirrorStage.inDest")
 
   override def shape: FanInShape2[FsElement, FsElement, SyncOperation] =
     new FanInShape2[FsElement, FsElement, SyncOperation](inSource, inDest, out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) with StageLogging {
-      // Current state of the sync stream
-      var state: SyncState = SyncState(null, waitForElements, 0, Nil, Set.empty)
-
-      // Manually stores the inlets that have been pulled; this is necessary
-      // to process onUpstreamFinish notifications at the correct time
-      val pulledPorts: Array[Boolean] = Array(true, true)
-
-      setHandler(inSource, new InHandler {
-        override def onPush(): Unit = {
-          updateState(IdxSource, grab(inSource))
-        }
-
-        override def onUpstreamFinish(): Unit = {
-          handleInletFinished(IdxSource)
-        }
-      })
-
-      setHandler(inDest, new InHandler {
-        override def onPush(): Unit = {
-          updateState(IdxDest, grab(inDest))
-        }
-
-        override def onUpstreamFinish(): Unit = {
-          handleInletFinished(IdxDest)
-        }
-      })
-
-      setHandler(out, new OutHandler {
-        override def onPull(): Unit = {}
-      })
-
-      override def preStart(): Unit =
-        pull(inSource)
-        pull(inDest)
-
-      /**
-        * Updates the current state on receiving an element.
-        *
-        * @param portIdx the port index
-        * @param element the element (may be '''null''' for completion)
-        */
-      private def updateState(portIdx: Int, element: FsElement): Unit =
-        val (data, next) = state.syncFunc(state, MirrorStage.this, portIdx, element, log)
-        state = next
-        emitMultiple(out, data.ops)
-        pulledPorts(portIdx) = false
-        pullPorts(data)
-        if data.complete then complete(out)
-
-      /**
-        * Pulls the input ports referenced by the given ''EmitData''. This
-        * method also checks whether one of the ports to be pulled is already
-        * finished; if so, a close notification is sent by invoking
-        * ''updateState()'' recursively.
-        *
-        * @param data the ''EmitData'' object
-        */
-      private def pullPorts(data: EmitData): Unit =
-        data.pullInletsIdx foreach { idx =>
-          val in = inlet(idx)
-          pulledPorts(idx) = true
-          if isClosed(in) then
-            updateState(idx, null)
-          else pull(in)
-        }
-
-      /**
-        * Handles a notification about a finished input port. Such
-        * notifications may arrive at a time when they cannot be handled yet
-        * because an element from this inlet is still being processed. (The
-        * processing logic expects that elements and close notifications only
-        * come in when the port has been pulled.) This implementation therefore
-        * propagates the notification only if this port has been pulled. If
-        * this is not the case, the close notification is processed when the
-        * port is pulled for the next time.
-        *
-        * @param portIdx the index of the port affected
-        */
-      private def handleInletFinished(portIdx: Int): Unit =
-        if pulledPorts(portIdx) then
-          updateState(portIdx, null)
-    }
-
-  /**
-    * Returns the inlet with the given index.
-    *
-    * @param portIdx the port index
-    * @return the inlet with this index
-    */
-  private def inlet(portIdx: Int): Inlet[FsElement] =
-    if portIdx == IdxSource then inSource else inDest
+    new MirrorStageLogic(shape, inSource, inDest, out, ignoreTimeDeltaSec)
