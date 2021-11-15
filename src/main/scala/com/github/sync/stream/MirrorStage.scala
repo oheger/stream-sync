@@ -55,17 +55,15 @@ object MirrorStage:
       * This class holds state information that is required when processing a
       * sync stream.
       *
-      * @param currentElem     a current element to be synced
-      * @param mergeFunc       the current merge function
-      * @param finishedSources the number of sources that have been finished
-      * @param deferredOps     sync operations that will be pushed out at the
-      *                        very end of the stream
-      * @param removedPaths    root elements that have been removed in the
-      *                        destination structure
+      * @param currentElem  a current element to be synced
+      * @param mergeFunc    the current merge function
+      * @param deferredOps  sync operations that will be pushed out at the
+      *                     very end of the stream
+      * @param removedPaths root elements that have been removed in the
+      *                     destination structure
       */
     case class MirrorState(override val mergeFunc: MergeFunc,
                            currentElem: FsElement,
-                           finishedSources: Int,
                            deferredOps: List[SyncOperation],
                            removedPaths: Set[FsElement]) extends BaseMergeState :
       /**
@@ -98,7 +96,7 @@ object MirrorStage:
     override type MergeState = MirrorState
 
     /** The specific state of the ''MirrorStage''. */
-    private var mirrorState = MirrorState(waitForElements, null, 0, Nil, Set.empty)
+    private var mirrorState = MirrorState(waitForElements, null, Nil, Set.empty)
 
     override protected def state: MirrorState = mirrorState
 
@@ -296,12 +294,14 @@ object MirrorStage:
                                                  (emitFunc: (MirrorState, FsElement) => (EmitData, MirrorState)):
     Option[(EmitData, MirrorState)] =
       if element == null then
-        if state.finishedSources > 0 then
-          Some(EmitData(state.deferredOps, Nil, complete = true), state)
-        else
-          val (emit, next) = Option(state.currentElem).map(emitFunc(state, _))
-            .getOrElse((EmitNothing, state))
-          Some(emit, next.copy(finishedSources = 1))
+        Option(state.currentElem).map { currentElem =>
+          val (emit, next) = emitFunc(state, currentElem)
+          Some((emit, next.copy(currentElem = null)))
+        } getOrElse Some {
+          if numberOfFinishedSources > 1 then
+            (EmitData(state.deferredOps, Nil, complete = true), state)
+          else (EmitNothing, state)
+        }
       else None
 
     /**
