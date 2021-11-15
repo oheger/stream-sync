@@ -138,6 +138,11 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
     */
   private val pulledPorts: Array[Boolean] = Array(true, true)
 
+  /**
+    * An array that stores a flag for each inlet whether it has been finished.
+    */
+  private val finishedPorts: Array[Boolean] = Array(false, false)
+
   setHandler(in1, new InHandler {
     override def onPush(): Unit = {
       updateMergeState(Inlet1, grab(in1))
@@ -165,6 +170,21 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
   override def preStart(): Unit =
     pull(in1)
     pull(in2)
+
+  /**
+    * Returns a flag whether the given input source has already been finished.
+    *
+    * @param input defines the input source
+    * @return a flag whether this source is already finished
+    */
+  protected def isFinished(input: Input): Boolean = finishedPorts(input.ordinal)
+
+  /**
+    * Returns the number of input sources that have been finished.
+    *
+    * @return the number of finished input sources
+    */
+  protected def numberOfFinishedSources: Int = Input.values.count(isFinished)
 
   /**
     * Updates the current state on receiving an element.
@@ -195,7 +215,7 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
         case Inlet2 => in2
       }
       pulledPorts(input.ordinal) = true
-      if isClosed(inlet) then
+      if isFinished(input) then
         updateMergeState(input, null.asInstanceOf[MergeElement])
       else pull(inlet)
     }
@@ -213,5 +233,6 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
     * @param input defines the input source
     */
   private def handleInletFinished(input: Input): Unit =
+    finishedPorts(input.ordinal) = true
     if pulledPorts(input.ordinal) then
       updateMergeState(input, null.asInstanceOf[MergeElement])
