@@ -20,6 +20,7 @@ import akka.event.LoggingAdapter
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler, StageLogging}
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 import com.github.cloudfiles.core.http.UriEncodingHelper
+import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.stream.BaseMergeStage.Input
@@ -189,7 +190,7 @@ object MirrorStage:
       */
     private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement, state: MirrorState):
     Option[(EmitData, MirrorState)] =
-      lazy val delta = compareElements(elemSource, elemDest)
+      lazy val delta = SyncTypes.compareElementUris(elemSource, elemDest)
       val isRemoved = isInRemovedPath(state, elemDest)
       if isRemoved.isDefined || delta > 0 then
         val (op, next) = removeElement(state.updateCurrentElement(elemSource), elemDest, isRemoved)
@@ -197,24 +198,6 @@ object MirrorStage:
       else if delta < 0 then
         Some((EmitData(List(createOp(elemSource)), BaseMergeStage.Pull1), state.updateCurrentElement(elemDest)))
       else None
-
-    /**
-      * Compares the given elements and returns an integer value determining
-      * which one is before the other: a value less than zero means that the
-      * source element is before the destination element; a value greater than
-      * zero means that the destination element is before the source element; the
-      * value 0 means that elements are equivalent.
-      *
-      * @param elemSource the source element
-      * @param elemDest   the destination element
-      * @return the result of the comparison
-      */
-    private def compareElements(elemSource: FsElement, elemDest: FsElement): Int =
-      val (srcParent, srcName) = UriEncodingHelper.splitParent(elemSource.relativeUri)
-      val (dstParent, dstName) = UriEncodingHelper.splitParent(elemDest.relativeUri)
-      val deltaParent = srcParent.compareTo(dstParent)
-      if deltaParent != 0 then deltaParent
-      else srcName.compareTo(dstName)
 
     /**
       * Handles advanced corner cases when comparing two elements that depend on

@@ -18,7 +18,7 @@ package com.github.sync.stream
 
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, StageLogging}
-import com.github.cloudfiles.core.http.UriEncodingHelper
+import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
 import com.github.sync.stream.BaseMergeStage.Input
 import com.github.sync.stream.LocalStateStage.{ElementWithDelta, LocalStateStageLogic}
@@ -128,7 +128,7 @@ private object LocalStateStage:
     private def syncElements(state: StageState, input: Input, element: FsElement): (EmitData, StageState) =
       handleNullElementDuringSync(state, input, element) getOrElse {
         val (currentElem, stateElem) = currentElementPair(state, input, element)
-        val uriDelta = compareElementUris(currentElem, stateElem)
+        val uriDelta = SyncTypes.compareElementUris(currentElem, stateElem)
         if uriDelta == 0 then
           deltaToState(state, currentElem, stateElem)
         else if uriDelta > 0 then
@@ -268,27 +268,6 @@ private object LocalStateStage:
     (FsElement, FsElement) =
       if input == Input.Inlet2 then (state.currentElem, element)
       else (element, state.currentElem)
-
-    /**
-      * Compares the given elements based on their URIs and returns an integer
-      * value determining which one is before the other: a value less than zero
-      * means that the first element is before the second element; a value
-      * greater than zero means that the second element is before the first
-      * element; the value 0 means that the elements are equivalent. This
-      * comparison is needed when dealing with elements from two different
-      * (ordered) sources, to find out which elements are available in both
-      * sources or which are missing in either one.
-      *
-      * @param elem1 the first element
-      * @param elem2 the second element
-      * @return the result of the comparison
-      */
-    private def compareElementUris(elem1: FsElement, elem2: FsElement): Int =
-      val (srcParent, srcName) = UriEncodingHelper.splitParent(elem1.relativeUri)
-      val (dstParent, dstName) = UriEncodingHelper.splitParent(elem2.relativeUri)
-      val deltaParent = srcParent.compareTo(dstParent)
-      if deltaParent != 0 then deltaParent
-      else srcName.compareTo(dstName)
 
 /**
   * A ''Stage'' that merges the elements in the local folder structure against
