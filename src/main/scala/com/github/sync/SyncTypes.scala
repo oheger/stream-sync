@@ -16,6 +16,8 @@
 
 package com.github.sync
 
+import com.github.cloudfiles.core.http.UriEncodingHelper
+
 import java.time.Instant
 
 /**
@@ -173,3 +175,24 @@ object SyncTypes:
       val deltaLevel = that.folder.level - folder.level
       if deltaLevel != 0 then deltaLevel
       else folder.relativeUri.compareTo(that.folder.relativeUri)
+
+  /**
+    * Compares the given elements based on their URIs and returns an integer
+    * value determining which one is before the other: a value less than zero
+    * means that the first element is before the second element; a value
+    * greater than zero means that the second element is before the first
+    * element; the value 0 means that the elements are equivalent. This
+    * comparison is needed when dealing with elements from two different
+    * (ordered) sources, to find out which elements are available in both
+    * sources or which are missing in either one.
+    *
+    * @param elem1 the first element
+    * @param elem2 the second element
+    * @return the result of the comparison
+    */
+  def compareElementUris(elem1: FsElement, elem2: FsElement): Int =
+    val (parent1, name1) = UriEncodingHelper.splitParent(elem1.relativeUri)
+    val (parent2, name2) = UriEncodingHelper.splitParent(elem2.relativeUri)
+    val deltaParent = parent1.compareTo(parent2)
+    if deltaParent != 0 then deltaParent
+    else name1.compareTo(name2)
