@@ -48,79 +48,59 @@ object MirrorStage:
                                  in2: Inlet[FsElement],
                                  out: Outlet[SyncOperation],
                                  ignoreTimeDeltaSec: Int)
-    extends GraphStageLogic(shape) with BaseMergeStage[FsElement, FsElement, SyncOperation](in1, in2, out)
-      with StageLogging :
+    extends GraphStageLogic(shape),
+      BaseMergeStage[FsElement, FsElement, SyncOperation](in1, in2, out),
+      ElementMergeStage[FsElement, FsElement, SyncOperation](in1, in2, out),
+      StageLogging :
     /**
       * The state of the [[MirrorStage]].
       *
       * This class holds state information that is required when processing a
       * sync stream.
       *
-      * @param currentElem  a current element to be synced
-      * @param mergeFunc    the current merge function
-      * @param deferredOps  sync operations that will be pushed out at the
-      *                     very end of the stream
-      * @param removedPaths root elements that have been removed in the
-      *                     destination structure
+      * @param currentElement a current element to be synced
+      * @param mergeFunc      the current merge function
+      * @param deferredOps    sync operations that will be pushed out at the
+      *                       very end of the stream
+      * @param removedPaths   root elements that have been removed in the
+      *                       destination structure
       */
     case class MirrorState(override val mergeFunc: MergeFunc,
-                           currentElem: FsElement,
+                           override val currentElement: FsElement,
                            deferredOps: List[SyncOperation],
-                           removedPaths: Set[FsElement]) extends BaseMergeState :
-      /**
-        * Creates a new sync state with the specified merge function and
-        * directly invokes this function with the updated state and the
-        * parameters provided. This is useful when switching to another merge
-        * function.
-        *
-        * @param f       the new merge function
-        * @param input   defines the current input source
-        * @param element the new element
-        * @return the result of the merge function
-        */
-      def updateAndCallMergeFunction(f: MergeFunc, input: Input, element: FsElement): (EmitData, MirrorState) =
-        f(copy(mergeFunc = f), input, element)
+                           removedPaths: Set[FsElement]) extends ElementMergeState :
+      override def updateCurrentElement(element: FsElement): MirrorState = copy(currentElement = element)
 
-      /**
-        * Updates the current element of this state instance if necessary. If
-        * there is no change in the current element, the state instance is
-        * returned without changes.
-        *
-        * @param element the new current element
-        * @return the updated ''SyncState'' instance
-        */
-      def updateCurrentElement(element: FsElement): MirrorState =
-        if currentElem == element then this
-        else copy(currentElem = element)
+      override def withMergeFunc(f: MergeFunc): MirrorState = copy(mergeFunc = f)
     end MirrorState
 
     override type MergeState = MirrorState
 
+    /**
+      * A ''MergeFunc'' that becomes active when the source structure is
+      * complete.
+      */
+    private val sourceCompleteMergeFunc = inputSourceComplete(emitSourceComplete)(streamComplete)
+
+    /**
+      * A ''MergeFunc'' that becomes active when the destination struture is
+      * complete.
+      */
+    private val destinationCompleteMergeFunc = inputSourceComplete(emitDestinationComplete)(streamComplete)
+
+    /**
+      * A ''MergeFunc'' that waits until an element from each input source has
+      * been received. This is also the initial merge function.
+      */
+    private val waitMergeFunc = waitForElements(syncElements, sourceCompleteMergeFunc, destinationCompleteMergeFunc)
+
     /** The specific state of the ''MirrorStage''. */
-    private var mirrorState = MirrorState(waitForElements, null, Nil, Set.empty)
+    private var mirrorState = MirrorState(waitMergeFunc, null, Nil, Set.empty)
 
     override protected def state: MirrorState = mirrorState
 
     override protected def updateState(newState: MirrorState): Unit =
       mirrorState = newState
-
-    /**
-      * A merge function to wait until elements from both sources are received.
-      * This function is set initially. It switches to another function when for
-      * both input elements elements are available or one of the input ports is
-      * already finished.
-      *
-      * @param state   the current sync state
-      * @param input   defines the current input source
-      * @param element the new element
-      * @return data to emit and the next state
-      */
-    private def waitForElements(state: MirrorState, input: Input, element: FsElement): (EmitData, MirrorState) =
-      handleNullElementDuringSync(state, input, element) getOrElse {
-        if state.currentElem == null then
-          (EmitNothing, state.copy(currentElem = element))
-        else state.updateAndCallMergeFunction(syncElements, input, element)
-      }
 
     /**
       * A merge function that is active when both input sources deliver
@@ -134,47 +114,46 @@ object MirrorStage:
       * @return data to emit and the next state
       */
     private def syncElements(state: MirrorState, input: Input, element: FsElement): (EmitData, MirrorState) =
-      handleNullElementDuringSync(state, input, element) getOrElse {
-        val (elemSource, elemDest) = extractSyncPair(state, input, element)
+      handleNullElementDuringSync(state, input, element, sourceCompleteMergeFunc,
+        destinationCompleteMergeFunc) getOrElse {
+        val (elemSource, elemDest) = extractMergePair(state, input, element)
         syncOperationForElements(elemSource, elemDest, state) orElse
           syncOperationForFileFolderDiff(elemSource, elemDest, state) getOrElse
           emitAndPullBoth(List(SyncOperation(elemSource, ActionNoop, element.level, DstIDUnknown)), state)
       }
 
     /**
-      * A merge function that becomes active when the source for the
-      * destination structure is finished. All elements that are now
-      * encountered have to be created in this structure.
+      * An emit function that is invoked if the destination structure is
+      * complete. All elements that are now encountered have to be created in
+      * this structure.
       *
-      * @param state   the current sync state
-      * @param input   defines the current input source
-      * @param element the new element
-      * @return data to emit and the next state
+      * @param s    the current state
+      * @param elem the current element
+      * @return data to emit and the updated state
       */
-    private def destinationFinished(state: MirrorState, input: Input, element: FsElement): (EmitData, MirrorState) =
-      def handleElement(s: MirrorState, elem: FsElement): (EmitData, MirrorState) =
-        (EmitData(List(createOp(elem)), BaseMergeStage.Pull1), s)
-
-      handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
-        handleElement(state, element)
+    private def emitDestinationComplete(s: MirrorState, elem: FsElement): (EmitData, MirrorState) =
+      (EmitData(List(createOp(elem)), BaseMergeStage.Pull1), s)
 
     /**
-      * A merge function that becomes active when the source for the source
-      * structure is finished. Remaining elements in the destination structure
-      * now have to be removed.
+      * An emit function that is invoked if the source structure is complete.
+      * Remaining elements in the destination structure now have to be removed.
       *
-      * @param state   the current sync state
-      * @param input   defines the current input source
-      * @param element the new element
-      * @return data to emit and the next state
+      * @param s    the current state
+      * @param elem the current element
+      * @return data to emit and the updated state
       */
-    private def sourceDirFinished(state: MirrorState, input: Input, element: FsElement): (EmitData, MirrorState) =
-      def handleElement(s: MirrorState, elem: FsElement): (EmitData, MirrorState) =
-        val (op, next) = removeElement(s, elem, removedPath = None)
-        (EmitData(op, BaseMergeStage.Pull2), next)
+    private def emitSourceComplete(s: MirrorState, elem: FsElement): (EmitData, MirrorState) =
+      val (op, next) = removeElement(s, elem, removedPath = None)
+      (EmitData(op, BaseMergeStage.Pull2), next)
 
-      handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
-        handleElement(state, element)
+    /**
+      * Produces the final ''EmitData'' if the stream is complete.
+      *
+      * @param state the current state
+      * @return the ''EmitData'' completing this stream
+      */
+    private def streamComplete(state: MirrorState): EmitData =
+      EmitData(state.deferredOps, Nil, complete = true)
 
     /**
       * Compares the given elements from the source and destination inlets and
@@ -239,27 +218,7 @@ object MirrorStage:
       * @return data to emit and the next state
       */
     private def emitAndPullBoth(op: List[SyncOperation], state: MirrorState): (EmitData, MirrorState) =
-      (EmitData(op, BaseMergeStage.PullBoth), state.copy(currentElem = null, mergeFunc = waitForElements))
-
-    /**
-      * Deals with a null element while in sync mode. This means that one of
-      * the input sources is now complete. Depending on the source affected,
-      * the state is updated to switch to the correct finished merge function.
-      * If the passed in element is not null, result is ''None''.
-      *
-      * @param state   the current sync state
-      * @param input   defines the current input source
-      * @param element the new element
-      * @param log     the logger
-      * @return an ''Option'' with data to change to the next state in case an
-      *         input source is finished
-      */
-    private def handleNullElementDuringSync(state: MirrorState, input: Input, element: FsElement):
-    Option[(EmitData, MirrorState)] =
-      if element == null then
-        val stateFunc = if input == Input.Inlet1 then sourceDirFinished _ else destinationFinished _
-        Some(state.updateAndCallMergeFunction(stateFunc, input, element))
-      else None
+      (EmitData(op, BaseMergeStage.PullBoth), state.copy(currentElement = null, mergeFunc = waitMergeFunc))
 
     /**
       * Deals with a null element in a state where one source has been finished.
@@ -277,30 +236,15 @@ object MirrorStage:
                                                  (emitFunc: (MirrorState, FsElement) => (EmitData, MirrorState)):
     Option[(EmitData, MirrorState)] =
       if element == null then
-        Option(state.currentElem).map { currentElem =>
+        Option(state.currentElement).map { currentElem =>
           val (emit, next) = emitFunc(state, currentElem)
-          Some((emit, next.copy(currentElem = null)))
+          Some((emit, next.copy(currentElement = null)))
         } getOrElse Some {
           if numberOfFinishedSources > 1 then
             (EmitData(state.deferredOps, Nil, complete = true), state)
           else (EmitNothing, state)
         }
       else None
-
-    /**
-      * Extracts the two elements to be compared for the current sync operation.
-      * This function returns a tuple with the first element from the source
-      * inlet and the second element from the destination inlet.
-      *
-      * @param state   the current sync state
-      * @param input   defines the current input source
-      * @param element the new element
-      * @return a tuple with the elements to be synced
-      */
-    private def extractSyncPair(state: MirrorState, input: Input, element: FsElement):
-    (FsElement, FsElement) =
-      if input == Input.Inlet2 then (state.currentElem, element)
-      else (element, state.currentElem)
 
     /**
       * Checks whether the given element belongs to a path in the destination
