@@ -47,7 +47,8 @@ object ElementSerializer:
     * generate the action tag for a serialized operation.
     */
   private val ActionTagMapping: Map[SyncAction, String] = Map(ActionCreate -> "CREATE",
-    ActionOverride -> "OVERRIDE", ActionRemove -> "REMOVE")
+    ActionOverride -> "OVERRIDE", ActionRemove -> "REMOVE", ActionLocalCreate -> "LOCAL_CREATE",
+    ActionLocalOverride -> "LOCAL_OVERRIDE", ActionLocalRemove -> "LOCAL_REMOVE")
 
   /**
     * A mapping from tag names to corresponding sync actions. This is used to

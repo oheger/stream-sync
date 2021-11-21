@@ -91,6 +91,18 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers :
     checkSerializedOperation(ActionRemove, "REMOVE")
   }
 
+  it should "serialize a local create operation" in {
+    checkSerializedOperation(ActionLocalCreate, "LOCAL_CREATE")
+  }
+
+  it should "serialize a local override operation" in {
+    checkSerializedOperation(ActionLocalOverride, "LOCAL_OVERRIDE")
+  }
+
+  it should "serialize a local remove operation" in {
+    checkSerializedOperation(ActionLocalRemove, "LOCAL_REMOVE")
+  }
+
   it should "serialize a successful sync operation result" in {
     val elem = FsFolder("folderID", "testFolder", 8)
     val op = SyncOperation(elem, ActionCreate, 4, dstID = "someDstID")
@@ -183,6 +195,18 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers :
 
   it should "deserialize a remove operation" in {
     checkDeserializeOperation(ActionRemove)
+  }
+
+  it should "deserialize a local create operation" in {
+    checkDeserializeOperation(ActionLocalCreate)
+  }
+
+  it should "deserialize a local override operation" in {
+    checkDeserializeOperation(ActionLocalOverride)
+  }
+
+  it should "deserialize a local remove operation" in {
+    checkDeserializeOperation(ActionLocalRemove)
   }
 
   it should "handle a deserialization of an invalid action tag" in {
