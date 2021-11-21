@@ -77,43 +77,54 @@ private object LocalStateStage:
                                      in2: Inlet[FsElement],
                                      out: Outlet[ElementWithDelta],
                                      syncTime: Instant)
-    extends GraphStageLogic(shape) with BaseMergeStage[FsElement, FsElement, ElementWithDelta](in1, in2, out)
-      with StageLogging :
+    extends GraphStageLogic(shape),
+      BaseMergeStage[FsElement, FsElement, ElementWithDelta](in1, in2, out),
+      ElementMergeStage[FsElement, FsElement, ElementWithDelta](in1, in2, out),
+      StageLogging :
     /**
       * A data class representing the state of this stage class.
       *
-      * @param mergeFunc   the active ''MergeFunc''
-      * @param currentElem the current element
+      * @param mergeFunc      the active ''MergeFunc''
+      * @param currentElement the current element
       */
     case class StageState(override val mergeFunc: MergeFunc,
-                          currentElem: FsElement) extends BaseMergeState
+                          override val currentElement: FsElement) extends ElementMergeState :
+      override def withMergeFunc(f: MergeFunc): StageState = copy(mergeFunc = f)
+
+      protected override def updateCurrentElement(e: MergeElement): MergeState = copy(currentElement = e)
 
     override type MergeState = StageState
 
+    /**
+      * The function producing the ''EmitData'' object signalling the end of
+      * the stream.
+      */
+    private val EmitDataComplete: MergeState => EmitData = _ => EmitData(Nil, Nil, complete = true)
+
+    /**
+      * The merge function to be used when the input source with the local
+      * state is complete.
+      */
+    private val stateCompleteMergeFunc = inputSourceComplete(emitLocalStateComplete)(EmitDataComplete)
+
+    /**
+      * The merge function to be used when the input source with the elements
+      * is complete.
+      */
+    private val elementsCompleteMergeFunc = inputSourceComplete(emitElementsComplete)(EmitDataComplete)
+
+    /**
+      * The merge function that waits for elements from both input sources.
+      * This is also set as the initial merge functiion.
+      */
+    private val waitMergeFunc = waitForElements(syncElements, elementsCompleteMergeFunc, stateCompleteMergeFunc)
+
     /** Holds the state of this stage. */
-    private var stageState = StageState(waitForElements, null)
+    private var stageState = StageState(waitMergeFunc, null)
 
     override protected def state: MergeState = stageState
 
     override protected def updateState(newState: MergeState): Unit = stageState = newState
-
-    /**
-      * A merge function to wait until elements from both sources are received.
-      * This function is set initially. It switches to another function when for
-      * both input elements elements are available or one of the input ports is
-      * already finished.
-      *
-      * @param state   the current sync state
-      * @param input   defines the current input source
-      * @param element the new element
-      * @return data to emit and the next state
-      */
-    private def waitForElements(state: StageState, input: Input, element: FsElement): (EmitData, StageState) =
-      handleNullElementDuringSync(state, input, element) getOrElse {
-        if state.currentElem == null then
-          (EmitNothing, state.copy(currentElem = element))
-        else syncElements(state.copy(mergeFunc = syncElements), input, element)
-      }
 
     /**
       * A merge function that is active when both input sources deliver
@@ -126,54 +137,44 @@ private object LocalStateStage:
       * @return data to emit and the next state
       */
     private def syncElements(state: StageState, input: Input, element: FsElement): (EmitData, StageState) =
-      handleNullElementDuringSync(state, input, element) getOrElse {
-        val (currentElem, stateElem) = currentElementPair(state, input, element)
+      handleNullElementDuringSync(state, input, element, elementsCompleteMergeFunc, stateCompleteMergeFunc) getOrElse {
+        val (currentElem, stateElem) = extractMergePair(state, input, element)
         val uriDelta = SyncTypes.compareElementUris(currentElem, stateElem)
         if uriDelta == 0 then
           deltaToState(state, currentElem, stateElem)
         else if uriDelta > 0 then
           val delta = ElementWithDelta(stateElem, ChangeType.Removed, changeTimeFromElement(stateElem))
-          (EmitData(List(delta), BaseMergeStage.Pull2), state.copy(currentElem = currentElem))
+          (EmitData(List(delta), BaseMergeStage.Pull2), state.copy(currentElement = currentElem))
         else
           val delta = ElementWithDelta(currentElem, ChangeType.Created, syncTime)
-          (EmitData(List(delta), BaseMergeStage.Pull1), state.copy(currentElem = stateElem))
+          (EmitData(List(delta), BaseMergeStage.Pull1), state.copy(currentElement = stateElem))
       }
 
     /**
-      * A merge function that becomes active when the source for the local
-      * state is finished. All elements that are now encountered have been
+      * An emit function for the case that the input source for the local state
+      * is already complete. All elements that are now encountered have been
       * newly created since the last sync process.
       *
-      * @param state   the current sync state
-      * @param input   defines the current input source
+      * @param state   the current merge state
       * @param element the new element
       * @return data to emit and the next state
       */
-    private def localStateFinished(state: StageState, input: Input, element: FsElement): (EmitData, StageState) =
-      def handleElement(s: StageState, elem: FsElement): (EmitData, StageState) =
-        val delta = ElementWithDelta(elem, ChangeType.Created, syncTime)
-        (EmitData(List(delta), BaseMergeStage.Pull1), s)
-
-      handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
-        handleElement(state, element)
+    private def emitLocalStateComplete(state: StageState, element: FsElement): (EmitData, StageState) =
+      val delta = ElementWithDelta(element, ChangeType.Created, syncTime)
+      (EmitData(List(delta), BaseMergeStage.Pull1), state)
 
     /**
-      * A merge function that becomes active when the source for the local
-      * file structure is finished. Remaining elements in the local state must
-      * have been removed.
+      * An emit function for the case that the input source for the local
+      * elements is already complete. Remaining elements in the local state
+      * must have been removed.
       *
-      * @param state   the current sync state
-      * @param input   defines the current input source
+      * @param state   the current merge state
       * @param element the new element
       * @return data to emit and the next state
       */
-    private def elementsFinished(state: StageState, input: Input, element: FsElement): (EmitData, StageState) =
-      def handleElement(s: StageState, elem: FsElement): (EmitData, StageState) =
-        val delta = ElementWithDelta(elem, ChangeType.Removed, changeTimeFromElement(elem))
-        (EmitData(List(delta), BaseMergeStage.Pull2), s)
-
-      handleNullElementOnFinishedSource(state, element)(handleElement) getOrElse
-        handleElement(state, element)
+    private def emitElementsComplete(state: StageState, element: FsElement): (EmitData, StageState) =
+      val delta = ElementWithDelta(element, ChangeType.Removed, changeTimeFromElement(element))
+      (EmitData(List(delta), BaseMergeStage.Pull2), state)
 
     /**
       * Computes a delta for the current element against its recorded state.
@@ -205,69 +206,7 @@ private object LocalStateStage:
       * @return data to emit and the next state
       */
     private def emitAndPullBoth(delta: List[ElementWithDelta], state: StageState): (EmitData, StageState) =
-      (EmitData(delta, BaseMergeStage.PullBoth), state.copy(currentElem = null, mergeFunc = waitForElements))
-
-    /**
-      * Deals with a null element while in sync mode. This means that one of
-      * the input sources is now complete. Depending on the source affected,
-      * the state is updated to switch to the correct finished merge function.
-      * If the passed in element is not null, result is ''None''.
-      *
-      * @param state   the current sync state
-      * @param input   defines the current input source
-      * @param element the new element
-      * @return an ''Option'' with data to change to the next state in case an
-      *         input source is finished
-      */
-    private def handleNullElementDuringSync(state: StageState, input: Input, element: FsElement):
-    Option[(EmitData, StageState)] =
-      if element == null then
-        val stateFunc = if input == Input.Inlet1 then elementsFinished _ else localStateFinished _
-        Some(stateFunc(state.copy(mergeFunc = stateFunc), input, element))
-      else None
-
-    /**
-      * Deals with a null element in a state where one source has been finished.
-      * This function handles the cases that the state was newly entered or that
-      * the stream can now be completed. If result is an empty option, a non null
-      * element was passed that needs to be processed by the caller.
-      *
-      * @param state    the current sync state
-      * @param element  the element to be handled
-      * @param emitFunc function to generate emit data for an element
-      * @return an option with emit data and the next state that is not empty if
-      *         this function could handle the element
-      */
-    private def handleNullElementOnFinishedSource(state: StageState, element: FsElement)
-                                                 (emitFunc: (StageState, FsElement) => (EmitData, StageState)):
-    Option[(EmitData, StageState)] =
-      if element == null then
-        Option(state.currentElem).map { currentElem =>
-          val (emit, next) = emitFunc(state, currentElem)
-          Some((emit, next.copy(currentElem = null)))
-        } getOrElse Some {
-          if numberOfFinishedSources > 1 then
-            (EmitData(Nil, Nil, complete = true), state)
-          else (EmitNothing, state)
-        }
-      else None
-
-    /**
-      * Extracts the two elements to be compared to compute the current delta.
-      * The element contained in the state can either be from the local file
-      * system or from the state. This function makes sure that in the
-      * resulting tuple the first element is from the file system and the
-      * second one from the state.
-      *
-      * @param state   the current state
-      * @param input   defines the current input source
-      * @param element the new element
-      * @return a tuple with the elements to be compared
-      */
-    private def currentElementPair(state: StageState, input: Input, element: FsElement):
-    (FsElement, FsElement) =
-      if input == Input.Inlet2 then (state.currentElem, element)
-      else (element, state.currentElem)
+      (EmitData(delta, BaseMergeStage.PullBoth), state.copy(currentElement = null, mergeFunc = waitMergeFunc))
 
 /**
   * A ''Stage'' that merges the elements in the local folder structure against
