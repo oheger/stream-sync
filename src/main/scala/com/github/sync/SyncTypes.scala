@@ -127,6 +127,25 @@ object SyncTypes:
       */
     case ActionRemove
 
+    /**
+      * A special ''SyncAction'' stating that an element should be newly
+      * created locally. This is used in bidirectional sync mode.
+      */
+    case ActionLocalCreate
+
+    /**
+      * A special ''SyncAction'' stating that a local element should be
+      * replaced by the one from the remote structure. This is used in
+      * bidirectional sync mode.
+      */
+    case ActionLocalOverride
+
+    /**
+      * A special ''SyncAction'' stating that a local element should be
+      * removed. This is used in bidirectional sync mode.
+      */
+    case ActionLocalRemove
+
   /**
     * A class that stores all information for a single sync operation.
     *
