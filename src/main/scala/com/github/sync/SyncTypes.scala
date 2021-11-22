@@ -196,6 +196,37 @@ object SyncTypes:
       else folder.relativeUri.compareTo(that.folder.relativeUri)
 
   /**
+    * A special exception class to report a conflict detected during a 
+    * bidirectional sync process.
+    *
+    * Conflicts occur when corresponding elements have been changed both
+    * locally and on the remote side. They require user interaction to decide
+    * which sync operations should be executed.
+    *
+    * To support automated conflict resolution, this exception class holds two
+    * sequences of ''SyncOperation''s: operations to be applied on local 
+    * elements in case that the remote structure takes precedence, and 
+    * opereations to be applied on remote elements in case that the local 
+    * structure takes precedence.
+    *
+    * @param localOperations  operations to execute on local elements
+    * @param remoteOperations operations to execute on remote elements
+    */
+  case class SyncConflictException(localOperations: Seq[SyncOperation],
+                                   remoteOperations: Seq[SyncOperation])
+    extends Exception(generateConflictMessage(localOperations, remoteOperations))
+
+  /**
+    * A type definition representing the result type of a sync stage.
+    *
+    * This type describes the outcome of the comparison of two elements to be
+    * synced. This can be either successful, yielding a sequence of
+    * [[SyncOperation]]s to be applied. There can also be a conflict, which
+    * needs to be resolved manually.
+    */
+  type SyncElementResult = Either[SyncConflictException, Seq[SyncOperation]]
+
+  /**
     * Compares the given elements based on their URIs and returns an integer
     * value determining which one is before the other: a value less than zero
     * means that the first element is before the second element; a value
@@ -215,3 +246,27 @@ object SyncTypes:
     val deltaParent = parent1.compareTo(parent2)
     if deltaParent != 0 then deltaParent
     else name1.compareTo(name2)
+
+  /**
+    * Generates the exception message for a [[SyncConflictException]] based on
+    * the operations to perform if the local source takes precedence or if the
+    * remote source takes precedence.
+    *
+    * @param localOperations  the local operations
+    * @param remoteOperations the remote operations
+    * @return the message for the conflict exception
+    */
+  private def generateConflictMessage(localOperations: Seq[SyncOperation], remoteOperations: Seq[SyncOperation]):
+  String =
+    val elementUris = extractUris(localOperations) ++ extractUris(remoteOperations)
+    "A conflict was detected for the elements " + elementUris.mkString(", ") + "; operations local: " +
+      localOperations + " <-> operations remote: " + remoteOperations
+
+  /**
+    * Returns a set with the relative URIs of all elements referenced by one
+    * of the given operations.
+    *
+    * @param ops the sync operations
+    * @return a set with the URIs of the referenced elements
+    */
+  private def extractUris(ops: Seq[SyncOperation]): Set[String] = ops.map(_.element.relativeUri).toSet

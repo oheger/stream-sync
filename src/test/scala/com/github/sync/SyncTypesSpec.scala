@@ -16,9 +16,11 @@
 
 package com.github.sync
 
-import com.github.sync.SyncTypes.{FsFile, FsFolder}
+import com.github.sync.SyncTypes.{FsFile, FsFolder, SyncConflictException, SyncOperation}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import java.time.Instant
 
 /**
   * Test class for ''SyncTypes''.
@@ -50,4 +52,21 @@ class SyncTypesSpec extends AnyFlatSpec, Matchers :
     val elem2 = FsFolder("id2", "a/subA", 2)
 
     SyncTypes.compareElementUris(elem1, elem2) should be < 0
+  }
+
+  it should "generate a correct message for a SyncConflictException" in {
+    val elem1 = FsFile("id1", "/a/test/file.txt", 3, Instant.parse("2021-11-21T21:11:37Z"), 123456L)
+    val elem2 = FsFolder("id2", "/test/folder", 2)
+    val elem3 = FsFile("id1", "/a/test/file.txt", 3, Instant.parse("2021-11-22T17:03:06Z"), 123457L)
+    val op1 = SyncOperation(elem1, SyncTypes.SyncAction.ActionRemove, 3, "id1")
+    val op2 = SyncOperation(elem2, SyncTypes.SyncAction.ActionCreate, 2, "id2")
+    val op3 = SyncOperation(elem3, SyncTypes.SyncAction.ActionLocalOverride, 3, "id1")
+    val localOps = List(op3)
+    val remoteOps = List(op1, op2)
+
+    val conflict = SyncConflictException(localOps, remoteOps)
+    val message = conflict.getMessage
+    message should include(elem1.relativeUri + ", " + elem2.relativeUri)
+    message should include("operations local: " + localOps)
+    message should include("operations remote: " + remoteOps)
   }
