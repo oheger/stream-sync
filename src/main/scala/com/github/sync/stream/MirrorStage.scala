@@ -58,17 +58,13 @@ object MirrorStage:
       * This class holds state information that is required when processing a
       * sync stream.
       *
-      * @param currentElement a current element to be synced
-      * @param mergeFunc      the current merge function
-      * @param deferredOps    sync operations that will be pushed out at the
-      *                       very end of the stream
-      * @param removedPaths   root elements that have been removed in the
-      *                       destination structure
+      * @param currentElement     a current element to be synced
+      * @param mergeFunc          the current merge function
+      * @param removedFolderState the state for removed folders
       */
     case class MirrorState(override val mergeFunc: MergeFunc,
                            override val currentElement: FsElement,
-                           deferredOps: List[SyncOperation],
-                           removedPaths: Set[FsElement]) extends ElementMergeState :
+                           removedFolderState: RemovedFolderState) extends ElementMergeState :
       override def updateCurrentElement(element: FsElement): MirrorState = copy(currentElement = element)
 
       override def withMergeFunc(f: MergeFunc): MirrorState = copy(mergeFunc = f)
@@ -95,7 +91,7 @@ object MirrorStage:
     private val waitMergeFunc = waitForElements(syncElements, sourceCompleteMergeFunc, destinationCompleteMergeFunc)
 
     /** The specific state of the ''MirrorStage''. */
-    private var mirrorState = MirrorState(waitMergeFunc, null, Nil, Set.empty)
+    private var mirrorState = MirrorState(waitMergeFunc, null, RemovedFolderState.Empty)
 
     override protected def state: MirrorState = mirrorState
 
@@ -153,7 +149,7 @@ object MirrorStage:
       * @return the ''EmitData'' completing this stream
       */
     private def streamComplete(state: MirrorState): EmitData =
-      EmitData(state.deferredOps, Nil, complete = true)
+      EmitData(state.removedFolderState.deferredOperations, Nil, complete = true)
 
     /**
       * Compares the given elements from the source and destination inlets and
@@ -170,10 +166,10 @@ object MirrorStage:
     private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement, state: MirrorState):
     Option[(EmitData, MirrorState)] =
       lazy val delta = SyncTypes.compareElementUris(elemSource, elemDest)
-      val isRemoved = isInRemovedPath(state, elemDest)
-      if isRemoved.isDefined || delta > 0 then
-        val (op, next) = removeElement(state.updateCurrentElement(elemSource), elemDest, isRemoved)
-        Some((EmitData(op, BaseMergeStage.Pull2), next))
+      val removedRoot = state.removedFolderState.findRoot(elemDest)
+      if removedRoot.isDefined || delta > 0 then
+        val (ops, next) = removeElement(state.updateCurrentElement(elemSource), elemDest, removedRoot)
+        Some((EmitData(ops, BaseMergeStage.Pull2), next))
       else if delta < 0 then
         Some((EmitData(List(createOp(elemSource)), BaseMergeStage.Pull1), state.updateCurrentElement(elemDest)))
       else None
@@ -202,9 +198,10 @@ object MirrorStage:
           Some(emitAndPullBoth(ops, state))
 
         case (fileSrc: FsFile, folderDst: FsFolder) => // folder converted to file
-          val defOps = removeOp(folderDst, fileSrc.level) :: createOp(fileSrc) :: state.deferredOps
-          val next = state.copy(deferredOps = defOps,
-            removedPaths = addRemovedFolder(state, folderDst))
+          val defOps =
+            removeOp(folderDst, fileSrc.level) :: createOp(fileSrc) :: state.removedFolderState.deferredOperations
+          val nextRemoveState = state.removedFolderState.addRoot(folderDst).copy(deferredOperations = defOps)
+          val next = state.copy(removedFolderState = nextRemoveState)
           Some(emitAndPullBoth(Nil, next))
 
         case _ => None
@@ -241,57 +238,28 @@ object MirrorStage:
           Some((emit, next.copy(currentElement = null)))
         } getOrElse Some {
           if numberOfFinishedSources > 1 then
-            (EmitData(state.deferredOps, Nil, complete = true), state)
+            (EmitData(state.removedFolderState.deferredOperations, Nil, complete = true), state)
           else (EmitNothing, state)
         }
       else None
 
     /**
-      * Checks whether the given element belongs to a path in the destination
-      * structure that has been removed before. Such elements can be removed
-      * directly.
-      *
-      * @param state   the current sync state
-      * @param element the element to be checked
-      * @return a flag whether this element is in a removed path
-      */
-    private def isInRemovedPath(state: MirrorState, element: FsElement): Option[FsElement] =
-      state.removedPaths find { e =>
-        element.relativeUri.startsWith(e.relativeUri)
-      }
-
-    /**
       * Generates emit data for an element to be removed. The exact actions to
       * delete the element depend on the element type: files can be deleted
-      * directly, the deletion of folders is deferred. So in case of a folder,
-      * the properties of the state are updated accordingly.
+      * directly, the deletion of folders is deferred. The details are handled by
+      * the [[RemovedFolderState]] object.
       *
-      * @param state       the current sync state
+      * @param state       the current mirror state
       * @param element     the element to be removed
       * @param removedPath a removed root path containing the current element
       * @return data to emit and the updated state
       */
-    private def removeElement(state: MirrorState, element: FsElement, removedPath: Option[FsElement]):
+    private def removeElement(state: MirrorState, element: FsElement, removedPath: Option[FsFolder]):
     (List[SyncOperation], MirrorState) =
-      val op = removeOp(element, removedPath map (_.level) getOrElse element.level)
-      element match
-        case folder: FsFolder =>
-          val paths = if removedPath.isDefined then state.removedPaths
-          else addRemovedFolder(state, folder)
-          (Nil, state.copy(removedPaths = paths, deferredOps = op :: state.deferredOps))
-        case _ =>
-          (List(op), state)
-
-    /**
-      * Adds a folder to the set of removed root paths.
-      *
-      * @param state  the current sync state
-      * @param folder the folder to be added
-      * @return the updated set with root paths
-      */
-    private def addRemovedFolder(state: MirrorState, folder: FsFolder): Set[FsElement] =
-      state.removedPaths + folder.copy(relativeUri = folder.relativeUri +
-        UriEncodingHelper.UriSeparator)
+      val (ops, nextRemoveState) =
+        state.removedFolderState.handleRemoveElement(element, SyncAction.ActionRemove, removedPath)
+      val nextState = state.copy(removedFolderState = nextRemoveState)
+      (ops, nextState)
 
     /**
       * Creates an operation that indicates that an element needs to be created.
