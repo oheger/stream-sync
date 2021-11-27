@@ -33,55 +33,13 @@ object LocalStateStageSpec:
   /** Constant for the current sync time. */
   private val SyncTime = Instant.parse("2021-11-14T17:04:50Z")
 
-  /** A timestamp used for test files. */
-  private val FileTime = Instant.parse("2021-11-11T11:11:11Z")
-
-  /**
-    * Generates the ID of a test element based on the given index.
-    *
-    * @param index the element index
-    * @return the ID for this test element
-    */
-  private def elementID(index: Int): String = s"id$index"
-
-  /**
-    * Generates the relative URI of a test element based on the given index.
-    *
-    * @param index the element index
-    * @return the URI for this test element
-    */
-  private def elementUri(index: Int): String = s"/data/element$index"
-
-  /**
-    * Creates a test folder based on the given index.
-    *
-    * @param index the index
-    * @return the test folder with this index
-    */
-  private def createFolder(index: Int): FsFolder = FsFolder(elementID(index), elementUri(index), 1)
-
-  /**
-    * Creates a test file based on the given index. If a delta for the time is
-    * specified, the generated file time is updated accordingly. This can be
-    * used to simulate that a file has been changed.
-    *
-    * @param index     the index
-    * @param deltaTime the time delta (in seconds)
-    * @return the test file with this index
-    */
-  private def createFile(index: Int, deltaTime: Int = 0): FsFile =
-    FsFile(elementID(index), elementUri(index), 1, FileTime.plusSeconds(index + deltaTime), (index + 1) * 100)
-
 /**
   * Test class for ''LocalStageStage''.
   */
-class LocalStateStageSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlatSpecLike, BeforeAndAfterAll,
-  Matchers, AsyncTestHelper :
+class LocalStateStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSystem):
   def this() = this(ActorSystem("LocalStateStageSpec"))
 
-  override protected def afterAll(): Unit =
-    TestKit shutdownActorSystem system
-
+  import AbstractStageSpec.*
   import LocalStateStageSpec.*
 
   /**
@@ -93,24 +51,7 @@ class LocalStateStageSpec(testSystem: ActorSystem) extends TestKit(testSystem), 
     * @return the sequence with elements with enriched delta information
     */
   private def runStage(elements: List[FsElement], state: List[FsElement]): Seq[ElementWithDelta] =
-    val foldSink =
-      Sink.fold[List[ElementWithDelta], ElementWithDelta](List.empty[ElementWithDelta]) { (lst, e) =>
-        e :: lst
-      }
-    val sourceElements = Source(elements)
-    val sourceState = Source(state)
-
-    val g = RunnableGraph.fromGraph(GraphDSL.createGraph(foldSink) { implicit builder =>
-      sink =>
-        import GraphDSL.Implicits._
-        val localStateStage = builder.add(new LocalStateStage(SyncTime))
-        sourceElements ~> localStateStage.in0
-        sourceState ~> localStateStage.in1
-        localStateStage.out ~> sink
-        ClosedShape
-    })
-
-    futureResult(g.run()).reverse
+    runStage(LocalStateStage(SyncTime), elements, state)
 
   "LocalStageStage" should "correctly handle two empty sources" in {
     runStage(Nil, Nil) shouldBe empty
