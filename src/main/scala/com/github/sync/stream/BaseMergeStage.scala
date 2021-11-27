@@ -30,6 +30,14 @@ object BaseMergeStage:
     case Inlet1
     case Inlet2
 
+    /**
+      * Returns the opposite Inlet of this one. This is useful for some merge
+      * algorithms.
+      *
+      * @return the opposite Inlet
+      */
+    def opposite: Input = if this == Inlet1 then Inlet2 else Inlet1
+
   /** Convenience constant to indicate that inlet 1 should be pulled. */
   final val Pull1 = Set(Input.Inlet1)
 
