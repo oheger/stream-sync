@@ -109,7 +109,7 @@ object MirrorStage:
       * @param element the new element
       * @return data to emit and the next state
       */
-    private def syncElements(state: MirrorState, input: Input, element: Option[FsElement]): (EmitData, MirrorState) =
+    private def syncElements(state: MirrorState, input: Input, element: Option[FsElement]): MergeResult =
       handleNoneElementDuringSync(state, input, element, sourceCompleteMergeFunc,
         destinationCompleteMergeFunc) { (elemSource, elemDest) =>
         syncOperationForElements(elemSource, elemDest, state) orElse
@@ -126,7 +126,7 @@ object MirrorStage:
       * @param elem the current element
       * @return data to emit and the updated state
       */
-    private def emitDestinationComplete(s: MirrorState, elem: FsElement): (EmitData, MirrorState) =
+    private def emitDestinationComplete(s: MirrorState, elem: FsElement): MergeResult =
       (EmitData(List(createOp(elem)), BaseMergeStage.Pull1), s)
 
     /**
@@ -137,7 +137,7 @@ object MirrorStage:
       * @param elem the current element
       * @return data to emit and the updated state
       */
-    private def emitSourceComplete(s: MirrorState, elem: FsElement): (EmitData, MirrorState) =
+    private def emitSourceComplete(s: MirrorState, elem: FsElement): MergeResult =
       val (op, next) = removeElement(s, elem, removedPath = None)
       (EmitData(op, BaseMergeStage.Pull2), next)
 
@@ -163,7 +163,7 @@ object MirrorStage:
       * @return an ''Option'' with data how to handle these elements
       */
     private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement, state: MirrorState):
-    Option[(EmitData, MirrorState)] =
+    Option[MergeResult] =
       lazy val delta = SyncTypes.compareElementUris(elemSource, elemDest)
       val removedRoot = state.removedFolderState.findRoot(elemDest)
       if removedRoot.isDefined || delta > 0 then
@@ -185,7 +185,7 @@ object MirrorStage:
       * @return an ''Option'' with data how to handle these elements
       */
     private def syncOperationForFileFolderDiff(elemSource: FsElement, elemDest: FsElement, state: MirrorState):
-    Option[(EmitData, MirrorState)] =
+    Option[MergeResult] =
       (elemSource, elemDest) match
         case (eSrc: FsFile, eDst: FsFile)
           if differentFileTimes(eSrc, eDst) || eSrc.size != eDst.size =>
@@ -213,7 +213,7 @@ object MirrorStage:
       * @param state the current sync state
       * @return data to emit and the next state
       */
-    private def emitAndPullBoth(op: List[SyncOperation], state: MirrorState): (EmitData, MirrorState) =
+    private def emitAndPullBoth(op: List[SyncOperation], state: MirrorState): MergeResult =
       (EmitData(op, BaseMergeStage.PullBoth), state.copy(currentElement = None, mergeFunc = waitMergeFunc))
 
     /**

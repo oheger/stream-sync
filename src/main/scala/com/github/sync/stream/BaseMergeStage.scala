@@ -112,6 +112,12 @@ trait BaseMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT](in1: Inlet[ELEMENT1],
   type MergeElement = ELEMENT1 | ELEMENT2
 
   /**
+    * A type alias for the result returned by a [[MergeFunc]]. This is shorter 
+    * than always using the tuple type.
+    */
+  type MergeResult = (EmitData, MergeState)
+
+  /**
     * Type of a function that handles a new element during a merge operation.
     * This function is invoked for each element that is received from one of
     * the input sources. It is passed the current merge state, the index of the
@@ -119,7 +125,7 @@ trait BaseMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT](in1: Inlet[ELEMENT1],
     * itself. If this ''Option'' is ''None'', this indicates that this input
     * source is complete.
     */
-  type MergeFunc = (MergeState, Input, Option[MergeElement]) => (EmitData, MergeState)
+  type MergeFunc = (MergeState, Input, Option[MergeElement]) => MergeResult
 
   /**
     * A constant that can be used by a [[MergeFunc]] to indicate that no action

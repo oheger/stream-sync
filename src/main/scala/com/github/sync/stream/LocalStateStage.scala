@@ -136,7 +136,7 @@ private object LocalStateStage:
       * @param element the new element
       * @return data to emit and the next state
       */
-    private def syncElements(state: StageState, input: Input, element: Option[FsElement]): (EmitData, StageState) =
+    private def syncElements(state: StageState, input: Input, element: Option[FsElement]): MergeResult =
       handleNoneElementDuringSync(state, input, element, elementsCompleteMergeFunc,
         stateCompleteMergeFunc) { (currentElem, stateElem) =>
         val uriDelta = SyncTypes.compareElementUris(currentElem, stateElem)
@@ -159,7 +159,7 @@ private object LocalStateStage:
       * @param element the new element
       * @return data to emit and the next state
       */
-    private def emitLocalStateComplete(state: StageState, element: FsElement): (EmitData, StageState) =
+    private def emitLocalStateComplete(state: StageState, element: FsElement): MergeResult =
       val delta = ElementWithDelta(element, ChangeType.Created, syncTime)
       (EmitData(List(delta), BaseMergeStage.Pull1), state)
 
@@ -172,7 +172,7 @@ private object LocalStateStage:
       * @param element the new element
       * @return data to emit and the next state
       */
-    private def emitElementsComplete(state: StageState, element: FsElement): (EmitData, StageState) =
+    private def emitElementsComplete(state: StageState, element: FsElement): MergeResult =
       val delta = ElementWithDelta(element, ChangeType.Removed, changeTimeFromElement(element))
       (EmitData(List(delta), BaseMergeStage.Pull2), state)
 
@@ -186,7 +186,7 @@ private object LocalStateStage:
       * @param stateElem   the element from the recorded state
       * @return data to emit and the next state
       */
-    private def deltaToState(state: StageState, currentElem: FsElement, stateElem: FsElement): (EmitData, StageState) =
+    private def deltaToState(state: StageState, currentElem: FsElement, stateElem: FsElement): MergeResult =
       val delta = if currentElem.isInstanceOf[FsFile] && stateElem.isInstanceOf[FsFolder] then
         ElementWithDelta(currentElem, ChangeType.Changed, syncTime)
       else
@@ -205,7 +205,7 @@ private object LocalStateStage:
       * @param state the current sync state
       * @return data to emit and the next state
       */
-    private def emitAndPullBoth(delta: List[ElementWithDelta], state: StageState): (EmitData, StageState) =
+    private def emitAndPullBoth(delta: List[ElementWithDelta], state: StageState): MergeResult =
       (EmitData(delta, BaseMergeStage.PullBoth), state.copy(currentElement = None, mergeFunc = waitMergeFunc))
 
 /**
