@@ -63,9 +63,9 @@ object MirrorStage:
       * @param removedFolderState the state for removed folders
       */
     case class MirrorState(override val mergeFunc: MergeFunc,
-                           override val currentElement: FsElement,
+                           override val currentElement: Option[FsElement],
                            removedFolderState: RemovedFolderState) extends ElementMergeState :
-      override def updateCurrentElement(element: FsElement): MirrorState = copy(currentElement = element)
+      override def updateCurrentElement(element: Option[FsElement]): MirrorState = copy(currentElement = element)
 
       override def withMergeFunc(f: MergeFunc): MirrorState = copy(mergeFunc = f)
     end MirrorState
@@ -91,7 +91,7 @@ object MirrorStage:
     private val waitMergeFunc = waitForElements(syncElements, sourceCompleteMergeFunc, destinationCompleteMergeFunc)
 
     /** The specific state of the ''MirrorStage''. */
-    private var mirrorState = MirrorState(waitMergeFunc, null, RemovedFolderState.Empty)
+    private var mirrorState = MirrorState(waitMergeFunc, None, RemovedFolderState.Empty)
 
     override protected def state: MirrorState = mirrorState
 
@@ -109,13 +109,12 @@ object MirrorStage:
       * @param element the new element
       * @return data to emit and the next state
       */
-    private def syncElements(state: MirrorState, input: Input, element: FsElement): (EmitData, MirrorState) =
-      handleNullElementDuringSync(state, input, element, sourceCompleteMergeFunc,
-        destinationCompleteMergeFunc) getOrElse {
-        val (elemSource, elemDest) = extractMergePair(state, input, element)
+    private def syncElements(state: MirrorState, input: Input, element: Option[FsElement]): (EmitData, MirrorState) =
+      handleNoneElementDuringSync(state, input, element, sourceCompleteMergeFunc,
+        destinationCompleteMergeFunc) { (elemSource, elemDest) =>
         syncOperationForElements(elemSource, elemDest, state) orElse
           syncOperationForFileFolderDiff(elemSource, elemDest, state) getOrElse
-          emitAndPullBoth(List(SyncOperation(elemSource, ActionNoop, element.level, DstIDUnknown)), state)
+          emitAndPullBoth(List(SyncOperation(elemSource, ActionNoop, elemDest.level, DstIDUnknown)), state)
       }
 
     /**
@@ -168,10 +167,10 @@ object MirrorStage:
       lazy val delta = SyncTypes.compareElementUris(elemSource, elemDest)
       val removedRoot = state.removedFolderState.findRoot(elemDest)
       if removedRoot.isDefined || delta > 0 then
-        val (ops, next) = removeElement(state.updateCurrentElement(elemSource), elemDest, removedRoot)
+        val (ops, next) = removeElement(state.updateCurrentElement(Some(elemSource)), elemDest, removedRoot)
         Some((EmitData(ops, BaseMergeStage.Pull2), next))
       else if delta < 0 then
-        Some((EmitData(List(createOp(elemSource)), BaseMergeStage.Pull1), state.updateCurrentElement(elemDest)))
+        Some((EmitData(List(createOp(elemSource)), BaseMergeStage.Pull1), state.updateCurrentElement(Some(elemDest))))
       else None
 
     /**
@@ -215,7 +214,7 @@ object MirrorStage:
       * @return data to emit and the next state
       */
     private def emitAndPullBoth(op: List[SyncOperation], state: MirrorState): (EmitData, MirrorState) =
-      (EmitData(op, BaseMergeStage.PullBoth), state.copy(currentElement = null, mergeFunc = waitMergeFunc))
+      (EmitData(op, BaseMergeStage.PullBoth), state.copy(currentElement = None, mergeFunc = waitMergeFunc))
 
     /**
       * Generates emit data for an element to be removed. The exact actions to

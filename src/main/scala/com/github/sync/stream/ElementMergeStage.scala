@@ -39,9 +39,9 @@ import com.github.sync.stream.BaseMergeStage.Input
   * @tparam ELEMENT1 the element type of the first input source
   * @tparam ELEMENT2 the element type of the second input source
   */
-trait ElementMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: Inlet[ELEMENT1],
-                                                                            in2: Inlet[ELEMENT2],
-                                                                            out: Outlet[OUTELEMENT])
+trait ElementMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT](in1: Inlet[ELEMENT1],
+                                                        in2: Inlet[ELEMENT2],
+                                                        out: Outlet[OUTELEMENT])
   extends BaseMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT] :
   this: StageLogging =>
 
@@ -63,21 +63,21 @@ trait ElementMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1:
 
     /**
       * Returns the current element of the merge process. This can be
-      * '''null''' if no element has been received yet.
+      * ''None'' if no element has been received yet.
       *
-      * @return the current element of the merge process
+      * @return the optional current element of the merge process
       */
-    def currentElement: MergeElement
+    def currentElement: Option[MergeElement]
 
     /**
       * Returns a copy of the current state - if necessary - that uses the
       * given element as current element. If this state already contains this
       * element, it is returned as is.
       *
-      * @param e the new current element
+      * @param e the optional new current element
       * @return the state with this current element
       */
-    def withCurrentElement(e: MergeElement): MergeState =
+    def withCurrentElement(e: Option[MergeElement]): MergeState =
       if currentElement == e then this.asInstanceOf[MergeState]
       else updateCurrentElement(e)
 
@@ -89,20 +89,20 @@ trait ElementMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1:
       *
       * @param f       the new merge function
       * @param input   defines the current input source
-      * @param element the new element
+      * @param element the optional new element
       * @return the result of the merge function
       */
-    def updateAndCallMergeFunc(f: MergeFunc, input: Input, element: MergeElement): (EmitData, MergeState) =
+    def updateAndCallMergeFunc(f: MergeFunc, input: Input, element: Option[MergeElement]): (EmitData, MergeState) =
       f(withMergeFunc(f), input, element)
 
     /**
       * Returns a copy of the current state that uses the given element as
       * current element.
       *
-      * @param e the new current element
+      * @param e the optional new current element
       * @return the state with the updated current element
       */
-    protected def updateCurrentElement(e: MergeElement): MergeState
+    protected def updateCurrentElement(e: Option[MergeElement]): MergeState
   end ElementMergeState
 
   override type MergeState <: ElementMergeState
@@ -124,11 +124,12 @@ trait ElementMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1:
   protected def waitForElements(syncFunc: => MergeFunc, src1CompleteFunc: => MergeFunc,
                                 src2CompleteFunc: => MergeFunc): MergeFunc =
     (state, input, element) =>
-      handleNullElementDuringSync(state, input, element, src1CompleteFunc, src2CompleteFunc) getOrElse {
-        if state.currentElement == null then
-          (EmitNothing, state.withCurrentElement(element))
-        else state.updateAndCallMergeFunc(syncFunc, input, element)
-      }
+      if element.isDefined && state.currentElement.isDefined then
+        state.updateAndCallMergeFunc(syncFunc, input, element)
+      else if element.isDefined then
+        (EmitNothing, state.withCurrentElement(element))
+      else
+        handleFinishedSource(state, input, src1CompleteFunc, src2CompleteFunc)
 
   /**
     * Returns a ''MergeFunc'' for the case that one of the input sources is
@@ -144,71 +145,86 @@ trait ElementMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1:
   protected def inputSourceComplete(emitFunc: (MergeState, MergeElement) => (EmitData, MergeState))
                                    (completeFunc: MergeState => EmitData): MergeFunc =
     (state, _, element) =>
-      handleNullElementOnFinishedSource(state, element)(emitFunc)(completeFunc) getOrElse
-        emitFunc(state, element)
+      handleNoneElementOnFinishedSource(state, element)(emitFunc)(completeFunc) getOrElse
+        emitFunc(state, element.get)
 
   /**
-    * Extracts the two elements to be compared for the current merge operation.
-    * This function returns a tuple with the first element from the first
-    * inlet and the second element from the second inlet. (As the current
-    * element in the state can be from either input source, it is not directly
-    * clear from which source the elements stem.)
-    *
-    * @param state   the current merge state
-    * @param input   defines the current input source
-    * @param element the new element
-    * @return a tuple with the elements to be merged
-    */
-  protected def extractMergePair(state: MergeState, input: Input, element: MergeElement):
-  (MergeElement, MergeElement) =
-    if input == Input.Inlet2 then (state.currentElement, element)
-    else (element, state.currentElement)
-
-  /**
-    * Deals with a null element while in sync mode. This means that one of
+    * Deals with a ''None'' element while in sync mode. This means that one of
     * the input sources is now complete. Depending on the source affected,
     * the state is updated to switch to the correct finished merge function.
-    * If the passed in element is not null, result is ''None''.
+    * If the passed in element is not ''None'', the passed in function is
+    * invoked to compute the result for a pair of elements to merge. Note that
+    * this function expects that the current element of the merge state is
+    * defined.
     *
     * @param state   the current merge state
     * @param input   defines the current input source
-    * @param element the new element
-    * @param log     the logger
+    * @param element the optional new element
+    * @param f       a function to handle two defined elements
     * @return an ''Option'' with data to change to the next state in case an
     *         input source is finished
     */
-  protected def handleNullElementDuringSync(state: MergeState, input: Input, element: MergeElement,
-                                            src1CompleteFunc: => MergeFunc, src2CompleteFunc: => MergeFunc):
-  Option[(EmitData, MergeState)] =
-    if element == null then
-      val stateFunc = if input == Input.Inlet1 then src1CompleteFunc else src2CompleteFunc
-      Some(state.updateAndCallMergeFunc(stateFunc, input, element))
-    else None
+  protected def handleNoneElementDuringSync(state: MergeState, input: Input, element: Option[MergeElement],
+                                            src1CompleteFunc: => MergeFunc, src2CompleteFunc: => MergeFunc)
+                                           (f: ((MergeElement, MergeElement)) => (EmitData, MergeState)):
+  (EmitData, MergeState) =
+    extractMergePair(state, input, element) map f getOrElse {
+      handleFinishedSource(state, input, src1CompleteFunc, src2CompleteFunc)
+    }
+
+  private def handleFinishedSource(state: MergeState, input: Input,
+                                   src1CompleteFunc: => MergeFunc, src2CompleteFunc: => MergeFunc):
+  (EmitData, MergeState) =
+    val mergeFunc = if input == Input.Inlet1 then src1CompleteFunc else src2CompleteFunc
+    state.updateAndCallMergeFunc(mergeFunc, input, None)
 
   /**
-    * Deals with a null element in a state where one source has been finished.
-    * This function handles the cases that the state was newly entered or that
-    * the stream can now be completed. If result is an empty option, a non null
-    * element was passed that needs to be processed by the caller.
+    * Deals with a ''None'' element in a state where one source has been
+    * finished. This function handles the cases that the state was newly
+    * entered or that the stream can now be completed. If result is an empty
+    * option, a defined element was passed that needs to be processed by the
+    * caller.
     *
     * @param state        the current merge state
-    * @param element      the element to be handled
+    * @param element      the optional element to be handled
     * @param emitFunc     function to generate emit data for an element
     * @param completeFunc function to generate the final ''EmitData'' if the
     *                     whole stream is complete
     * @return an option with emit data and the next state that is not empty if
     *         this function could handle the element
     */
-  private def handleNullElementOnFinishedSource(state: MergeState, element: MergeElement)
+  private def handleNoneElementOnFinishedSource(state: MergeState, element: Option[MergeElement])
                                                (emitFunc: (MergeState, MergeElement) => (EmitData, MergeState))
                                                (completeFunc: MergeState => EmitData): Option[(EmitData, MergeState)] =
-    if element == null then
-      Option(state.currentElement).map { currentElem =>
-        val (emit, next) = emitFunc(state, currentElem)
-        Some((emit, next.withCurrentElement(null.asInstanceOf[MergeElement])))
+    if element.isEmpty then
+      state.currentElement.map { current =>
+        val (emit, next) = emitFunc(state, current)
+        Some((emit, next.withCurrentElement(None)))
       } getOrElse Some {
         if numberOfFinishedSources > 1 then
           (completeFunc(state), state)
         else (EmitNothing, state)
       }
     else None
+
+  /**
+    * Extracts the two elements to be compared for the current merge operation.
+    * This function returns an optional tuple with the first element from the
+    * first inlet and the second element from the second inlet. (As the current
+    * element in the state can be from either input source, it is not directly
+    * clear from which source the elements stem.) If either of the elements
+    * involved is undefined, result is ''None''.
+    *
+    * @param state   the current merge state
+    * @param input   defines the current input source
+    * @param element the new element
+    * @return an optional tuple with the elements to be merged
+    */
+  private def extractMergePair(state: MergeState, input: Input, element: Option[MergeElement]):
+  Option[(MergeElement, MergeElement)] =
+    for
+      stateElem <- state.currentElement
+      currentElem <- element
+    yield
+      if input == Input.Inlet2 then (stateElem, currentElem)
+      else (currentElem, stateElem)

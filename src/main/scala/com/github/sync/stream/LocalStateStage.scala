@@ -88,10 +88,10 @@ private object LocalStateStage:
       * @param currentElement the current element
       */
     case class StageState(override val mergeFunc: MergeFunc,
-                          override val currentElement: FsElement) extends ElementMergeState :
+                          override val currentElement: Option[FsElement]) extends ElementMergeState :
       override def withMergeFunc(f: MergeFunc): StageState = copy(mergeFunc = f)
 
-      protected override def updateCurrentElement(e: MergeElement): MergeState = copy(currentElement = e)
+      protected override def updateCurrentElement(e: Option[MergeElement]): MergeState = copy(currentElement = e)
 
     override type MergeState = StageState
 
@@ -120,7 +120,7 @@ private object LocalStateStage:
     private val waitMergeFunc = waitForElements(syncElements, elementsCompleteMergeFunc, stateCompleteMergeFunc)
 
     /** Holds the state of this stage. */
-    private var stageState = StageState(waitMergeFunc, null)
+    private var stageState = StageState(waitMergeFunc, None)
 
     override protected def state: MergeState = stageState
 
@@ -136,18 +136,18 @@ private object LocalStateStage:
       * @param element the new element
       * @return data to emit and the next state
       */
-    private def syncElements(state: StageState, input: Input, element: FsElement): (EmitData, StageState) =
-      handleNullElementDuringSync(state, input, element, elementsCompleteMergeFunc, stateCompleteMergeFunc) getOrElse {
-        val (currentElem, stateElem) = extractMergePair(state, input, element)
+    private def syncElements(state: StageState, input: Input, element: Option[FsElement]): (EmitData, StageState) =
+      handleNoneElementDuringSync(state, input, element, elementsCompleteMergeFunc,
+        stateCompleteMergeFunc) { (currentElem, stateElem) =>
         val uriDelta = SyncTypes.compareElementUris(currentElem, stateElem)
         if uriDelta == 0 then
           deltaToState(state, currentElem, stateElem)
         else if uriDelta > 0 then
           val delta = ElementWithDelta(stateElem, ChangeType.Removed, changeTimeFromElement(stateElem))
-          (EmitData(List(delta), BaseMergeStage.Pull2), state.copy(currentElement = currentElem))
+          (EmitData(List(delta), BaseMergeStage.Pull2), state.copy(currentElement = Some(currentElem)))
         else
           val delta = ElementWithDelta(currentElem, ChangeType.Created, syncTime)
-          (EmitData(List(delta), BaseMergeStage.Pull1), state.copy(currentElement = stateElem))
+          (EmitData(List(delta), BaseMergeStage.Pull1), state.copy(currentElement = Some(stateElem)))
       }
 
     /**
@@ -206,7 +206,7 @@ private object LocalStateStage:
       * @return data to emit and the next state
       */
     private def emitAndPullBoth(delta: List[ElementWithDelta], state: StageState): (EmitData, StageState) =
-      (EmitData(delta, BaseMergeStage.PullBoth), state.copy(currentElement = null, mergeFunc = waitMergeFunc))
+      (EmitData(delta, BaseMergeStage.PullBoth), state.copy(currentElement = None, mergeFunc = waitMergeFunc))
 
 /**
   * A ''Stage'' that merges the elements in the local folder structure against

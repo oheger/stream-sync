@@ -65,9 +65,9 @@ object BaseMergeStage:
   * @tparam ELEMENT1 the element type of the first input source
   * @tparam ELEMENT2 the element type of the second input source
   */
-trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: Inlet[ELEMENT1],
-                                                                         in2: Inlet[ELEMENT2],
-                                                                         out: Outlet[OUTELEMENT]) extends GraphStageLogic :
+trait BaseMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT](in1: Inlet[ELEMENT1],
+                                                     in2: Inlet[ELEMENT2],
+                                                     out: Outlet[OUTELEMENT]) extends GraphStageLogic :
   this: StageLogging =>
 
   import BaseMergeStage.*
@@ -115,10 +115,11 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
     * Type of a function that handles a new element during a merge operation.
     * This function is invoked for each element that is received from one of
     * the input sources. It is passed the current merge state, the index of the
-    * source that emitted the element, and the element itself. The element may
-    * be '''null''', indicating that this input source is complete.
+    * source that emitted the element, and an ''Option'' for the element
+    * itself. If this ''Option'' is ''None'', this indicates that this input
+    * source is complete.
     */
-  type MergeFunc = (MergeState, Input, MergeElement) => (EmitData, MergeState)
+  type MergeFunc = (MergeState, Input, Option[MergeElement]) => (EmitData, MergeState)
 
   /**
     * A constant that can be used by a [[MergeFunc]] to indicate that no action
@@ -153,7 +154,7 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
 
   setHandler(in1, new InHandler {
     override def onPush(): Unit = {
-      updateMergeState(Inlet1, grab(in1))
+      updateMergeState(Inlet1, Some(grab(in1)))
     }
 
     override def onUpstreamFinish(): Unit = {
@@ -163,7 +164,7 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
 
   setHandler(in2, new InHandler {
     override def onPush(): Unit = {
-      updateMergeState(Inlet2, grab(in2))
+      updateMergeState(Inlet2, Some(grab(in2)))
     }
 
     override def onUpstreamFinish(): Unit = {
@@ -198,9 +199,9 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
     * Updates the current state on receiving an element.
     *
     * @param input   defines the input source
-    * @param element the element (may be '''null''' for completion)
+    * @param element the optional element (may be ''None'' for completion)
     */
-  private def updateMergeState(input: Input, element: MergeElement): Unit =
+  private def updateMergeState(input: Input, element: Option[MergeElement]): Unit =
     val (data, next) = state.mergeFunc(state, input, element)
     updateState(next)
     emitMultiple(out, data.elements)
@@ -224,7 +225,7 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
       }
       pulledPorts(input.ordinal) = true
       if isFinished(input) then
-        updateMergeState(input, null.asInstanceOf[MergeElement])
+        updateMergeState(input, None)
       else pull(inlet)
     }
 
@@ -243,4 +244,4 @@ trait BaseMergeStage[ELEMENT1 <: AnyRef, ELEMENT2 <: AnyRef, OUTELEMENT](in1: In
   private def handleInletFinished(input: Input): Unit =
     finishedPorts(input.ordinal) = true
     if pulledPorts(input.ordinal) then
-      updateMergeState(input, null.asInstanceOf[MergeElement])
+      updateMergeState(input, None)
