@@ -218,32 +218,6 @@ object MirrorStage:
       (EmitData(op, BaseMergeStage.PullBoth), state.copy(currentElement = null, mergeFunc = waitMergeFunc))
 
     /**
-      * Deals with a null element in a state where one source has been finished.
-      * This function handles the cases that the state was newly entered or that
-      * the stream can now be completed. If result is an empty option, a non null
-      * element was passed that needs to be processed by the caller.
-      *
-      * @param state    the current sync state
-      * @param element  the element to be handled
-      * @param emitFunc function to generate emit data for an element
-      * @return an option with emit data and the next state that is not empty if
-      *         this function could handle the element
-      */
-    private def handleNullElementOnFinishedSource(state: MirrorState, element: FsElement)
-                                                 (emitFunc: (MirrorState, FsElement) => (EmitData, MirrorState)):
-    Option[(EmitData, MirrorState)] =
-      if element == null then
-        Option(state.currentElement).map { currentElem =>
-          val (emit, next) = emitFunc(state, currentElem)
-          Some((emit, next.copy(currentElement = null)))
-        } getOrElse Some {
-          if numberOfFinishedSources > 1 then
-            (EmitData(state.removedFolderState.deferredOperations, Nil, complete = true), state)
-          else (EmitNothing, state)
-        }
-      else None
-
-    /**
       * Generates emit data for an element to be removed. The exact actions to
       * delete the element depend on the element type: files can be deleted
       * directly, the deletion of folders is deferred. The details are handled by
