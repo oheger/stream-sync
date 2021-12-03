@@ -51,18 +51,6 @@ private object LocalStateStage:
                               lastLocalTime: Instant)
 
   /**
-    * Extracts the time of the last change from the given element. This time is
-    * only defined for files, but not for folders.
-    *
-    * @param element the element in question
-    * @return the time of the last change of this element
-    */
-  private def changeTimeFromElement(element: FsElement): Instant =
-    element match
-      case file: FsFile => file.lastModified
-      case _ => null
-
-  /**
     * The internal class representing the logic and the state of the local
     * state stage.
     *
@@ -143,7 +131,7 @@ private object LocalStateStage:
         if uriDelta == 0 then
           deltaToState(state, currentElem, stateElem)
         else if uriDelta > 0 then
-          val delta = ElementWithDelta(stateElem, ChangeType.Removed, changeTimeFromElement(stateElem))
+          val delta = ElementWithDelta(stateElem, ChangeType.Removed, stateElem.modifiedTime(null))
           (EmitData(List(delta), BaseMergeStage.Pull2), state.copy(currentElement = Some(currentElem)))
         else
           val delta = ElementWithDelta(currentElem, ChangeType.Created, syncTime)
@@ -173,7 +161,7 @@ private object LocalStateStage:
       * @return data to emit and the next state
       */
     private def emitElementsComplete(state: StageState, element: FsElement): MergeResult =
-      val delta = ElementWithDelta(element, ChangeType.Removed, changeTimeFromElement(element))
+      val delta = ElementWithDelta(element, ChangeType.Removed, element.modifiedTime(null))
       (EmitData(List(delta), BaseMergeStage.Pull2), state)
 
     /**
@@ -190,8 +178,8 @@ private object LocalStateStage:
       val delta = if currentElem.isInstanceOf[FsFile] && stateElem.isInstanceOf[FsFolder] then
         ElementWithDelta(currentElem, ChangeType.Changed, syncTime)
       else
-        val currentTime = changeTimeFromElement(currentElem)
-        val stateTime = changeTimeFromElement(stateElem)
+        val currentTime = currentElem.modifiedTime(null)
+        val stateTime = stateElem.modifiedTime(null)
         val changeType = if currentTime == stateTime then ChangeType.Unchanged else ChangeType.Changed
         ElementWithDelta(currentElem, changeType, stateTime)
 
