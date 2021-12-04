@@ -18,9 +18,11 @@ package com.github.sync.stream
 
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, StageLogging}
-import com.github.sync.SyncTypes.{FsElement, FsFile, SyncAction, SyncElementResult, SyncOperation, compareElementUris}
+import com.github.sync.SyncTypes.{FsElement, FsFile, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, compareElementUris}
 import com.github.sync.stream.BaseMergeStage.Input
 import com.github.sync.stream.LocalStateStage.{ChangeType, ElementWithDelta}
+
+import java.time.Instant
 
 object SyncStage:
   /**
@@ -186,14 +188,34 @@ object SyncStage:
       * @return data to be emitted and the updated merge state
       */
     private def syncLocalEqualRemote(state: SyncState, local: ElementWithDelta, remote: FsElement): MergeResult =
-      val op = local.changeType match
+      def overrideOp() = SyncOperation(local.element, SyncAction.ActionOverride, remote.level, remote.id)
+
+      def removeOp() = RemovedFolderState.createRemoveOperation(remote)
+
+      def localOverrideOp() = SyncOperation(remote, SyncAction.ActionLocalOverride, remote.level, local.element.id)
+
+      val localModified = local.element.modifiedTime(Instant.MIN)
+      val remoteModified = remote.modifiedTime(Instant.MIN)
+
+      val results = local.changeType match
+        case ChangeType.Removed if remoteModified != local.lastLocalTime =>
+          emitConflict(localOverrideOp(), removeOp())
         case ChangeType.Removed =>
-          SyncOperation(remote, SyncAction.ActionRemove, remote.level, remote.id)
+          emitOp(removeOp())
+        case _ if localModified == remoteModified =>
+          emitOp(noop(local, remote))
+        case ChangeType.Changed if remoteModified != local.lastLocalTime =>
+          emitConflict(localOverrideOp(), overrideOp())
         case ChangeType.Changed =>
-          SyncOperation(local.element, SyncAction.ActionOverride, remote.level, remote.id)
-        case _ =>
-          SyncOperation(local.element, SyncAction.ActionNoop, remote.level, remote.id)
-      state.mergeResultWithResetElements(emitOp(op), BaseMergeStage.PullBoth)
+          emitOp(overrideOp())
+        case ChangeType.Unchanged if remoteModified.isAfter(localModified) =>
+          emitOp(localOverrideOp())
+        case ChangeType.Created =>
+          emitConflict(localOverrideOp(), overrideOp())
+        case ChangeType.Unchanged =>
+          emitOp(noop(local, remote))
+
+      state.mergeResultWithResetElements(results, BaseMergeStage.PullBoth)
 
     /**
       * Produces a ''MergeResult'' if the current local element's URI is less
@@ -204,12 +226,20 @@ object SyncStage:
       * @return data to be emitted and the updated merge state
       */
     private def syncLocalLessRemote(state: SyncState, local: ElementWithDelta): MergeResult =
-      val op = local.changeType match
+      def createOp(action: SyncAction): SyncOperation =
+        SyncOperation(local.element, action, local.element.level, local.element.id)
+
+      val ops = local.changeType match
         case ChangeType.Unchanged =>
-          SyncOperation(local.element, SyncAction.ActionLocalRemove, local.element.level, local.element.id)
+          emitOp(createOp(SyncAction.ActionLocalRemove))
+        case ChangeType.Removed =>
+          Nil
+        case ChangeType.Changed =>
+          emitConflict(createOp(SyncAction.ActionLocalRemove), createOp(SyncAction.ActionCreate))
         case _ =>
-          SyncOperation(local.element, SyncAction.ActionCreate, local.element.level, local.element.id)
-      state.mergeResultWithResetElements(emitOp(op), BaseMergeStage.Pull1)
+          emitOp(createOp(SyncAction.ActionCreate))
+
+      state.mergeResultWithResetElements(ops, BaseMergeStage.Pull1)
 
     /**
       * Produces a ''MergeResult'' if the current local element's URI is
@@ -233,6 +263,28 @@ object SyncStage:
     * @return the resulting list of results
     */
   private def emitOp(op: SyncOperation): List[SyncElementResult] = List(Right(List(op)))
+
+  /**
+    * Convenience function to produce a conflict sync result for two
+    * conflicting operations.
+    *
+    * @param localOp  the local operation
+    * @param remoteOp the remote operation
+    * @return the resulting list of results
+    */
+  private def emitConflict(localOp: SyncOperation, remoteOp: SyncOperation): List[SyncElementResult] =
+    val conflictException = SyncConflictException(List(localOp), List(remoteOp))
+    List(Left(conflictException))
+
+  /**
+    * Generates a ''SyncOperation'' with a Noop action for the given elements.
+    *
+    * @param local  the current local element
+    * @param remote the current remote element
+    * @return the Noop ''SyncOperation'' for these elements
+    */
+  private def noop(local: ElementWithDelta, remote: FsElement): SyncOperation =
+    SyncOperation(local.element, SyncAction.ActionNoop, remote.level, remote.id)
 
 /**
   * A special stage that generates [[SyncOperation]]s for a local and a remote
