@@ -19,7 +19,7 @@ package com.github.sync.stream
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, StageLogging}
 import com.github.sync.SyncTypes.{FsElement, FsFile, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, compareElementUris}
-import com.github.sync.stream.BaseMergeStage.Input
+import com.github.sync.stream.BaseMergeStage.{Input, MergeEmitData}
 import com.github.sync.stream.LocalStateStage.{ChangeType, ElementWithDelta}
 
 import java.time.Instant
@@ -82,7 +82,7 @@ object SyncStage:
 
         val nextCurrentLocal = nextCurrent(Input.Inlet1, currentLocalElement)
         val nextCurrentRemote = nextCurrent(Input.Inlet2, currentRemoteElement)
-        (EmitData(elements, pullInlets),
+        (MergeEmitData(elements, pullInlets),
           copy(currentLocalElement = nextCurrentLocal, currentRemoteElement = nextCurrentRemote))
 
     end SyncState
@@ -138,10 +138,10 @@ object SyncStage:
         case None => (EmitNothing.copy(complete = true), state)
         case Some(elem: FsElement) =>
           val op = SyncOperation(elem, SyncAction.ActionLocalCreate, elem.level, elem.id)
-          (EmitData(emitOp(op), List(input)), state)
+          (MergeEmitData(emitOp(op), List(input)), state)
         case Some(elem: ElementWithDelta) =>
           val op = SyncOperation(elem.element, SyncAction.ActionCreate, elem.element.level, elem.element.id)
-          (EmitData(emitOp(op), List(input)), state)
+          (MergeEmitData(emitOp(op), List(input)), state)
 
     /**
       * Generates a sync result for the current elements in the state if both

@@ -20,7 +20,7 @@ import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, StageLogging}
 import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
-import com.github.sync.stream.BaseMergeStage.Input
+import com.github.sync.stream.BaseMergeStage.{Input, MergeEmitData}
 import com.github.sync.stream.LocalStateStage.{ElementWithDelta, LocalStateStageLogic}
 
 import java.time.Instant
@@ -87,7 +87,7 @@ private object LocalStateStage:
       * The function producing the ''EmitData'' object signalling the end of
       * the stream.
       */
-    private val EmitDataComplete: MergeState => EmitData = _ => EmitData(Nil, Nil, complete = true)
+    private val EmitDataComplete: MergeState => EmitData = _ => MergeEmitData(Nil, Nil, complete = true)
 
     /**
       * The merge function to be used when the input source with the local
@@ -132,10 +132,10 @@ private object LocalStateStage:
           deltaToState(state, currentElem, stateElem)
         else if uriDelta > 0 then
           val delta = ElementWithDelta(stateElem, ChangeType.Removed, stateElem.modifiedTime(null))
-          (EmitData(List(delta), BaseMergeStage.Pull2), state.copy(currentElement = Some(currentElem)))
+          (MergeEmitData(List(delta), BaseMergeStage.Pull2), state.copy(currentElement = Some(currentElem)))
         else
           val delta = ElementWithDelta(currentElem, ChangeType.Created, syncTime)
-          (EmitData(List(delta), BaseMergeStage.Pull1), state.copy(currentElement = Some(stateElem)))
+          (MergeEmitData(List(delta), BaseMergeStage.Pull1), state.copy(currentElement = Some(stateElem)))
       }
 
     /**
@@ -149,7 +149,7 @@ private object LocalStateStage:
       */
     private def emitLocalStateComplete(state: StageState, element: FsElement): MergeResult =
       val delta = ElementWithDelta(element, ChangeType.Created, syncTime)
-      (EmitData(List(delta), BaseMergeStage.Pull1), state)
+      (MergeEmitData(List(delta), BaseMergeStage.Pull1), state)
 
     /**
       * An emit function for the case that the input source for the local
@@ -162,7 +162,7 @@ private object LocalStateStage:
       */
     private def emitElementsComplete(state: StageState, element: FsElement): MergeResult =
       val delta = ElementWithDelta(element, ChangeType.Removed, element.modifiedTime(null))
-      (EmitData(List(delta), BaseMergeStage.Pull2), state)
+      (MergeEmitData(List(delta), BaseMergeStage.Pull2), state)
 
     /**
       * Computes a delta for the current element against its recorded state.
@@ -194,7 +194,7 @@ private object LocalStateStage:
       * @return data to emit and the next state
       */
     private def emitAndPullBoth(delta: List[ElementWithDelta], state: StageState): MergeResult =
-      (EmitData(delta, BaseMergeStage.PullBoth), state.copy(currentElement = None, mergeFunc = waitMergeFunc))
+      (MergeEmitData(delta, BaseMergeStage.PullBoth), state.copy(currentElement = None, mergeFunc = waitMergeFunc))
 
 /**
   * A ''Stage'' that merges the elements in the local folder structure against

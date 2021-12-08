@@ -47,6 +47,18 @@ object BaseMergeStage:
   /** Convenience constant to indicate that both inlets should be pulled. */
   final val PullBoth = Set(Input.Inlet1, Input.Inlet2)
 
+  /**
+    * A class with details about elements to be emitted downstream.
+    *
+    * @param elements   the elements to be pushed downstream
+    * @param pullInlets defines the inlets to be pulled
+    * @param complete   flag whether the stream should be completed
+    * @tparam T the type of the elements emitted by the stream                   
+    */
+  case class MergeEmitData[+T](elements: scala.collection.immutable.Iterable[T],
+                      pullInlets: Iterable[Input],
+                      complete: Boolean = false)
+
 /**
   * A trait defining common logic for ''GraphStage'' implementations that merge
   * the content of two sources.
@@ -95,15 +107,10 @@ trait BaseMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT](in1: Inlet[ELEMENT1],
   type MergeState <: BaseMergeState
 
   /**
-    * A class with details about elements to be emitted downstream.
-    *
-    * @param elements   the elements to be pushed downstream
-    * @param pullInlets defines the inlets to be pulled
-    * @param complete   flag whether the stream should be completed
+    * Type alias for the correctly typed data class to store the elements to be
+    * emitted.
     */
-  case class EmitData(elements: scala.collection.immutable.Iterable[OUTELEMENT],
-                      pullInlets: Iterable[Input],
-                      complete: Boolean = false)
+  type EmitData = MergeEmitData[OUTELEMENT]
 
   /**
     * A type representing the elements that need to be handled during a merge
@@ -131,7 +138,7 @@ trait BaseMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT](in1: Inlet[ELEMENT1],
     * A constant that can be used by a [[MergeFunc]] to indicate that no action
     * needs to be performed: no data to emit and no inlets to pull.
     */
-  final val EmitNothing = EmitData(Nil, Nil)
+  final val EmitNothing = MergeEmitData(Nil, Nil)
 
   /**
     * Returns the current state of this stage.

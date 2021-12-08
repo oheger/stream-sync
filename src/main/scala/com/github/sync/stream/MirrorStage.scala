@@ -23,7 +23,7 @@ import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
-import com.github.sync.stream.BaseMergeStage.Input
+import com.github.sync.stream.BaseMergeStage.{Input, MergeEmitData}
 
 object MirrorStage:
   /**
@@ -127,7 +127,7 @@ object MirrorStage:
       * @return data to emit and the updated state
       */
     private def emitDestinationComplete(s: MirrorState, elem: FsElement): MergeResult =
-      (EmitData(List(createOp(elem)), BaseMergeStage.Pull1), s)
+      (MergeEmitData(List(createOp(elem)), BaseMergeStage.Pull1), s)
 
     /**
       * An emit function that is invoked if the source structure is complete.
@@ -139,7 +139,7 @@ object MirrorStage:
       */
     private def emitSourceComplete(s: MirrorState, elem: FsElement): MergeResult =
       val (op, next) = removeElement(s, elem, removedPath = None)
-      (EmitData(op, BaseMergeStage.Pull2), next)
+      (MergeEmitData(op, BaseMergeStage.Pull2), next)
 
     /**
       * Produces the final ''EmitData'' if the stream is complete.
@@ -148,7 +148,7 @@ object MirrorStage:
       * @return the ''EmitData'' completing this stream
       */
     private def streamComplete(state: MirrorState): EmitData =
-      EmitData(state.removedFolderState.deferredOperations, Nil, complete = true)
+      MergeEmitData(state.removedFolderState.deferredOperations, Nil, complete = true)
 
     /**
       * Compares the given elements from the source and destination inlets and
@@ -168,9 +168,10 @@ object MirrorStage:
       val removedRoot = state.removedFolderState.findRoot(elemDest)
       if removedRoot.isDefined || delta > 0 then
         val (ops, next) = removeElement(state.updateCurrentElement(Some(elemSource)), elemDest, removedRoot)
-        Some((EmitData(ops, BaseMergeStage.Pull2), next))
+        Some((MergeEmitData(ops, BaseMergeStage.Pull2), next))
       else if delta < 0 then
-        Some((EmitData(List(createOp(elemSource)), BaseMergeStage.Pull1), state.updateCurrentElement(Some(elemDest))))
+        Some((MergeEmitData(List(createOp(elemSource)), BaseMergeStage.Pull1),
+          state.updateCurrentElement(Some(elemDest))))
       else None
 
     /**
@@ -214,7 +215,7 @@ object MirrorStage:
       * @return data to emit and the next state
       */
     private def emitAndPullBoth(op: List[SyncOperation], state: MirrorState): MergeResult =
-      (EmitData(op, BaseMergeStage.PullBoth), state.copy(currentElement = None, mergeFunc = waitMergeFunc))
+      (MergeEmitData(op, BaseMergeStage.PullBoth), state.copy(currentElement = None, mergeFunc = waitMergeFunc))
 
     /**
       * Generates emit data for an element to be removed. The exact actions to
