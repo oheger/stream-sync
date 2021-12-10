@@ -127,10 +127,10 @@ private object LocalStateStage:
     private def syncElements(state: StageState, input: Input, element: Option[FsElement]): MergeResult =
       handleNoneElementDuringSync(state, input, element, elementsCompleteMergeFunc,
         stateCompleteMergeFunc) { (currentElem, stateElem) =>
-        val uriDelta = SyncTypes.compareElementUris(currentElem, stateElem)
-        if uriDelta == 0 then
+        val elemDelta = SyncTypes.compareElements(currentElem, stateElem)
+        if elemDelta == 0 then
           deltaToState(state, currentElem, stateElem)
-        else if uriDelta > 0 then
+        else if elemDelta > 0 then
           val delta = ElementWithDelta(stateElem, ChangeType.Removed, stateElem.modifiedTime(null))
           (MergeEmitData(List(delta), BaseMergeStage.Pull2), state.copy(currentElement = Some(currentElem)))
         else

@@ -164,7 +164,7 @@ object MirrorStage:
       */
     private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement, state: MirrorState):
     Option[MergeResult] =
-      lazy val delta = SyncTypes.compareElementUris(elemSource, elemDest)
+      lazy val delta = SyncTypes.compareElements(elemSource, elemDest)
       val removedRoot = state.removedFolderState.findRoot(elemDest)
       if removedRoot.isDefined || delta > 0 then
         val (ops, next) = removeElement(state.updateCurrentElement(Some(elemSource)), elemDest, removedRoot)

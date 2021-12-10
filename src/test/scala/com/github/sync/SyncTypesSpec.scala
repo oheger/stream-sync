@@ -30,28 +30,28 @@ class SyncTypesSpec extends AnyFlatSpec, Matchers :
     val elem1 = FsFile("id1", "/path/to/element", 3, null, 1000)
     val elem2 = FsFolder("id2", elem1.relativeUri, 3)
 
-    SyncTypes.compareElementUris(elem1, elem2) should be(0)
+    SyncTypes.compareElements(elem1, elem2) should be(0)
   }
 
   it should "compare two element URIs if the first one is before" in {
     val elem1 = FsFolder("id1", "/path/to/element1", 3)
     val elem2 = FsFile("id2", "/path/to/element2", 3, null, 1234)
 
-    SyncTypes.compareElementUris(elem1, elem2) should be < 0
+    SyncTypes.compareElements(elem1, elem2) should be < 0
   }
 
   it should "compare two element URIs if the second one is before" in {
     val elem1 = FsFolder("id1", "/path/to/element2", 3)
     val elem2 = FsFile("id2", "/path/to/element1", 3, null, 1234)
 
-    SyncTypes.compareElementUris(elem1, elem2) should be > 0
+    SyncTypes.compareElements(elem1, elem2) should be > 0
   }
 
   it should "correctly compare two element URIs on different level" in {
     val elem1 = FsFolder("id1", "b", 1)
     val elem2 = FsFolder("id2", "a/subA", 2)
 
-    SyncTypes.compareElementUris(elem1, elem2) should be < 0
+    SyncTypes.compareElements(elem1, elem2) should be < 0
   }
 
   it should "generate a correct message for a SyncConflictException" in {

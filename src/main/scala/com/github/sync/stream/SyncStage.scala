@@ -18,7 +18,7 @@ package com.github.sync.stream
 
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, StageLogging}
-import com.github.sync.SyncTypes.{FsElement, FsFile, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, compareElementUris}
+import com.github.sync.SyncTypes.{FsElement, FsFile, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, compareElements}
 import com.github.sync.stream.BaseMergeStage.{Input, MergeEmitData}
 import com.github.sync.stream.LocalStateStage.{ChangeType, ElementWithDelta}
 
@@ -168,14 +168,14 @@ object SyncStage:
       * @return data to be emitted and the updated merge state
       */
     private def syncCurrentElements(state: SyncState, local: ElementWithDelta, remote: FsElement): MergeResult =
-      math.signum(compareElementUris(local.element, remote)) match
+      math.signum(compareElements(local.element, remote)) match
         case 1 =>
           syncLocalGreaterRemote(state, remote)
 
         case -1 =>
           syncLocalLessRemote(state, local)
 
-        case _ => // element URIs are equal
+        case _ => // elements are equal
           syncLocalEqualRemote(state, local, remote)
 
     /**

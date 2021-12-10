@@ -242,7 +242,7 @@ object SyncTypes:
     * @param elem2 the second element
     * @return the result of the comparison
     */
-  def compareElementUris(elem1: FsElement, elem2: FsElement): Int =
+  def compareElements(elem1: FsElement, elem2: FsElement): Int =
     if elem1.level == elem2.level then elem1.relativeUri.compareTo(elem2.relativeUri)
     else if elem1.level < elem2.level then -1
     else 1
