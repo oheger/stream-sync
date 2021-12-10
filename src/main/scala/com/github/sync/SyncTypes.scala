@@ -227,25 +227,25 @@ object SyncTypes:
   type SyncElementResult = Either[SyncConflictException, Seq[SyncOperation]]
 
   /**
-    * Compares the given elements based on their URIs and returns an integer
-    * value determining which one is before the other: a value less than zero
-    * means that the first element is before the second element; a value
-    * greater than zero means that the second element is before the first
-    * element; the value 0 means that the elements are equivalent. This
-    * comparison is needed when dealing with elements from two different
-    * (ordered) sources, to find out which elements are available in both
-    * sources or which are missing in either one.
+    * Compares the given elements and returns an integer value determining
+    * which one is before the other: a value less than zero means that the
+    * first element is before the second element; a value greater than zero
+    * means that the second element is before the first element; the value 0
+    * means that the elements are equivalent. This comparison is needed when
+    * dealing with elements from two different (ordered) sources, to find out
+    * which elements are available in both sources or which are missing in
+    * either one. This function assumes that sources are iterated over in
+    * BFS order; therefore, elements with a higher level are after elements on
+    * lower levels.
     *
     * @param elem1 the first element
     * @param elem2 the second element
     * @return the result of the comparison
     */
   def compareElementUris(elem1: FsElement, elem2: FsElement): Int =
-    val (parent1, name1) = UriEncodingHelper.splitParent(elem1.relativeUri)
-    val (parent2, name2) = UriEncodingHelper.splitParent(elem2.relativeUri)
-    val deltaParent = parent1.compareTo(parent2)
-    if deltaParent != 0 then deltaParent
-    else name1.compareTo(name2)
+    if elem1.level == elem2.level then elem1.relativeUri.compareTo(elem2.relativeUri)
+    else if elem1.level < elem2.level then -1
+    else 1
 
   /**
     * Generates the exception message for a [[SyncConflictException]] based on
