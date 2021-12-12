@@ -21,6 +21,7 @@ import akka.stream.{ClosedShape, FanInShape2}
 import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
 import akka.stream.stage.GraphStage
 import akka.testkit.TestKit
+import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncElementResult}
 import com.github.sync.stream.LocalStateStage.ElementWithDelta
@@ -52,20 +53,27 @@ object AbstractStageSpec:
   /**
     * Generates the relative URI of a test element based on the given index.
     *
-    * @param index the element index
+    * @param index     the element index
+    * @param optParent an optional parent element; if defined the resulting
+    *                  URI uses the parent URI as prefix
     * @return the URI for this test element
     */
-  def elementUri(index: Int): String = s"/data/element$index"
+  def elementUri(index: Int, optParent: Option[FsElement] = None): String =
+    val path = s"/element$index"
+    optParent.fold(s"/data$path") { elem =>
+      UriEncodingHelper.removeTrailingSeparator(elem.relativeUri) + path
+    }
 
   /**
     * Creates a test folder based on the given index.
     *
-    * @param index  the index
-    * @param idType the ID type
+    * @param index     the index
+    * @param idType    the ID type
+    * @param optParent an optional parent element
     * @return the test folder with this index
     */
-  def createFolder(index: Int, idType: String = IdTypeDefault): FsFolder =
-    FsFolder(elementID(index), elementUri(index), 1)
+  def createFolder(index: Int, idType: String = IdTypeDefault, optParent: Option[FsElement] = None): FsFolder =
+    FsFolder(elementID(index), elementUri(index, optParent), level(optParent))
 
   /**
     * Creates a test file based on the given index. If a delta for the time is
@@ -77,8 +85,11 @@ object AbstractStageSpec:
     * @param deltaTime the time delta (in seconds)
     * @return the test file with this index
     */
-  def createFile(index: Int, idType: String = IdTypeDefault, deltaTime: Int = 0): FsFile =
-    FsFile(elementID(index, idType), elementUri(index), 1, FileTime.plusSeconds(index + deltaTime), (index + 1) * 100)
+  def createFile(index: Int, idType: String = IdTypeDefault, deltaTime: Int = 0, optParent: Option[FsElement] = None):
+  FsFile =
+    FsFile(elementID(index, idType), elementUri(index, optParent), level(optParent),
+      FileTime.plusSeconds(index + deltaTime),
+      (index + 1) * 100)
 
   /**
     * Returns a ''fold'' sink that produces a list with all elements received
@@ -89,6 +100,15 @@ object AbstractStageSpec:
     */
   def foldSink[T]: Sink[T, Future[List[T]]] =
     Sink.fold[List[T], T](List.empty[T]) { (lst, e) => e :: lst }
+
+  /**
+    * Returns the level of a test element based on the presence of a parent
+    * element.
+    *
+    * @param optParent the optional parent element
+    * @return the level of the new test element
+    */
+  private def level(optParent: Option[FsElement]): Int = optParent map (_.level + 1) getOrElse 1
 
 /**
   * A base test class for custom stage implementations. The class extends the
