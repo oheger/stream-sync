@@ -41,3 +41,11 @@ class ExtensionsSpec extends AnyFlatSpec, Matchers :
     val time = folder.modifiedTime(FolderModifiedTime)
     time should be(FolderModifiedTime)
   }
+
+  "toNormalizedFolder" should "return a correct normalized folder" in {
+    val folder = FsFolder("folderID", "/my/folder/path", 3)
+
+    val normFolder = folder.toNormalizedFolder
+    normFolder.folder should be(folder)
+    normFolder.normalizedUri should be(folder.relativeUri + "/")
+  }

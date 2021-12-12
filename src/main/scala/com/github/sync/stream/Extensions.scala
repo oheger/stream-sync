@@ -34,3 +34,10 @@ extension (elem: FsElement)
   def modifiedTime(folderTime: => Instant): Instant = elem match
     case file: FsFile => file.lastModified
     case _: FsFolder => folderTime
+
+extension (folder: FsFolder)
+
+/**
+  * Returns a ''NormalizedFolder'' initialized with this folder.
+  */
+  def toNormalizedFolder: NormalizedFolder = NormalizedFolder(folder)
