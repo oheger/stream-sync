@@ -228,7 +228,7 @@ object MirrorStage:
       * @param removedPath a removed root path containing the current element
       * @return data to emit and the updated state
       */
-    private def removeElement(state: MirrorState, element: FsElement, removedPath: Option[FsFolder]):
+    private def removeElement(state: MirrorState, element: FsElement, removedPath: Option[NormalizedFolder]):
     (List[SyncOperation], MirrorState) =
       val (ops, nextRemoveState) =
         state.removedFolderState.handleRemoveElement(element, SyncAction.ActionRemove, removedPath)

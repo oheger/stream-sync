@@ -23,7 +23,7 @@ import org.scalatest.matchers.should.Matchers
 import java.time.Instant
 
 class RemovedFolderStateSpec extends AnyFlatSpec, Matchers :
-  "RemoveRoots" should "return None if no root folder is found for an element" in {
+  "RemovedFolderState" should "return None if no root folder is found for an element" in {
     val element = FsFolder("someID", "/someUri", 11)
 
     RemovedFolderState.Empty.findRoot(element) should be(None)
@@ -33,9 +33,9 @@ class RemovedFolderStateSpec extends AnyFlatSpec, Matchers :
     val root = FsFolder("root", "/root", 1)
     val otherRoot = FsFolder("other", "/another/root", 2)
     val element = FsFile("file", "/root/path/to/file.txt", 3, Instant.now(), 100)
-    val roots = RemovedFolderState(Set(otherRoot, root), List.empty)
+    val roots = RemovedFolderState(Set(otherRoot.toNormalizedFolder, root.toNormalizedFolder), List.empty)
 
-    roots.findRoot(element) should be(Some(root))
+    roots.findRoot(element) should be(Some(root.toNormalizedFolder))
   }
 
   it should "handle a removed file under a removed root folder" in {
@@ -44,7 +44,7 @@ class RemovedFolderStateSpec extends AnyFlatSpec, Matchers :
     val expOp = SyncOperation(file, SyncAction.ActionRemove, root.level, file.id)
     val state = RemovedFolderState.Empty
 
-    val (ops, nextState) = state.handleRemoveElement(file, SyncAction.ActionRemove, Some(root))
+    val (ops, nextState) = state.handleRemoveElement(file, SyncAction.ActionRemove, Some(root.toNormalizedFolder))
     nextState should be theSameInstanceAs state
     ops should contain only expOp
   }
@@ -66,7 +66,8 @@ class RemovedFolderStateSpec extends AnyFlatSpec, Matchers :
     val expOp = SyncOperation(folder, SyncAction.ActionLocalRemove, root.level, folder.id)
     val state = RemovedFolderState(Set.empty, List(rootOp))
 
-    val (ops, nextState) = state.handleRemoveElement(folder, SyncAction.ActionLocalRemove, Some(root))
+    val (ops, nextState) = state.handleRemoveElement(folder, SyncAction.ActionLocalRemove,
+      Some(root.toNormalizedFolder))
     ops shouldBe empty
     nextState.deferredOperations should contain only(expOp, rootOp)
     nextState.roots shouldBe empty
@@ -77,24 +78,33 @@ class RemovedFolderStateSpec extends AnyFlatSpec, Matchers :
     val otherOp = SyncOperation(otherRoot, SyncAction.ActionRemove, otherRoot.level, otherRoot.id)
     val FolderPath = "/path/to/delete"
     val folder = FsFolder("removedRoot", FolderPath, 2)
-    val removedFolder = folder.copy(relativeUri = FolderPath + "/")
     val expOp = SyncOperation(folder, SyncAction.ActionRemove, folder.level, folder.id)
-    val state = RemovedFolderState(Set(otherRoot), List(otherOp))
+    val state = RemovedFolderState(Set(otherRoot.toNormalizedFolder), List(otherOp))
 
     val (ops, nextState) = state.handleRemoveElement(folder, SyncAction.ActionRemove, None)
     ops shouldBe empty
     nextState.deferredOperations should contain only(expOp, otherOp)
-    nextState.roots should contain only(removedFolder, otherRoot)
+    nextState.roots should contain only(folder.toNormalizedFolder, otherRoot.toNormalizedFolder)
   }
 
   it should "allow adding a folder manually" in {
-    val otherRoot = FsFolder("existingRemovedRoot", "/other/path/to/delete", 3)
+    val otherRoot = FsFolder("existingRemovedRoot", "/other/path/to/delete", 3).toNormalizedFolder
     val FolderPath = "/explicit/folder/to/add"
     val folder = FsFolder("irregularFolder", FolderPath, 3)
-    val addedFolder = folder.copy(relativeUri = FolderPath + "/")
     val state = RemovedFolderState(Set(otherRoot), List.empty)
 
     val nextState = state.addRoot(folder)
     nextState.deferredOperations shouldBe empty
-    nextState.roots should contain only(otherRoot, addedFolder)
+    nextState.roots should contain only(otherRoot, folder.toNormalizedFolder)
+  }
+
+  it should "allow adding a normalized folder manually" in {
+    val otherRoot = FsFolder("existingRemovedRoot", "/other/path/to/delete", 3).toNormalizedFolder
+    val FolderPath = "/explicit/norm/folder/to/add"
+    val folder = FsFolder("irregularFolder", FolderPath, 3).toNormalizedFolder
+    val state = RemovedFolderState(Set(otherRoot), List.empty)
+
+    val nextState = state.addRoot(folder)
+    nextState.deferredOperations shouldBe empty
+    nextState.roots should contain only(otherRoot, folder)
   }

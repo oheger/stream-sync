@@ -37,18 +37,6 @@ private object RemovedFolderState:
                             action: SyncAction = SyncAction.ActionRemove): SyncOperation =
     SyncOperation(element, action, optLevel getOrElse element.level, element.id)
 
-  /**
-    * Modifies the URI of the given folder to end on a separator, which is
-    * required for the logic to detect subfolders. Note: As this is an internal
-    * function only, it assumes that all passed in folders do not have a
-    * trailing separator.
-    *
-    * @param folder the folder to update
-    * @return the updated folder
-    */
-  private def updateFolderUri(folder: FsFolder): FsFolder =
-    folder.copy(relativeUri = folder.relativeUri + UriEncodingHelper.UriSeparator)
-
 /**
   * A helper class to manage folders that have been removed during a sync
   * process.
@@ -69,23 +57,22 @@ private object RemovedFolderState:
   * @param deferredOperations the operations to be executed at the end of the
   *                           sync process
   */
-private case class RemovedFolderState(roots: Set[FsFolder],
+private case class RemovedFolderState(roots: Set[NormalizedFolder],
                                       deferredOperations: List[SyncOperation]):
 
   import RemovedFolderState.*
 
   /**
     * Tries to find a root folder that spans a tree, which contains the given
-    * element. If such a folder exists, it is returned in a ''Some'';
-    * otherwise, result is ''None''.
+    * element. If such a folder exists, its normalized form is returned in a
+    * ''Some''; otherwise, result is ''None''.
     *
     * @param element the element to check
-    * @return an ''Option'' with the removed root folder of this element
+    * @return an ''Option'' with the normalized removed root folder of this
+    *         element
     */
-  def findRoot(element: FsElement): Option[FsFolder] =
-    roots find { root =>
-      element.relativeUri.startsWith(root.relativeUri)
-    }
+  def findRoot(element: FsElement): Option[NormalizedFolder] =
+    roots find { root => root.isInTree(element) }
 
   /**
     * Creates a ''SyncOperation'' for the given element and returns an updated
@@ -95,7 +82,7 @@ private case class RemovedFolderState(roots: Set[FsFolder],
     * The ''optRoot'' parameter can point to a removed root folder, which is a
     * (direct or indirect) parent of this element; this is normally the result
     * of a ''findRoot()'' call. Result is a list with the ''SyncOperation''s to
-    * execute immedeately (which can contain at most 1 element, but for stages
+    * execute immediately (which can contain at most 1 element, but for stages
     * doing sync operations a list is typically more convenient than an option)
     * and the possibly modified state.
     *
@@ -105,14 +92,14 @@ private case class RemovedFolderState(roots: Set[FsFolder],
     * @param optRoot the optional removed parent folder of the element
     * @return the operations to execute directly and the updated state
     */
-  def handleRemoveElement(element: FsElement, action: SyncAction, optRoot: Option[FsFolder]):
+  def handleRemoveElement(element: FsElement, action: SyncAction, optRoot: Option[NormalizedFolder]):
   (List[SyncOperation], RemovedFolderState) =
-    val op = createRemoveOperation(element, optRoot map (_.level), action)
+    val op = createRemoveOperation(element, optRoot map (_.folder.level), action)
     element match
       case _: FsFolder if optRoot.isDefined =>
         (Nil, copy(deferredOperations = op :: deferredOperations))
       case folder: FsFolder =>
-        val newRoot = updateFolderUri(folder)
+        val newRoot = folder.toNormalizedFolder
         (Nil, copy(roots = roots + newRoot, deferredOperations = op :: deferredOperations))
       case _ =>
         (List(op), this)
@@ -125,5 +112,17 @@ private case class RemovedFolderState(roots: Set[FsFolder],
     * @param folder the folder to add
     * @return the updated state containing this folder
     */
-  def addRoot(folder: FsFolder): RemovedFolderState = copy(roots = roots + updateFolderUri(folder))
+  def addRoot(folder: FsFolder): RemovedFolderState = addRoot(folder.toNormalizedFolder)
+
+  /**
+    * Adds another ''NormalizedFolder'' to the set of removed root folders.
+    * This function can be used for folders that are removed by other
+    * operations not handled by ''handleRemoveElement()''; e.g. when a folder
+    * is replaced by a file.
+    *
+    * @param normalizedFolder the normalized folder to add
+    * @return the updated state containing this folder
+    */
+  def addRoot(normalizedFolder: NormalizedFolder): RemovedFolderState = copy(roots = roots + normalizedFolder)
+  
   
