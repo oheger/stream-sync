@@ -45,13 +45,16 @@ object SyncStage:
     /**
       * A data class representing the state of this stage.
       *
-      * @param mergeFunc            the current merge function
-      * @param currentLocalElement  optional local element to be synced
-      * @param currentRemoteElement optional remote element to be synced
+      * @param mergeFunc             the current merge function
+      * @param currentLocalElement   optional local element to be synced
+      * @param currentRemoteElement  optional remote element to be synced
+      * @param remoteConflictHandler the handler for conflicts in remote folder
+      *                              removal operations
       */
     case class SyncState(override val mergeFunc: MergeFunc,
                          currentLocalElement: Option[ElementWithDelta],
-                         currentRemoteElement: Option[FsElement])
+                         currentRemoteElement: Option[FsElement],
+                         remoteConflictHandler: RemovedFolderConflictHandler[SyncState])
       extends BaseMergeState :
       /**
         * Obtains the current element stored in this state for the given input
@@ -90,11 +93,25 @@ object SyncStage:
     override type MergeState = SyncState
 
     /** Holds the current state of this stage. */
-    private var syncState = SyncState(sync, None, None)
+    private var syncState = SyncState(sync, None, None,
+      new RemovedFolderConflictHandler[SyncState](RemovedFolderState.Empty, Map.empty,
+        SyncAction.ActionLocalRemove, BaseMergeStage.Pull1, updateRemoteConflictState,
+        RemovedFolderConflictHandler.LocalConflictFunc))
 
     override protected def state: SyncState = syncState
 
     override protected def updateState(newState: SyncState): Unit = syncState = newState
+
+    /**
+      * The update function for the remote [[RemovedFolderConflictHandler]].
+      *
+      * @param state   the current sync state
+      * @param handler the handler to update
+      * @return the updated sync state
+      */
+    private def updateRemoteConflictState(state: SyncState,
+                                          handler: RemovedFolderConflictHandler[SyncState]): SyncState =
+      state.copy(remoteConflictHandler = handler)
 
     /**
       * The default merge function of this stage. From the incoming elements,
@@ -135,13 +152,16 @@ object SyncStage:
       */
     private def syncRemaining(state: SyncState, input: Input, element: Option[MergeElement]): MergeResult =
       element match
-        case None => (EmitNothing.copy(complete = true), state)
+        case None =>
+          (EmitNothing.copy(complete = true, elements = state.remoteConflictHandler.remainingResults()), state)
         case Some(elem: FsElement) =>
           val op = SyncOperation(elem, SyncAction.ActionLocalCreate, elem.level, elem.id)
           (MergeEmitData(emitOp(op), List(input)), state)
         case Some(elem: ElementWithDelta) =>
-          val op = SyncOperation(elem.element, SyncAction.ActionCreate, elem.element.level, elem.element.id)
-          (MergeEmitData(emitOp(op), List(input)), state)
+          state.remoteConflictHandler.handleElement(state, elem.element, conflictsForRemoteRemovedFolder(elem)) {
+            val op = SyncOperation(elem.element, SyncAction.ActionCreate, elem.element.level, elem.element.id)
+            (MergeEmitData(emitOp(op), List(input)), state)
+          }
 
     /**
       * Generates a sync result for the current elements in the state if both
@@ -229,17 +249,19 @@ object SyncStage:
       def createOp(action: SyncAction): SyncOperation =
         SyncOperation(local.element, action, local.element.level, local.element.id)
 
-      val ops = local.changeType match
-        case ChangeType.Unchanged =>
-          emitOp(createOp(SyncAction.ActionLocalRemove))
-        case ChangeType.Removed =>
-          Nil
-        case ChangeType.Changed =>
-          emitConflict(createOp(SyncAction.ActionLocalRemove), createOp(SyncAction.ActionCreate))
-        case _ =>
-          emitOp(createOp(SyncAction.ActionCreate))
+      state.remoteConflictHandler.handleElement(state, local.element, conflictsForRemoteRemovedFolder(local)) {
+        val ops = local.changeType match
+          case ChangeType.Unchanged =>
+            emitOp(createOp(SyncAction.ActionLocalRemove))
+          case ChangeType.Removed =>
+            Nil
+          case ChangeType.Changed =>
+            emitConflict(createOp(SyncAction.ActionLocalRemove), createOp(SyncAction.ActionCreate))
+          case _ =>
+            emitOp(createOp(SyncAction.ActionCreate))
 
-      state.mergeResultWithResetElements(ops, BaseMergeStage.Pull1)
+        state.mergeResultWithResetElements(ops, BaseMergeStage.Pull1)
+      }
 
     /**
       * Produces a ''MergeResult'' if the current local element's URI is
@@ -252,6 +274,19 @@ object SyncStage:
     private def syncLocalGreaterRemote(state: SyncState, remote: FsElement): MergeResult =
       val op = SyncOperation(remote, SyncAction.ActionLocalCreate, remote.level, remote.id)
       state.mergeResultWithResetElements(emitOp(op), BaseMergeStage.Pull2)
+
+    /**
+      * Checks the given element for a conflict with an ongoing operation to
+      * remove a remote folder. If there was a change on the local element, a
+      * conflict is reported.
+      *
+      * @param element the current local element
+      * @return a list with conflicting sync operations
+      */
+    private def conflictsForRemoteRemovedFolder(element: ElementWithDelta): List[SyncOperation] =
+      if element.changeType == ChangeType.Changed || element.changeType == ChangeType.Created then
+        List(SyncOperation(element.element, SyncAction.ActionCreate, element.element.level, element.element.id))
+      else Nil
 
   end SyncStageLogic
 
