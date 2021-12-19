@@ -88,10 +88,10 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     result should contain theSameElementsInOrderAs expectedResults
   }
 
-  it should "handle an empty source of remote elements" in {
-    val localElements = List(deltaElem(createFile(1), ChangeType.Unchanged),
-      deltaElem(createFolder(2), ChangeType.Unchanged),
-      deltaElem(createFile(3), ChangeType.Unchanged))
+  it should "handle an empty source of remote elements if new local elements have been created" in {
+    val localElements = List(deltaElem(createFile(1), ChangeType.Created),
+      deltaElem(createFolder(2), ChangeType.Created),
+      deltaElem(createFile(3), ChangeType.Created))
     val expectedResults = localElements map { elem =>
       val op = SyncOperation(elem.element, SyncAction.ActionCreate, elem.element.level, elem.element.id)
       createResult(op)
@@ -273,6 +273,23 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
         localElements(1).element.level, remoteElements(1).id)))
 
     val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "correctly evaluate the change type of local elements if the remote source is complete" in {
+    val changedFile = createFile(1)
+    val removedFile = createFile(2)
+    val unchangedFolder = createFolder(3)
+    val localElements = List(deltaElem(changedFile, ChangeType.Changed),
+      deltaElem(removedFile, ChangeType.Removed),
+      deltaElem(unchangedFolder, ChangeType.Unchanged))
+    val expectedResults = List(createConflict(
+      SyncOperation(changedFile, SyncAction.ActionLocalRemove, changedFile.level, changedFile.id),
+      SyncOperation(changedFile, SyncAction.ActionCreate, changedFile.level, changedFile.id)),
+      createResult(SyncOperation(unchangedFolder, SyncAction.ActionLocalRemove, unchangedFolder.level,
+        unchangedFolder.id)))
+
+    val result = runStage(new SyncStage, localElements, Nil)
     result should contain theSameElementsInOrderAs expectedResults
   }
 

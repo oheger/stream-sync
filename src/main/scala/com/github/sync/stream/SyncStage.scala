@@ -155,13 +155,9 @@ object SyncStage:
         case None =>
           (EmitNothing.copy(complete = true, elements = state.remoteConflictHandler.remainingResults()), state)
         case Some(elem: FsElement) =>
-          val op = SyncOperation(elem, SyncAction.ActionLocalCreate, elem.level, elem.id)
-          (MergeEmitData(emitOp(op), List(input)), state)
+          syncLocalGreaterRemote(state, elem)
         case Some(elem: ElementWithDelta) =>
-          state.remoteConflictHandler.handleElement(state, elem.element, conflictsForRemoteRemovedFolder(elem)) {
-            val op = SyncOperation(elem.element, SyncAction.ActionCreate, elem.element.level, elem.element.id)
-            (MergeEmitData(emitOp(op), List(input)), state)
-          }
+          syncLocalLessRemote(state, elem)
 
     /**
       * Generates a sync result for the current elements in the state if both
@@ -257,7 +253,7 @@ object SyncStage:
             Nil
           case ChangeType.Changed =>
             emitConflict(createOp(SyncAction.ActionLocalRemove), createOp(SyncAction.ActionCreate))
-          case _ =>
+          case ChangeType.Created =>
             emitOp(createOp(SyncAction.ActionCreate))
 
         state.mergeResultWithResetElements(ops, BaseMergeStage.Pull1)
