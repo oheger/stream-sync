@@ -317,10 +317,10 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val expectedResults = List(createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level,
       remoteFolder.id)),
       createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)),
-      createResult(SyncOperation(localChildFile, SyncAction.ActionNoop, localChildFile.level, remoteChildFile.id)),
       Right(List(SyncOperation(removedChild2, SyncAction.ActionLocalRemove, removedChild2.level, removedChild2.id),
         SyncOperation(removedChild1, SyncAction.ActionLocalRemove, removedChild1.level, removedChild1.id),
         SyncOperation(removedFolder1, SyncAction.ActionLocalRemove, removedFolder1.level, removedFolder1.id))),
+      createResult(SyncOperation(localChildFile, SyncAction.ActionNoop, localChildFile.level, remoteChildFile.id)),
       Right(List(SyncOperation(removedChild3, SyncAction.ActionLocalRemove, removedChild3.level, removedChild3.id),
         SyncOperation(removedFolder2, SyncAction.ActionLocalRemove, removedFolder2.level, removedFolder2.id))))
 

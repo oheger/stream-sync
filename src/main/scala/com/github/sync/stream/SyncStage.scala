@@ -231,7 +231,8 @@ object SyncStage:
         case ChangeType.Unchanged =>
           emitOp(noop(local, remote))
 
-      state.mergeResultWithResetElements(results, BaseMergeStage.PullBoth)
+      state.remoteConflictHandler.addCompletedResults(remote,
+        state.mergeResultWithResetElements(results, BaseMergeStage.PullBoth))
 
     /**
       * Produces a ''MergeResult'' if the current local element's URI is less
