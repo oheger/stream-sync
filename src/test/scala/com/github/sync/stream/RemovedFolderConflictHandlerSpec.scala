@@ -332,3 +332,45 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     val result = handler.remainingResults()
     result should contain only Left(expConflict)
   }
+
+  it should "return the same result if there are no completed remove folder operations" in {
+    val orgResult = (BaseMergeStage.MergeEmitData(List(resultForOp(AbstractStageSpec.createFile(1),
+      SyncAction.ActionCreate)), BaseMergeStage.Pull1), TestSyncState(12, null))
+    val handler = createHandler()
+
+    val next = handler.addCompletedResults(AbstractStageSpec.createFolder(2), orgResult)
+    next should be theSameInstanceAs orgResult
+  }
+
+  it should "update a result with completed remove folder operations" in {
+    val rootFolder1 = AbstractStageSpec.createFolder(1).toNormalizedFolder
+    val rootFolder2 = AbstractStageSpec.createFolder(2).toNormalizedFolder
+    val rootFolder3 = AbstractStageSpec.createFolder(3).toNormalizedFolder
+    val removeOpState1 = RemovedFolderConflictHandler.RemoveOperationState(lastFolder = rootFolder1,
+      deferredOperations = List(createOp(AbstractStageSpec.createFile(10), SyncAction.ActionRemove),
+        createOp(AbstractStageSpec.createFile(11), SyncAction.ActionRemove)), conflictOperations = Nil)
+    val removedOpState2 = RemovedFolderConflictHandler.RemoveOperationState(lastFolder = rootFolder2,
+      deferredOperations = List(createOp(AbstractStageSpec.createFolder(20), SyncAction.ActionRemove)),
+      conflictOperations = List(createOp(AbstractStageSpec.createFolder(20), SyncAction.ActionLocalCreate)))
+    val removedOpState3 = RemovedFolderConflictHandler.RemoveOperationState(lastFolder = rootFolder3,
+      deferredOperations = List(createOp(rootFolder3.folder, SyncAction.ActionRemove)), conflictOperations = Nil)
+    val initFolderState = RemovedFolderState(Set(rootFolder1, rootFolder2, rootFolder3), Nil)
+    val operations = Map(rootFolder1 -> removeOpState1,
+      rootFolder2 -> removedOpState2,
+      rootFolder3 -> removedOpState3)
+    val element = AbstractStageSpec.createFile(30, optParent = Some(rootFolder3.folder))
+    val orgResults = List(Right(List(createOp(AbstractStageSpec.createFile(42), SyncAction.ActionLocalCreate))))
+    val orgResult = (BaseMergeStage.MergeEmitData(orgResults, BaseMergeStage.PullBoth),
+      TestSyncState(1, null))
+    val expectedResults = List(Right(removeOpState1.deferredOperations),
+      Left(SyncConflictException(localOperations = removedOpState2.conflictOperations,
+        remoteOperations = removedOpState2.deferredOperations))) ::: orgResults
+    val handler = createHandler(folderState = initFolderState, operations = operations)
+
+    val (resEmit, resState) = handler.addCompletedResults(element, orgResult)
+    resEmit.pullInlets should be(orgResult._1.pullInlets)
+    resEmit.elements.toList should contain theSameElementsInOrderAs expectedResults
+    val resHandler = resState.handler
+    resHandler.folderState.roots should contain only rootFolder3
+    resHandler.operations.keys should contain only rootFolder3
+  }

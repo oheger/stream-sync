@@ -155,16 +155,8 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
         handleElementInRemovedRoot(state, root, element, conflictOps)
 
       case None =>
-        val completelyRemovedFolders = folderState.roots.filter(_.isChildIterationComplete(element))
         val handlerResult = handleNewRemovedFolders(state, handlerFunc)
-
-        if completelyRemovedFolders.isEmpty then handlerResult
-        else
-          val deferredResults = resultsForDeferredOperations(completelyRemovedFolders)
-          val nextFolderState = folderState.copy(roots = folderState.roots -- completelyRemovedFolders)
-          val nextOperations = operations -- completelyRemovedFolders
-          val result = handlerResult._1.copy(elements = deferredResults ::: handlerResult._1.elements.toList)
-          (result, stateUpdate(handlerResult._2, copy(folderState = nextFolderState, operations = nextOperations)))
+        updateWithCompletedResults(element, handlerResult)
 
   /**
     * Returns a list with the current results of all ongoing remove operations.
@@ -176,6 +168,21 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
     *         still in progress
     */
   def remainingResults(): List[SyncElementResult] = resultsForDeferredOperations(folderState.roots)
+
+  /**
+    * Checks - based on the given current element - whether there are complete
+    * remove folder operations. If this is the case, the resulting operations
+    * are prepended to the operations in the given result, and the handler's 
+    * state is updated accordingly. This function can be used by sync functions
+    * that do not call ''handleElement()'', to make sure that results are
+    * emitted as soon as they become available.
+    *
+    * @param element the current element
+    * @param result  the current result
+    * @return the updated result
+    */
+  def addCompletedResults(element: FsElement, result: HandlerResult[S]): HandlerResult[S] =
+    updateWithCompletedResults(element, result)
 
   /**
     * Handles an element that is in the tree spawned by a removed folder. The
@@ -251,3 +258,23 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
       else
         Left(conflictFunc(operationState.deferredOperations, operationState.conflictOperations))
     }.toList
+
+  /**
+    * Checks whether there are completed remove folder operations based on the
+    * given element. If so, their results are prepended to the given result.
+    * Otherwise, the result is returned as is.
+    *
+    * @param element   the current element
+    * @param orgResult the original result
+    * @return the updated result
+    */
+  private def updateWithCompletedResults(element: FsElement, orgResult: HandlerResult[S]): HandlerResult[S] =
+    val completelyRemovedFolders = folderState.roots.filter(_.isChildIterationComplete(element))
+    if completelyRemovedFolders.isEmpty then orgResult
+    else
+      val deferredResults = resultsForDeferredOperations(completelyRemovedFolders)
+      val nextFolderState = folderState.copy(roots = folderState.roots -- completelyRemovedFolders)
+      val nextOperations = operations -- completelyRemovedFolders
+      val result = orgResult._1.copy(elements = deferredResults ::: orgResult._1.elements.toList)
+      (result, stateUpdate(orgResult._2, copy(folderState = nextFolderState, operations = nextOperations)))
+
