@@ -163,7 +163,7 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
         handleElementInRemovedRoot(state, root, element, resultFunc, conflictOps)
 
       case None =>
-        val handlerResult = handleNewRemovedFolders(state, handlerFunc)
+        val handlerResult = handleNewRemovedFolders(handlerFunc)
         updateWithCompletedResults(element, handlerResult)
 
   /**
@@ -219,11 +219,10 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
     * folders. If so, for each new folder, a [[RemoveOperationState]] object to
     * track its state is created, and the sync state is updated accordingly.
     *
-    * @param state         the state of the client stage
     * @param handlerResult the result from the handler function
     * @return the result to return the client stage
     */
-  private def handleNewRemovedFolders(state: S, handlerResult: HandlerResult[S]): HandlerResult[S] =
+  private def handleNewRemovedFolders(handlerResult: HandlerResult[S]): HandlerResult[S] =
     handlerResult._1.elements match
       case List(Right(syncOperations: List[_])) =>
         val (removedFolders, ops) =
@@ -246,7 +245,7 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
           val nextHandler = copy(folderState = nextFolderState, operations = nextOperations)
           val elementsToEmit = if ops.isEmpty then Nil
           else List(Right(ops))
-          (handlerResult._1.copy(elements = elementsToEmit), stateUpdate(state, nextHandler))
+          (handlerResult._1.copy(elements = elementsToEmit), stateUpdate(handlerResult._2, nextHandler))
         else handlerResult
 
       case _ => handlerResult

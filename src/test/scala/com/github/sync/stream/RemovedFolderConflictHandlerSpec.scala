@@ -149,17 +149,16 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     val element = AbstractStageSpec.createFolder(1)
     val expOp = createOp(element, SyncAction.ActionRemove)
     val handler = createHandler()
-    val oldState = TestSyncState(0, null)
     val result = resultForOp(element, SyncAction.ActionRemove)
     val emitData = BaseMergeStage.MergeEmitData(List(result), BaseMergeStage.Pull1)
 
-    val (resEmitData, resState) = handler.handleElement(oldState, element, resultFunc, Nil) {
-      (emitData, oldState)
+    val (resEmitData, resState) = handler.handleElement(TestSyncState(0, null), element, resultFunc, Nil) {
+      (emitData, TestSyncState(1, null))
     }
     resEmitData.elements shouldBe empty
     resEmitData.pullInlets should be(emitData.pullInlets)
 
-    resState.data should be(1)
+    resState.data should be(2)
     resState.handler.folderState.roots should contain(element.toNormalizedFolder)
     val operationState = resState.handler.operations(element.toNormalizedFolder)
     operationState.deferredOperations should contain only expOp
