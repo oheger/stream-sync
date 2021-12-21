@@ -18,6 +18,7 @@ package com.github.sync.stream
 
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncAction, SyncConflictException, SyncElementResult, SyncOperation}
+import com.github.sync.stream.BaseMergeStage.MergeEmitData
 import com.github.sync.stream.RemovedFolderConflictHandler.ConflictFunc
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -59,8 +60,18 @@ object RemovedFolderConflictHandlerSpec:
                             updateFunc: RemovedFolderConflictHandler.StateUpdateFunc[TestSyncState] = stateUpdateFunc,
                             conflictFunc: ConflictFunc = RemovedFolderConflictHandler.RemoteConflictFunc):
   RemovedFolderConflictHandler[TestSyncState] =
-    RemovedFolderConflictHandler(folderState, operations, SyncAction.ActionRemove, BaseMergeStage.Pull1, updateFunc,
-      conflictFunc)
+    RemovedFolderConflictHandler(folderState, operations, SyncAction.ActionRemove, updateFunc, conflictFunc)
+
+  /**
+    * The function to produce results emitted by a test handler instance.
+    *
+    * @param state    the current state
+    * @param elements the elements in the result
+    * @return the result with this data
+    */
+  private def resultFunc(state: TestSyncState, elements: List[SyncElementResult]):
+  RemovedFolderConflictHandler.HandlerResult[TestSyncState] =
+    (MergeEmitData(elements, BaseMergeStage.Pull1), state)
 
   /**
     * Convenience function to create a ''SyncOperation'' for a given element
@@ -93,7 +104,7 @@ object RemovedFolderConflictHandlerSpec:
     */
     private def handleRemovedElement(state: TestSyncState, element: FsElement, conflict: => List[SyncOperation]):
     RemovedFolderConflictHandler.HandlerResult[TestSyncState] =
-      h.handleElement(state, element, conflict) {
+      h.handleElement(state, element, resultFunc, conflict) {
         throw UnsupportedOperationException("Unexpected invocation")
       }
 
@@ -112,7 +123,7 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     val result = resultForOp(element, SyncAction.ActionOverride)
     val emitData = BaseMergeStage.MergeEmitData(List(result), BaseMergeStage.Pull1)
 
-    val (resEmitData, resState) = handler.handleElement(oldState, element, Nil) {
+    val (resEmitData, resState) = handler.handleElement(oldState, element, resultFunc, Nil) {
       (emitData, newState)
     }
     resEmitData should be(emitData)
@@ -127,7 +138,7 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     val result = Left(SyncConflictException(Nil, Nil))
     val emitData = BaseMergeStage.MergeEmitData(List(result), BaseMergeStage.Pull1)
 
-    val (resEmitData, resState) = handler.handleElement(oldState, element, Nil) {
+    val (resEmitData, resState) = handler.handleElement(oldState, element, resultFunc, Nil) {
       (emitData, newState)
     }
     resEmitData should be(emitData)
@@ -142,7 +153,7 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     val result = resultForOp(element, SyncAction.ActionRemove)
     val emitData = BaseMergeStage.MergeEmitData(List(result), BaseMergeStage.Pull1)
 
-    val (resEmitData, resState) = handler.handleElement(oldState, element, Nil) {
+    val (resEmitData, resState) = handler.handleElement(oldState, element, resultFunc, Nil) {
       (emitData, oldState)
     }
     resEmitData.elements shouldBe empty
@@ -168,7 +179,7 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     val initFolderState = RemovedFolderState.Empty.addRoot(root0)
     val handler = createHandler(folderState = initFolderState)
 
-    val (resEmitData, resState) = handler.handleElement(oldState, root1, Nil) {
+    val (resEmitData, resState) = handler.handleElement(oldState, root1, resultFunc, Nil) {
       (emitData, oldState)
     }
     resEmitData.elements should contain only Right(List(otherOp))
@@ -238,7 +249,7 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
       BaseMergeStage.PullBoth), TestSyncState(1, null))
     val handler = createHandler(folderState = initFolderState, operations = operations)
 
-    val (resEmitData, resState) = handler.handleElement(TestSyncState(0, null), laterElement,
+    val (resEmitData, resState) = handler.handleElement(TestSyncState(0, null), laterElement, resultFunc,
       Nil)(orgResult)
     resEmitData.elements should contain theSameElementsAs List(Right(removeOpState1.deferredOperations),
       Right(removedOpState2.deferredOperations), orgResult._1.elements.head)
@@ -308,7 +319,7 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     val operations = Map(rootFolder -> removeOpState)
     val handler = createHandler(folderState = initFolderState, operations = operations)
 
-    val (resEmitData, _) = handler.handleElement(TestSyncState(0, null), element, Nil) {
+    val (resEmitData, _) = handler.handleElement(TestSyncState(0, null), element, resultFunc, Nil) {
       (BaseMergeStage.MergeEmitData(Nil, BaseMergeStage.Pull2), TestSyncState(1, null))
     }
     resEmitData.elements should contain only Left(expConflict)

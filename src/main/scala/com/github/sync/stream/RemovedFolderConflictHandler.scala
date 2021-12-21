@@ -17,7 +17,7 @@
 package com.github.sync.stream
 
 import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, SyncOperationResult}
-import com.github.sync.stream.RemovedFolderConflictHandler.{ConflictFunc, HandlerResult, RemoveOperationState, StateUpdateFunc}
+import com.github.sync.stream.RemovedFolderConflictHandler.{ConflictFunc, HandlerResult, RemoveOperationState, ResultFunc, StateUpdateFunc}
 
 private object RemovedFolderConflictHandler:
   /**
@@ -45,6 +45,15 @@ private object RemovedFolderConflictHandler:
     * operations are executed on the local or remote side.
     */
   type ConflictFunc = (List[SyncOperation], List[SyncOperation]) => SyncConflictException
+
+  /**
+    * Type alias of a function that produces a result. This function is used by
+    * this class when it has to produce a result on its own. The class only
+    * knows the elements to emit, but no further details like the inlets to
+    * pull. This depends on the concrete context in which this handler is
+    * called.
+    */
+  type ResultFunc[S] = (S, List[SyncElementResult]) => HandlerResult[S]
 
   /**
     * A ''ConflictFunc'' that treats deferred operations as operations to
@@ -122,7 +131,6 @@ private object RemovedFolderConflictHandler:
   * @param folderState      the current state of removed folders
   * @param operations       a map with information about operations in progress
   * @param removeActionType the action type for remove operations
-  * @param pullInlets       the inlets to pull when emitting an element
   * @param stateUpdate      a function to update the current sync state
   * @param conflictFunc     a function to generate conflict exceptions
   * @tparam S the type of the sync state
@@ -130,7 +138,6 @@ private object RemovedFolderConflictHandler:
 private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderState,
                                                    operations: Map[NormalizedFolder, RemoveOperationState],
                                                    removeActionType: SyncAction,
-                                                   pullInlets: Set[BaseMergeStage.Input],
                                                    stateUpdate: StateUpdateFunc[S],
                                                    conflictFunc: ConflictFunc):
   /**
@@ -141,6 +148,7 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
     *
     * @param state       the state of the client stage
     * @param element     the current element to be handled
+    * @param resultFunc  a function to produce a result
     * @param conflictOps a function to check whether the element is in a state
     *                    conflicting with a remove operation; if this is the
     *                    case, the function returns the conflicting operations
@@ -148,11 +156,11 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
     *                    removal operation
     * @return data to emit and the updated sync state
     */
-  def handleElement(state: S, element: FsElement, conflictOps: => List[SyncOperation])
+  def handleElement(state: S, element: FsElement, resultFunc: ResultFunc[S], conflictOps: => List[SyncOperation])
                    (handlerFunc: => HandlerResult[S]): HandlerResult[S] =
     folderState.findRoot(element) match
       case Some(root) =>
-        handleElementInRemovedRoot(state, root, element, conflictOps)
+        handleElementInRemovedRoot(state, root, element, resultFunc, conflictOps)
 
       case None =>
         val handlerResult = handleNewRemovedFolders(state, handlerFunc)
@@ -191,18 +199,20 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
     * @param state       the state of the client stage
     * @param root        the removed root folder
     * @param element     the current element
+    * @param resultFunc  the function to generate a result
     * @param conflictOps returns a list with conflicting operations
     * @return the result to return to the client stage
     */
   private def handleElementInRemovedRoot(state: S, root: NormalizedFolder, element: FsElement,
-                                         conflictOps: => List[SyncOperation]): HandlerResult[S] =
+                                         resultFunc: ResultFunc[S], conflictOps: => List[SyncOperation]):
+  HandlerResult[S] =
     val removeOp = SyncOperation(element, removeActionType, element.level, element.id)
     val tempOperationState = operations(root).addDeferredOperation(removeOp, conflictOps)
     val nextOperationState = element match
       case folder: FsFolder => tempOperationState.copy(lastFolder = folder.toNormalizedFolder)
       case _ => tempOperationState
     val nextHandler = copy(operations = operations + (root -> nextOperationState))
-    (BaseMergeStage.MergeEmitData(Nil, pullInlets), stateUpdate(state, nextHandler))
+    resultFunc(stateUpdate(state, nextHandler), Nil)
 
   /**
     * Checks whether the result of the handler function contains new removed

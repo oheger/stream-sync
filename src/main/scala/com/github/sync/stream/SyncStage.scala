@@ -95,8 +95,7 @@ object SyncStage:
     /** Holds the current state of this stage. */
     private var syncState = SyncState(sync, None, None,
       new RemovedFolderConflictHandler[SyncState](RemovedFolderState.Empty, Map.empty,
-        SyncAction.ActionLocalRemove, BaseMergeStage.Pull1, updateRemoteConflictState,
-        RemovedFolderConflictHandler.LocalConflictFunc))
+        SyncAction.ActionLocalRemove, updateRemoteConflictState, RemovedFolderConflictHandler.LocalConflictFunc))
 
     override protected def state: SyncState = syncState
 
@@ -246,7 +245,8 @@ object SyncStage:
       def createOp(action: SyncAction): SyncOperation =
         SyncOperation(local.element, action, local.element.level, local.element.id)
 
-      state.remoteConflictHandler.handleElement(state, local.element, conflictsForRemoteRemovedFolder(local)) {
+      state.remoteConflictHandler.handleElement(state, local.element, createResult,
+        conflictsForRemoteRemovedFolder(local)) {
         val ops = local.changeType match
           case ChangeType.Unchanged =>
             emitOp(createOp(SyncAction.ActionLocalRemove))
@@ -284,6 +284,17 @@ object SyncStage:
       if element.changeType == ChangeType.Changed || element.changeType == ChangeType.Created then
         List(SyncOperation(element.element, SyncAction.ActionCreate, element.element.level, element.element.id))
       else Nil
+
+    /**
+      * The result function used by the conflict handlers for remove folder
+      * operations.
+      *
+      * @param state    the current sync state
+      * @param elements the elements to emit
+      * @return the result of the current operations
+      */
+    private def createResult(state: SyncState, elements: List[SyncElementResult]): MergeResult =
+      (MergeEmitData(elements, BaseMergeStage.Pull1), state)
 
   end SyncStageLogic
 
