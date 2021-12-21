@@ -379,3 +379,125 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val result = runStage(new SyncStage, localElements, remoteElements)
     result should contain theSameElementsInOrderAs expectedResults
   }
+
+  it should "handle the removal of local folders" in {
+    val removedFolder1 = createFolder(1, RemoteID)
+    val removedFolder2 = createFolder(2, RemoteID)
+    val remainingFolder = createFolder(3, RemoteID)
+    val removedChild1 = createFile(10, RemoteID, optParent = Some(removedFolder1))
+    val removedChild2 = createFile(20, RemoteID, optParent = Some(removedFolder2))
+    val remainingChild = createFile(30, RemoteID, optParent = Some(remainingFolder))
+    val localRemovedFolder1 = createFolder(1)
+    val localRemovedFolder2 = createFolder(2)
+    val localRemainingFolder = createFolder(3)
+    val localRemovedChild1 = createFile(10, optParent = Some(localRemovedFolder1))
+    val localRemovedChild2 = createFile(20, optParent = Some(localRemovedFolder2))
+    val localRemainingChild = createFile(30, optParent = Some(localRemainingFolder))
+
+    val remoteElements = List(removedFolder1, removedFolder2, remainingFolder, removedChild1, removedChild2,
+      remainingChild)
+    val localElements = List(deltaElem(localRemovedFolder1, ChangeType.Removed),
+      deltaElem(localRemovedFolder2, ChangeType.Removed),
+      deltaElem(localRemainingFolder, ChangeType.Unchanged),
+      deltaElem(localRemovedChild1, ChangeType.Removed),
+      deltaElem(localRemovedChild2, ChangeType.Removed),
+      deltaElem(localRemainingChild, ChangeType.Unchanged))
+    val expectedResults = List(createResult(SyncOperation(localRemainingFolder, SyncAction.ActionNoop,
+      localRemainingFolder.level, remainingFolder.id)),
+      Right(List(SyncOperation(removedChild1, SyncAction.ActionRemove, removedChild1.level, removedChild1.id),
+        SyncOperation(removedFolder1, SyncAction.ActionRemove, removedFolder1.level, removedFolder1.id))),
+      Right(List(SyncOperation(removedChild2, SyncAction.ActionRemove, removedChild2.level, removedChild2.id),
+        SyncOperation(removedFolder2, SyncAction.ActionRemove, removedFolder2.level, removedFolder2.id))),
+      createResult(SyncOperation(localRemainingChild, SyncAction.ActionNoop, localRemainingChild.level,
+        remainingChild.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "detect a conflict with a removed local folder and a changed remote file" in {
+    val removedFolder = createFolder(1, RemoteID)
+    val removedChild = createFile(10, RemoteID, optParent = Some(removedFolder))
+    val conflictChild = createFile(11, RemoteID, deltaTime = 1, optParent = Some(removedFolder))
+    val removedLocalFolder = createFolder(1)
+    val removedLocalChild = createFile(10, optParent = Some(removedLocalFolder))
+    val conflictLocalChild = createFile(11, optParent = Some(removedLocalFolder))
+
+    val remoteElements = List(removedFolder, removedChild, conflictChild)
+    val localElements = List(deltaElem(removedLocalFolder, ChangeType.Removed),
+      deltaElem(removedLocalChild, ChangeType.Removed),
+      deltaElem(conflictLocalChild, ChangeType.Removed))
+    val expectedResults = List(Left(SyncConflictException(localOperations = List(SyncOperation(conflictChild,
+      SyncAction.ActionLocalCreate, conflictChild.level, conflictLocalChild.id)),
+      remoteOperations = List(SyncOperation(conflictChild, SyncAction.ActionRemove, conflictChild.level,
+        conflictChild.id), SyncOperation(removedChild, SyncAction.ActionRemove, removedChild.level, removedChild.id),
+        SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level, removedFolder.id)))))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "detect a conflict with a removed local folder and a newly created remote element" in {
+    val removedFolder = createFolder(1, RemoteID)
+    val newElement = createFolder(10, optParent = Some(removedFolder))
+    val removedChild = createFile(11, RemoteID, optParent = Some(removedFolder))
+    val removedLocalFolder = createFolder(1)
+    val removedLocalChild = createFile(11, optParent = Some(removedLocalFolder))
+
+    val remoteElements = List(removedFolder, newElement, removedChild)
+    val localElements = List(deltaElem(removedLocalFolder, ChangeType.Removed),
+      deltaElem(removedLocalChild, ChangeType.Removed))
+    val expectedResults = List(Left(SyncConflictException(localOperations = List(SyncOperation(newElement,
+      SyncAction.ActionLocalCreate, newElement.level, newElement.id)),
+      remoteOperations = List(SyncOperation(removedChild, SyncAction.ActionRemove, removedChild.level,
+        removedChild.id),
+        SyncOperation(newElement, SyncAction.ActionRemove, newElement.level, newElement.id),
+        SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level, removedFolder.id)))))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "detect a conflict with a removed local folder and a newly created remote element at the stream end" in {
+    val removedFolder = createFolder(1, RemoteID)
+    val removedChild = createFile(10, RemoteID, optParent = Some(removedFolder))
+    val newElement = createFolder(11, optParent = Some(removedFolder))
+    val removedLocalFolder = createFolder(1)
+    val removedLocalChild = createFile(10, optParent = Some(removedLocalFolder))
+
+    val remoteElements = List(removedFolder, removedChild, newElement)
+    val localElements = List(deltaElem(removedLocalFolder, ChangeType.Removed),
+      deltaElem(removedLocalChild, ChangeType.Removed))
+    val expectedResults = List(Left(SyncConflictException(localOperations = List(SyncOperation(newElement,
+      SyncAction.ActionLocalCreate, newElement.level, newElement.id)),
+      remoteOperations = List(SyncOperation(newElement, SyncAction.ActionRemove, newElement.level, newElement.id),
+        SyncOperation(removedChild, SyncAction.ActionRemove, removedChild.level, removedChild.id),
+        SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level, removedFolder.id)))))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "handle a removed remote element in a local folder removed operation" in {
+    val removedFolder = createFolder(1, RemoteID)
+    val remoteFolder = createFolder(2, RemoteID)
+    val remoteChild = createFile(20, RemoteID, optParent = Some(remoteFolder))
+    val removedLocalFolder = createFolder(1)
+    val removedLocalChild = createFile(10, optParent = Some(removedLocalFolder))
+    val localFolder = createFolder(2)
+    val localChild = createFile(20, optParent = Some(localFolder))
+
+    val remoteElements = List(removedFolder, remoteFolder, remoteChild)
+    val localElements = List(deltaElem(removedLocalFolder, ChangeType.Removed),
+      deltaElem(localFolder, ChangeType.Unchanged),
+      deltaElem(removedLocalChild, ChangeType.Removed),
+      deltaElem(localChild, ChangeType.Unchanged))
+    val expectedResults = List(createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level,
+      remoteFolder.id)),
+      Right(List(SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level,
+        removedFolder.id))),
+      createResult(SyncOperation(localChild, SyncAction.ActionNoop, localChild.level, remoteChild.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
