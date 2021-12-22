@@ -384,3 +384,23 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     resHandler.folderState.roots should contain only rootFolder3
     resHandler.operations.keys should contain only rootFolder3
   }
+
+  it should "detect a folder that was converted to a file" in {
+    val orgFolder = AbstractStageSpec.createFolder(1)
+    val newFile = AbstractStageSpec.createFile(1)
+    val orgSyncOps = List(createOp(orgFolder, SyncAction.ActionRemove),
+      createOp(newFile, SyncAction.ActionCreate))
+    val orgResult = (BaseMergeStage.MergeEmitData(List(Right(orgSyncOps)), BaseMergeStage.Pull1),
+      TestSyncState(1, null))
+    val handler = createHandler()
+
+    val (resEmit, resState) = handler.handleElement(TestSyncState(0, null), orgFolder, resultFunc, Nil)(orgResult)
+    resEmit.pullInlets should be(orgResult._1.pullInlets)
+    resEmit.elements shouldBe empty
+    val resHandler = resState.handler
+    resHandler.folderState.roots should contain only orgFolder.toNormalizedFolder
+    val opState = resHandler.operations(orgFolder.toNormalizedFolder)
+    opState.conflictOperations shouldBe empty
+    opState.deferredOperations should contain theSameElementsInOrderAs orgSyncOps
+  }
+  

@@ -16,8 +16,10 @@
 
 package com.github.sync.stream
 
-import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, SyncOperationResult}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, SyncOperationResult}
 import com.github.sync.stream.RemovedFolderConflictHandler.{ConflictFunc, HandlerResult, RemoveOperationState, ResultFunc, StateUpdateFunc}
+
+import scala.annotation.tailrec
 
 private object RemovedFolderConflictHandler:
   /**
@@ -225,18 +227,7 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
   private def handleNewRemovedFolders(handlerResult: HandlerResult[S]): HandlerResult[S] =
     handlerResult._1.elements match
       case List(Right(syncOperations: List[_])) =>
-        val (removedFolders, ops) =
-          syncOperations.foldRight((Map.empty[NormalizedFolder, RemoveOperationState], List.empty[SyncOperation])) {
-            (syncOp, t) =>
-              syncOp match
-                case op@SyncOperation(element: FsFolder, action, _, _) if action == removeActionType =>
-                  val normFolder = element.toNormalizedFolder
-                  val operationState = RemoveOperationState(List(op), Nil, normFolder)
-                  (t._1 + (normFolder -> operationState), t._2)
-                case op: SyncOperation =>
-                  (t._1, op :: t._2)
-          }
-
+        val (removedFolders, ops) = findNewRemovedFolders(syncOperations, Map.empty, List.empty)
         if removedFolders.nonEmpty then
           val nextFolderState = removedFolders.values.foldRight(folderState) { (operationState, state) =>
             state.addRoot(operationState.lastFolder)
@@ -249,6 +240,37 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
         else handlerResult
 
       case _ => handlerResult
+
+  /**
+    * Iterates over the given list of sync operations and identifies operations
+    * that remove folders. For these operations, new [[RemoveOperationState]]
+    * objects are created; the other operations are added to a list.
+    *
+    * @param operations the sync operations to process
+    * @param removeOps  the map to store operations to remove folders
+    * @param otherOps   the list with other operations
+    * @return the map with remove operations and the list with other operations
+    */
+  @tailrec
+  private def findNewRemovedFolders(operations: List[_],
+                                    removeOps: Map[NormalizedFolder, RemoveOperationState],
+                                    otherOps: List[SyncOperation]):
+  (Map[NormalizedFolder, RemoveOperationState], List[SyncOperation]) =
+    operations match
+      case List(o1@SyncOperation(folder: FsFolder, action, _, _), o2@SyncOperation(file: FsFile, fileAction, _, _), _*)
+        if folder.relativeUri == file.relativeUri && action == removeActionType &&
+          (fileAction == SyncAction.ActionCreate || fileAction == SyncAction.ActionLocalCreate) =>
+        val normFolder = folder.toNormalizedFolder
+        val operationState = RemoveOperationState(List(o1, o2), Nil, normFolder)
+        findNewRemovedFolders(operations.drop(2), removeOps + (normFolder -> operationState), otherOps)
+      case List(op@SyncOperation(folder: FsFolder, action, _, _), _*) if action == removeActionType =>
+        val normFolder = folder.toNormalizedFolder
+        val operationState = RemoveOperationState(List(op), Nil, normFolder)
+        findNewRemovedFolders(operations.tail, removeOps + (normFolder -> operationState), otherOps)
+      case List(op: SyncOperation, _*) =>
+        findNewRemovedFolders(operations.tail, removeOps, op :: otherOps)
+      case _ =>
+        (removeOps, otherOps.reverse)
 
   /**
     * Generates a list with ''SyncElementResult'' objects for the ongoing
