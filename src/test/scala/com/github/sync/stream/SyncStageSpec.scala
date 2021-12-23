@@ -501,3 +501,53 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val result = runStage(new SyncStage, localElements, remoteElements)
     result should contain theSameElementsInOrderAs expectedResults
   }
+
+  it should "handle a remote folder that was replaced by a file" in {
+    val replacementFile = createFile(1, RemoteID)
+    val remoteFolder = createFolder(2, RemoteID)
+    val remoteFile = createFile(20, RemoteID, optParent = Some(remoteFolder))
+    val replacedFolder = createFolder(1)
+    val child = createFile(10, optParent = Some(replacedFolder))
+    val localFolder = createFolder(2)
+    val localFile = createFile(20, optParent = Some(localFolder))
+
+    val remoteElements = List(replacementFile, remoteFolder, remoteFile)
+    val localElements = List(deltaElem(replacedFolder, ChangeType.Unchanged),
+      deltaElem(localFolder, ChangeType.Unchanged),
+      deltaElem(child, ChangeType.Unchanged),
+      deltaElem(localFile, ChangeType.Unchanged))
+    val expectedResults = List(createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level,
+      remoteFolder.id)),
+      Right(List(SyncOperation(child, SyncAction.ActionLocalRemove, child.level, child.id),
+        SyncOperation(replacedFolder, SyncAction.ActionLocalRemove, replacedFolder.level, replacedFolder.id),
+        SyncOperation(replacementFile, SyncAction.ActionLocalCreate, replacementFile.level, replacementFile.id))),
+      createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "handle a remote file that was replaced by a folder" in {
+    val replacementFolder = createFolder(1, RemoteID)
+    val remoteFolder = createFolder(2, RemoteID)
+    val remoteFile = createFile(20, RemoteID, optParent = Some(remoteFolder))
+    val replacedFile = createFile(1)
+    val newFile = createFile(10, RemoteID, optParent = Some(replacementFolder))
+    val localFolder = createFolder(2)
+    val localFile = createFile(20, optParent = Some(localFolder))
+
+    val remoteElements = List(replacementFolder, remoteFolder, newFile, remoteFile)
+    val localElements = List(deltaElem(replacedFile, ChangeType.Unchanged),
+      deltaElem(localFolder, ChangeType.Unchanged),
+      deltaElem(localFile, ChangeType.Unchanged))
+    val expectedResults = List(Right(List(SyncOperation(replacedFile, SyncAction.ActionLocalRemove,
+      replacedFile.level, replacedFile.id),
+      SyncOperation(replacementFolder, SyncAction.ActionLocalCreate, replacementFolder.level,
+        replacementFolder.id))),
+      createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level, remoteFolder.id)),
+      createResult(SyncOperation(newFile, SyncAction.ActionLocalCreate, newFile.level, newFile.id)),
+      createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }

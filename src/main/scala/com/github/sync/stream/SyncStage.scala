@@ -18,7 +18,7 @@ package com.github.sync.stream
 
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, StageLogging}
-import com.github.sync.SyncTypes.{FsElement, FsFile, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, compareElements}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, compareElements}
 import com.github.sync.stream.BaseMergeStage.{Input, MergeEmitData}
 import com.github.sync.stream.LocalStateStage.{ChangeType, ElementWithDelta}
 
@@ -229,31 +229,61 @@ object SyncStage:
 
       state.localConflictHandler.handleElement(state, remote, resultFunc(BaseMergeStage.PullBoth),
         conflictsForLocalRemovedFolder(remote, local)) {
-        val localModified = local.element.modifiedTime(Instant.MIN)
-        val remoteModified = remote.modifiedTime(Instant.MIN)
-        val lastLocalTime = if local.lastLocalTime == null then Instant.MIN else local.lastLocalTime
+        state.remoteConflictHandler.handleElement(state, remote, resultFunc(BaseMergeStage.PullBoth), Nil) {
+          val results = syncFileFolderReplacements(local, remote) getOrElse {
+            val localModified = local.element.modifiedTime(Instant.MIN)
+            val remoteModified = remote.modifiedTime(Instant.MIN)
+            val lastLocalTime = if local.lastLocalTime == null then Instant.MIN else local.lastLocalTime
 
-        val results = local.changeType match
-          case ChangeType.Removed if remoteModified != lastLocalTime =>
-            emitConflict(localOverrideOp(), removeOp())
-          case ChangeType.Removed =>
-            emitOp(removeOp())
-          case _ if localModified == remoteModified =>
-            emitOp(noop(local, remote))
-          case ChangeType.Changed if remoteModified != lastLocalTime =>
-            emitConflict(localOverrideOp(), overrideOp())
-          case ChangeType.Changed =>
-            emitOp(overrideOp())
-          case ChangeType.Unchanged if remoteModified.isAfter(localModified) =>
-            emitOp(localOverrideOp())
-          case ChangeType.Created =>
-            emitConflict(localOverrideOp(), overrideOp())
-          case ChangeType.Unchanged =>
-            emitOp(noop(local, remote))
+            local.changeType match
+              case ChangeType.Removed if remoteModified != lastLocalTime =>
+                emitConflict(localOverrideOp(), removeOp())
+              case ChangeType.Removed =>
+                emitOp(removeOp())
+              case _ if localModified == remoteModified =>
+                emitOp(noop(local, remote))
+              case ChangeType.Changed if remoteModified != lastLocalTime =>
+                emitConflict(localOverrideOp(), overrideOp())
+              case ChangeType.Changed =>
+                emitOp(overrideOp())
+              case ChangeType.Unchanged if remoteModified.isAfter(localModified) =>
+                emitOp(localOverrideOp())
+              case ChangeType.Created =>
+                emitConflict(localOverrideOp(), overrideOp())
+              case ChangeType.Unchanged =>
+                emitOp(noop(local, remote))
+          }
 
-        state.remoteConflictHandler.addCompletedResults(remote,
-          state.mergeResultWithResetElements(results, BaseMergeStage.PullBoth))
+          state.mergeResultWithResetElements(results, BaseMergeStage.PullBoth)
+        }
       }
+
+    /**
+      * Handles corner cases when syncing two equivalent elements that are
+      * related to files converted to folders or vice versa. If such a case is
+      * detected, the function returns a defined ''Option''; otherwise, result
+      * is ''None''.
+      *
+      * @param local  the current local element
+      * @param remote the current remove element
+      * @return an option with operations to handle this case
+      */
+    private def syncFileFolderReplacements(local: ElementWithDelta, remote: FsElement):
+    Option[List[SyncElementResult]] =
+      (local.element, remote) match
+        case (localFolder: FsFolder, remoteFile: FsFile) =>
+          val opRemoveFolder = RemovedFolderState.createRemoveOperation(localFolder,
+            action = SyncAction.ActionLocalRemove)
+          val opCreateFile = SyncOperation(remoteFile, SyncAction.ActionLocalCreate, remoteFile.level, remoteFile.id)
+          Some(List(Right(List(opRemoveFolder, opCreateFile))))
+
+        case (localFile: FsFile, remoteFolder: FsFolder) =>
+          val opRemoveFile = RemovedFolderState.createRemoveOperation(localFile, action = SyncAction.ActionLocalRemove)
+          val opCreateFolder = SyncOperation(remoteFolder, SyncAction.ActionLocalCreate, remoteFolder.level,
+            remoteFolder.id)
+          Some(List(Right(List(opRemoveFile, opCreateFolder))))
+
+        case _ => None
 
     /**
       * Produces a ''MergeResult'' if the current local element's URI is less
