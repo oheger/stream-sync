@@ -250,7 +250,8 @@ object SyncStage:
                 emitOp(localOverrideOp())
               case ChangeType.Created =>
                 emitConflict(localOverrideOp(), overrideOp())
-              case ChangeType.Unchanged =>
+              // TODO: Handle the new change type TypeChanged.
+              case /*ChangeType.Unchanged */_ =>
                 emitOp(noop(local, remote))
           }
 
@@ -308,6 +309,8 @@ object SyncStage:
             emitConflict(createOp(SyncAction.ActionLocalRemove), createOp(SyncAction.ActionCreate))
           case ChangeType.Created =>
             emitOp(createOp(SyncAction.ActionCreate))
+          // TODO: Handle the new change type TypeChanged.
+          case _ => Nil
 
         state.mergeResultWithResetElements(ops, BaseMergeStage.Pull1)
       }

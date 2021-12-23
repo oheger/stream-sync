@@ -36,7 +36,7 @@ object LocalStateStageSpec:
 /**
   * Test class for ''LocalStageStage''.
   */
-class LocalStateStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSystem):
+class LocalStateStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSystem) :
   def this() = this(ActorSystem("LocalStateStageSpec"))
 
   import AbstractStageSpec.*
@@ -162,7 +162,7 @@ class LocalStateStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(tes
     val elements = List(elem1, elemFolder2, elem3)
     val state = List(elem1, elemFile2, elem3)
     val expectedResult = List(ElementWithDelta(elem1, LocalStateStage.ChangeType.Unchanged, null),
-      ElementWithDelta(elemFolder2, LocalStateStage.ChangeType.Changed, elemFile2.lastModified),
+      ElementWithDelta(elemFolder2, LocalStateStage.ChangeType.TypeChanged, elemFile2.lastModified),
       ElementWithDelta(elem3, LocalStateStage.ChangeType.Unchanged, null))
 
     runStage(elements, state) should contain theSameElementsInOrderAs expectedResult
@@ -176,7 +176,7 @@ class LocalStateStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(tes
     val elements = List(elem1, elemFile2, elem3)
     val state = List(elem1, elemFolder2, elem3)
     val expectedResult = List(ElementWithDelta(elem1, LocalStateStage.ChangeType.Unchanged, null),
-      ElementWithDelta(elemFile2, LocalStateStage.ChangeType.Changed, SyncTime),
+      ElementWithDelta(elemFile2, LocalStateStage.ChangeType.TypeChanged, SyncTime),
       ElementWithDelta(elem3, LocalStateStage.ChangeType.Unchanged, null))
 
     runStage(elements, state) should contain theSameElementsInOrderAs expectedResult

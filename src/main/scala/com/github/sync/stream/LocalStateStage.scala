@@ -36,6 +36,7 @@ private object LocalStateStage:
     case Changed
     case Created
     case Removed
+    case TypeChanged
 
   /**
     * A data class representing a local file system element together with its
@@ -175,8 +176,8 @@ private object LocalStateStage:
       * @return data to emit and the next state
       */
     private def deltaToState(state: StageState, currentElem: FsElement, stateElem: FsElement): MergeResult =
-      val delta = if currentElem.isInstanceOf[FsFile] && stateElem.isInstanceOf[FsFolder] then
-        ElementWithDelta(currentElem, ChangeType.Changed, syncTime)
+      val delta = if currentElem.getClass != stateElem.getClass then
+        ElementWithDelta(currentElem, ChangeType.TypeChanged, stateElem.modifiedTime(syncTime))
       else
         val currentTime = currentElem.modifiedTime(null)
         val stateTime = stateElem.modifiedTime(null)
