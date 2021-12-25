@@ -251,8 +251,8 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val remoteElements = List(createFile(1, RemoteID, deltaTime = 1), createFolder(2, RemoteID))
     val localElements = List(deltaElem(createFile(1), ChangeType.Removed),
       deltaElem(createFolder(2), ChangeType.Unchanged))
-    val expectedResults = List(createConflict(SyncOperation(remoteElements.head, SyncAction.ActionLocalOverride,
-      remoteElements.head.level, localElements.head.element.id),
+    val expectedResults = List(createConflict(SyncOperation(remoteElements.head, SyncAction.ActionLocalCreate,
+      remoteElements.head.level, remoteElements.head.id),
       SyncOperation(remoteElements.head, SyncAction.ActionRemove, remoteElements.head.level, remoteElements.head.id)),
       createResult(SyncOperation(localElements(1).element, SyncAction.ActionNoop,
         localElements(1).element.level, remoteElements(1).id)))
@@ -551,3 +551,153 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val result = runStage(new SyncStage, localElements, remoteElements)
     result should contain theSameElementsInOrderAs expectedResults
   }
+
+  it should "handle a local folder that was replaced by a file" in {
+    val replacementFile = createFile(1)
+    val localFolder = createFolder(2)
+    val localChild = createFile(10, optParent = Some(createFolder(1)))
+    val localFile = createFile(20, optParent = Some(localFolder))
+    val replacedFolder = createFolder(1, RemoteID)
+    val remoteFolder = createFolder(2, RemoteID)
+    val remoteFile = createFile(20, RemoteID, optParent = Some(remoteFolder))
+    val child = createFile(10, RemoteID, optParent = Some(replacedFolder))
+
+    val remoteElements = List(replacedFolder, remoteFolder, child, remoteFile)
+    val localElements = List(deltaElem(replacementFile, ChangeType.TypeChanged),
+      deltaElem(localFolder, ChangeType.Unchanged),
+      deltaElem(localChild, ChangeType.Removed),
+      deltaElem(localFile, ChangeType.Unchanged))
+    val expectedResults = List(createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level,
+      remoteFolder.id)),
+      Right(List(SyncOperation(child, SyncAction.ActionRemove, child.level, child.id),
+        SyncOperation(replacedFolder, SyncAction.ActionRemove, replacedFolder.level, replacedFolder.id),
+        SyncOperation(replacementFile, SyncAction.ActionCreate, replacementFile.level, replacementFile.id))),
+      createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "handle a local file that was replaced by a folder" in {
+    val replacementFolder = createFolder(1)
+    val localFolder = createFolder(2)
+    val newFile = createFile(10, optParent = Some(replacementFolder))
+    val localFile = createFile(20, optParent = Some(localFolder))
+    val remoteFolder = createFolder(2, RemoteID)
+    val remoteFile = createFile(20, RemoteID, optParent = Some(remoteFolder))
+    val replacedFile = createFile(1, RemoteID)
+
+    val remoteElements = List(replacedFile, remoteFolder, remoteFile)
+    val localElements = List(ElementWithDelta(replacementFolder, ChangeType.TypeChanged, replacedFile.lastModified),
+      deltaElem(localFolder, ChangeType.Unchanged),
+      deltaElem(newFile, ChangeType.Created),
+      deltaElem(localFile, ChangeType.Unchanged))
+    val expectedResults = List(Right(List(SyncOperation(replacedFile, SyncAction.ActionRemove,
+      replacedFile.level, replacedFile.id),
+      SyncOperation(replacementFolder, SyncAction.ActionCreate, replacementFolder.level, replacementFolder.id))),
+      createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level, remoteFolder.id)),
+      createResult(SyncOperation(newFile, SyncAction.ActionCreate, newFile.level, newFile.id)),
+      createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "detect a conflict with a remote file changed to a folder if the local file was removed" in {
+    val replacementFolder = createFolder(1, RemoteID)
+    val remoteFile = createFile(2, RemoteID)
+    val replacedFile = createFile(1)
+    val localFile = createFile(2)
+
+    val remoteElements = List(replacementFolder, remoteFile)
+    val localElements = List(deltaElem(replacedFile, ChangeType.Removed),
+      deltaElem(localFile, ChangeType.Unchanged))
+    val expectedResults = List(createConflict(SyncOperation(replacementFolder, SyncAction.ActionLocalCreate,
+      replacementFolder.level, replacementFolder.id),
+      SyncOperation(replacementFolder, SyncAction.ActionRemove, replacementFolder.level, replacementFolder.id)),
+      createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  /**
+    * Helper function to check whether a conflict is detected if a remote file
+    * was converted to a folder and the local file was modified in some way.
+    *
+    * @param changeType the change type for the local file
+    */
+  private def checkConflictWithRemoteFileChangedToFolderAndLocalFile(changeType: ChangeType): Unit =
+    val replacementFolder = createFolder(1, RemoteID)
+    val remoteFile = createFile(2, RemoteID)
+    val replacedFile = createFile(1)
+    val localFile = createFile(2)
+
+    val remoteElements = List(replacementFolder, remoteFile)
+    val localElements = List(deltaElem(replacedFile, changeType),
+      deltaElem(localFile, ChangeType.Unchanged))
+    val expectedResults = List(Left(SyncConflictException(remoteOperations = List(SyncOperation(replacementFolder,
+      SyncAction.ActionRemove, replacementFolder.level, replacementFolder.id),
+      SyncOperation(replacedFile, SyncAction.ActionCreate, replacedFile.level, replacedFile.id)),
+      localOperations = List(SyncOperation(replacedFile, SyncAction.ActionLocalRemove, replacedFile.level,
+        replacedFile.id),
+        SyncOperation(replacementFolder, SyncAction.ActionLocalCreate, replacementFolder.level,
+          replacementFolder.id)))),
+      createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+
+  it should "detect a conflict with a remote file changed to a folder if the local file was changed" in {
+    checkConflictWithRemoteFileChangedToFolderAndLocalFile(ChangeType.Changed)
+  }
+
+  it should "detect a conflict with a remote file changed to a folder if the local file was newly created" in {
+    checkConflictWithRemoteFileChangedToFolderAndLocalFile(ChangeType.Created)
+  }
+
+  it should "detect a conflict with a local file changed to a folder if the remote file was removed" in {
+    val replacementFolder = createFolder(1)
+    val localFile = createFile(2)
+    val remoteFile = createFile(2, RemoteID)
+
+    val remoteElements = List(remoteFile)
+    val localElements = List(deltaElem(replacementFolder, ChangeType.TypeChanged),
+      deltaElem(localFile, ChangeType.Unchanged))
+    val expectedResults = List(createConflict(SyncOperation(replacementFolder, SyncAction.ActionLocalRemove,
+      replacementFolder.level, replacementFolder.id),
+      SyncOperation(replacementFolder, SyncAction.ActionCreate, replacementFolder.level, replacementFolder.id)),
+      createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "detect a conflict with a local file changed to a folder if the remote file was changed" in {
+    val replacementFolder = createFolder(1)
+    val localFolder = createFolder(2)
+    val newFile = createFile(10, optParent = Some(replacementFolder))
+    val localFile = createFile(20, optParent = Some(localFolder))
+    val remoteFolder = createFolder(2, RemoteID)
+    val remoteFile = createFile(20, RemoteID, optParent = Some(remoteFolder))
+    val replacedFile = createFile(1, RemoteID, deltaTime = 1)
+
+    val remoteElements = List(replacedFile, remoteFolder, remoteFile)
+    val localElements = List(deltaElem(replacementFolder, ChangeType.TypeChanged),
+      deltaElem(localFolder, ChangeType.Unchanged),
+      deltaElem(newFile, ChangeType.Created),
+      deltaElem(localFile, ChangeType.Unchanged))
+    val expectedResults = List(Left(SyncConflictException(localOperations = List(SyncOperation(replacementFolder,
+      SyncAction.ActionLocalRemove, replacementFolder.level, replacementFolder.id),
+      SyncOperation(replacedFile, SyncAction.ActionLocalCreate, replacedFile.level, replacedFile.id)),
+      remoteOperations = List(SyncOperation(replacedFile, SyncAction.ActionRemove, replacedFile.level,
+        replacedFile.id),
+        SyncOperation(replacementFolder, SyncAction.ActionCreate, replacementFolder.level, replacementFolder.id)))),
+      createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level, remoteFolder.id)),
+      createResult(SyncOperation(newFile, SyncAction.ActionCreate, newFile.level, newFile.id)),
+      createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
+
+    val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+  

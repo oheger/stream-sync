@@ -237,7 +237,7 @@ object SyncStage:
 
             local.changeType match
               case ChangeType.Removed if remoteModified != lastLocalTime =>
-                emitConflict(localOverrideOp(), removeOp())
+                emitConflict(SyncOperation(remote, SyncAction.ActionLocalCreate, remote.level, remote.id), removeOp())
               case ChangeType.Removed =>
                 emitOp(removeOp())
               case _ if localModified == remoteModified =>
@@ -250,8 +250,9 @@ object SyncStage:
                 emitOp(localOverrideOp())
               case ChangeType.Created =>
                 emitConflict(localOverrideOp(), overrideOp())
-              // TODO: Handle the new change type TypeChanged.
-              case /*ChangeType.Unchanged */_ =>
+              case _ =>
+                // This basically means ChangeType.Unchanged, since ChangeType.TypeChanged is dealt with in
+                // syncFileFolderReplacements().
                 emitOp(noop(local, remote))
           }
 
@@ -272,13 +273,43 @@ object SyncStage:
     private def syncFileFolderReplacements(local: ElementWithDelta, remote: FsElement):
     Option[List[SyncElementResult]] =
       (local.element, remote) match
+        case (localFolder: FsFolder, remoteFile: FsFile) if local.changeType == ChangeType.TypeChanged &&
+          remoteFile.lastModified == local.lastLocalTime =>
+          val opRemoveFile = RemovedFolderState.createRemoveOperation(remoteFile)
+          val opCreateFolder = SyncOperation(localFolder, SyncAction.ActionCreate, localFolder.level, localFolder.id)
+          Some(List(Right(List(opRemoveFile, opCreateFolder))))
+
+        case (localFolder: FsFolder, remoteFile: FsFile) if local.changeType == ChangeType.TypeChanged =>
+          val localOperations = List(RemovedFolderState.createRemoveOperation(localFolder,
+            action = SyncAction.ActionLocalRemove),
+            SyncOperation(remoteFile, SyncAction.ActionLocalCreate, remoteFile.level, remoteFile.id))
+          val remoteOperations = List(RemovedFolderState.createRemoveOperation(remoteFile),
+            SyncOperation(localFolder, SyncAction.ActionCreate, localFolder.level, localFolder.id))
+          Some(List(Left(SyncConflictException(localOperations = localOperations,
+            remoteOperations = remoteOperations))))
+
         case (localFolder: FsFolder, remoteFile: FsFile) =>
           val opRemoveFolder = RemovedFolderState.createRemoveOperation(localFolder,
             action = SyncAction.ActionLocalRemove)
           val opCreateFile = SyncOperation(remoteFile, SyncAction.ActionLocalCreate, remoteFile.level, remoteFile.id)
           Some(List(Right(List(opRemoveFolder, opCreateFile))))
 
-        case (localFile: FsFile, remoteFolder: FsFolder) =>
+        case (localFile: FsFile, remoteFolder: FsFolder) if local.changeType == ChangeType.TypeChanged =>
+          val opRemoveFolder = RemovedFolderState.createRemoveOperation(remote)
+          val opCreateFile = SyncOperation(localFile, SyncAction.ActionCreate, localFile.level, localFile.id)
+          Some(List(Right(List(opRemoveFolder, opCreateFile))))
+
+        case (localFile: FsFile, remoteFolder: FsFolder) if local.changeType == ChangeType.Changed ||
+          local.changeType == ChangeType.Created =>
+          val localOperations = List(RemovedFolderState.createRemoveOperation(localFile,
+            action = SyncAction.ActionLocalRemove),
+            SyncOperation(remoteFolder, SyncAction.ActionLocalCreate, remoteFolder.level, remoteFolder.id))
+          val remoteOperations = List(RemovedFolderState.createRemoveOperation(remoteFolder),
+            SyncOperation(localFile, SyncAction.ActionCreate, localFile.level, localFile.id))
+          Some(List(Left(SyncConflictException(localOperations = localOperations,
+            remoteOperations = remoteOperations))))
+
+        case (localFile: FsFile, remoteFolder: FsFolder) if local.changeType == ChangeType.Unchanged =>
           val opRemoveFile = RemovedFolderState.createRemoveOperation(localFile, action = SyncAction.ActionLocalRemove)
           val opCreateFolder = SyncOperation(remoteFolder, SyncAction.ActionLocalCreate, remoteFolder.level,
             remoteFolder.id)
@@ -309,8 +340,9 @@ object SyncStage:
             emitConflict(createOp(SyncAction.ActionLocalRemove), createOp(SyncAction.ActionCreate))
           case ChangeType.Created =>
             emitOp(createOp(SyncAction.ActionCreate))
-          // TODO: Handle the new change type TypeChanged.
-          case _ => Nil
+          case ChangeType.TypeChanged =>
+            emitConflict(RemovedFolderState.createRemoveOperation(local.element, action = SyncAction.ActionLocalRemove),
+              SyncOperation(local.element, SyncAction.ActionCreate, local.element.level, local.element.id))
 
         state.mergeResultWithResetElements(ops, BaseMergeStage.Pull1)
       }
