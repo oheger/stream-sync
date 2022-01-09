@@ -14,17 +14,22 @@
  * limitations under the License.
  */
 
-/** Definition of versions. */
-lazy val AkkaVersion = "2.6.17"
-lazy val AkkaHttpVersion = "10.2.6"
-lazy val VersionScala = "3.1.0"
+/** The version of this project. */
+lazy val VersionStreamSync = "0.15-SNAPSHOT"
+
+/** Definition of versions for compile-time dependencies. */
+lazy val VersionAkka = "2.6.17"
+lazy val VersionAkkaHttp = "10.2.6"
 lazy val VersionCloudFiles = "0.3"
-lazy val VersionScli = "1.1.0"
-lazy val VersionLog4j = "2.14.1"
 lazy val VersionDisruptor = "3.4.4"
+lazy val VersionLog4j = "2.14.1"
+lazy val VersionScala = "3.1.0"
+lazy val VersionScli = "1.1.0"
+
+/** Definition of versions for test dependencies. */
 lazy val VersionScalaTest = "3.2.10"
-lazy val VersionWireMock = "2.31.0"
 lazy val VersionScalaTestMockito = "3.2.10.0"
+lazy val VersionWireMock = "2.31.0"
 
 scalacOptions ++=
   Seq(
@@ -37,11 +42,11 @@ scalacOptions ++=
 lazy val ITest = config("integrationTest") extend Test
 
 lazy val akkaDependencies = Seq(
-  ("com.typesafe.akka" %% "akka-actor" % AkkaVersion).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-stream" % AkkaVersion).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-http" % AkkaHttpVersion).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion).cross(CrossVersion.for3Use2_13)
+  ("com.typesafe.akka" %% "akka-actor" % VersionAkka).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-actor-typed" % VersionAkka).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-stream" % VersionAkka).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-http" % VersionAkkaHttp).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-http-spray-json" % VersionAkkaHttp).cross(CrossVersion.for3Use2_13)
 )
 
 lazy val cloudFilesDependencies = Seq(
@@ -63,8 +68,8 @@ lazy val loggingDependencies = Seq(
 lazy val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % VersionScalaTest % Test exclude("org.scala-lang.modules", "scala-xml_3"),
   "org.scalatestplus" %% "mockito-3-12" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
-  ("com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-testkit" % VersionAkka % Test).cross(CrossVersion.for3Use2_13),
+  ("com.typesafe.akka" %% "akka-actor-testkit-typed" % VersionAkka % Test).cross(CrossVersion.for3Use2_13),
   "com.github.tomakehurst" % "wiremock-jre8" % VersionWireMock % Test
 )
 
@@ -72,7 +77,7 @@ lazy val StreamSync = (project in file("."))
   .configs(ITest)
   .settings(inConfig(ITest)(Defaults.testSettings): _*)
   .settings(
-    version := "0.15-SNAPSHOT",
+    version := VersionStreamSync,
     scalaVersion := VersionScala,
     libraryDependencies ++= akkaDependencies,
     libraryDependencies += ("com.github.oheger" %% "scli" % VersionScli).cross(CrossVersion.for3Use2_13),
