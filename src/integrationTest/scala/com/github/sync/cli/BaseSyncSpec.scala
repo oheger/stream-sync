@@ -169,7 +169,7 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * @return the decrypted name
     */
   protected def decryptName(key: String, name: String): String =
-    CryptService.decryptTextFromBase64(Aes, Aes.keyFromString(key), name)
+    CryptService.decryptTextFromBase64(Aes, Aes.keyFromString(key), name).get
 
   /**
     * Executes a sync process with the given command line options.

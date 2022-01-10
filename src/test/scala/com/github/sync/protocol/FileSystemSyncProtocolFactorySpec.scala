@@ -97,7 +97,8 @@ class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSup
     val protocol = helper.createAndCheckProtocol(cryptConfig)
     protocol.fileSystem match
       case fsn: CryptNamesFileSystem[_, _, _] =>
-        checkCryptConfig(fsn.config)
+        checkCryptConfig(fsn.namesConfig.cryptConfig)
+        fsn.namesConfig.ignoreUnencrypted shouldBe true
         fsn.delegate match
           case fsc: CryptContentFileSystem[_, _, _] =>
             checkCryptConfig(fsc.config)

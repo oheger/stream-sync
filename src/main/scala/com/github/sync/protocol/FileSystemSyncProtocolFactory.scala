@@ -23,7 +23,7 @@ import com.github.cloudfiles.core.delegate.ExtensibleFileSystem
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, HttpRequestSenderFactoryImpl, Spawner}
 import com.github.cloudfiles.crypt.alg.aes.Aes
 import com.github.cloudfiles.crypt.fs.resolver.CachePathComponentsResolver
-import com.github.cloudfiles.crypt.fs.{CryptConfig, CryptContentFileSystem, CryptNamesFileSystem}
+import com.github.cloudfiles.crypt.fs.{CryptConfig, CryptContentFileSystem, CryptNamesConfig, CryptNamesFileSystem}
 import com.github.sync.protocol.FileSystemSyncProtocolFactory.createCryptConfig
 import com.github.sync.protocol.config.{StructureConfig, StructureCryptConfig}
 
@@ -102,7 +102,7 @@ class FileSystemSyncProtocolFactory[ID, FILE <: Model.File[ID], FOLDER <: Model.
       val fsc = new CryptContentFileSystem(fs, cryptConfig)
       if structCryptConfig.cryptNames then
         implicit val resolverTimeout: Timeout = timeout
-        new CryptNamesFileSystem(fsc, cryptConfig,
+        new CryptNamesFileSystem(fsc, CryptNamesConfig(cryptConfig, ignoreUnencrypted = true),
           resolver = CachePathComponentsResolver(spawner, structCryptConfig.cryptCacheSize))
       else fsc
     }
