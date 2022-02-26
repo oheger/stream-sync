@@ -164,7 +164,7 @@ object MirrorStage:
       */
     private def syncOperationForElements(elemSource: FsElement, elemDest: FsElement, state: MirrorState):
     Option[MergeResult] =
-      lazy val delta = SyncTypes.compareElements(elemSource, elemDest)
+      lazy val delta = compareElements(elemSource, elemDest)
       val removedRoot = state.removedFolderState.findRoot(elemDest)
       if removedRoot.isDefined || delta > 0 then
         val (ops, next) = removeElement(state.updateCurrentElement(Some(elemSource)), elemDest, removedRoot)
@@ -275,6 +275,25 @@ object MirrorStage:
       * @return the modified time to be compared during a sync operations
       */
     private def extractTime(file: FsFile): Long = file.lastModified.getEpochSecond
+
+    /**
+      * Compares the given elements and returns an integer value determining
+      * which one is before the other: a value less than zero means that the
+      * source element is before the destination element; a value greater than
+      * zero means that the destination element is before the source element; the
+      * value 0 means that elements are equivalent.
+      *
+      * @param elemSource the source element
+      * @param elemDest   the destination element
+      * @return the result of the comparison
+      */
+    private def compareElements(elemSource: FsElement, elemDest: FsElement): Int =
+      val (srcParent, srcName) = UriEncodingHelper.splitParent(elemSource.relativeUri)
+      val (dstParent, dstName) = UriEncodingHelper.splitParent(elemDest.relativeUri)
+      val deltaParent = srcParent.compareTo(dstParent)
+      if deltaParent != 0 then deltaParent
+      else srcName.compareTo(dstName)
+
   end MirrorStageLogic
 
 /**

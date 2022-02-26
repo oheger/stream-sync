@@ -383,3 +383,19 @@ class MirrorStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with 
 
     runStage(sourceOrg, sourceTarget) should contain theSameElementsAs expOps
   }
+
+  it should "correctly handle new files in a folder" in {
+    val folder1 = createFolder("/folder1")
+    val subFolder = createFolder(folder1.relativeUri + "/sub", level = 1)
+    val folder2 = createFolder("/folder2")
+    val file1 = createFile(subFolder.relativeUri + "/file1.txt", level = 2)
+    val fileNew = createFile(subFolder.relativeUri + "/new.txt", level = 2)
+    val file2 = createFile(folder2.relativeUri + "/file2.txt", level = 1)
+    val sourceOrg = Source(List(folder1, folder2, subFolder, file1, fileNew, file2))
+    val sourceTarget = Source(destinationElems(List(folder1, folder2, subFolder, file1, file2)))
+    val expOps = List(createOp(folder1, ActionNoop), createOp(folder2, ActionNoop),
+      createOp(subFolder, ActionNoop, level = 1), createOp(file1, ActionNoop, level = 2),
+      createOp(fileNew, ActionCreate, level = 2), createOp(file2, ActionNoop, level = 1))
+
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsAs expOps
+  }
