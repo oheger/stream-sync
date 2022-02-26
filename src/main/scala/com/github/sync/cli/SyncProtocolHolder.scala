@@ -126,7 +126,7 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     *
     * @return the source for the source structure
     */
-  def createSourceElementSource(): Source[FsElement, Any] = createElementSource(srcProtocol)
+  def createSourceElementSource(): Source[FsElement, Any] = createElementSource("source", srcProtocol)
 
   /**
     * Creates a source for iterating over the elements of the destination
@@ -134,7 +134,7 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     *
     * @return the source for the destination structure
     */
-  def createDestinationElementSource(): Source[FsElement, Any] = createElementSource(dstProtocol)
+  def createDestinationElementSource(): Source[FsElement, Any] = createElementSource("dest", dstProtocol)
 
   /**
     * Creates the flow stage for applying the sync operations against the
@@ -172,11 +172,12 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     * Creates a source for file system elements that uses the protocol
     * specified.
     *
+    * @param name the name of the source
     * @param protocol the ''SyncProtocol'' for this source
     * @return the source for iterating the elements of this structure
     */
-  private def createElementSource(protocol: SyncProtocol): Source[FsElement, Any] =
-    Source.fromGraph(new ProtocolElementSource(protocol))
+  private def createElementSource(name: String, protocol: SyncProtocol): Source[FsElement, Any] =
+    Source.fromGraph(new ProtocolElementSource(name, protocol))
 
   /**
     * Returns the execution context from the actor system in implicit scope.

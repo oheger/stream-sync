@@ -217,7 +217,7 @@ class ProtocolElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSys
       */
     def executeStream(): Future[List[FsElement]] =
       implicit val ec: ExecutionContext = system.dispatcher
-      val source = new ProtocolElementSource(protocol)
+      val source = new ProtocolElementSource("test", protocol)
       val sink = Sink.fold[List[FsElement], FsElement](Nil)((lst, e) => e :: lst)
       Source.fromGraph(source).runWith(sink)
 

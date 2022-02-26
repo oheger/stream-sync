@@ -35,10 +35,11 @@ import scala.util.{Failure, Success, Try}
   * within a folder are sorted by their names; folders are processed in breadth
   * first order (making use of a queue to keep track of pending folders).
   *
+  * @param name     a name for this source (used in log output)
   * @param protocol the ''SyncProtocol''
   * @param ec       the execution context
   */
-class ProtocolElementSource(protocol: SyncProtocol)
+class ProtocolElementSource(val name: String, protocol: SyncProtocol)
                            (implicit ec: ExecutionContext) extends GraphStage[SourceShape[FsElement]]:
   val out: Outlet[FsElement] = Outlet("ElementSource")
 
@@ -62,12 +63,15 @@ class ProtocolElementSource(protocol: SyncProtocol)
         * folders have been processed, the stage is completed.
         */
       private def processNextFolder(): Unit =
-        if pendingFolders.isEmpty then completeStage()
+        if pendingFolders.isEmpty then
+          log.info("[{}] completed.", name)
+          completeStage()
+
         else
           val (data, queue) = pendingFolders.dequeue()
           pendingFolders = queue
           val folder = data.folder
-          log.info("Processing {}.", folder.relativeUri)
+          log.info("[{}] Processing {}.", name, folder.relativeUri)
           val callback = getAsyncCallback[Try[List[FsElement]]](handleFolderResults)
           val futFolderResult = if folder.level < 0 then protocol.readRootFolder()
           else protocol.readFolder(folder.id, UriEncodingHelper.withTrailingSeparator(folder.relativeUri),
