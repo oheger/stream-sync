@@ -164,7 +164,7 @@ object Sync:
 
   /**
     * Applies some further configuration options to the source of the sync
-    * process, such as filtering or throttling.
+    * process, such as filtering.
     *
     * @param source         the original source
     * @param config         the sync configuration
@@ -174,11 +174,7 @@ object Sync:
   private def decorateSource(source: Source[SyncOperation, Any], config: SyncConfig,
                              protocolHolder: SyncProtocolHolder): Future[Source[SyncOperation, Any]] =
     val filteredSource = source.filter(createSyncFilter(config.filterData))
-    val throttledSource = config.opsPerSecond match
-      case Some(value) =>
-        filteredSource.throttle(value, 1.second)
-      case None => filteredSource
-    Future.successful(throttledSource.via(protocolHolder.oAuthRefreshKillSwitch.flow))
+    Future.successful(filteredSource.via(protocolHolder.oAuthRefreshKillSwitch.flow))
 
   /**
     * Creates the source for the sync process if a sync log is provided. The
@@ -212,9 +208,13 @@ object Sync:
     */
   private def createApplyStage(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[Flow[SyncOperation, SyncOperationResult, NotUsed]] = Future {
+  Future[Flow[SyncOperation, SyncOperationResult, Any]] = Future {
     if config.dryRun then Flow[SyncOperation].map(op => SyncOperationResult(op, None))
-    else protocolHolder.createApplyStage(config, spawner)
+    else
+      val applyStage = protocolHolder.createApplyStage(config, spawner)
+      config.opsPerSecond.fold(applyStage) { limit =>
+        Throttle(applyStage, limit)
+      }
   }
 
   /**

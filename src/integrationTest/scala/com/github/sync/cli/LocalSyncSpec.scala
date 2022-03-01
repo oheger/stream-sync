@@ -47,7 +47,7 @@ object LocalSyncSpec:
   * Integration test class for sync processes that mainly deals with operations
   * on the local file system.
   */
-class LocalSyncSpec extends BaseSyncSpec with MockitoSugar:
+class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
   "Sync" should "synchronize two directory structures" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -511,6 +511,24 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar:
     }
   }
 
+  it should "not restrict the number of Noop actions per time unit" in {
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val FileCount = 16
+    val startTime = Instant.parse("2022-03-01T20:30:02Z")
+    (1 to FileCount) foreach { idx =>
+      val timestamp = startTime.plusSeconds(idx * 60)
+      val fileName = s"testFile$idx.txt"
+      createTestFile(srcFolder, fileName, fileTime = Some(timestamp))
+      createTestFile(dstFolder, fileName, fileTime = Some(timestamp))
+    }
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--ops-per-second", "1")
+
+    val result = futureResult(runSync(options))
+    result.totalOperations should be(0)
+  }
+
   it should "support an error log file" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -528,7 +546,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar:
     futureResult(runSync(options))
     val errorLog = readDataFile(errorLogFile)
     errorLog should include(operations.head)
-    errorLog should not include (operations(1))
+    errorLog should not include operations(1)
   }
 
   it should "log failed sync operations" in {
