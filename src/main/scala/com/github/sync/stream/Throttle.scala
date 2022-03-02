@@ -39,15 +39,28 @@ import scala.concurrent.duration.*
   */
 object Throttle:
   /**
+    * An enum to allow defining time units for throttling operations.
+    *
+    * The cases defined here can be used to define throttling in a
+    * fine-granular way, such as "20 ops per minute" or "500 ops per hour".
+    */
+  enum TimeUnit(val baseDuration: FiniteDuration):
+    case Second extends TimeUnit(1.second)
+    case Minute extends TimeUnit(1.minute)
+    case Hour extends TimeUnit(1.hour)
+
+  /**
     * Returns a ''Flow'' that applies throttling to the given stage.
     *
     * @param stage             the stage subject to throttling
     * @param operationsPerUnit the number of operations to pass per time unit
+    * @param timeUnit          the time unit
     * @return the decorated ''Flow'' respecting the specified limit
     */
-  def apply(stage: Flow[SyncOperation, SyncOperationResult, Any], operationsPerUnit: Int):
-  Flow[SyncOperation, SyncOperationResult, Any] =
-    val filterThrottle = Flow[SyncOperation].filter(needsThrottling).throttle(operationsPerUnit, 1.second)
+  def apply(stage: Flow[SyncOperation, SyncOperationResult, Any], operationsPerUnit: Int,
+            timeUnit: TimeUnit = TimeUnit.Second): Flow[SyncOperation, SyncOperationResult, Any] =
+    val filterThrottle = Flow[SyncOperation].filter(needsThrottling)
+      .throttle(operationsPerUnit, timeUnit.baseDuration)
     val mapToResult = Flow[SyncOperation].map(toResult)
     Flow.fromGraph(GraphDSL.create() {
       implicit builder =>

@@ -70,6 +70,18 @@ class ThrottleSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlat
 
   import ThrottleSpec.*
 
+  "TimeUnit" should "support seconds" in {
+    Throttle.TimeUnit.Second.baseDuration should be(1.second)
+  }
+
+  it should "support minutes" in {
+    Throttle.TimeUnit.Minute.baseDuration should be(1.minute)
+  }
+
+  it should "support hours" in {
+    Throttle.TimeUnit.Hour.baseDuration should be(1.hour)
+  }
+
   "Throttle" should "handle an empty stream" in {
     val helper = new ThrottleTestHelper
 
@@ -127,7 +139,20 @@ class ThrottleSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlat
 
     val futResult = helper.runStream(operations, 1)
     intercept[TimeoutException] {
-      Await.ready(futResult, 2.seconds)
+      Await.ready(futResult, 1500.millis)
+    }
+  }
+
+  it should "allow throttling per time unit" in {
+    val NumberOfOps = 20
+    val operations = (1 to NumberOfOps) map { idx =>
+      createOp(AbstractStageSpec.createFile(idx), SyncAction.ActionRemove)
+    }
+    val helper = new ThrottleTestHelper
+
+    val futResult = helper.runStream(operations, NumberOfOps, Throttle.TimeUnit.Minute)
+    intercept[TimeoutException] {
+      Await.ready(futResult, 1500.millis)
     }
   }
 
@@ -163,16 +188,18 @@ class ThrottleSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlat
       *
       * @param operations the operations to pass through the stream
       * @param opsPerUnit the number of allowed operations per time unit
+      * @param unit       the time unit
       * @return A ''Future'' with the output of the throttled stage
       */
-    def runStream(operations: Seq[SyncOperation], opsPerUnit: Int): Future[Seq[SyncOperationResult]] =
+    def runStream(operations: Seq[SyncOperation], opsPerUnit: Int,
+                  unit: Throttle.TimeUnit = Throttle.TimeUnit.Second): Future[Seq[SyncOperationResult]] =
       implicit val ec: ExecutionContext = system.dispatcher
       val source = Source(operations)
       val stage = Flow[SyncOperation].map { op =>
         throttledOperations.offer(op)
         createResult(op)
       }
-      val throttledStage = Throttle(stage, opsPerUnit)
+      val throttledStage = Throttle(stage, opsPerUnit, unit)
       val sink = AbstractStageSpec.foldSink[SyncOperationResult]
       source.via(throttledStage).runWith(sink).map(_.reverse)
 
