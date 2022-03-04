@@ -503,7 +503,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, "smallFile3.txt")
     createTestFile(srcFolder, "smallFile4.txt")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--ops-per-second", "1")
+      "--throttle", "1")
 
     intercept[TimeoutException] {
       val syncFuture = runSync(options)
@@ -523,7 +523,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
       createTestFile(dstFolder, fileName, fileTime = Some(timestamp))
     }
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--ops-per-second", "1")
+      "--throttle", "1")
 
     val result = futureResult(runSync(options))
     result.totalOperations should be(0)

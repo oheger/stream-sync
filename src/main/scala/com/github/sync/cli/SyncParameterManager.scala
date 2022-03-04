@@ -17,14 +17,15 @@
 package com.github.sync.cli
 
 import akka.util.Timeout
-import com.github.scli.ParameterExtractor._
+import com.github.scli.ParameterExtractor.*
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
+import com.github.sync.stream.Throttle
 import org.apache.logging.log4j.Level
 
 import java.nio.file.Path
 import java.util.Locale
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.language.implicitConversions
 import scala.util.Try
 
@@ -127,16 +128,31 @@ object SyncParameterManager:
 
   /**
     * Name of the option that restricts the number of sync operations that can
-    * be executed within a second. This is useful for instance when syncing to
-    * a server that accepts only a limit number of requests per time unit.
+    * be executed within a time unit. This is useful for instance when syncing
+    * to a server that accepts only a limit number of requests per time unit.
     */
-  final val OpsPerSecondOption: String = "ops-per-second"
+  final val OpsPerUnitOption: String = "throttle"
 
-  final val OpsPerSecondHelp =
-    """Allows limiting the number of sync operations executed per second. The option value is the \
-      |number of operations that are allowed. This can be used to protected servers for too much \
+  /** Help text for the operations per unit option. */
+  final val OpsPerUnitHelp =
+    """Allows limiting the number of sync operations executed per time unit. The option value is the \
+      |number of operations that are allowed in a specific time unit. The time unit itself is defined by \
+      |the 'throttle-unit' option. This can be used to protected servers from too much \
       |load. Per default, there is no restriction for the operations that are executed.
       |""".stripMargin
+
+  /**
+    * Name of the option that defines the time unit in which throttling is
+    * applied.
+    */
+  final val ThrottleUnitOption: String = "throttle-unit"
+
+  /** Help text for the throttle unit option. */
+  final val ThrottleUnitHelp =
+    """Defines the time unit for throttling. This is used together with --throttle to define in a fine-granular \
+      |way the allowed number of operations in a specific time frame. Valid values are 'S' or 'Second', \
+      |'M' or 'Minute', 'H' or 'Hour' (case does not matter). For instance, the options '--throttle 1000 \
+      |--throttle-unit Hour' would define a threshold of 1000 operations per hour. Defaults to 'Second'.""".stripMargin
 
   /**
     * Name of the option defining the encryption password for the source
@@ -258,13 +274,21 @@ object SyncParameterManager:
   final val HelpAlias = "h"
 
   /** The default timeout for sync operations. */
-  val DefaultTimeout: Timeout = Timeout(1.minute)
+  final val DefaultTimeout: Timeout = Timeout(1.minute)
 
   /** The default size of the cache for encrypted file names. */
-  val DefaultCryptCacheSize = 128
+  final val DefaultCryptCacheSize = 128
 
   /** The minimum size of the cache for encrypted file names. */
-  val MinCryptCacheSize = 32
+  final val MinCryptCacheSize = 32
+
+  /**
+    * A map assigning the supported names for time units to the corresponding
+    * objects.
+    */
+  private final val TimeUnits = Map("h" -> Throttle.TimeUnit.Hour, "hour" -> Throttle.TimeUnit.Hour,
+    "m" -> Throttle.TimeUnit.Minute, "minute" -> Throttle.TimeUnit.Minute,
+    "s" -> Throttle.TimeUnit.Second, "second" -> Throttle.TimeUnit.Second)
 
   /**
     * An enumeration defining the usage of encryption for a structure.
@@ -316,30 +340,41 @@ object SyncParameterManager:
                          cryptCacheSize: Int)
 
   /**
+    * A configuration class that combines the properties related to logging.
+    *
+    * @param logFilePath      an option with the path to the log file if defined
+    * @param errorLogFilePath an option with the path to an error log file
+    * @param syncLogPath      an option with the path to a file containing sync
+    *                         operations to be executed
+    * @param logLevel         the log level for the sync process
+    */
+  case class LogConfig(logFilePath: Option[Path],
+                       errorLogFilePath: Option[Path],
+                       syncLogPath: Option[Path],
+                       logLevel: Level)
+
+  /**
     * A class that holds the configuration options for a sync process.
     *
     * An instance of this class is created from the command line options passed
     * to the program.
     *
-    * @param srcUri           the source URI of the sync process
-    * @param dstUri           the destination URI of the sync process
-    * @param srcConfig        the config for the source structure
-    * @param dstConfig        the config for the destination structure
-    * @param dryRun           flag whether only a dry-run should be done
-    * @param timeout          a timeout for sync operations
-    * @param logFilePath      an option with the path to the log file if defined
-    * @param errorLogFilePath an option with the path to an error log file
-    * @param syncLogPath      an option with the path to a file containing sync
-    *                         operations to be executed
-    * @param ignoreTimeDelta  optional threshold for a time difference between
-    *                         two files that should be ignored
-    * @param cryptConfig      the configuration related to encryption
-    * @param opsPerSecond     optional restriction for the number of sync
-    *                         operations per second
-    * @param filterData       an object with information about filters
-    * @param logLevel         the log level for the sync process
-    * @param switched         a flag whether src and dst configs should be
-    *                         switched
+    * @param srcUri          the source URI of the sync process
+    * @param dstUri          the destination URI of the sync process
+    * @param srcConfig       the config for the source structure
+    * @param dstConfig       the config for the destination structure
+    * @param dryRun          flag whether only a dry-run should be done
+    * @param timeout         a timeout for sync operations
+    * @param logConfig       the configuration related to logging
+    * @param ignoreTimeDelta optional threshold for a time difference between
+    *                        two files that should be ignored
+    * @param cryptConfig     the configuration related to encryption
+    * @param opsPerUnit      optional restriction for the number of sync
+    *                        operations per time unit
+    * @param throttleUnit    defines the time unit for throttling
+    * @param filterData      an object with information about filters
+    * @param switched        a flag whether src and dst configs should be
+    *                        switched
     */
   case class SyncConfig(srcUri: String,
                         dstUri: String,
@@ -347,14 +382,12 @@ object SyncParameterManager:
                         dstConfig: StructureAuthConfig,
                         dryRun: Boolean,
                         timeout: Timeout,
-                        logFilePath: Option[Path],
-                        errorLogFilePath: Option[Path],
-                        syncLogPath: Option[Path],
+                        logConfig: LogConfig,
                         ignoreTimeDelta: Option[Int],
                         cryptConfig: CryptConfig,
-                        opsPerSecond: Option[Int],
+                        opsPerUnit: Option[Int],
+                        throttleUnit: Throttle.TimeUnit,
                         filterData: SyncFilterData,
-                        logLevel: Level,
                         switched: Boolean):
     /**
       * Returns a normalized ''SyncConfig'' for this instance. If the
@@ -384,18 +417,16 @@ object SyncParameterManager:
       DestinationUriOption)
     dryRun <- dryRunExtractor()
     timeout <- timeoutExtractor()
-    logFile <- optionValue(LogFileOption, Some(LogFileHelp)).alias("l").toPath
-    errLog <- optionValue(ErrorLogFileOption, Some(ErrorLogFileHelp)).toPath
-    syncLog <- optionValue(SyncLogOption, Some(SyncLogHelp)).toPath
+    logConfig <- logConfigExtractor
     timeDelta <- ignoreTimeDeltaExtractor()
-    opsPerSec <- opsPerSecondExtractor()
+    opsPerUnit <- opsPerUnitExtractor()
+    throttleUnit <- throttleTimeUnitExtractor()
     cryptConf <- cryptConfigExtractor
     filters <- FilterManager.filterDataExtractor
     switched <- switchValue(SwitchOption, optHelp = Some(SwitchOptionHelp)).alias("S")
-    logLevel <- logLevelExtractor()
     _ <- CliActorSystemLifeCycle.FileExtractor
-  yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, dryRun, timeout, logFile, errLog, syncLog,
-    timeDelta, opsPerSec, cryptConf, filters, switched, logLevel) map (_.normalized)
+  yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, dryRun, timeout, logConfig,
+    timeDelta, opsPerUnit, throttleUnit, cryptConf, filters, switched) map (_.normalized)
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all
@@ -409,15 +440,12 @@ object SyncParameterManager:
     * @param triedDstConfig   the destination structure config component
     * @param triedDryRun      the dry-run component
     * @param triedTimeout     the timeout component
-    * @param triedLogFile     the log file component
-    * @param triedErrorLog    the error log file component
-    * @param triedSyncLog     the sync log component
+    * @param triedLogConfig   the configuration related to logging
     * @param triedTimeDelta   the ignore file time delta component
-    * @param triedOpsPerSec   the ops per second component
+    * @param triedOpsPerUnit  the ops per second component
     * @param triedCryptConfig the component with the crypt config
     * @param triedFilterData  the component with the filter data
     * @param triedSwitch      the component for the switch flag
-    * @param triedLogLevel    the component for the log level
     * @return a ''Try'' with the config
     */
   private def createSyncConfig(triedSrcUri: Try[String],
@@ -426,18 +454,16 @@ object SyncParameterManager:
                                triedDstConfig: Try[StructureAuthConfig],
                                triedDryRun: Try[Boolean],
                                triedTimeout: Try[Timeout],
-                               triedLogFile: Try[Option[Path]],
-                               triedErrorLog: Try[Option[Path]],
-                               triedSyncLog: Try[Option[Path]],
+                               triedLogConfig: Try[LogConfig],
                                triedTimeDelta: Try[Option[Int]],
-                               triedOpsPerSec: Try[Option[Int]],
+                               triedOpsPerUnit: Try[Option[Int]],
+                               triedThrottleUnit: Try[Throttle.TimeUnit],
                                triedCryptConfig: Try[CryptConfig],
                                triedFilterData: Try[SyncFilterData],
-                               triedSwitch: Try[Boolean],
-                               triedLogLevel: Try[Level]): Try[SyncConfig] =
+                               triedSwitch: Try[Boolean]): Try[SyncConfig] =
     createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
-      triedDryRun, triedTimeout, triedLogFile, triedErrorLog, triedSyncLog, triedTimeDelta, triedCryptConfig,
-      triedOpsPerSec, triedFilterData, triedLogLevel, triedSwitch)(SyncConfig.apply)
+      triedDryRun, triedTimeout, triedLogConfig, triedTimeDelta, triedCryptConfig,
+      triedOpsPerUnit, triedThrottleUnit, triedFilterData, triedSwitch)(SyncConfig.apply)
 
   /**
     * Returns an extractor that extracts the source URI from the first input
@@ -493,14 +519,27 @@ object SyncParameterManager:
       .toInt
 
   /**
-    * Returns an extractor that extracts he value of the option for the number
-    * of sync operations per second.
+    * Returns an extractor that extracts the value of the option for the number
+    * of sync operations per time unit.
     *
-    * @return the extractor for the ops per second option
+    * @return the extractor for the ops per time unit option
     */
-  private def opsPerSecondExtractor(): CliExtractor[Try[Option[Int]]] =
-    optionValue(OpsPerSecondOption, Some(OpsPerSecondHelp))
+  private def opsPerUnitExtractor(): CliExtractor[Try[Option[Int]]] =
+    optionValue(OpsPerUnitOption, Some(OpsPerUnitHelp))
       .toInt
+
+  /**
+    * Returns an extractor that extracts the time unit for the throttling of
+    * operations.
+    *
+    * @return the extractor for the time unit for throttling
+    */
+  private def throttleTimeUnitExtractor(): CliExtractor[Try[Throttle.TimeUnit]] =
+    optionValue(ThrottleUnitOption, Some(ThrottleUnitHelp))
+      .toLower
+      .toEnum(TimeUnits.get)
+      .fallbackValue(Throttle.TimeUnit.Second)
+      .mandatory
 
   /**
     * Returns an extractor that extracts the parameters related to cryptography.
@@ -583,6 +622,20 @@ object SyncParameterManager:
       .mandatory
 
   /**
+    * Returns an extractor that that extracts the parameters related to
+    * logging.
+    *
+    * @return the extractor for the log configuration
+    */
+  private def logConfigExtractor: CliExtractor[Try[LogConfig]] =
+    for
+      logFile <- optionValue(LogFileOption, Some(LogFileHelp)).alias("l").toPath
+      errLog <- optionValue(ErrorLogFileOption, Some(ErrorLogFileHelp)).toPath
+      syncLog <- optionValue(SyncLogOption, Some(SyncLogHelp)).toPath
+      logLevel <- logLevelExtractor()
+    yield createLogConfig(logFile, errLog, syncLog, logLevel)
+
+  /**
     * Returns an extractor for the log level option. The log level can be
     * specified using different switches, like "--info" or "--error". If
     * multiple switches of this group are provided, the last one wins. If there
@@ -600,6 +653,21 @@ object SyncParameterManager:
       .toEnum(LogLevels.get)
       .fallbackValue(Level.WARN)
       .mandatory
+
+  /**
+    * Tries to create a ''LogConfig'' from the given components
+    *
+    * @param triedLogFile  the log file component
+    * @param triedErrorLog the error log file component
+    * @param triedSyncLog  the sync log component
+    * @param triedLogLevel the component for the log level
+    * @return a ''Try'' with the ''LogConfig''
+    */
+  private def createLogConfig(triedLogFile: Try[Option[Path]],
+                              triedErrorLog: Try[Option[Path]],
+                              triedSyncLog: Try[Option[Path]],
+                              triedLogLevel: Try[Level]): Try[LogConfig] =
+    createRepresentation(triedLogFile, triedErrorLog, triedSyncLog, triedLogLevel)(LogConfig.apply)
 
   /**
     * Switches the fields related to source and destination structures in the

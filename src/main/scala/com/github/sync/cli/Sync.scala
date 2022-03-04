@@ -109,13 +109,13 @@ object Sync:
     */
   private def runSync(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
                      (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] =
-    Configurator.setRootLevel(config.logLevel)
+    Configurator.setRootLevel(config.logConfig.logLevel)
 
     protocolHolder.registerCloseHandler(for
       source <- createSyncSource(config, protocolHolder)
       decoratedSource <- decorateSource(source, config, protocolHolder)
       stage <- createApplyStage(config, spawner, protocolHolder)
-      g <- createSyncStream(decoratedSource, stage, config.logFilePath, config.errorLogFilePath)
+      g <- createSyncStream(decoratedSource, stage, config.logConfig.logFilePath, config.logConfig.errorLogFilePath)
       res <- g.run()
     yield SyncResult(res.totalSinkMat, res.errorSinkMat))
 
@@ -133,7 +133,7 @@ object Sync:
     */
   private def createSyncSource(config: SyncConfig, protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[Source[SyncOperation, Any]] = config.syncLogPath match
+  Future[Source[SyncOperation, Any]] = config.logConfig.syncLogPath match
     case Some(path) =>
       createSyncSourceFromLog(config, path)
     case None =>
@@ -188,7 +188,7 @@ object Sync:
     */
   private def createSyncSourceFromLog(config: SyncConfig, syncLogPath: Path)
                                      (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[Source[SyncOperation, Any]] = config.logFilePath match
+  Future[Source[SyncOperation, Any]] = config.logConfig.logFilePath match
     case Some(processedLog) =>
       SerializerStreamHelper.createSyncOperationSourceWithProcessedLog(syncLogPath, processedLog)
     case None =>
@@ -212,7 +212,7 @@ object Sync:
     if config.dryRun then Flow[SyncOperation].map(op => SyncOperationResult(op, None))
     else
       val applyStage = protocolHolder.createApplyStage(config, spawner)
-      config.opsPerSecond.fold(applyStage) { limit =>
+      config.opsPerUnit.fold(applyStage) { limit =>
         Throttle(applyStage, limit)
       }
   }

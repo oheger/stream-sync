@@ -23,13 +23,14 @@ import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractio
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.SyncParameterManager._
+import com.github.sync.cli.SyncParameterManager.*
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 import com.github.sync.oauth.SyncNoAuth
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig}
+import com.github.sync.stream.Throttle
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.apache.logging.log4j.Level
-import org.mockito.Mockito._
+import org.mockito.Mockito.*
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
@@ -38,7 +39,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import java.nio.file.Paths
 import java.time.ZoneId
 import scala.concurrent.Future
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.util.Failure
 
 object SyncParameterManagerSpec:
@@ -202,7 +203,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "have an undefined log file option if none is specified" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-    config.logFilePath should be(None)
+    config.logConfig.logFilePath should be(None)
   }
 
   it should "store the path to a log file in the sync config" in {
@@ -210,7 +211,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.LogFileOption -> List(logFile.toString))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.logFilePath should be(Some(logFile))
+    config.logConfig.logFilePath should be(Some(logFile))
   }
 
   it should "handle a log file option with multiple values" in {
@@ -222,7 +223,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "have an undefined error log file option if none is specified" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-    config.errorLogFilePath should be(None)
+    config.logConfig.errorLogFilePath should be(None)
   }
 
   it should "store the path to the error log file in the sync config" in {
@@ -230,12 +231,12 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.ErrorLogFileOption -> List(logFile.toString))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.errorLogFilePath should be(Some(logFile))
+    config.logConfig.errorLogFilePath should be(Some(logFile))
   }
 
   it should "have an undefined sync log option if none is specified" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-    config.syncLogPath should be(None)
+    config.logConfig.syncLogPath should be(None)
   }
 
   it should "store the path to the sync log file in the sync config" in {
@@ -243,7 +244,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.SyncLogOption -> List(syncLogFile.toString))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.syncLogPath should be(Some(syncLogFile))
+    config.logConfig.syncLogPath should be(Some(syncLogFile))
   }
 
   it should "handle a sync log option with multiple values" in {
@@ -278,23 +279,41 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "handle an undefined option for the operations per second" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
 
-    config.opsPerSecond should be(None)
+    config.opsPerUnit should be(None)
   }
 
-  it should "evaluate the threshold for the operations per second" in {
+  it should "evaluate the threshold for the operations per unit" in {
     val OpsCount = 17
-    val argsMap = ArgsMap + (SyncParameterManager.OpsPerSecondOption -> List(OpsCount.toString))
+    val argsMap = ArgsMap + (SyncParameterManager.OpsPerUnitOption -> List(OpsCount.toString))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.opsPerSecond should be(Some(OpsCount))
+    config.opsPerUnit should be(Some(OpsCount))
   }
 
   it should "handle an invalid threshold for the operations per second" in {
     val InvalidValue = "not a valid number of ops per sec"
-    val argsMap = ArgsMap + (SyncParameterManager.OpsPerSecondOption -> List(InvalidValue))
+    val argsMap = ArgsMap + (SyncParameterManager.OpsPerUnitOption -> List(InvalidValue))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      InvalidValue, SyncParameterManager.OpsPerSecondOption)
+      InvalidValue, SyncParameterManager.OpsPerUnitOption)
+  }
+
+  it should "evaluate the time unit for throttling" in {
+    val namesToUnits = Map("s" -> Throttle.TimeUnit.Second, "second" -> Throttle.TimeUnit.Second,
+      "m" -> Throttle.TimeUnit.Minute, "MINUTE" -> Throttle.TimeUnit.Minute,
+      "H" -> Throttle.TimeUnit.Hour, "hour" -> Throttle.TimeUnit.Hour)
+
+    namesToUnits foreach { (name, unit) =>
+      val argsMap = ArgsMap + (SyncParameterManager.ThrottleUnitOption -> List(name))
+      val (config, _) = futureResult(extractSyncConfig(argsMap))
+      config.throttleUnit should be(unit)
+    }
+  }
+
+  it should "set a default for the time unit for throttling" in {
+    val (config, _) = futureResult(extractSyncConfig(ArgsMap))
+
+    config.throttleUnit should be(Throttle.TimeUnit.Second)
   }
 
   it should "return correct default options related to encryption" in {
@@ -379,7 +398,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "set a default log level" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
 
-    config.logLevel should be(Level.WARN)
+    config.logConfig.logLevel should be(Level.WARN)
   }
 
   it should "handle the switches determining the log level" in {
@@ -387,7 +406,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       val argsMap = ArgsMap + (switch -> List("true"))
       val (config, _) = futureResult(extractSyncConfig(argsMap))
 
-      config.logLevel should be(expectedLevel)
+      config.logConfig.logLevel should be(expectedLevel)
 
     checkLogLevel(SyncParameterManager.LogLevelDebug, Level.DEBUG)
     checkLogLevel(SyncParameterManager.LogLevelInfo, Level.INFO)
@@ -401,7 +420,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
     // The order of the options in the map is not deterministic.
-    config.logLevel == Level.ERROR || config.logLevel == Level.INFO shouldBe true
+    config.logConfig.logLevel == Level.ERROR || config.logConfig.logLevel == Level.INFO shouldBe true
   }
 
   it should "mark all options contained in the sync config as accessed" in {
@@ -414,7 +433,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val (_, updCtx) = futureResult(extractSyncConfig(argsMap))
     accessedKeys(updCtx) should contain allOf(SyncParameterManager.DryRunOption,
       SyncParameterManager.TimeoutOption, SyncParameterManager.LogFileOption, SyncParameterManager.SyncLogOption,
-      SyncParameterManager.IgnoreTimeDeltaOption, SyncParameterManager.OpsPerSecondOption,
+      SyncParameterManager.IgnoreTimeDeltaOption, SyncParameterManager.OpsPerUnitOption,
       SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption,
       SyncParameterManager.SourceCryptModeOption, SyncParameterManager.DestCryptModeOption)
   }
@@ -434,10 +453,12 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       dstPassword = Some("pwd-dst"), dstCryptMode = CryptMode.Files, cryptCacheSize = 55)
     val expCryptConfig = CryptConfig(dstPassword = Some("pwd-src"), dstCryptMode = CryptMode.FilesAndNames,
       srcPassword = Some("pwd-dst"), srcCryptMode = CryptMode.Files, cryptCacheSize = 55)
+    val logConfig = LogConfig(logFilePath = Some(Paths get "log"), errorLogFilePath = Some(Paths get "err"),
+      syncLogPath = Some(Paths get "syncLog"), logLevel = Level.INFO)
     val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
-      dstConfig = mock[StructureAuthConfig], dryRun = false, timeout = 1.minute, logFilePath = None,
-      syncLogPath = None, ignoreTimeDelta = Some(100), cryptConfig = orgCryptConfig, opsPerSecond = Some(100),
-      filterData = mock[SyncFilterData], logLevel = Level.INFO, switched = true, errorLogFilePath = None)
+      dstConfig = mock[StructureAuthConfig], dryRun = false, timeout = 1.minute, logConfig = logConfig,
+      ignoreTimeDelta = Some(100), cryptConfig = orgCryptConfig, opsPerUnit = Some(100),
+      throttleUnit = Throttle.TimeUnit.Minute, filterData = mock[SyncFilterData], switched = true)
     val expNormalized = orgConfig.copy(srcUri = orgConfig.dstUri, dstUri = orgConfig.srcUri,
       srcConfig = orgConfig.dstConfig, dstConfig = orgConfig.srcConfig, cryptConfig = expCryptConfig,
       switched = false)

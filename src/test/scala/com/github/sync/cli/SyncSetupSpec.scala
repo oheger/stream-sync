@@ -24,13 +24,14 @@ import akka.util.Timeout
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.*
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
-import com.github.sync.cli.SyncParameterManager.SyncConfig
+import com.github.sync.cli.SyncParameterManager.{LogConfig, SyncConfig}
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig}
 import com.github.sync.protocol.gdrive.GoogleDriveProtocolFactory
 import com.github.sync.protocol.local.LocalProtocolFactory
 import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
 import com.github.sync.protocol.webdav.DavProtocolFactory
+import com.github.sync.stream.Throttle
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
 import org.apache.logging.log4j.Level
 import org.mockito.ArgumentMatchers.any
@@ -52,9 +53,9 @@ object SyncSetupSpec:
 
   /** A test sync configuration. */
   private val TestSyncConfig = SyncConfig(srcUri = "someSrcUri", dstUri = "someDstUri", srcConfig = null,
-    dstConfig = null, timeout = SyncTimeout, dryRun = false, logFilePath = None, syncLogPath = None,
-    ignoreTimeDelta = None, cryptConfig = null, opsPerSecond = None, filterData = null, switched = false,
-    logLevel = Level.DEBUG, errorLogFilePath = None)
+    dstConfig = null, timeout = SyncTimeout, dryRun = false, logConfig = LogConfig(None, None, None, Level.DEBUG),
+    ignoreTimeDelta = None, cryptConfig = null, opsPerUnit = None, throttleUnit = Throttle.TimeUnit.Second,
+    filterData = null, switched = false)
 
   /** A test configuration for HTTP actors. */
   private val TestSenderConfig = HttpRequestSenderConfig(actorName = Some("testActor"))
