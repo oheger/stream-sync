@@ -511,6 +511,22 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     }
   }
 
+  it should "support a time unit when applying throttling" in {
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val FilesCount = 10
+    (1 to FilesCount) foreach { idx =>
+      createTestFile(srcFolder, s"testFile$idx.txt")
+    }
+    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+      "--throttle", FilesCount.toString, "--throttle-unit", "Minute")
+
+    intercept[TimeoutException] {
+      val syncFuture = runSync(options)
+      Await.ready(syncFuture, 2.seconds)
+    }
+  }
+
   it should "not restrict the number of Noop actions per time unit" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))

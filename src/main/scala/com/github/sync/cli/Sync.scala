@@ -213,7 +213,7 @@ object Sync:
     else
       val applyStage = protocolHolder.createApplyStage(config, spawner)
       config.opsPerUnit.fold(applyStage) { limit =>
-        Throttle(applyStage, limit)
+        Throttle(applyStage, limit, config.throttleUnit)
       }
   }
 
