@@ -40,6 +40,7 @@ scalacOptions ++=
   )
 
 lazy val ITest = config("integrationTest") extend Test
+ITest / parallelExecution := false
 
 lazy val akkaDependencies = Seq(
   ("com.typesafe.akka" %% "akka-actor" % VersionAkka).cross(CrossVersion.for3Use2_13),
