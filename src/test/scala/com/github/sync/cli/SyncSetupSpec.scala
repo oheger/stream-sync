@@ -35,7 +35,7 @@ import com.github.sync.stream.Throttle
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
 import org.apache.logging.log4j.Level
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{never, verify, verifyZeroInteractions, when}
+import org.mockito.Mockito.{never, verify, verifyNoInteractions, when}
 import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
@@ -100,7 +100,7 @@ class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers w
     val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
 
     futureResult(authFunc(SyncNoAuth, mock[KillSwitch])) should be(NoAuthConfig)
-    verifyZeroInteractions(storageService)
+    verifyNoInteractions(storageService)
   }
 
   it should "convert a SyncBasicAuth config" in {
@@ -110,7 +110,7 @@ class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers w
 
     val authConfig = futureResult(authFunc(syncConfig, mock[KillSwitch]))
     authConfig should be(BasicAuthConfig(syncConfig.user, syncConfig.password))
-    verifyZeroInteractions(storageService)
+    verifyNoInteractions(storageService)
   }
 
   /**
@@ -160,7 +160,7 @@ class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers w
     val newTokens = OAuthTokenData("refreshedAccessToken", "refreshToken")
     authConfig.refreshNotificationFunc(Success(newTokens))
     verify(storageService).saveTokens(storageConfig, newTokens)
-    verifyZeroInteractions(killSwitch)
+    verifyNoInteractions(killSwitch)
   }
 
   it should "provide an OAuth refresh notification func that triggers the kill switch on errors" in {

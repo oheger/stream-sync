@@ -223,7 +223,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
 
     val (config, _) = futureResult(extractCommandConfig(args, consoleReader))
     config.storageConfig.optPassword should be(None)
-    verifyZeroInteractions(consoleReader)
+    verifyNoInteractions(consoleReader)
   }
 
   it should "evaluate a negative encrypt option when creating a storage configuration" in {
@@ -233,7 +233,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
 
     val (config, _) = futureResult(extractCommandConfig(args, consoleReader))
     config.storageConfig.optPassword should be(None)
-    verifyZeroInteractions(consoleReader)
+    verifyNoInteractions(consoleReader)
   }
 
   it should "detect an invalid encryption option" in {
@@ -242,7 +242,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       OAuthParameterManager.PasswordOption + (OAuthParameterManager.EncryptOption -> "?")
 
     expectFailedFuture(extractCommandConfig(args, consoleReader), OAuthParameterManager.EncryptOption)
-    verifyZeroInteractions(consoleReader)
+    verifyNoInteractions(consoleReader)
   }
 
   /**
