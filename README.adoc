@@ -786,17 +786,38 @@ command, for instance:
 
 In some situations it may be necessary to restrict the number of sync
 operations that are executed in a given time unit. For instance, there are
-public servers that react with an error status of _429 Too many files_ when
+public servers that react with an error status of _429 Too many requests_ when
 many small files are uploaded over a fast internet connection.
 
-StreamSync supports a command line option to deal with such cases:
-`ops-per-second`. The option is passed a numeric value that limits the number
+StreamSync supports two command line options to deal with such cases:
+
+.Command line options for throttling sync operations
+[cols="1,3,1",options="header"]
+|====
+| Option | Description | Default
+| throttle | The option is passed a numeric value that limits the number
 of sync operations (file uploads, deletion of files, creation of folders, etc.)
-in a second. By specifying the minimum value of 1, only a single operation per
-second is executed. This is a good solution for the problem with overloaded
-servers because it mainly impacts small files and operations that complete very
-fast. The upload of larger files that takes significantly longer than a second
-will not be delayed by this switch.
+in a time unit. | None
+| throttle-unit | This option defines the time unit, in which the `throttle`
+option should be applied. It can take one of the values _Second_, _Minute_, or
+_Hour_, or one of the abbreviations _S_, _M_, or _H_ (case does not matter).
+| Second
+|====
+
+For instance, using a command like
+
+ Sync --throttle 1 ...
+
+only a single operation per second is executed. This is a good solution for the
+problem with overloaded servers because it mainly impacts small files and
+operations that complete very fast. The upload of larger files that takes
+significantly longer than a second will not be delayed by this option. By
+specifying greater time units, throttling can even be configured on a finer
+level, e.g.:
+
+ Sync --throttle 45 --throttle-unit minute ...
+
+would limit the throughput of the sync stream to 45 operations per minute.
 
 Another option to influence the speed of sync processes that have an HTTP
 server as source or destination is to override certain configuration settings.
