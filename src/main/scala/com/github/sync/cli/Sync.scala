@@ -139,7 +139,8 @@ object Sync:
     case None =>
       val srcSource = protocolHolder.createSourceElementSource()
       val dstSource = protocolHolder.createDestinationElementSource()
-      Future.successful(createGraphForSyncSource(srcSource, dstSource, config.ignoreTimeDelta getOrElse 1))
+      Future.successful(createGraphForSyncSource(srcSource, dstSource,
+        config.streamConfig.ignoreTimeDelta getOrElse 1))
 
   /**
     * Creates a ''Source'' that produces ''SyncOperation'' objects to sync the
@@ -209,11 +210,11 @@ object Sync:
   private def createApplyStage(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Flow[SyncOperation, SyncOperationResult, Any]] = Future {
-    if config.dryRun then Flow[SyncOperation].map(op => SyncOperationResult(op, None))
+    if config.streamConfig.dryRun then Flow[SyncOperation].map(op => SyncOperationResult(op, None))
     else
       val applyStage = protocolHolder.createApplyStage(config, spawner)
-      config.opsPerUnit.fold(applyStage) { limit =>
-        Throttle(applyStage, limit, config.throttleUnit)
+      config.streamConfig.opsPerUnit.fold(applyStage) { limit =>
+        Throttle(applyStage, limit, config.streamConfig.throttleUnit)
       }
   }
 

@@ -354,39 +354,48 @@ object SyncParameterManager:
                        logLevel: Level)
 
   /**
+    * A configuration class that combines all the properties of the sync
+    * stream that are not related to a specific category, such as logging or
+    * cryptography.
+    *
+    * @param dryRun          flag whether only a dry-run should be done
+    * @param timeout         a timeout for sync operations
+    * @param ignoreTimeDelta optional threshold for a time difference between
+    *                        two files that should be ignored
+    * @param opsPerUnit      optional restriction for the number of sync
+    *                        operations per time unit
+    * @param throttleUnit    defines the time unit for throttling
+    */
+  case class StreamConfig(dryRun: Boolean,
+                          timeout: Timeout,
+                          ignoreTimeDelta: Option[Int],
+                          opsPerUnit: Option[Int],
+                          throttleUnit: Throttle.TimeUnit)
+
+  /**
     * A class that holds the configuration options for a sync process.
     *
     * An instance of this class is created from the command line options passed
     * to the program.
     *
-    * @param srcUri          the source URI of the sync process
-    * @param dstUri          the destination URI of the sync process
-    * @param srcConfig       the config for the source structure
-    * @param dstConfig       the config for the destination structure
-    * @param dryRun          flag whether only a dry-run should be done
-    * @param timeout         a timeout for sync operations
-    * @param logConfig       the configuration related to logging
-    * @param ignoreTimeDelta optional threshold for a time difference between
-    *                        two files that should be ignored
-    * @param cryptConfig     the configuration related to encryption
-    * @param opsPerUnit      optional restriction for the number of sync
-    *                        operations per time unit
-    * @param throttleUnit    defines the time unit for throttling
-    * @param filterData      an object with information about filters
-    * @param switched        a flag whether src and dst configs should be
-    *                        switched
+    * @param srcUri       the source URI of the sync process
+    * @param dstUri       the destination URI of the sync process
+    * @param srcConfig    the config for the source structure
+    * @param dstConfig    the config for the destination structure
+    * @param logConfig    the configuration related to logging
+    * @param cryptConfig  the configuration related to encryption
+    * @param streamConfig the configuration related to stream parameters
+    * @param filterData   an object with information about filters
+    * @param switched     a flag whether src and dst configs should be
+    *                     switched
     */
   case class SyncConfig(srcUri: String,
                         dstUri: String,
                         srcConfig: StructureAuthConfig,
                         dstConfig: StructureAuthConfig,
-                        dryRun: Boolean,
-                        timeout: Timeout,
                         logConfig: LogConfig,
-                        ignoreTimeDelta: Option[Int],
                         cryptConfig: CryptConfig,
-                        opsPerUnit: Option[Int],
-                        throttleUnit: Throttle.TimeUnit,
+                        streamConfig: StreamConfig,
                         filterData: SyncFilterData,
                         switched: Boolean):
     /**
@@ -415,18 +424,14 @@ object SyncParameterManager:
     srcConfig <- SyncCliStructureConfig.structureConfigExtractor(SyncCliStructureConfig.SourceRoleType, SourceUriOption)
     dstConfig <- SyncCliStructureConfig.structureConfigExtractor(SyncCliStructureConfig.DestinationRoleType,
       DestinationUriOption)
-    dryRun <- dryRunExtractor()
-    timeout <- timeoutExtractor()
     logConfig <- logConfigExtractor
-    timeDelta <- ignoreTimeDeltaExtractor()
-    opsPerUnit <- opsPerUnitExtractor()
-    throttleUnit <- throttleTimeUnitExtractor()
     cryptConf <- cryptConfigExtractor
+    streamConf <- streamConfigExtractor
     filters <- FilterManager.filterDataExtractor
     switched <- switchValue(SwitchOption, optHelp = Some(SwitchOptionHelp)).alias("S")
     _ <- CliActorSystemLifeCycle.FileExtractor
-  yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, dryRun, timeout, logConfig,
-    timeDelta, opsPerUnit, throttleUnit, cryptConf, filters, switched) map (_.normalized)
+  yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, logConfig, cryptConf, streamConf,
+    filters, switched) map (_.normalized)
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all
@@ -438,11 +443,7 @@ object SyncParameterManager:
     * @param triedDstUri      the dest URI component
     * @param triedSrcConfig   the source structure config component
     * @param triedDstConfig   the destination structure config component
-    * @param triedDryRun      the dry-run component
-    * @param triedTimeout     the timeout component
     * @param triedLogConfig   the configuration related to logging
-    * @param triedTimeDelta   the ignore file time delta component
-    * @param triedOpsPerUnit  the ops per second component
     * @param triedCryptConfig the component with the crypt config
     * @param triedFilterData  the component with the filter data
     * @param triedSwitch      the component for the switch flag
@@ -452,18 +453,13 @@ object SyncParameterManager:
                                triedDstUri: Try[String],
                                triedSrcConfig: Try[StructureAuthConfig],
                                triedDstConfig: Try[StructureAuthConfig],
-                               triedDryRun: Try[Boolean],
-                               triedTimeout: Try[Timeout],
                                triedLogConfig: Try[LogConfig],
-                               triedTimeDelta: Try[Option[Int]],
-                               triedOpsPerUnit: Try[Option[Int]],
-                               triedThrottleUnit: Try[Throttle.TimeUnit],
                                triedCryptConfig: Try[CryptConfig],
+                               triedStreamConfig: Try[StreamConfig],
                                triedFilterData: Try[SyncFilterData],
                                triedSwitch: Try[Boolean]): Try[SyncConfig] =
     createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
-      triedDryRun, triedTimeout, triedLogConfig, triedTimeDelta, triedCryptConfig,
-      triedOpsPerUnit, triedThrottleUnit, triedFilterData, triedSwitch)(SyncConfig.apply)
+      triedLogConfig, triedCryptConfig, triedStreamConfig, triedFilterData, triedSwitch)(SyncConfig.apply)
 
   /**
     * Returns an extractor that extracts the source URI from the first input
@@ -486,14 +482,6 @@ object SyncParameterManager:
       .mandatory
 
   /**
-    * Returns an extractor for the dry-run switch.
-    *
-    * @return the extractor for the dry-run mode switch
-    */
-  private def dryRunExtractor(): CliExtractor[Try[Boolean]] =
-    switchValue(DryRunOption, Some(DryRunHelp)).alias("d")
-
-  /**
     * Returns an extractor that extracts a crypt mode value from a command line
     * option.
     *
@@ -505,40 +493,6 @@ object SyncParameterManager:
       .toUpper
       .toEnum(CryptMode.Literals.get)
       .fallbackValue(CryptMode.None.asInstanceOf[CryptMode.Value])
-      .mandatory
-
-  /**
-    * Returns an extractor that extracts the value of the option for ignoring
-    * file time deltas. This extractor is based on the extractor for an
-    * optional parameter, but the result has to be mapped to an integer.
-    *
-    * @return the extractor for the ignore time delta option
-    */
-  private def ignoreTimeDeltaExtractor(): CliExtractor[Try[Option[Int]]] =
-    optionValue(IgnoreTimeDeltaOption, Some(IgnoreTimeDeltaHelp))
-      .toInt
-
-  /**
-    * Returns an extractor that extracts the value of the option for the number
-    * of sync operations per time unit.
-    *
-    * @return the extractor for the ops per time unit option
-    */
-  private def opsPerUnitExtractor(): CliExtractor[Try[Option[Int]]] =
-    optionValue(OpsPerUnitOption, Some(OpsPerUnitHelp))
-      .toInt
-
-  /**
-    * Returns an extractor that extracts the time unit for the throttling of
-    * operations.
-    *
-    * @return the extractor for the time unit for throttling
-    */
-  private def throttleTimeUnitExtractor(): CliExtractor[Try[Throttle.TimeUnit]] =
-    optionValue(ThrottleUnitOption, Some(ThrottleUnitHelp))
-      .toLower
-      .toEnum(TimeUnits.get)
-      .fallbackValue(Throttle.TimeUnit.Second)
       .mandatory
 
   /**
@@ -607,21 +561,6 @@ object SyncParameterManager:
       triedCryptCacheSize)(CryptConfig.apply)
 
   /**
-    * Returns an extractor that extracts the timeout from the command line.
-    * This extractor extracts an int value, which is interpreted as timeout in
-    * seconds. A default timeout is set if the option is undefined.
-    *
-    * @return the extractor to extract the timeout value
-    */
-  private def timeoutExtractor(): CliExtractor[Try[Timeout]] =
-    optionValue(TimeoutOption, Some(TimeoutHelp))
-      .alias("t")
-      .toInt
-      .mapTo(time => Timeout(time.seconds))
-      .fallbackValue(DefaultTimeout)
-      .mandatory
-
-  /**
     * Returns an extractor that that extracts the parameters related to
     * logging.
     *
@@ -668,6 +607,95 @@ object SyncParameterManager:
                               triedSyncLog: Try[Option[Path]],
                               triedLogLevel: Try[Level]): Try[LogConfig] =
     createRepresentation(triedLogFile, triedErrorLog, triedSyncLog, triedLogLevel)(LogConfig.apply)
+
+  /**
+    * Returns an extractor that extracts the parameters related to the stream.
+    *
+    * @return the extractor for the ''StreamConfig''
+    */
+  private def streamConfigExtractor: CliExtractor[Try[StreamConfig]] =
+    for
+      dryRun <- dryRunExtractor()
+      timeout <- timeoutExtractor()
+      timeDelta <- ignoreTimeDeltaExtractor()
+      opsPerUnit <- opsPerUnitExtractor()
+      throttleUnit <- throttleTimeUnitExtractor()
+    yield createStreamConfig(dryRun, timeout, timeDelta, opsPerUnit, throttleUnit)
+
+  /**
+    * Returns an extractor for the dry-run switch.
+    *
+    * @return the extractor for the dry-run mode switch
+    */
+  private def dryRunExtractor(): CliExtractor[Try[Boolean]] =
+    switchValue(DryRunOption, Some(DryRunHelp)).alias("d")
+
+  /**
+    * Returns an extractor that extracts the timeout from the command line.
+    * This extractor extracts an int value, which is interpreted as timeout in
+    * seconds. A default timeout is set if the option is undefined.
+    *
+    * @return the extractor to extract the timeout value
+    */
+  private def timeoutExtractor(): CliExtractor[Try[Timeout]] =
+    optionValue(TimeoutOption, Some(TimeoutHelp))
+      .alias("t")
+      .toInt
+      .mapTo(time => Timeout(time.seconds))
+      .fallbackValue(DefaultTimeout)
+      .mandatory
+
+  /**
+    * Returns an extractor that extracts the value of the option for ignoring
+    * file time deltas. This extractor is based on the extractor for an
+    * optional parameter, but the result has to be mapped to an integer.
+    *
+    * @return the extractor for the ignore time delta option
+    */
+  private def ignoreTimeDeltaExtractor(): CliExtractor[Try[Option[Int]]] =
+    optionValue(IgnoreTimeDeltaOption, Some(IgnoreTimeDeltaHelp))
+      .toInt
+
+  /**
+    * Returns an extractor that extracts the value of the option for the number
+    * of sync operations per time unit.
+    *
+    * @return the extractor for the ops per time unit option
+    */
+  private def opsPerUnitExtractor(): CliExtractor[Try[Option[Int]]] =
+    optionValue(OpsPerUnitOption, Some(OpsPerUnitHelp))
+      .toInt
+
+  /**
+    * Returns an extractor that extracts the time unit for the throttling of
+    * operations.
+    *
+    * @return the extractor for the time unit for throttling
+    */
+  private def throttleTimeUnitExtractor(): CliExtractor[Try[Throttle.TimeUnit]] =
+    optionValue(ThrottleUnitOption, Some(ThrottleUnitHelp))
+      .toLower
+      .toEnum(TimeUnits.get)
+      .fallbackValue(Throttle.TimeUnit.Second)
+      .mandatory
+
+  /**
+    * Tries to construct a ''StreamConfig'' object from the passed in components.
+    *
+    * @param triedDryRun       the dry-run component
+    * @param triedTimeout      the timeout component
+    * @param triedTimeDelta    the ignore file time delta component
+    * @param triedOpsPerUnit   the ops per unit component
+    * @param triedThrottleUnit the throttle unit component
+    * @return a ''Try'' with the ''StreamConfig''
+    */
+  private def createStreamConfig(triedDryRun: Try[Boolean],
+                                 triedTimeout: Try[Timeout],
+                                 triedTimeDelta: Try[Option[Int]],
+                                 triedOpsPerUnit: Try[Option[Int]],
+                                 triedThrottleUnit: Try[Throttle.TimeUnit]): Try[StreamConfig] =
+    createRepresentation(triedDryRun, triedTimeout, triedTimeDelta, triedOpsPerUnit,
+      triedThrottleUnit)(StreamConfig.apply)
 
   /**
     * Switches the fields related to source and destination structures in the

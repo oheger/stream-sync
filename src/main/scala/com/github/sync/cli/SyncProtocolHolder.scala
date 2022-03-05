@@ -146,7 +146,7 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     */
   def createApplyStage(syncConfig: SyncConfig, spawner: Spawner): Flow[SyncOperation, SyncOperationResult, NotUsed] =
     val protocolHandler = new ProtocolOperationHandler(dstProtocol, srcProtocol)
-    implicit val timeout: Timeout = syncConfig.timeout
+    implicit val timeout: Timeout = syncConfig.streamConfig.timeout
 
     ProtocolOperationHandlerStage(protocolHandler, spawner)
 

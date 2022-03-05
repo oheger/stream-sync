@@ -171,26 +171,26 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
   it should "return a default dry-run mode" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-    config.dryRun shouldBe false
+    config.streamConfig.dryRun shouldBe false
   }
 
   it should "support enabling the dry-run mode" in {
     val argsMap = ArgsMap + (SyncParameterManager.DryRunOption -> List("true"))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.dryRun shouldBe true
+    config.streamConfig.dryRun shouldBe true
   }
 
   it should "return a default timeout if no timeout option is provided" in {
     val argsMap = ArgsMap - SyncParameterManager.TimeoutOption
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.timeout should be(SyncParameterManager.DefaultTimeout)
+    config.streamConfig.timeout should be(SyncParameterManager.DefaultTimeout)
   }
 
   it should "return the configured timeout option value" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-    config.timeout should be(Timeout(TimeoutValue.seconds))
+    config.streamConfig.timeout should be(Timeout(TimeoutValue.seconds))
   }
 
   it should "handle an invalid timeout value" in {
@@ -257,7 +257,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   it should "handle an undefined option for the file times threshold" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
 
-    config.ignoreTimeDelta should be(None)
+    config.streamConfig.ignoreTimeDelta should be(None)
   }
 
   it should "evaluate the threshold for file time deltas" in {
@@ -265,7 +265,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.IgnoreTimeDeltaOption -> List(Delta.toString))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.ignoreTimeDelta should be(Some(Delta))
+    config.streamConfig.ignoreTimeDelta should be(Some(Delta))
   }
 
   it should "handle an invalid threshold for file time deltas" in {
@@ -276,10 +276,10 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       InvalidValue, SyncParameterManager.IgnoreTimeDeltaOption)
   }
 
-  it should "handle an undefined option for the operations per second" in {
+  it should "handle an undefined option for the operations per unit" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
 
-    config.opsPerUnit should be(None)
+    config.streamConfig.opsPerUnit should be(None)
   }
 
   it should "evaluate the threshold for the operations per unit" in {
@@ -287,7 +287,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.OpsPerUnitOption -> List(OpsCount.toString))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.opsPerUnit should be(Some(OpsCount))
+    config.streamConfig.opsPerUnit should be(Some(OpsCount))
   }
 
   it should "handle an invalid threshold for the operations per second" in {
@@ -306,14 +306,14 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     namesToUnits foreach { (name, unit) =>
       val argsMap = ArgsMap + (SyncParameterManager.ThrottleUnitOption -> List(name))
       val (config, _) = futureResult(extractSyncConfig(argsMap))
-      config.throttleUnit should be(unit)
+      config.streamConfig.throttleUnit should be(unit)
     }
   }
 
   it should "set a default for the time unit for throttling" in {
     val (config, _) = futureResult(extractSyncConfig(ArgsMap))
 
-    config.throttleUnit should be(Throttle.TimeUnit.Second)
+    config.streamConfig.throttleUnit should be(Throttle.TimeUnit.Second)
   }
 
   it should "return correct default options related to encryption" in {
@@ -455,10 +455,11 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       srcPassword = Some("pwd-dst"), srcCryptMode = CryptMode.Files, cryptCacheSize = 55)
     val logConfig = LogConfig(logFilePath = Some(Paths get "log"), errorLogFilePath = Some(Paths get "err"),
       syncLogPath = Some(Paths get "syncLog"), logLevel = Level.INFO)
+    val streamConfig = StreamConfig(dryRun = false, timeout = 1.minute, ignoreTimeDelta = Some(100),
+      opsPerUnit = Some(100), throttleUnit = Throttle.TimeUnit.Minute)
     val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
-      dstConfig = mock[StructureAuthConfig], dryRun = false, timeout = 1.minute, logConfig = logConfig,
-      ignoreTimeDelta = Some(100), cryptConfig = orgCryptConfig, opsPerUnit = Some(100),
-      throttleUnit = Throttle.TimeUnit.Minute, filterData = mock[SyncFilterData], switched = true)
+      dstConfig = mock[StructureAuthConfig], logConfig = logConfig, cryptConfig = orgCryptConfig,
+      streamConfig = streamConfig, filterData = mock[SyncFilterData], switched = true)
     val expNormalized = orgConfig.copy(srcUri = orgConfig.dstUri, dstUri = orgConfig.srcUri,
       srcConfig = orgConfig.dstConfig, dstConfig = orgConfig.srcConfig, cryptConfig = expCryptConfig,
       switched = false)

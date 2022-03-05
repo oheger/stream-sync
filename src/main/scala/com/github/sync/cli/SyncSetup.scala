@@ -127,7 +127,7 @@ object SyncSetup:
     */
   def defaultProtocolFactorySetupFunc(implicit system: ActorSystem[_], ec: ExecutionContext):
   ProtocolFactorySetupFunc = (structConfig, syncConfig, senderConfig, spawner) => {
-    val syncTimeout = syncConfig.timeout
+    val syncTimeout = syncConfig.streamConfig.timeout
     structConfig match
       case fsConfig: FsStructureConfig =>
         new LocalProtocolFactory(fsConfig, senderConfig, syncTimeout, spawner, ec)
