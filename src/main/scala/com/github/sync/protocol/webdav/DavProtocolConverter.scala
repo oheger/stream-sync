@@ -44,15 +44,12 @@ private object DavProtocolConverter:
   * loaded from attributes.
   *
   * @param davConfig the WebDAV configuration
+  * @param optModifiedAttribute an optional custom property to access the last
+  *                             modified time                   
   */
-private class DavProtocolConverter(val davConfig: DavStructureConfig)
+private class DavProtocolConverter(val davConfig: DavStructureConfig,
+                                   val optModifiedAttribute: Option[DavModel.AttributeKey])
   extends FileSystemProtocolConverter[Uri, DavModel.DavFile, DavModel.DavFolder]:
-  /** An optional custom property to access the last modified time. */
-  private val optModifiedAttribute = davConfig.optLastModifiedProperty map { property =>
-    val namespace = davConfig.optLastModifiedNamespace getOrElse DavParser.NS_DAV
-    DavModel.AttributeKey(namespace, property)
-  }
-
   /** The attribute to be used when setting the last modified time. */
   private val setModifiedAttribute = optModifiedAttribute getOrElse DavParser.AttrModifiedAt
 

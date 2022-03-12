@@ -55,4 +55,4 @@ private object DavProtocolCreator
 
   override def createConverter(config: DavStructureConfig):
   FileSystemProtocolConverter[Uri, DavModel.DavFile, DavModel.DavFolder] =
-    new DavProtocolConverter(config)
+    new DavProtocolConverter(config, None)

@@ -61,7 +61,7 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
   import DavProtocolConverterSpec._
 
   "DavProtocolConverter" should "convert a string ID to a URI" in {
-    val converter = new DavProtocolConverter(PlainConfig)
+    val converter = new DavProtocolConverter(PlainConfig, None)
 
     converter.elementIDFromString(TestUri.toString()) should be(TestUri)
   }
@@ -69,7 +69,7 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
   it should "convert a sync folder to a dav folder" in {
     val FolderName = "testFolder"
     val SyncFolder = SyncTypes.FsFolder(null, "/some/rel/uri", 0)
-    val converter = new DavProtocolConverter(PlainConfig)
+    val converter = new DavProtocolConverter(PlainConfig, None)
 
     val fsFolder = converter.toFsFolder(SyncFolder, FolderName)
     fsFolder.name should be(FolderName)
@@ -81,7 +81,7 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
     val ParentPath = "/path/of/the/parent/"
     val fsFolder = DavModel.newFolder(FolderName, id = elementUri(EncFolderName))
     val expSyncFolder = SyncTypes.FsFolder(elementUri(EncFolderName), ParentPath + EncFolderName, TestLevel)
-    val converter = new DavProtocolConverter(PlainConfig)
+    val converter = new DavProtocolConverter(PlainConfig, None)
 
     converter.toFolderElement(fsFolder, ParentPath, TestLevel) should be(expSyncFolder)
   }
@@ -90,7 +90,7 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
     val FileName = "testFile.txt"
     val SyncFile = SyncTypes.FsFile(id = TestUriStr, relativeUri = "/some/uri/test.txt", size = 8192,
       lastModified = LastModifiedTime, level = TestLevel)
-    val converter = new DavProtocolConverter(PlainConfig)
+    val converter = new DavProtocolConverter(PlainConfig, None)
 
     val fsFile = converter.toFsFile(SyncFile, FileName, useID = true)
     fsFile.id should be(TestUri)
@@ -104,25 +104,26 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
     val FileName = "testFile.txt"
     val ModifiedProperty = "customLastModified"
     val Namespace = ":custom:ns"
+    val ModifiedKey = DavModel.AttributeKey(Namespace, ModifiedProperty)
     val SyncFile = SyncTypes.FsFile(id = TestUriStr, relativeUri = "/some/uri/test.txt", size = 8192,
       lastModified = LastModifiedTime, level = TestLevel)
     val config = DavStructureConfig(optLastModifiedProperty = Some(ModifiedProperty),
       optLastModifiedNamespace = Some(Namespace), deleteBeforeOverride = false)
-    val converter = new DavProtocolConverter(config)
+    val converter = new DavProtocolConverter(config, Some(ModifiedKey))
 
     val fsFile = converter.toFsFile(SyncFile, FileName, useID = true)
     fsFile.id should be(TestUri)
     fsFile.name should be(FileName)
     fsFile.size should be(SyncFile.size)
     fsFile.attributes.values should have size 1
-    fsFile.attributes.values(DavModel.AttributeKey(Namespace, ModifiedProperty)) should be(LastModifiedTimeStr)
+    fsFile.attributes.values(ModifiedKey) should be(LastModifiedTimeStr)
   }
 
   it should "optionally ignore the ID when converting a sync file to a dav file" in {
     val FileName = "testFile.txt"
     val SyncFile = SyncTypes.FsFile(id = TestUriStr, relativeUri = "/some/uri/test.txt", size = 8192,
       lastModified = LastModifiedTime, level = TestLevel)
-    val converter = new DavProtocolConverter(PlainConfig)
+    val converter = new DavProtocolConverter(PlainConfig, None)
 
     val fsFile = converter.toFsFile(SyncFile, FileName, useID = false)
     fsFile.id should be(null)
@@ -140,7 +141,7 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
       size = 16384, createdAt = null, lastModifiedAt = LastModifiedTime, attributes = DavModel.EmptyAttributes)
     val expSyncFile = SyncTypes.FsFile(id = elementUri(EncFileName), relativeUri = ParentPath + EncFileName,
       size = fsFile.size, level = TestLevel, lastModified = LastModifiedTime)
-    val converter = new DavProtocolConverter(PlainConfig)
+    val converter = new DavProtocolConverter(PlainConfig, None)
 
     converter.toFileElement(fsFile, ParentPath, TestLevel) should be(expSyncFile)
   }
@@ -150,7 +151,8 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
     val attributes = DavModel.EmptyAttributes.withAttribute("DAV:", ModifiedProperty, LastModifiedTimeStr)
     val fsFile = DavModel.DavFile(id = elementUri("modified.txt"), name = "FileName", description = null,
       size = 16384, createdAt = null, lastModifiedAt = Instant.EPOCH, attributes = attributes)
-    val converter = new DavProtocolConverter(PlainConfig.copy(optLastModifiedProperty = Some(ModifiedProperty)))
+    val converter = new DavProtocolConverter(PlainConfig,
+      Some(DavModel.AttributeKey(DavParser.NS_DAV, ModifiedProperty)))
 
     val syncFile = converter.toFileElement(fsFile, "/parent/", TestLevel)
     syncFile.lastModified should be(LastModifiedTime)
@@ -159,12 +161,13 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
   it should "obtain a dav file's modified time if an alternative property with namespace is set" in {
     val ModifiedProperty = "OtherModifiedProperty"
     val Namespace = "other:namespace"
+    val ModifiedKey = DavModel.AttributeKey(Namespace, ModifiedProperty)
     val attributes = DavModel.EmptyAttributes.withAttribute(Namespace, ModifiedProperty, LastModifiedTimeStr)
     val fsFile = DavModel.DavFile(id = elementUri("modified.txt"), name = "FileName", description = null,
       size = 16384, createdAt = null, lastModifiedAt = Instant.EPOCH, attributes = attributes)
     val config = DavStructureConfig(optLastModifiedProperty = Some(ModifiedProperty),
       optLastModifiedNamespace = Some(Namespace), deleteBeforeOverride = false)
-    val converter = new DavProtocolConverter(config)
+    val converter = new DavProtocolConverter(config, Some(ModifiedKey))
 
     val syncFile = converter.toFileElement(fsFile, "/parent/", TestLevel)
     syncFile.lastModified should be(LastModifiedTime)
@@ -173,7 +176,7 @@ class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
   it should "fall back to the default modified time if the alternative property is undefined" in {
     val fsFile = DavModel.DavFile(id = elementUri("modified.txt"), name = "FileName", description = null,
       size = 16384, createdAt = null, lastModifiedAt = LastModifiedTime, attributes = DavModel.EmptyAttributes)
-    val converter = new DavProtocolConverter(PlainConfig.copy(optLastModifiedProperty = Some("undefined")))
+    val converter = new DavProtocolConverter(PlainConfig, Some(DavModel.AttributeKey("foo", "undefined")))
 
     val syncFile = converter.toFileElement(fsFile, "/path/", TestLevel)
     syncFile.lastModified should be(LastModifiedTime)
