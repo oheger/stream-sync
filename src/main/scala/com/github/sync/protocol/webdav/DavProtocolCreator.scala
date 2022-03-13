@@ -23,7 +23,7 @@ import com.github.cloudfiles.core.Model
 import com.github.cloudfiles.core.delegate.ExtensibleFileSystem
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
-import com.github.cloudfiles.webdav.{DavConfig, DavFileSystem, DavModel}
+import com.github.cloudfiles.webdav.{DavConfig, DavFileSystem, DavModel, DavParser}
 import com.github.sync.protocol.{FileSystemProtocolConverter, FileSystemProtocolCreator}
 import com.github.sync.protocol.config.DavStructureConfig
 
@@ -34,7 +34,7 @@ import com.github.sync.protocol.config.DavStructureConfig
   * It creates a ''DavFileSystem'' and compatible components.
   */
 private object DavProtocolCreator
-  extends FileSystemProtocolCreator[Uri, DavModel.DavFile, DavModel.DavFolder, DavStructureConfig]:
+  extends FileSystemProtocolCreator[Uri, DavModel.DavFile, DavModel.DavFolder, DavStructureConfig] :
   /**
     * The prefix of URIs indicating the DAV protocol. This prefix needs to be
     * removed when passing the URI to the file system.
@@ -46,7 +46,11 @@ private object DavProtocolCreator
     Model.FolderContent[Uri, DavModel.DavFile, DavModel.DavFolder]] =
     val davConfig = DavConfig(rootUri = uri.stripPrefix(DavUriPrefix), timeout = timeout,
       deleteBeforeOverride = config.deleteBeforeOverride)
-    new DavFileSystem(davConfig)
+    val davConfigWithModifiedAttr = modifiedProperty(config).fold(davConfig) { attr =>
+      davConfig.copy(additionalAttributes = List(attr))
+    }
+
+    new DavFileSystem(davConfigWithModifiedAttr)
 
   override def createHttpSender(spawner: Spawner, factory: HttpRequestSenderFactory, uri: String,
                                 config: DavStructureConfig, senderConfig: HttpRequestSenderConfig):
@@ -55,4 +59,18 @@ private object DavProtocolCreator
 
   override def createConverter(config: DavStructureConfig):
   FileSystemProtocolConverter[Uri, DavModel.DavFile, DavModel.DavFolder] =
-    new DavProtocolConverter(config, None)
+    new DavProtocolConverter(config, modifiedProperty(config))
+
+  /**
+    * Returns an ''Option'' with a key for a custom property for the last
+    * modified time. If the configuration provided contains information about
+    * such a property, the ''Option'' is populated accordingly.
+    *
+    * @param config the configuration
+    * @return an ''Option'' with the key for a last modified property
+    */
+  private def modifiedProperty(config: DavStructureConfig): Option[DavModel.AttributeKey] =
+    config.optLastModifiedProperty map { name =>
+      val namespace = config.optLastModifiedNamespace getOrElse DavParser.NS_DAV
+      DavModel.AttributeKey(namespace, name)
+    }

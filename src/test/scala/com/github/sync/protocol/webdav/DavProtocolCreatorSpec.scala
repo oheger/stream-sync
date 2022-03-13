@@ -20,21 +20,21 @@ import akka.actor.typed.ActorRef
 import akka.util.Timeout
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
-import com.github.cloudfiles.webdav.{DavConfig, DavFileSystem}
+import com.github.cloudfiles.webdav.{DavConfig, DavFileSystem, DavModel, DavParser}
 import com.github.sync.protocol.config.DavStructureConfig
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 
 object DavProtocolCreatorSpec:
   /** The URI of the dav server used by tests. */
   private val TestUri = "https://dav.example.org/data"
 
   /** A test configuration for a DAV server. */
-  private val TestConfig = DavStructureConfig(deleteBeforeOverride = true, optLastModifiedProperty = Some("modified"),
+  private val TestConfig = DavStructureConfig(deleteBeforeOverride = true, optLastModifiedProperty = None,
     optLastModifiedNamespace = None)
 
   /** A test timeout value. */
@@ -47,11 +47,37 @@ class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar
 
   import DavProtocolCreatorSpec._
 
-  "DavProtocolCreator" should "create a correct file system" in {
+  "DavProtocolCreator" should "create a correct file system if no modified property is set" in {
     val expDavConfig = DavConfig(rootUri = TestUri, deleteBeforeOverride = TestConfig.deleteBeforeOverride,
       timeout = TestTimeout)
 
     DavProtocolCreator.createFileSystem(TestUri, TestConfig, TestTimeout) match
+      case fs: DavFileSystem =>
+        fs.config should be(expDavConfig)
+      case fs => fail("Unexpected file system: " + fs)
+  }
+
+  it should "create a correct file system if a modified property is set" in {
+    val ModifiedProperty = "itWasModifiedAt"
+    val config = TestConfig.copy(optLastModifiedProperty = Some(ModifiedProperty))
+    val expDavConfig = DavConfig(rootUri = TestUri, deleteBeforeOverride = TestConfig.deleteBeforeOverride,
+      timeout = TestTimeout, additionalAttributes = List(DavModel.AttributeKey(DavParser.NS_DAV, ModifiedProperty)))
+
+    DavProtocolCreator.createFileSystem(TestUri, config, TestTimeout) match
+      case fs: DavFileSystem =>
+        fs.config should be(expDavConfig)
+      case fs => fail("Unexpected file system: " + fs)
+  }
+
+  it should "create a correct file system if a modified property and namespace are set" in {
+    val ModifiedProperty = "itWasModifiedAt"
+    val ModifiedNamespace = "modifications"
+    val config = TestConfig.copy(optLastModifiedProperty = Some(ModifiedProperty),
+      optLastModifiedNamespace = Some(ModifiedNamespace))
+    val expDavConfig = DavConfig(rootUri = TestUri, deleteBeforeOverride = TestConfig.deleteBeforeOverride,
+      timeout = TestTimeout, additionalAttributes = List(DavModel.AttributeKey(ModifiedNamespace, ModifiedProperty)))
+
+    DavProtocolCreator.createFileSystem(TestUri, config, TestTimeout) match
       case fs: DavFileSystem =>
         fs.config should be(expDavConfig)
       case fs => fail("Unexpected file system: " + fs)
@@ -88,9 +114,32 @@ class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar
       senderConfig) should be(sender)
   }
 
-  it should "create a correct protocol converter" in {
+  it should "create a correct protocol converter if no modified property is set" in {
     DavProtocolCreator.createConverter(TestConfig) match
       case davConverter: DavProtocolConverter =>
         davConverter.davConfig should be(TestConfig)
+        davConverter.optModifiedAttribute shouldBe empty
+      case c => fail("Unexpected converter: " + c)
+  }
+
+  it should "create a correct protocol converter if a modified property is set" in {
+    val ModifiedProperty = "modifiedAt"
+    val config = TestConfig.copy(optLastModifiedProperty = Some(ModifiedProperty))
+
+    DavProtocolCreator.createConverter(config) match
+      case davConverter: DavProtocolConverter =>
+        davConverter.optModifiedAttribute should be(Some(DavModel.AttributeKey(DavParser.NS_DAV, ModifiedProperty)))
+      case c => fail("Unexpected converter: " + c)
+  }
+
+  it should "create a correct protocol converter if a modified property and namespace are set" in {
+    val ModifiedNamespace = "modifiedNS"
+    val ModifiedProperty = "modifiedAt"
+    val config = TestConfig.copy(optLastModifiedProperty = Some(ModifiedProperty),
+      optLastModifiedNamespace = Some(ModifiedNamespace))
+
+    DavProtocolCreator.createConverter(config) match
+      case davConverter: DavProtocolConverter =>
+        davConverter.optModifiedAttribute should be(Some(DavModel.AttributeKey(ModifiedNamespace, ModifiedProperty)))
       case c => fail("Unexpected converter: " + c)
   }
