@@ -72,7 +72,7 @@ object FilterManagerSpec:
     * @return the newly created operation
     */
   private def createOperation(action: SyncAction, level: Int, element: FsElement = Element): SyncOperation =
-    SyncOperation(element, action, level)
+    SyncOperation(element, action, level, null)
 
   /**
     * Helper function to run a parse operation for filter parameters on the

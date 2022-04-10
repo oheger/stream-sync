@@ -165,7 +165,7 @@ object SyncTypes:
     * @param level   the level of this operation
     * @param dstID   the ID of the destination element; required for downloads
     */
-  case class SyncOperation(element: FsElement, action: SyncAction, level: Int, dstID: String = null)
+  case class SyncOperation(element: FsElement, action: SyncAction, level: Int, dstID: String)
 
   /**
     * A data class representing the result of the execution of a sync
