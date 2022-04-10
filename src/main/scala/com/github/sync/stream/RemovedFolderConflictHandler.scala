@@ -257,13 +257,14 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
                                     otherOps: List[SyncOperation]):
   (Map[NormalizedFolder, RemoveOperationState], List[SyncOperation]) =
     operations match
-      case List(o1@SyncOperation(folder: FsFolder, action, _, _), o2@SyncOperation(file: FsFile, fileAction, _, _), _*)
+      case List(o1@SyncOperation(folder: FsFolder, action, _, _, _),
+      o2@SyncOperation(file: FsFile, fileAction, _, _, _), _*)
         if folder.relativeUri == file.relativeUri && action == removeActionType &&
           (fileAction == SyncAction.ActionCreate || fileAction == SyncAction.ActionLocalCreate) =>
         val normFolder = folder.toNormalizedFolder
         val operationState = RemoveOperationState(List(o1, o2), Nil, normFolder)
         findNewRemovedFolders(operations.drop(2), removeOps + (normFolder -> operationState), otherOps)
-      case List(op@SyncOperation(folder: FsFolder, action, _, _), _*) if action == removeActionType =>
+      case List(op@SyncOperation(folder: FsFolder, action, _, _, _), _*) if action == removeActionType =>
         val normFolder = folder.toNormalizedFolder
         val operationState = RemoveOperationState(List(op), Nil, normFolder)
         findNewRemovedFolders(operations.tail, removeOps + (normFolder -> operationState), otherOps)

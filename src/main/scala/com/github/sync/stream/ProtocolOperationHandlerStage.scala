@@ -201,19 +201,19 @@ object ProtocolOperationHandlerStage:
   private def handleExecutionCommand(ctx: ActorContext[OperationHandlerCommand], state: ExecutionState,
                                      cmd: ExecuteOperationCommand): ExecutionState =
     cmd.op match
-      case SyncOperation(elem, ActionCreate, level, _) =>
+      case SyncOperation(elem, ActionCreate, level, _, _) =>
         handleIfPossible(ctx, state, cmd, notifyOnComplete = elem.isInstanceOf[FsFolder]) {
-          case SyncOperation(_: FsFolder, ActionCreate, otherLevel, _) if otherLevel < level => true
+          case SyncOperation(_: FsFolder, ActionCreate, otherLevel, _, _) if otherLevel < level => true
           case _ => false
         }
 
-      case SyncOperation(_: FsFolder, ActionRemove, level, _) =>
+      case SyncOperation(_: FsFolder, ActionRemove, level, _, _) =>
         handleIfPossible(ctx, state, cmd, notifyOnComplete = true) {
-          case SyncOperation(_, ActionRemove, otherLevel, _) if otherLevel > level => true
+          case SyncOperation(_, ActionRemove, otherLevel, _, _) if otherLevel > level => true
           case _ => false
         }
 
-      case SyncOperation(_, ActionRemove, _, _) =>
+      case SyncOperation(_, ActionRemove, _, _, _) =>
         handleOperation(ctx, state, cmd, notifyOnComplete = true)
 
       case _ => handleOperation(ctx, state, cmd, notifyOnComplete = false)
@@ -236,7 +236,7 @@ object ProtocolOperationHandlerStage:
                               command: ExecuteOperationCommand, notifyOnComplete: Boolean):
   ExecutionState =
     implicit val ec: ExecutionContext = ctx.executionContext
-    if (command.op.action != ActionNoop) then
+    if command.op.action != ActionNoop then
       ctx.log.debug("Processing operation {}.", command.op)
     val futExecute = state.handler.execute(command.op)
     val (futComplete, next) = if notifyOnComplete then

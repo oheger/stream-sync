@@ -160,12 +160,24 @@ object SyncTypes:
     * the operation.) The level can be used in filter expressions to customize
     * sync behavior.
     *
-    * @param element the element that is subject to this operation
-    * @param action  the action to be executed on this element
-    * @param level   the level of this operation
-    * @param dstID   the ID of the destination element; required for downloads
+    * As additional information, there is flag indicating that this operation
+    * is deferred, i.e. it is executed outside of the normal order of element
+    * processing. Per default, there is a certain order in which elements are
+    * processed, and the operations to be executed follows this order. For
+    * specific complex operations, this order can change, and then some special
+    * treatment may be necessary.
+    *
+    * @param element  the element that is subject to this operation
+    * @param action   the action to be executed on this element
+    * @param level    the level of this operation
+    * @param dstID    the ID of the destination element; required for downloads
+    * @param deferred flag whether this is a deferred operation
     */
-  case class SyncOperation(element: FsElement, action: SyncAction, level: Int, dstID: String)
+  case class SyncOperation(element: FsElement,
+                           action: SyncAction,
+                           level: Int,
+                           dstID: String,
+                           deferred: Boolean = false)
 
   /**
     * A data class representing the result of the execution of a sync

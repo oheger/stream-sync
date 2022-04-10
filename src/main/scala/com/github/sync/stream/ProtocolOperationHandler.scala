@@ -39,28 +39,28 @@ class ProtocolOperationHandler(protocol: SyncProtocol, downloadProtocol: SyncPro
                               (implicit ec: ExecutionContext):
   def execute(op: SyncOperation): Future[Unit] =
     op match
-      case SyncOperation(_: FsFile, ActionRemove, _, dstID) =>
+      case SyncOperation(_: FsFile, ActionRemove, _, dstID, _) =>
         protocol.removeFile(dstID)
 
-      case SyncOperation(_: FsFolder, ActionRemove, _, dstID) =>
+      case SyncOperation(_: FsFolder, ActionRemove, _, dstID, _) =>
         protocol.removeFolder(dstID)
 
-      case SyncOperation(folder: FsFolder, ActionCreate, _, _) =>
+      case SyncOperation(folder: FsFolder, ActionCreate, _, _, _) =>
         val (parent, name) = extractParentAndName(folder)
         protocol.createFolder(parent, name, folder)
 
-      case SyncOperation(file: FsFile, ActionCreate, _, _) =>
+      case SyncOperation(file: FsFile, ActionCreate, _, _, _) =>
         val (parent, name) = extractParentAndName(file)
         downloadProtocol.downloadFile(file.id) flatMap { source =>
           protocol.createFile(parent, name, file, source)
         }
 
-      case SyncOperation(file: FsFile, ActionOverride, _, dstID) =>
+      case SyncOperation(file: FsFile, ActionOverride, _, dstID, _) =>
         downloadProtocol.downloadFile(file.id) flatMap { source =>
           protocol.updateFile(file.copy(id = dstID), source)
         }
 
-      case SyncOperation(_, ActionNoop, _, _) =>
+      case SyncOperation(_, ActionNoop, _, _, _) =>
         Future.successful(())
 
       case _ =>
