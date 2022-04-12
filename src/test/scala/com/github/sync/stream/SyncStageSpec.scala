@@ -287,7 +287,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
       SyncOperation(changedFile, SyncAction.ActionLocalRemove, changedFile.level, changedFile.id),
       SyncOperation(changedFile, SyncAction.ActionCreate, changedFile.level, changedFile.id)),
       createResult(SyncOperation(unchangedFolder, SyncAction.ActionLocalRemove, unchangedFolder.level,
-        unchangedFolder.id)))
+        unchangedFolder.id, deferred = true)))
 
     val result = runStage(new SyncStage, localElements, Nil)
     result should contain theSameElementsInOrderAs expectedResults
@@ -317,12 +317,17 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val expectedResults = List(createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level,
       remoteFolder.id)),
       createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)),
-      Right(List(SyncOperation(removedChild2, SyncAction.ActionLocalRemove, removedChild2.level, removedChild2.id),
-        SyncOperation(removedChild1, SyncAction.ActionLocalRemove, removedChild1.level, removedChild1.id),
-        SyncOperation(removedFolder1, SyncAction.ActionLocalRemove, removedFolder1.level, removedFolder1.id))),
+      Right(List(SyncOperation(removedChild2, SyncAction.ActionLocalRemove, removedChild2.level, removedChild2.id,
+        deferred = true),
+        SyncOperation(removedChild1, SyncAction.ActionLocalRemove, removedChild1.level, removedChild1.id,
+          deferred = true),
+        SyncOperation(removedFolder1, SyncAction.ActionLocalRemove, removedFolder1.level, removedFolder1.id,
+          deferred = true))),
       createResult(SyncOperation(localChildFile, SyncAction.ActionNoop, localChildFile.level, remoteChildFile.id)),
-      Right(List(SyncOperation(removedChild3, SyncAction.ActionLocalRemove, removedChild3.level, removedChild3.id),
-        SyncOperation(removedFolder2, SyncAction.ActionLocalRemove, removedFolder2.level, removedFolder2.id))))
+      Right(List(SyncOperation(removedChild3, SyncAction.ActionLocalRemove, removedChild3.level, removedChild3.id,
+        deferred = true),
+        SyncOperation(removedFolder2, SyncAction.ActionLocalRemove, removedFolder2.level, removedFolder2.id,
+          deferred = true))))
 
     val result = runStage(new SyncStage, localElements, remoteElements)
     result should contain theSameElementsInOrderAs expectedResults
@@ -342,9 +347,11 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val expectedResults = List(createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level,
       remoteFile.id)),
       Left(SyncConflictException(localOperations = List(SyncOperation(changedChild, SyncAction.ActionLocalRemove,
-        changedChild.level, changedChild.id),
-        SyncOperation(unchangedChild, SyncAction.ActionLocalRemove, unchangedChild.level, unchangedChild.id),
-        SyncOperation(removedFolder, SyncAction.ActionLocalRemove, removedFolder.level, removedFolder.id)),
+        changedChild.level, changedChild.id, deferred = true),
+        SyncOperation(unchangedChild, SyncAction.ActionLocalRemove, unchangedChild.level, unchangedChild.id,
+          deferred = true),
+        SyncOperation(removedFolder, SyncAction.ActionLocalRemove, removedFolder.level, removedFolder.id,
+          deferred = true)),
         remoteOperations = List(SyncOperation(changedChild, SyncAction.ActionCreate, changedChild.level,
           changedChild.id)))))
 
@@ -368,9 +375,11 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val expectedResults = List(createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level,
       remoteFolder.id)),
       Left(SyncConflictException(localOperations = List(SyncOperation(newChild, SyncAction.ActionLocalRemove,
-        newChild.level, newChild.id),
-        SyncOperation(unchangedChild, SyncAction.ActionLocalRemove, unchangedChild.level, unchangedChild.id),
-        SyncOperation(removedFolder1, SyncAction.ActionLocalRemove, removedFolder1.level, removedFolder1.id)),
+        newChild.level, newChild.id, deferred = true),
+        SyncOperation(unchangedChild, SyncAction.ActionLocalRemove, unchangedChild.level, unchangedChild.id,
+          deferred = true),
+        SyncOperation(removedFolder1, SyncAction.ActionLocalRemove, removedFolder1.level, removedFolder1.id,
+          deferred = true)),
         remoteOperations = List(SyncOperation(newChild, SyncAction.ActionCreate, newChild.level,
           newChild.id)))),
       createResult(SyncOperation(removedFolder2, SyncAction.ActionCreate, removedFolder2.level,
@@ -404,10 +413,14 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
       deltaElem(localRemainingChild, ChangeType.Unchanged))
     val expectedResults = List(createResult(SyncOperation(localRemainingFolder, SyncAction.ActionNoop,
       localRemainingFolder.level, remainingFolder.id)),
-      Right(List(SyncOperation(removedChild1, SyncAction.ActionRemove, removedChild1.level, removedChild1.id),
-        SyncOperation(removedFolder1, SyncAction.ActionRemove, removedFolder1.level, removedFolder1.id))),
-      Right(List(SyncOperation(removedChild2, SyncAction.ActionRemove, removedChild2.level, removedChild2.id),
-        SyncOperation(removedFolder2, SyncAction.ActionRemove, removedFolder2.level, removedFolder2.id))),
+      Right(List(SyncOperation(removedChild1, SyncAction.ActionRemove, removedChild1.level, removedChild1.id,
+        deferred = true),
+        SyncOperation(removedFolder1, SyncAction.ActionRemove, removedFolder1.level, removedFolder1.id,
+          deferred = true))),
+      Right(List(SyncOperation(removedChild2, SyncAction.ActionRemove, removedChild2.level, removedChild2.id,
+        deferred = true),
+        SyncOperation(removedFolder2, SyncAction.ActionRemove, removedFolder2.level, removedFolder2.id,
+          deferred = true))),
       createResult(SyncOperation(localRemainingChild, SyncAction.ActionNoop, localRemainingChild.level,
         remainingChild.id)))
 
@@ -430,8 +443,10 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val expectedResults = List(Left(SyncConflictException(localOperations = List(SyncOperation(conflictChild,
       SyncAction.ActionLocalCreate, conflictChild.level, conflictLocalChild.id)),
       remoteOperations = List(SyncOperation(conflictChild, SyncAction.ActionRemove, conflictChild.level,
-        conflictChild.id), SyncOperation(removedChild, SyncAction.ActionRemove, removedChild.level, removedChild.id),
-        SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level, removedFolder.id)))))
+        conflictChild.id, deferred = true),
+        SyncOperation(removedChild, SyncAction.ActionRemove, removedChild.level, removedChild.id, deferred = true),
+        SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level, removedFolder.id,
+          deferred = true)))))
 
     val result = runStage(new SyncStage, localElements, remoteElements)
     result should contain theSameElementsInOrderAs expectedResults
@@ -450,9 +465,10 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val expectedResults = List(Left(SyncConflictException(localOperations = List(SyncOperation(newElement,
       SyncAction.ActionLocalCreate, newElement.level, newElement.id)),
       remoteOperations = List(SyncOperation(removedChild, SyncAction.ActionRemove, removedChild.level,
-        removedChild.id),
-        SyncOperation(newElement, SyncAction.ActionRemove, newElement.level, newElement.id),
-        SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level, removedFolder.id)))))
+        removedChild.id, deferred = true),
+        SyncOperation(newElement, SyncAction.ActionRemove, newElement.level, newElement.id, deferred = true),
+        SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level, removedFolder.id,
+          deferred = true)))))
 
     val result = runStage(new SyncStage, localElements, remoteElements)
     result should contain theSameElementsInOrderAs expectedResults
@@ -470,9 +486,11 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
       deltaElem(removedLocalChild, ChangeType.Removed))
     val expectedResults = List(Left(SyncConflictException(localOperations = List(SyncOperation(newElement,
       SyncAction.ActionLocalCreate, newElement.level, newElement.id)),
-      remoteOperations = List(SyncOperation(newElement, SyncAction.ActionRemove, newElement.level, newElement.id),
-        SyncOperation(removedChild, SyncAction.ActionRemove, removedChild.level, removedChild.id),
-        SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level, removedFolder.id)))))
+      remoteOperations = List(SyncOperation(newElement, SyncAction.ActionRemove, newElement.level, newElement.id,
+        deferred = true),
+        SyncOperation(removedChild, SyncAction.ActionRemove, removedChild.level, removedChild.id, deferred = true),
+        SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level, removedFolder.id,
+          deferred = true)))))
 
     val result = runStage(new SyncStage, localElements, remoteElements)
     result should contain theSameElementsInOrderAs expectedResults
@@ -495,7 +513,7 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     val expectedResults = List(createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level,
       remoteFolder.id)),
       Right(List(SyncOperation(removedFolder, SyncAction.ActionRemove, removedFolder.level,
-        removedFolder.id))),
+        removedFolder.id, deferred = true))),
       createResult(SyncOperation(localChild, SyncAction.ActionNoop, localChild.level, remoteChild.id)))
 
     val result = runStage(new SyncStage, localElements, remoteElements)
@@ -518,9 +536,11 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
       deltaElem(localFile, ChangeType.Unchanged))
     val expectedResults = List(createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level,
       remoteFolder.id)),
-      Right(List(SyncOperation(child, SyncAction.ActionLocalRemove, child.level, child.id),
-        SyncOperation(replacedFolder, SyncAction.ActionLocalRemove, replacedFolder.level, replacedFolder.id),
-        SyncOperation(replacementFile, SyncAction.ActionLocalCreate, replacementFile.level, replacementFile.id))),
+      Right(List(SyncOperation(child, SyncAction.ActionLocalRemove, child.level, child.id, deferred = true),
+        SyncOperation(replacedFolder, SyncAction.ActionLocalRemove, replacedFolder.level, replacedFolder.id,
+          deferred = true),
+        SyncOperation(replacementFile, SyncAction.ActionLocalCreate, replacementFile.level, replacementFile.id,
+          deferred = true))),
       createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
 
     val result = runStage(new SyncStage, localElements, remoteElements)
@@ -569,9 +589,11 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
       deltaElem(localFile, ChangeType.Unchanged))
     val expectedResults = List(createResult(SyncOperation(localFolder, SyncAction.ActionNoop, localFolder.level,
       remoteFolder.id)),
-      Right(List(SyncOperation(child, SyncAction.ActionRemove, child.level, child.id),
-        SyncOperation(replacedFolder, SyncAction.ActionRemove, replacedFolder.level, replacedFolder.id),
-        SyncOperation(replacementFile, SyncAction.ActionCreate, replacementFile.level, replacementFile.id))),
+      Right(List(SyncOperation(child, SyncAction.ActionRemove, child.level, child.id, deferred = true),
+        SyncOperation(replacedFolder, SyncAction.ActionRemove, replacedFolder.level, replacedFolder.id,
+          deferred = true),
+        SyncOperation(replacementFile, SyncAction.ActionCreate, replacementFile.level, replacementFile.id,
+          deferred = true))),
       createResult(SyncOperation(localFile, SyncAction.ActionNoop, localFile.level, remoteFile.id)))
 
     val result = runStage(new SyncStage, localElements, remoteElements)

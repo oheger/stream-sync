@@ -98,7 +98,7 @@ private object RemovedFolderConflictHandler:
       * @return the copy containing this operation
       */
     def addDeferredOperation(op: SyncOperation, conflicts: List[SyncOperation]): RemoveOperationState =
-      copy(deferredOperations = op :: deferredOperations,
+      copy(deferredOperations = op.copy(deferred = true) :: deferredOperations,
         conflictOperations = conflicts ::: conflictOperations)
 
 /**
@@ -256,17 +256,20 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
                                     removeOps: Map[NormalizedFolder, RemoveOperationState],
                                     otherOps: List[SyncOperation]):
   (Map[NormalizedFolder, RemoveOperationState], List[SyncOperation]) =
+    def makeDeferred(ops: List[SyncOperation]): List[SyncOperation] =
+      ops map { op => op.copy(deferred = true) }
+
     operations match
       case List(o1@SyncOperation(folder: FsFolder, action, _, _, _),
       o2@SyncOperation(file: FsFile, fileAction, _, _, _), _*)
         if folder.relativeUri == file.relativeUri && action == removeActionType &&
           (fileAction == SyncAction.ActionCreate || fileAction == SyncAction.ActionLocalCreate) =>
         val normFolder = folder.toNormalizedFolder
-        val operationState = RemoveOperationState(List(o1, o2), Nil, normFolder)
+        val operationState = RemoveOperationState(makeDeferred(List(o1, o2)), Nil, normFolder)
         findNewRemovedFolders(operations.drop(2), removeOps + (normFolder -> operationState), otherOps)
       case List(op@SyncOperation(folder: FsFolder, action, _, _, _), _*) if action == removeActionType =>
         val normFolder = folder.toNormalizedFolder
-        val operationState = RemoveOperationState(List(op), Nil, normFolder)
+        val operationState = RemoveOperationState(makeDeferred(List(op)), Nil, normFolder)
         findNewRemovedFolders(operations.tail, removeOps + (normFolder -> operationState), otherOps)
       case List(op: SyncOperation, _*) =>
         findNewRemovedFolders(operations.tail, removeOps, op :: otherOps)

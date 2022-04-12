@@ -77,23 +77,25 @@ object RemovedFolderConflictHandlerSpec:
     * Convenience function to create a ''SyncOperation'' for a given element
     * and action.
     *
-    * @param element the element affected by the operation
-    * @param action  the action on the element
+    * @param element  the element affected by the operation
+    * @param action   the action on the element
+    * @param deferred the deferred flag
     * @return the ''SyncOperation''
     */
-  private def createOp(element: FsElement, action: SyncAction): SyncOperation =
-    SyncOperation(element, action, element.level, element.id)
+  private def createOp(element: FsElement, action: SyncAction, deferred: Boolean = false): SyncOperation =
+    SyncOperation(element, action, element.level, element.id, deferred)
 
   /**
     * Convenience function to create a sync result with a single operation on
     * the given element.
     *
-    * @param element the element affected by the operation
-    * @param action  the action on the element
+    * @param element  the element affected by the operation
+    * @param action   the action on the element
+    * @param deferred the deferred flag
     * @return the sync result
     */
-  private def resultForOp(element: FsElement, action: SyncAction): SyncElementResult =
-    Right(List(createOp(element, action)))
+  private def resultForOp(element: FsElement, action: SyncAction, deferred: Boolean = false): SyncElementResult =
+    Right(List(createOp(element, action, deferred)))
 
   extension (h: RemovedFolderConflictHandler[TestSyncState])
 
@@ -107,6 +109,13 @@ object RemovedFolderConflictHandlerSpec:
       h.handleElement(state, element, resultFunc, conflict) {
         throw UnsupportedOperationException("Unexpected invocation")
       }
+
+  extension (op: SyncOperation)
+
+  /**
+    * Converts a ''SyncOperation'' to a deferred one.
+    */
+    def toDeferred: SyncOperation = op.copy(deferred = true)
 
 /**
   * Test class for ''RemovedFolderConflictHandler''.
@@ -147,7 +156,7 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
 
   it should "detect and initialize a new root folder remove operation" in {
     val element = AbstractStageSpec.createFolder(1)
-    val expOp = createOp(element, SyncAction.ActionRemove)
+    val expOp = createOp(element, SyncAction.ActionRemove, deferred = true)
     val handler = createHandler()
     val result = resultForOp(element, SyncAction.ActionRemove)
     val emitData = BaseMergeStage.MergeEmitData(List(result), BaseMergeStage.Pull1)
@@ -189,15 +198,15 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     List(root0, root1, root2) foreach { folder =>
       resHandler.folderState.roots should contain(folder.toNormalizedFolder)
     }
-    resHandler.operations(root1.toNormalizedFolder).deferredOperations should contain only removeOp1
-    resHandler.operations(root2.toNormalizedFolder).deferredOperations should contain only removeOp2
+    resHandler.operations(root1.toNormalizedFolder).deferredOperations should contain only removeOp1.toDeferred
+    resHandler.operations(root2.toNormalizedFolder).deferredOperations should contain only removeOp2.toDeferred
   }
 
   it should "detect an element affected by a remove folder operation" in {
     val removedFolder = AbstractStageSpec.createFolder(1).toNormalizedFolder
     val removeFolderOp = createOp(removedFolder.folder, SyncAction.ActionRemove)
     val removedChild = AbstractStageSpec.createFile(2, optParent = Some(removedFolder.folder))
-    val expOp = createOp(removedChild, SyncAction.ActionRemove)
+    val expOp = createOp(removedChild, SyncAction.ActionRemove, deferred = true)
     val initFolderState = RemovedFolderState.Empty.addRoot(removedFolder)
     val removeOpState = RemovedFolderConflictHandler.RemoveOperationState(List(removeFolderOp), Nil, removedFolder)
     val handler = createHandler(folderState = initFolderState,
@@ -290,7 +299,7 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     val removeOpState = RemovedFolderConflictHandler.RemoveOperationState(lastFolder = rootFolder,
       deferredOperations = List(removeFolderOp), conflictOperations = List(conflictOpEx))
     val element = AbstractStageSpec.createFile(20, optParent = Some(rootFolder.folder))
-    val expOp = createOp(element, SyncAction.ActionRemove)
+    val expOp = createOp(element, SyncAction.ActionRemove, deferred = true)
     val conflictOp = createOp(element, SyncAction.ActionLocalCreate)
     val initFolderState = RemovedFolderState(Set(rootFolder), Nil)
     val operations = Map(rootFolder -> removeOpState)
@@ -401,6 +410,7 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     resHandler.folderState.roots should contain only orgFolder.toNormalizedFolder
     val opState = resHandler.operations(orgFolder.toNormalizedFolder)
     opState.conflictOperations shouldBe empty
-    opState.deferredOperations should contain theSameElementsInOrderAs orgSyncOps
+    opState.deferredOperations should contain theSameElementsInOrderAs orgSyncOps.map(_.toDeferred)
   }
+
   
