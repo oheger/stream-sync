@@ -52,15 +52,18 @@ object RemovedFolderConflictHandlerSpec:
     * @param operations   the initial map with remove operations
     * @param updateFunc   the function to update the folder state
     * @param conflictFunc the function to generate conflict exceptions
+    * @param noopDeferred the noopForDeferredElement flag
     * @return the new test instance
     */
   private def createHandler(folderState: RemovedFolderState = RemovedFolderState.Empty,
                             operations: Map[NormalizedFolder,
                               RemovedFolderConflictHandler.RemoveOperationState] = Map.empty,
                             updateFunc: RemovedFolderConflictHandler.StateUpdateFunc[TestSyncState] = stateUpdateFunc,
-                            conflictFunc: ConflictFunc = RemovedFolderConflictHandler.RemoteConflictFunc):
+                            conflictFunc: ConflictFunc = RemovedFolderConflictHandler.RemoteConflictFunc,
+                            noopDeferred: Boolean = false):
   RemovedFolderConflictHandler[TestSyncState] =
-    RemovedFolderConflictHandler(folderState, operations, SyncAction.ActionRemove, updateFunc, conflictFunc)
+    RemovedFolderConflictHandler(folderState, operations, SyncAction.ActionRemove, updateFunc, conflictFunc,
+      noopDeferred)
 
   /**
     * The function to produce results emitted by a test handler instance.
@@ -174,6 +177,27 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     operationState.lastFolder should be(element.toNormalizedFolder)
   }
 
+  it should "detect and initialize a new root folder remove operation and issue a noop action" in {
+    val element = AbstractStageSpec.createFolder(1)
+    val expOp = createOp(element, SyncAction.ActionRemove, deferred = true)
+    val expNoop = createOp(element, SyncAction.ActionNoop)
+    val handler = createHandler(noopDeferred = true)
+    val result = resultForOp(element, SyncAction.ActionRemove)
+    val emitData = BaseMergeStage.MergeEmitData(List(result), BaseMergeStage.Pull1)
+
+    val (resEmitData, resState) = handler.handleElement(TestSyncState(0, null), element, resultFunc, Nil) {
+      (emitData, TestSyncState(1, null))
+    }
+    resEmitData.elements should contain only Right(List(expNoop))
+    resEmitData.pullInlets should be(emitData.pullInlets)
+
+    resState.data should be(2)
+    resState.handler.folderState.roots should contain(element.toNormalizedFolder)
+    val operationState = resState.handler.operations(element.toNormalizedFolder)
+    operationState.deferredOperations should contain only expOp
+    operationState.lastFolder should be(element.toNormalizedFolder)
+  }
+
   it should "detect and initialize multiple root folder remove operations in a handler result" in {
     val root0 = AbstractStageSpec.createFolder(100)
     val root1 = AbstractStageSpec.createFolder(1)
@@ -214,6 +238,24 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
 
     val (resEmitData, resState) = handler.handleRemovedElement(TestSyncState(0, null), removedChild, Nil)
     resEmitData.elements shouldBe empty
+    resEmitData.pullInlets should be(BaseMergeStage.Pull1)
+    resState.handler.operations(removedFolder)
+      .deferredOperations should contain theSameElementsInOrderAs List(expOp, removeFolderOp)
+  }
+
+  it should "detect an element affected by a remove folder operation and issue a noop action" in {
+    val removedFolder = AbstractStageSpec.createFolder(1).toNormalizedFolder
+    val removeFolderOp = createOp(removedFolder.folder, SyncAction.ActionRemove)
+    val removedChild = AbstractStageSpec.createFile(2, optParent = Some(removedFolder.folder))
+    val expNoop = createOp(removedChild, SyncAction.ActionNoop)
+    val expOp = createOp(removedChild, SyncAction.ActionRemove, deferred = true)
+    val initFolderState = RemovedFolderState.Empty.addRoot(removedFolder)
+    val removeOpState = RemovedFolderConflictHandler.RemoveOperationState(List(removeFolderOp), Nil, removedFolder)
+    val handler = createHandler(folderState = initFolderState, noopDeferred = true,
+      operations = Map(removedFolder -> removeOpState))
+
+    val (resEmitData, resState) = handler.handleRemovedElement(TestSyncState(0, null), removedChild, Nil)
+    resEmitData.elements should contain only Right(List(expNoop))
     resEmitData.pullInlets should be(BaseMergeStage.Pull1)
     resState.handler.operations(removedFolder)
       .deferredOperations should contain theSameElementsInOrderAs List(expOp, removeFolderOp)
@@ -413,4 +455,21 @@ class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
     opState.deferredOperations should contain theSameElementsInOrderAs orgSyncOps.map(_.toDeferred)
   }
 
-  
+  it should "detect a folder that was converted to a file and issue a noop action" in {
+    val orgFolder = AbstractStageSpec.createFolder(1)
+    val newFile = AbstractStageSpec.createFile(1)
+    val orgSyncOps = List(createOp(orgFolder, SyncAction.ActionRemove), createOp(newFile, SyncAction.ActionCreate))
+    val expNoop = createOp(orgFolder, SyncAction.ActionNoop)
+    val orgResult = (BaseMergeStage.MergeEmitData(List(Right(orgSyncOps)), BaseMergeStage.Pull1),
+      TestSyncState(1, null))
+    val handler = createHandler(noopDeferred = true)
+
+    val (resEmit, resState) = handler.handleElement(TestSyncState(0, null), orgFolder, resultFunc, Nil)(orgResult)
+    resEmit.pullInlets should be(orgResult._1.pullInlets)
+    resEmit.elements should contain only Right(List(expNoop))
+    val resHandler = resState.handler
+    resHandler.folderState.roots should contain only orgFolder.toNormalizedFolder
+    val opState = resHandler.operations(orgFolder.toNormalizedFolder)
+    opState.conflictOperations shouldBe empty
+    opState.deferredOperations should contain theSameElementsInOrderAs orgSyncOps.map(_.toDeferred)
+  }

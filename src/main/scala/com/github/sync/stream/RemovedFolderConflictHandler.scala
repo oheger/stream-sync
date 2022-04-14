@@ -128,20 +128,28 @@ private object RemovedFolderConflictHandler:
   * containing all involved operations, needs to be constructed.
   *
   * Note that folder remove operations need to be tracked for both the local
-  * and the remote side of the sync process separately.
+  * and the remote side of the sync process separately. In case of remove
+  * operations on remote folders, the handler should issue noop actions for
+  * local elements that depend on the removed folder. That way, it is possible
+  * to keep track on the current position in the progress, and the update of
+  * the local state works correctly.
   *
-  * @param folderState      the current state of removed folders
-  * @param operations       a map with information about operations in progress
-  * @param removeActionType the action type for remove operations
-  * @param stateUpdate      a function to update the current sync state
-  * @param conflictFunc     a function to generate conflict exceptions
+  * @param folderState         the current state of removed folders
+  * @param operations          a map with information about operations in
+  *                            progress
+  * @param removeActionType    the action type for remove operations
+  * @param stateUpdate         a function to update the current sync state
+  * @param conflictFunc        a function to generate conflict exceptions
+  * @param noopForDeferredElem a flag controlling whether for deferred
+  *                            operations noop actions should be generated
   * @tparam S the type of the sync state
   */
 private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderState,
                                                    operations: Map[NormalizedFolder, RemoveOperationState],
                                                    removeActionType: SyncAction,
                                                    stateUpdate: StateUpdateFunc[S],
-                                                   conflictFunc: ConflictFunc):
+                                                   conflictFunc: ConflictFunc,
+                                                   noopForDeferredElem: Boolean = false):
   /**
     * Handles the given element by performing the actions related to removal of
     * folders if required. This function checks whether the given element is
@@ -214,7 +222,11 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
       case folder: FsFolder => tempOperationState.copy(lastFolder = folder.toNormalizedFolder)
       case _ => tempOperationState
     val nextHandler = copy(operations = operations + (root -> nextOperationState))
-    resultFunc(stateUpdate(state, nextHandler), Nil)
+
+    val results: List[SyncElementResult] = if noopForDeferredElem then
+      List(Right(List(removeOp.copy(action = SyncAction.ActionNoop))))
+    else Nil
+    resultFunc(stateUpdate(state, nextHandler), results)
 
   /**
     * Checks whether the result of the handler function contains new removed
@@ -259,6 +271,10 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
     def makeDeferred(ops: List[SyncOperation]): List[SyncOperation] =
       ops map { op => op.copy(deferred = true) }
 
+    def addOptionalNoop(op: SyncOperation): List[SyncOperation] =
+      if noopForDeferredElem then op.copy(action = SyncAction.ActionNoop) :: otherOps
+      else otherOps
+
     operations match
       case List(o1@SyncOperation(folder: FsFolder, action, _, _, _),
       o2@SyncOperation(file: FsFile, fileAction, _, _, _), _*)
@@ -266,13 +282,16 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
           (fileAction == SyncAction.ActionCreate || fileAction == SyncAction.ActionLocalCreate) =>
         val normFolder = folder.toNormalizedFolder
         val operationState = RemoveOperationState(makeDeferred(List(o1, o2)), Nil, normFolder)
-        findNewRemovedFolders(operations.drop(2), removeOps + (normFolder -> operationState), otherOps)
+        findNewRemovedFolders(operations.drop(2), removeOps + (normFolder -> operationState), addOptionalNoop(o1))
+
       case List(op@SyncOperation(folder: FsFolder, action, _, _, _), _*) if action == removeActionType =>
         val normFolder = folder.toNormalizedFolder
         val operationState = RemoveOperationState(makeDeferred(List(op)), Nil, normFolder)
-        findNewRemovedFolders(operations.tail, removeOps + (normFolder -> operationState), otherOps)
+        findNewRemovedFolders(operations.tail, removeOps + (normFolder -> operationState), addOptionalNoop(op))
+
       case List(op: SyncOperation, _*) =>
         findNewRemovedFolders(operations.tail, removeOps, op :: otherOps)
+
       case _ =>
         (removeOps, otherOps.reverse)
 
