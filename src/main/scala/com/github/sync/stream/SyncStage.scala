@@ -98,7 +98,8 @@ object SyncStage:
     /** Holds the current state of this stage. */
     private var syncState = SyncState(sync, None, None,
       new RemovedFolderConflictHandler[SyncState](RemovedFolderState.Empty, Map.empty,
-        SyncAction.ActionLocalRemove, updateRemoteConflictState, RemovedFolderConflictHandler.LocalConflictFunc),
+        SyncAction.ActionLocalRemove, updateRemoteConflictState, RemovedFolderConflictHandler.LocalConflictFunc,
+        noopForDeferredElem = true),
       new RemovedFolderConflictHandler[SyncState](RemovedFolderState.Empty, Map.empty,
         SyncAction.ActionRemove, updateLocalConflictState, RemovedFolderConflictHandler.RemoteConflictFunc))
 
@@ -294,7 +295,7 @@ object SyncStage:
           val opCreateFile = SyncOperation(remoteFile, SyncAction.ActionLocalCreate, remoteFile.level, remoteFile.id)
           Some(List(Right(List(opRemoveFolder, opCreateFile))))
 
-        case (localFile: FsFile, remoteFolder: FsFolder) if local.changeType == ChangeType.TypeChanged =>
+        case (localFile: FsFile, _: FsFolder) if local.changeType == ChangeType.TypeChanged =>
           val opRemoveFolder = RemovedFolderState.createRemoveOperation(remote)
           val opCreateFile = SyncOperation(localFile, SyncAction.ActionCreate, localFile.level, localFile.id)
           Some(List(Right(List(opRemoveFolder, opCreateFile))))
