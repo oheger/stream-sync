@@ -21,10 +21,28 @@ import akka.stream.stage.{GraphStage, GraphStageLogic, StageLogging}
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncAction, SyncConflictException, SyncElementResult, SyncOperation, compareElements}
 import com.github.sync.stream.BaseMergeStage.{Input, MergeEmitData}
 import com.github.sync.stream.LocalStateStage.{ChangeType, ElementWithDelta}
+import com.github.sync.stream.RemovedFolderConflictHandler.HandlerResult
+import com.github.sync.stream.SyncStage.SyncStageResult
 
 import java.time.Instant
 
-object SyncStage:
+private object SyncStage:
+  /**
+    * A data class to represent a result produced by [[SyncStage]].
+    *
+    * In addition to the actual [[SyncElementResult]], further information is
+    * required to update the local state. The class therefore contains an
+    * optional [[ElementWithDelta]] with the original local element, for which 
+    * this result was generated. So, if an update operation fails, this element 
+    * can be written to the new local state. If no original local element is
+    * available (if it was newly created), the property is undefined.
+    *
+    * @param elementResult   the actual result
+    * @param optLocalElement an option with the original local element
+    */
+  case class SyncStageResult(elementResult: SyncElementResult,
+                             optLocalElement: Option[ElementWithDelta])
+
   /**
     * An internal class implementing the logic of the sync stage and holding
     * its state.
@@ -37,9 +55,9 @@ object SyncStage:
   private class SyncStageLogic(shape: Shape,
                                in1: Inlet[ElementWithDelta],
                                in2: Inlet[FsElement],
-                               out: Outlet[SyncElementResult])
+                               out: Outlet[SyncStageResult])
     extends GraphStageLogic(shape),
-      BaseMergeStage[ElementWithDelta, FsElement, SyncElementResult](in1, in2, out),
+      BaseMergeStage[ElementWithDelta, FsElement, SyncStageResult](in1, in2, out),
       StageLogging :
 
     /**
@@ -82,7 +100,7 @@ object SyncStage:
         * @return a ''MergeResult'' with this information
         */
       def mergeResultWithResetElements(elements: List[SyncElementResult],
-                                       pullInlets: Iterable[Input]): MergeResult =
+                                       pullInlets: Iterable[Input]): HandlerResult[SyncState] =
         def nextCurrent[T](input: Input, value: => Option[T]): Option[T] =
           if pullInlets.exists(_ == input) then None else value
 
@@ -171,7 +189,8 @@ object SyncStage:
         case None =>
           val elements =
             state.remoteConflictHandler.remainingResults() ::: state.localConflictHandler.remainingResults()
-          (MergeEmitData(elements, Nil, complete = true), state)
+          val results = elements.map(elemResult => SyncStageResult(elemResult, optLocalElement = None))
+          (MergeEmitData(results, Nil, complete = true), state)
         case Some(elem: FsElement) =>
           syncLocalGreaterRemote(state, elem)
         case Some(elem: ElementWithDelta) =>
@@ -228,7 +247,7 @@ object SyncStage:
 
       def localOverrideOp() = SyncOperation(remote, SyncAction.ActionLocalOverride, remote.level, local.element.id)
 
-      state.localConflictHandler.handleElement(state, remote, resultFunc(BaseMergeStage.PullBoth),
+      mapResult(state.localConflictHandler.handleElement(state, remote, resultFunc(BaseMergeStage.PullBoth),
         conflictsForLocalRemovedFolder(remote, local)) {
         state.remoteConflictHandler.handleElement(state, remote, resultFunc(BaseMergeStage.PullBoth), Nil) {
           val results = syncFileFolderReplacements(local, remote) getOrElse {
@@ -259,7 +278,7 @@ object SyncStage:
 
           state.mergeResultWithResetElements(results, BaseMergeStage.PullBoth)
         }
-      }
+      }, Some(local))
 
     /**
       * Handles corner cases when syncing two equivalent elements that are
@@ -330,7 +349,7 @@ object SyncStage:
       def createOp(action: SyncAction): SyncOperation =
         SyncOperation(local.element, action, local.element.level, local.element.id)
 
-      state.remoteConflictHandler.handleElement(state, local.element, resultFunc(BaseMergeStage.Pull1),
+      mapResult(state.remoteConflictHandler.handleElement(state, local.element, resultFunc(BaseMergeStage.Pull1),
         conflictsForRemoteRemovedFolder(local)) {
         val ops = local.changeType match
           case ChangeType.Unchanged =>
@@ -346,7 +365,7 @@ object SyncStage:
               SyncOperation(local.element, SyncAction.ActionCreate, local.element.level, local.element.id))
 
         state.mergeResultWithResetElements(ops, BaseMergeStage.Pull1)
-      }
+      }, Some(local))
 
     /**
       * Produces a ''MergeResult'' if the current local element's URI is
@@ -358,9 +377,9 @@ object SyncStage:
       */
     private def syncLocalGreaterRemote(state: SyncState, remote: FsElement): MergeResult =
       val op = SyncOperation(remote, SyncAction.ActionLocalCreate, remote.level, remote.id)
-      state.localConflictHandler.handleElement(state, remote, resultFunc(BaseMergeStage.Pull2), List(op)) {
+      mapResult(state.localConflictHandler.handleElement(state, remote, resultFunc(BaseMergeStage.Pull2), List(op)) {
         state.mergeResultWithResetElements(emitOp(op), BaseMergeStage.Pull2)
-      }
+      }, None)
 
     /**
       * Checks the given element for a conflict with an ongoing operation to
@@ -401,8 +420,20 @@ object SyncStage:
       * @return the result of the current operations
       */
     private def resultFunc(pullInlets: Set[BaseMergeStage.Input])
-                          (state: SyncState, elements: List[SyncElementResult]): MergeResult =
+                          (state: SyncState, elements: List[SyncElementResult]): HandlerResult[MergeState] =
       state.mergeResultWithResetElements(elements, pullInlets)
+
+    /**
+      * Maps a result based on [[SyncElementResult]] to a result based on
+      * [[SyncStageResult]].
+      *
+      * @param result       the original result
+      * @param optLocalElem the optional local element
+      * @return the resulting [[SyncStageResult]]
+      */
+    private def mapResult(result: HandlerResult[SyncState], optLocalElem: Option[ElementWithDelta]): MergeResult =
+      val resultElems = result._1.elements.map(res => SyncStageResult(res, optLocalElem))
+      (result._1.copy(elements = resultElems), result._2)
 
   end SyncStageLogic
 
@@ -446,13 +477,13 @@ object SyncStage:
   * known. Therefore, conflicts caused by changes on elements in both sources
   * can be detected.
   */
-class SyncStage extends GraphStage[FanInShape2[ElementWithDelta, FsElement, SyncElementResult]] :
-  val out: Outlet[SyncElementResult] = Outlet[SyncElementResult]("SyncStage.out")
+private class SyncStage extends GraphStage[FanInShape2[ElementWithDelta, FsElement, SyncStageResult]] :
+  val out: Outlet[SyncStageResult] = Outlet[SyncStageResult]("SyncStage.out")
   val inLocal: Inlet[ElementWithDelta] = Inlet[ElementWithDelta]("SyncStage.inLocal")
   val inRemote: Inlet[FsElement] = Inlet[FsElement]("SyncStage.inRemote")
 
-  override def shape: FanInShape2[ElementWithDelta, FsElement, SyncElementResult] =
-    new FanInShape2[ElementWithDelta, FsElement, SyncElementResult](inLocal, inRemote, out)
+  override def shape: FanInShape2[ElementWithDelta, FsElement, SyncStageResult] =
+    new FanInShape2[ElementWithDelta, FsElement, SyncStageResult](inLocal, inRemote, out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     SyncStage.SyncStageLogic(shape, inLocal, inRemote, out)
