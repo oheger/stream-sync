@@ -18,10 +18,11 @@ package com.github.sync.stream
 
 import akka.stream.{Attributes, FanInShape2, Inlet, Outlet}
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
+import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.{FsElement, SyncAction, SyncConflictException, SyncOperation, SyncOperationResult}
 import com.github.sync.stream.LocalState.affectsLocalState
 import com.github.sync.stream.LocalStateStage.ElementWithDelta
-import com.github.sync.stream.LocalStateUpdateStage.{LocalAffectingUpdate, NonLocalAffectingUpdate, StateUpdate, filterNones, hasNonDeferredOperations}
+import com.github.sync.stream.LocalStateUpdateStage.{LocalAffectingUpdate, NonLocalAffectingUpdate, StateUpdate, filterNones, hasNonDeferredOperations, updateOperationResults}
 
 private object LocalStateUpdateStage:
   /**
@@ -65,6 +66,26 @@ private object LocalStateUpdateStage:
     */
   private def toLocalState(optLocalElement: Option[ElementWithDelta]): Option[LocalState.LocalElementState] =
     optLocalElement map (elem => LocalState.LocalElementState(elem.element, removed = false))
+
+  /**
+    * Updates the map with operation results based on the given list of
+    * completed operations. All defined completed operations are removed from
+    * the map. Then, all operations referencing smaller elements are removed as
+    * well. This is necessary for updates that require multiple operations,
+    * such as a folder replaced by a file.
+    *
+    * @param results             the current map with operation results
+    * @param completedOperations the completed operations
+    * @return the updated map with operations
+    */
+  private def updateOperationResults(results: Map[SyncOperation, SyncOperationResult],
+                                     completedOperations: Iterable[Option[SyncOperation]]):
+  Map[SyncOperation, SyncOperationResult] =
+    val definedOperations = filterNones(completedOperations)
+    val completedMap = results -- definedOperations
+    definedOperations.headOption.fold(completedMap) { firstOp =>
+      completedMap filterNot (e => SyncTypes.compareElements(e._1.element, firstOp.element) < 0)
+    }
 
   /**
     * A trait representing an update of the local state for a single element.
@@ -189,8 +210,9 @@ private class LocalStateUpdateStage
     setHandler(inOps, new InHandler {
       override def onPush(): Unit =
         val opResult = grab(inOps)
-        operationResults += opResult.op -> opResult
-        emitCompletedOperations()
+        if opResult.op.affectsLocalState then
+          operationResults += opResult.op -> opResult
+          emitCompletedOperations()
         pull(inOps)
 
       override def onUpstreamFinish(): Unit =
@@ -228,10 +250,10 @@ private class LocalStateUpdateStage
     private def updateForResult(syncResult: SyncStage.SyncStageResult): Option[StateUpdate] =
       syncResult.elementResult match
         case Right(operations) =>
-          operations filterNot (_.deferred) match
-            case h :: _ =>
-              if h.affectsLocalState then
-                Some(LocalAffectingUpdate(syncResult.optLocalElement, h))
+          operations.filterNot(_.deferred).lastOption match
+            case Some(op) =>
+              if op.affectsLocalState then
+                Some(LocalAffectingUpdate(syncResult.optLocalElement, op))
               else
                 Some(NonLocalAffectingUpdate(syncResult.optLocalElement))
             case _ => None
@@ -261,5 +283,5 @@ private class LocalStateUpdateStage
 
       emitMultiple(out, filterNones(emitData).toVector)
       currentUpdates = incomplete
-      operationResults --= filterNones(operations)
+      operationResults = updateOperationResults(operationResults, operations)
   }

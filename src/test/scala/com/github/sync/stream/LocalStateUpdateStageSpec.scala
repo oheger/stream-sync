@@ -286,3 +286,45 @@ class LocalStateUpdateStageSpec(testSystem: ActorSystem) extends AbstractStageSp
     val nextState = runStage(stage, List(result), List(opResult))
     nextState should contain only LocalState.LocalElementState(localElement, removed = true)
   }
+
+  it should "handle an operation to create a local element" in {
+    val remoteFile = AbstractStageSpec.createFile(1, idType = "remote")
+    val operation = testOperation(SyncAction.ActionLocalCreate, remoteFile)
+    val opResult = SyncOperationResult(operation, optFailure = None)
+    val result = SyncStage.SyncStageResult(syncResult(operation), None)
+    val stage = new LocalStateUpdateStage
+
+    val nextState = runStage(stage, List(result), List(opResult))
+    nextState should contain only LocalState.LocalElementState(remoteFile, removed = false)
+  }
+
+  it should "handle an operation that replaces a local folder by a file" in {
+    val localFolder = AbstractStageSpec.createFolder(1)
+    val remoteFile = AbstractStageSpec.createFile(1, idType = "remote")
+    val opDelete = testOperation(SyncAction.ActionLocalRemove, localFolder)
+    val opCreate = testOperation(SyncAction.ActionLocalCreate, remoteFile)
+    val opDeferred = testOperation(SyncAction.ActionLocalRemove, deferred = true)
+    val result = SyncStage.SyncStageResult(Right(List(opDelete, opCreate, opDeferred)),
+      Some(testElementWithDelta(localFolder)))
+    val stage = new LocalStateUpdateStage
+
+    val nextState = runStage(stage, List(result),
+      List(SyncOperationResult(opDelete, optFailure = None), SyncOperationResult(opCreate, optFailure = None)))
+    nextState should contain only LocalState.LocalElementState(remoteFile, removed = false)
+  }
+
+  it should "remove no longer needed operation results from the internal state" in {
+    val localFolder = AbstractStageSpec.createFolder(0)
+    val remoteFile = AbstractStageSpec.createFile(1, idType = "remote")
+    val opDelete = testOperation(SyncAction.ActionLocalRemove, localFolder)
+    val opCreate = testOperation(SyncAction.ActionLocalCreate, remoteFile)
+    val opDeferred = testOperation(SyncAction.ActionLocalRemove, deferred = true)
+    val result1 = SyncStage.SyncStageResult(Right(List(opDelete, opCreate, opDeferred)),
+      Some(testElementWithDelta(localFolder)))
+    val result2 = SyncStage.SyncStageResult(syncResult(opDelete), Some(testElementWithDelta(localFolder)))
+    val stage = new LocalStateUpdateStage
+
+    val nextState = runStage(stage, delayedSource(List(result1, result2)),
+      Source(List(SyncOperationResult(opDelete, optFailure = None), SyncOperationResult(opCreate, optFailure = None))))
+    nextState should contain only LocalState.LocalElementState(remoteFile, removed = false)
+  }
