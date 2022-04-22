@@ -93,7 +93,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers :
     val elem = FsFolder("1a", "my_folder", 8)
     val op = SyncOperation(elem, action, 4, dstID = "someDstID")
 
-    val s = ElementSerializer.serializeOperation(op).utf8String
+    val s = ElementSerializer.serialize(op).utf8String
     s should be(s"$strAction ${op.level} ${op.dstID} FOLDER ${elem.id} ${elem.relativeUri} ${elem.level}$lineEnd")
 
   it should "serialize a create operation" in {
@@ -177,9 +177,9 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers :
     val file = FsFile("the ID", "my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
       20180906193152L)
     val operation = SyncOperation(file, action, 22, dstID = "the destination ID")
-    val opRaw = ElementSerializer serializeOperation operation
+    val opRaw = ElementSerializer serialize operation
 
-    ElementSerializer.deserializeOperation(opRaw.utf8String) match
+    ElementSerializer.deserialize[SyncOperation](opRaw.utf8String) match
       case Success(op) =>
         op should be(operation)
       case r =>
@@ -212,6 +212,6 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers :
   it should "handle a deserialization of an invalid action tag" in {
     val raw = "DELETE 13 FOLDER /foo/bar 8"
 
-    val triedOperation = ElementSerializer.deserializeOperation(raw)
+    val triedOperation = ElementSerializer.deserialize[SyncOperation](raw)
     triedOperation.isSuccess shouldBe false
   }

@@ -33,6 +33,21 @@ object SerializationSupport:
   final val TagFile = "FILE"
 
   /**
+    * A mapping from action types to corresponding strings. This is used to
+    * generate the action tag for a serialized operation.
+    */
+  private val ActionTagMapping: Map[SyncAction, String] = Map(ActionCreate -> "CREATE",
+    ActionOverride -> "OVERRIDE", ActionRemove -> "REMOVE", ActionLocalCreate -> "LOCAL_CREATE",
+    ActionLocalOverride -> "LOCAL_OVERRIDE", ActionLocalRemove -> "LOCAL_REMOVE")
+
+  /**
+    * A mapping from tag names to corresponding sync actions. This is used to
+    * reconstruct actions from the serialized form.
+    */
+  private val TagActionMapping: Map[String, SyncAction] =
+    ActionTagMapping map (_.swap)
+
+  /**
     * Concrete instance to support serialization of [[FsElement]] instances.
     */
   given SerializationSupport[FsElement] with
@@ -59,6 +74,28 @@ object SerializationSupport:
             builder += size.toString
 
   /**
+    * Concrete instance to support serialization of [[SyncOperation]]
+    * instances.
+    */
+  given serOp(using serElem: SerializationSupport[FsElement]): SerializationSupport[SyncOperation] with
+    override def deserialize(parts: IndexedSeq[String]): Try[SyncOperation] =
+      deserializeElementInOperation(parts) flatMap { elem =>
+        Try {
+          val action = TagActionMapping(parts.head)
+          val level = parts(1).toInt
+          val dstID = decode(parts(2))
+          SyncOperation(elem, action, level, dstID)
+        }
+      }
+
+    extension (op: SyncOperation)
+      def serialize(builder: mutable.ArrayBuilder[String]): Unit =
+        builder += ActionTagMapping(op.action)
+        builder += op.level.toString
+        builder += encode(op.dstID)
+        op.element.serialize(builder)
+
+  /**
     * Generates the serialized representation for the basic properties of the
     * given element with the given tag (indicating the element type). Note that
     * the element's URI needs to be encoded; otherwise, it may contain space
@@ -73,6 +110,18 @@ object SerializationSupport:
     builder += encode(elem.id)
     builder += encode(elem.relativeUri)
     builder += elem.level.toString
+
+  /**
+    * Tries to deserialize the element from the serialized form of a sync
+    * operation.
+    *
+    * @param parts   the parts of the sync operation
+    * @param serElem the ''SerializationSupport'' for elements
+    * @return a ''Try'' with the deserialized element
+    */
+  private def deserializeElementInOperation(parts: IndexedSeq[String])
+                                           (using serElem: SerializationSupport[FsElement]): Try[FsElement] =
+    serElem.deserialize(parts drop 3)
 
 /**
   * A type class that defines support for serializing and deserializing objects
