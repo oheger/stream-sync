@@ -173,9 +173,20 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val result = runStream(params)
     result.totalSinkMat.status should be(Success(Done))
     val logLines = Files.readAllLines(logFile)
-    logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serializeOperation(operations.head)
-      .utf8String)
-    logLines.get(2) should include(operations(1).toString + " failed")
+    logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serialize(operations.head).utf8String)
+    logLines.get(1) + System.lineSeparator() should be(ElementSerializer.serialize(operations(1)).utf8String)
+  }
+
+  it should "support the creation of an error log sink" in {
+    val operations = List(createOperation(1), createOperation(2, success = false), createOperation(3))
+    val logFile = createFileReference()
+    val params = syncParams(operations, SyncStream.createLogSink(logFile, errorLog = true))
+
+    val result = runStream(params)
+    result.totalSinkMat.status should be(Success(Done))
+    val logLines = Files.readAllLines(logFile)
+    logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serialize(operations(1)).utf8String)
+    logLines.get(1) should include(operations(1).toString + " failed")
   }
 
   it should "create a log sink that appends to an existing log file" in {
@@ -184,11 +195,10 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val logFile = writeFileContent(createFileReference(), OriginalContent + System.lineSeparator())
     val params = syncParams(operations, SyncStream.createLogSink(logFile))
 
-    val result = runStream(params)
+    runStream(params)
     val logLines = Files.readAllLines(logFile)
     logLines.get(0) should be(OriginalContent)
-    logLines.get(1) + System.lineSeparator() should be(ElementSerializer.serializeOperation(operations.head)
-      .utf8String)
+    logLines.get(1) + System.lineSeparator() should be(ElementSerializer.serialize(operations.head).utf8String)
   }
 
   it should "add a logging sink to an existing sink" in {
@@ -202,8 +212,21 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val result = runStream(params)
     result.totalSinkMat.reverse should contain theSameElementsInOrderAs expTotalResults
     val logLines = Files.readAllLines(logFile)
-    logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serializeOperation(operations.head)
-      .utf8String)
+    logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serialize(operations.head).utf8String)
+  }
+
+  it should "add an error logging sink to an existing sink" in {
+    import system.dispatcher
+    val operations = List(createOperation(1), createOperation(2, success = false))
+    val expTotalResults = operations map createOperationResult
+    val logFile = createFileReference()
+    val sink = SyncStream.sinkWithLogging(collectingSink, logFile, errorLog = true)
+    val params = syncParams(operations, sink)
+
+    val result = runStream(params)
+    result.totalSinkMat.reverse should contain theSameElementsInOrderAs expTotalResults
+    val logLines = Files.readAllLines(logFile)
+    logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serialize(operations(1)).utf8String)
   }
 
   it should "create a counting sink" in {

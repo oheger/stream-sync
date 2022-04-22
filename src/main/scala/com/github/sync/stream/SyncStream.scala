@@ -96,28 +96,37 @@ object SyncStream:
 
   /**
     * Creates a ''Sink'' that logs the received [[SyncOperation]]s to a file.
+    * Optionally, the sink can be configured to log only failed operations,
+    * together with the exceptions causing the failures. In this mode, the sink
+    * acts as an error log.
     *
-    * @param logFile the path to the log file
+    * @param logFile  the path to the log file
+    * @param errorLog flag whether only failures should be logged
     * @return the ''Sink'' that writes the log file
     */
-  def createLogSink(logFile: Path): Sink[SyncOperationResult, Future[IOResult]] =
+  def createLogSink(logFile: Path, errorLog: Boolean = false): Sink[SyncOperationResult, Future[IOResult]] =
     val sink = FileIO.toPath(logFile, options = Set(StandardOpenOption.WRITE,
       StandardOpenOption.CREATE, StandardOpenOption.APPEND))
-    val serialize = Flow[SyncOperationResult].map(ElementSerializer.serializeOperationResult)
+    val serialize = if errorLog then
+      Flow[SyncOperationResult].filter(_.optFailure.isDefined)
+        .map(result => ElementSerializer.serializeFailedOperation(result.op, result.optFailure.get))
+    else
+      Flow[SyncOperationResult].map(result => ElementSerializer.serialize(result.op))
     serialize.toMat(sink)(Keep.right)
 
   /**
     * Creates a combined ''Sink'' from the given sink that also logs all
     * received [[SyncOperationResult]]s to a file.
     *
-    * @param sink    the sink to be decorated
-    * @param logFile the path to the log file
+    * @param sink     the sink to be decorated
+    * @param logFile  the path to the log file
+    * @param errorLog flag whether only failures should be logged
     * @tparam MAT the type of the materialized value of the original sink
     * @return the combined sink that performs logging
     */
-  def sinkWithLogging[MAT](sink: Sink[SyncOperationResult, Future[MAT]], logFile: Path)
+  def sinkWithLogging[MAT](sink: Sink[SyncOperationResult, Future[MAT]], logFile: Path, errorLog: Boolean = false)
                           (implicit ec: ExecutionContext): Sink[SyncOperationResult, Future[MAT]] =
-    combinedSink(sink, createLogSink(logFile))
+    combinedSink(sink, createLogSink(logFile, errorLog))
 
   /**
     * Creates a ''Sink'' that counts the received results for sync
