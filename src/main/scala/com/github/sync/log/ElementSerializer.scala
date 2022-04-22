@@ -24,6 +24,7 @@ import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 
 import java.io.{ByteArrayOutputStream, PrintWriter, StringWriter}
+import scala.collection.mutable
 import scala.util.Try
 
 /**
@@ -57,6 +58,12 @@ object ElementSerializer:
   private val TagActionMapping: Map[String, SyncAction] =
     ActionTagMapping map (_.swap)
 
+  /** The separator between the properties of an object. */
+  private val PROPERTY_SEPARATOR = " "
+
+  /** The line separator. */
+  private val LINE_SEPARATOR = System.lineSeparator()
+
   /** Constant for the line-ending characters. */
   private val CR = ByteString(System.lineSeparator())
 
@@ -74,6 +81,30 @@ object ElementSerializer:
                                          level: Int,
                                          destID: String,
                                          elementParts: Seq[String])
+
+  /**
+    * Serializes the given [[SerializationSupport]] object to a ''ByteString''.
+    *
+    * @param obj the object to serialize
+    * @tparam T the type of the object
+    * @return the serialized form of this object
+    */
+  def serialize[T: SerializationSupport](obj: T): ByteString =
+    val builder = mutable.ArrayBuilder.make[String]
+    obj.serialize(builder)
+    ByteString(builder.result().mkString("", PROPERTY_SEPARATOR, LINE_SEPARATOR))
+
+  /**
+    * Tries to deserialize the given string representation to an object of the
+    * given type.
+    *
+    * @param line the string representation to deserialize
+    * @tparam T the type of the target object
+    * @return a ''Try'' with the deserialized object
+    */
+  def deserialize[T](line: String)(using ser: SerializationSupport[T]): Try[T] =
+    val parts = line.split("\\s").toIndexedSeq
+    ser.deserialize(parts)
 
   /**
     * Generates a string representation for the given element.

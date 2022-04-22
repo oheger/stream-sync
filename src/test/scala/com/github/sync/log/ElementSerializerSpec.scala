@@ -37,32 +37,49 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers :
   private def lineEnd: String = System.lineSeparator()
 
   "ElementSerializer" should "serialize a folder" in {
-    val folder = FsFolder("someFolderID", "test_folder", 11)
+    val folder: FsElement = FsFolder("someFolderID", "test_folder", 11)
 
-    val s = ElementSerializer.serializeElement(folder).utf8String
-    s should be(s"FOLDER ${folder.id} ${folder.relativeUri} ${folder.level}")
+    val s = ElementSerializer.serialize(folder).utf8String
+    s should be(s"FOLDER ${folder.id} ${folder.relativeUri} ${folder.level}$lineEnd")
   }
 
   it should "serialize a file" in {
     val fileTime = "2018-09-06T17:25:28.103Z"
     val file = FsFile("someFileID", "test_data.txt", 21, Instant.parse(fileTime), 123456)
 
-    val s = ElementSerializer.serializeElement(file).utf8String
-    s should be(s"FILE ${file.id} ${file.relativeUri} ${file.level} $fileTime ${file.size}")
+    val s = ElementSerializer.serialize(file: FsElement).utf8String
+    s should be(s"FILE ${file.id} ${file.relativeUri} ${file.level} $fileTime ${file.size}$lineEnd")
   }
 
   it should "encode element URIs on serialization" in {
     val folder = FsFolder("someFolderID", "/my data/sub/cool stuff (42)", 10)
 
-    val s = ElementSerializer.serializeElement(folder).utf8String
-    s should be(s"FOLDER ${folder.id} %2Fmy%20data%2Fsub%2Fcool%20stuff%20%2842%29 ${folder.level}")
+    val s = ElementSerializer.serialize(folder: FsElement).utf8String
+    s should be(s"FOLDER ${folder.id} %2Fmy%20data%2Fsub%2Fcool%20stuff%20%2842%29 ${folder.level}$lineEnd")
   }
 
   it should "encode element IDs on serialization" in {
     val folder = FsFolder("some folder(42)", "folder-uri", 1)
 
-    val s = ElementSerializer.serializeElement(folder).utf8String
-    s should be(s"FOLDER some%20folder%2842%29 ${folder.relativeUri} ${folder.level}")
+    val s = ElementSerializer.serialize(folder: FsElement).utf8String
+    s should be(s"FOLDER some%20folder%2842%29 ${folder.relativeUri} ${folder.level}$lineEnd")
+  }
+
+  it should "support a serialization round-trip with a folder" in {
+    val folder = FsFolder("some folder(42)", "/my data/sub/cool stuff (42)", 10)
+    val s = ElementSerializer.serialize(folder: FsElement).utf8String
+
+    val folder2 = ElementSerializer.deserialize[FsElement](s).get
+    folder2 should be(folder)
+  }
+
+  it should "support a serialization round-trip with a file" in {
+    val fileTime = "2018-09-06T17:25:28.103Z"
+    val file = FsFile("someFileID", "test_data.txt", 21, Instant.parse(fileTime), 123456)
+
+    val s = ElementSerializer.serialize(file: FsElement).utf8String
+    val file2 = ElementSerializer.deserialize[FsElement](s).get
+    file2 should be(file)
   }
 
   /**
@@ -127,27 +144,10 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers :
         s(1) should include(e.getMessage)
   }
 
-  it should "deserialize a folder element" in {
-    val folder = FsFolder("theFolderID", "some/test/folder", 9)
-    val parts = ElementSerializer.serializeElement(folder).utf8String.split("\\s").toSeq
-
-    val folder2 = ElementSerializer.deserializeElement(parts).get
-    folder2 should be(folder)
-  }
-
-  it should "deserialize a file element" in {
-    val file = FsFile("theFileID", "my/test/file.txt", 2, Instant.parse("2018-09-06T19:14:36.189Z"),
-      20180906191501L)
-    val parts = ElementSerializer.serializeElement(file).utf8String.split("\\s").toSeq
-
-    val file2 = ElementSerializer.deserializeElement(parts).get
-    file2 should be(file)
-  }
-
   it should "handle a deserialization of an unknown element tag" in {
-    val parts = Seq("FOLDER_FILE", "123", "/test/data", "1")
+    val ser = "FOLDER_FILE 123 /test/data 1"
 
-    ElementSerializer.deserializeElement(parts) match
+    ElementSerializer.deserialize[FsElement](ser) match
       case Failure(exception) =>
         exception shouldBe a[IllegalArgumentException]
         exception.getMessage should include("FOLDER_FILE")
@@ -155,15 +155,15 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers :
   }
 
   it should "handle a deserialization of an element with not enough parts" in {
-    val triedElement = ElementSerializer.deserializeElement(Seq.empty[String])
+    val triedElement = ElementSerializer.deserialize[FsElement]("")
 
     triedElement.isFailure shouldBe true
   }
 
   it should "handle a deserialization of an element with invalid properties" in {
-    val parts = Seq("FOLDER", "anID", "/uri", "notAValidLevel")
+    val ser = "FOLDER anID /uri notAValidLevel"
 
-    val triedElement = ElementSerializer.deserializeElement(parts)
+    val triedElement = ElementSerializer.deserialize[FsElement](ser)
     triedElement.isFailure shouldBe true
   }
 
