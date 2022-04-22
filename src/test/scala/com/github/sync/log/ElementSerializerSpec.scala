@@ -120,25 +120,14 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers :
     checkSerializedOperation(ActionLocalRemove, "LOCAL_REMOVE")
   }
 
-  it should "serialize a successful sync operation result" in {
-    val elem = FsFolder("folderID", "testFolder", 8)
-    val op = SyncOperation(elem, ActionCreate, 4, dstID = "someDstID")
-    val result = SyncOperationResult(op, None)
-
-    val s = ElementSerializer.serializeOperationResult(result).utf8String
-    s should be(s"CREATE ${op.level} ${op.dstID} FOLDER ${elem.id} ${elem.relativeUri} ${elem.level}$lineEnd")
-  }
-
-  it should "serialize the exception of a failed sync operation result" in {
+  it should "serialize the exception of a failed sync operation" in {
     val elem = FsFolder("errorFolderID", "brokenFolder", 3)
     val op = SyncOperation(elem, ActionCreate, 4, dstID = "brokenDstID")
     try
       throw new IllegalStateException("Test exception")
     catch
       case e: Exception =>
-        val result = SyncOperationResult(op, Some(e))
-
-        val s = ElementSerializer.serializeOperationResult(result).utf8String.split(lineEnd)
+        val s = ElementSerializer.serializeFailedOperation(op, e).utf8String.split(lineEnd)
         s should have size e.getStackTrace.length + 2
         s(0) should be(s"CREATE ${op.level} ${op.dstID} FOLDER ${elem.id} ${elem.relativeUri} ${elem.level}")
         s(1) should include(e.getMessage)

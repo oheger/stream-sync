@@ -152,6 +152,23 @@ object ElementSerializer:
     }
 
   /**
+    * Generates a string representation for a failed ''SyncOperation''. The
+    * operation is serialized in the normal way; then the exception with its
+    * stacktrace is written on a new line.
+    *
+    * @param operation the operation
+    * @param exception the exception caused by the operation
+    * @return the string representation of this failed operation
+    */
+  def serializeFailedOperation(operation: SyncOperation, exception: Throwable): ByteString =
+    val serializedOp = serialize(operation)
+    val stringWriter = new StringWriter()
+    val out = new PrintWriter(stringWriter)
+    exception.printStackTrace(out)
+    out.flush()
+    serializedOp ++ ByteString(stringWriter.toString)
+
+  /**
     * Tries to create an ''FsElement'' from its serialized form. Note that the
     * serialized form contains a variable number of properties depending on the
     * fact whether an original URI is present or not.
