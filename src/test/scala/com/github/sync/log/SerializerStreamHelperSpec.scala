@@ -76,8 +76,7 @@ class SerializerStreamHelperSpec(testSystem: ActorSystem) extends TestKit(testSy
     val op1 = SyncOperation(FsFile("fileID", "/test/file.txt", 4, Instant.now(), 256), ActionOverride, 1,
       dstID = "The destination ID")
     val op2 = SyncOperation(FsFolder("folderID", "/test/folder", 2), ActionRemove, 1, dstID = "21")
-    val Content = List(op1, op2).map(op => ElementSerializer.serializeOperation(op).utf8String)
-      .mkString("\n")
+    val Content = List(op1, op2).map(op => ElementSerializer.serialize(op).utf8String).mkString("\n")
     val logFile = createDataFile(Content)
     val sink = listSink[SyncOperation]
 

@@ -107,4 +107,4 @@ object SerializerStreamHelper:
     * @return the source emitting ''SyncOperation'' objects
     */
   private def toOperationSource(source: Source[String, Any]): Source[SyncOperation, Any] =
-    source.map(strOp => ElementSerializer.deserializeOperation(strOp).get)
+    source.map(strOp => ElementSerializer.deserialize[SyncOperation](strOp).get)
