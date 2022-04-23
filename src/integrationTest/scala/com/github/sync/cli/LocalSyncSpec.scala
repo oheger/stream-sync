@@ -563,6 +563,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val errorLog = readDataFile(errorLogFile)
     errorLog should include(operations.head)
     errorLog should not include operations(1)
+    errorLog should include("FileSystemException")
   }
 
   it should "log failed sync operations" in {

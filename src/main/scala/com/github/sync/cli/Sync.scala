@@ -240,8 +240,7 @@ object Sync:
                                errorLogFile: Option[Path])
                               (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] = Future {
-    val sinkCount = SyncStream.createCountSink()
-    val sinkTotal = createCountSinkWithOptionalLogging(logFile)
+    val sinkTotal = createCountSinkWithOptionalLogging(logFile, errorLog = false)
     val sinkError = createErrorSink(errorLogFile)
     val sinkSuccess = Flow[SyncOperationResult].filterNot { result =>
       result.optFailure.isDefined || result.op.action == ActionNoop
@@ -270,7 +269,7 @@ object Sync:
     */
   private def createErrorSink(errorLogFile: Option[Path])(implicit ec: ExecutionContext):
   Sink[SyncOperationResult, Future[Int]] =
-    val countSink = createCountSinkWithOptionalLogging(errorLogFile)
+    val countSink = createCountSinkWithOptionalLogging(errorLogFile, errorLog = true)
     val logger = LogManager.getLogger(classOf[Sync])
     val consoleLogSink = Sink.foreach[SyncOperationResult] { result =>
       logger.error(s"Failed to apply operation '${result.op}'.", result.optFailure.get)
@@ -283,14 +282,16 @@ object Sync:
     * logging if a log file is specified. This function is used to create the
     * sinks for all operations and the failed operations.
     *
-    * @param logFile the optional path to the log file
-    * @param ec      the excution context
+    * @param logFile  the optional path to the log file
+    * @param errorLog flag whether an error log sink should be created
+    * @param ec       the execution context
     * @return the resulting sink
     */
-  private def createCountSinkWithOptionalLogging(logFile: Option[Path])(implicit ec: ExecutionContext):
+  private def createCountSinkWithOptionalLogging(logFile: Option[Path], errorLog: Boolean)
+                                                (implicit ec: ExecutionContext):
   Sink[SyncOperationResult, Future[Int]] =
     val sinkCount = SyncStream.createCountSink()
-    logFile.fold(sinkCount)(path => SyncStream.sinkWithLogging(sinkCount, path))
+    logFile.fold(sinkCount)(path => SyncStream.sinkWithLogging(sinkCount, path, errorLog))
 
   /**
     * Generates a predicate that filters out undesired sync operations based on
