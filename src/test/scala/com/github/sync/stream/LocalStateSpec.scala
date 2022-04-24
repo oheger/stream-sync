@@ -16,15 +16,16 @@
 
 package com.github.sync.stream
 
-import com.github.sync.SyncTypes.{FsFolder, SyncAction, SyncOperation}
-import com.github.sync.stream.LocalState.affectsLocalState
+import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncAction, SyncOperation}
+import com.github.sync.log.ElementSerializer
+import com.github.sync.stream.LocalState.{LocalElementState, affectsLocalState}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /**
   * Test class for ''LocalState''.
   */
-class LocalStateSpec extends AnyFlatSpec, Matchers:
+class LocalStateSpec extends AnyFlatSpec, Matchers :
   /**
     * Helper function to check the ''affectsLocalState'' extension function.
     *
@@ -61,4 +62,29 @@ class LocalStateSpec extends AnyFlatSpec, Matchers:
 
   it should "detect that a SyncOperation with ActionLocalOverride affects the local state" in {
     checkAffectsLocalState(SyncAction.ActionLocalOverride, expectedResult = true)
+  }
+
+  /**
+    * Checks whether the given element can be correctly serialized and
+    * deserialized in local state.
+    *
+    * @param element the element
+    * @param removed the removed flag
+    */
+  private def checkSerializationRoundTripForLocalState(element: FsElement, removed: Boolean): Unit =
+    val state = LocalElementState(element, removed)
+    val ser = ElementSerializer.serialize(state).utf8String
+    val state2 = ElementSerializer.deserialize[LocalElementState](ser).get
+    state2 should be(state)
+
+  it should "support serialization and deserialization of a file in local state" in {
+    val file = AbstractStageSpec.createFile(1)
+
+    checkSerializationRoundTripForLocalState(file, removed = false)
+  }
+
+  it should "support serialization and deserialization of a folder in local state" in {
+    val folder = AbstractStageSpec.createFolder(2)
+
+    checkSerializationRoundTripForLocalState(folder, removed = true)
   }

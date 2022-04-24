@@ -17,6 +17,10 @@
 package com.github.sync.stream
 
 import com.github.sync.SyncTypes.{FsElement, SyncAction, SyncOperation}
+import com.github.sync.log.SerializationSupport
+
+import scala.collection.mutable
+import scala.util.Try
 
 /**
   * A module providing functionality related to the local state of sync
@@ -33,6 +37,25 @@ import com.github.sync.SyncTypes.{FsElement, SyncAction, SyncOperation}
   * transformations to apply sync operations on local elements.
   */
 private object LocalState:
+  object LocalElementState:
+    /**
+      * A [[SerializationSupport]] instance providing serialization support for
+      * elements in the local state.
+      */
+    given serState(using serElem: SerializationSupport[FsElement]): SerializationSupport[LocalElementState] with
+      override def deserialize(parts: IndexedSeq[String]): Try[LocalElementState] =
+        serElem.deserialize(parts) flatMap { elem =>
+          Try {
+            val removed = parts.last == "true"
+            LocalElementState(elem, removed)
+          }
+        }
+
+      extension (state: LocalElementState)
+        def serialize(builder: mutable.ArrayBuilder[String]): Unit =
+          state.element.serialize(builder)
+          builder += state.removed.toString
+
   /**
     * A data class to represent an element in the local state of a sync
     * process.
