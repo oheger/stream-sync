@@ -16,16 +16,36 @@
 
 package com.github.sync.stream
 
+import akka.actor.ActorSystem
+import akka.stream.scaladsl.Source
+import akka.testkit.TestKit
 import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncAction, SyncOperation}
 import com.github.sync.log.ElementSerializer
 import com.github.sync.stream.LocalState.{LocalElementState, affectsLocalState}
-import org.scalatest.flatspec.AnyFlatSpec
+import com.github.sync.{AsyncTestHelper, FileTestHelper}
+import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
+
+import java.nio.file.Path
 
 /**
   * Test class for ''LocalState''.
   */
-class LocalStateSpec extends AnyFlatSpec, Matchers :
+class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlatSpecLike, BeforeAndAfterAll,
+  BeforeAndAfterEach, Matchers, FileTestHelper, AsyncTestHelper :
+  def this() = this(ActorSystem("LocalStateSpec"))
+
+  override protected def afterAll(): Unit =
+    TestKit shutdownActorSystem system
+    super.afterAll()
+
+  override protected def afterEach(): Unit =
+    tearDownTestFile()
+    super.afterEach()
+
+  import system.dispatcher
+
   /**
     * Helper function to check the ''affectsLocalState'' extension function.
     *
@@ -87,4 +107,54 @@ class LocalStateSpec extends AnyFlatSpec, Matchers :
     val folder = AbstractStageSpec.createFolder(2)
 
     checkSerializationRoundTripForLocalState(folder, removed = true)
+  }
+
+  /**
+    * Reads a file with serialized local state elements.
+    *
+    * @param path the path to the file to read
+    * @return a sequence with the elements extracted from the file
+    */
+  private def readLocalStateFile(path: Path): Seq[LocalElementState] =
+    val lines = readDataFile(path).split(System.lineSeparator())
+    lines.map(line => ElementSerializer.deserialize[LocalElementState](line).get)
+
+  /**
+    * Helper function to check whether a file with local state information
+    * contains the expected elements.
+    *
+    * @param path        the path to the file with state information
+    * @param expElements the expected elements
+    */
+  private def checkLocalStateFile(path: Path, expElements: Seq[LocalElementState]): Unit =
+    val stateElements = readLocalStateFile(path)
+    stateElements should contain theSameElementsInOrderAs expElements
+
+  it should "create a sink to update the local state" in {
+    val elements = (1 to 8) map { idx =>
+      val element = if idx % 2 == 0 then AbstractStageSpec.createFile(idx)
+      else AbstractStageSpec.createFolder(idx)
+      LocalElementState(element, idx % 3 == 0)
+    }
+    val StreamName = "TestSyncStream"
+    val source = Source(elements)
+
+    val sink = LocalState.localStateSink(testDirectory, StreamName)
+    val stateFileResult = futureResult(source.runWith(sink))
+    val localStateFile = createPathInDirectory(StreamName + ".lst.tmp")
+    stateFileResult.toAbsolutePath should be(localStateFile.toAbsolutePath)
+    checkLocalStateFile(localStateFile, elements)
+  }
+
+  it should "create a sink that overrides an existing local state file" in {
+    val elements = (1 to 4) map { idx =>
+      LocalElementState(AbstractStageSpec.createFile(idx), removed = false)
+    }
+    val source = Source(elements)
+    val StreamName = "TestStreamOverride"
+    val localStateFile = writeFileContent(createPathInDirectory(StreamName + ".lst.tmp"), FileTestHelper.TestData)
+
+    val sink = LocalState.localStateSink(testDirectory, StreamName)
+    futureResult(source.runWith(sink))
+    checkLocalStateFile(localStateFile, elements)
   }

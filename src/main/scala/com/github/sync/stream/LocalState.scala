@@ -16,10 +16,13 @@
 
 package com.github.sync.stream
 
+import akka.stream.scaladsl.{FileIO, Sink}
 import com.github.sync.SyncTypes.{FsElement, SyncAction, SyncOperation}
-import com.github.sync.log.SerializationSupport
+import com.github.sync.log.{ElementSerializer, SerializationSupport}
 
+import java.nio.file.Path
 import scala.collection.mutable
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 /**
@@ -37,6 +40,16 @@ import scala.util.Try
   * transformations to apply sync operations on local elements.
   */
 private object LocalState:
+  /** The extension of a file storing local state information. */
+  final val ExtensionLocalState = ".lst"
+
+  /**
+    * The extension of a file storing local state information while the sync
+    * stream is in progress. This is a temporary file, which is renamed at the
+    * end of the stream.
+    */
+  final val ExtensionLocalStateIP = ExtensionLocalState + ".tmp"
+
   object LocalElementState:
     /**
       * A [[SerializationSupport]] instance providing serialization support for
@@ -84,3 +97,21 @@ private object LocalState:
     * element state.
     */
     def affectsLocalState: Boolean = ActionsAffectingLocalState(operation.action)
+
+  /**
+    * Returns a ''Sink'' for the updated local element state of a sync stream.
+    * The state is stored in the given folder in a file whose name is derived
+    * from the stream name. The materialized value of the sink is a ''Future''
+    * with the path to this file.
+    *
+    * @param path       the path where to store local state information
+    * @param streamName the name of this sync stream
+    * @param ec         the execution context
+    * @return the sink to update the local element state
+    */
+  def localStateSink(path: Path, streamName: String)
+                    (implicit ec: ExecutionContext): Sink[LocalElementState, Future[Path]] =
+    val targetFile = path.resolve(streamName + ExtensionLocalStateIP)
+    FileIO.toPath(targetFile).contramap[LocalElementState](ElementSerializer.serialize)
+      .mapMaterializedValue(_.map(_ => targetFile))
+
