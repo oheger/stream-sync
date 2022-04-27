@@ -17,9 +17,8 @@
 package com.github.sync.log
 
 import java.nio.file.Path
-
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{FileIO, Framing, Sink, Source}
+import akka.stream.scaladsl.{FileIO, Flow, Framing, Sink, Source}
 import akka.util.ByteString
 import com.github.sync.SyncTypes.SyncOperation
 
@@ -30,7 +29,7 @@ import scala.concurrent.{ExecutionContext, Future}
   * elements.
   *
   * The functions defined here are used in streams that need to read sync
-  * operations from log files.
+  * operations from log files, or in general, serialized elements from files.
   */
 object SerializerStreamHelper:
   /** The byte string representing a line end character. */
@@ -40,6 +39,19 @@ object SerializerStreamHelper:
   private val MaxLineLength = 8192
 
   /**
+    * Returns a ''Flow'' that extracts the string representations of serialized
+    * elements from the content of a file. The flow basically returns the 
+    * single non-empty lines of the file, since each line corresponds to one
+    * element in serialized form.
+    *
+    * @return the flow for the lines representing serialized elements
+    */
+  def serializedElementFlow: Flow[ByteString, String, Any] =
+    Framing.delimiter(LineEnd, MaxLineLength, allowTruncation = true)
+      .map(_.utf8String.trim)
+      .filterNot(_.isEmpty)
+
+  /**
     * Creates a source to read the content of a log file containing sync
     * operations. The source emits the single lines of the log file (where each
     * line corresponds to a sync operation).
@@ -47,11 +59,7 @@ object SerializerStreamHelper:
     * @param file the log file with sync operations
     * @return the source to read sync log files
     */
-  def createLogFileSource(file: Path): Source[String, Any] =
-    FileIO.fromPath(file)
-      .via(Framing.delimiter(LineEnd, MaxLineLength, allowTruncation = true))
-      .map(_.utf8String.trim)
-      .filterNot(_.isEmpty)
+  def createLogFileSource(file: Path): Source[String, Any] = FileIO.fromPath(file).via(serializedElementFlow)
 
   /**
     * Creates a source to read the content of a log file containing sync
@@ -61,7 +69,34 @@ object SerializerStreamHelper:
     * @return the source to read sync operations
     */
   def createSyncOperationSource(file: Path): Source[SyncOperation, Any] =
-    toOperationSource(createLogFileSource(file))
+    createDeserializationSource(file)
+
+  /**
+    * Creates a source to read a file containing objects in serialized form.
+    * The objects are deserialized to the given result type. The stream fails
+    * if elements in an unexpected format are encountered.
+    *
+    * @param file the file with serialized objects
+    * @tparam T the result type of deserialization
+    * @return the source to read and deserialize the file
+    */
+  def createDeserializationSource[T: SerializationSupport](file: Path): Source[T, Any] =
+    createDeserializationSource(createLogFileSource(file))
+
+  /**
+    * Creates a source that deserializes objects obtained from another source
+    * that yields serialized objects. The passed in source must produce string
+    * representations of objects. Each string is deserialized to an object of
+    * the specified type.
+    *
+    * @param source the source for serialized elements
+    * @tparam T the result type of deserialization
+    * @return the source producing deserialized objects
+    */
+  def createDeserializationSource[T: SerializationSupport](source: Source[String, Any]): Source[T, Any] =
+    source map { str =>
+      ElementSerializer.deserialize[T](str).get
+    }
 
   /**
     * Reads a log file with sync operations and returns the single lines as a
@@ -96,15 +131,5 @@ object SerializerStreamHelper:
                                                (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Source[SyncOperation, Any]] = readProcessedLog(processedLog)
     .fallbackTo(Future.successful(Set.empty[String])) map { log =>
-    toOperationSource(createLogFileSource(syncLog).filterNot(log.contains))
+    createDeserializationSource(createLogFileSource(syncLog).filterNot(log.contains))
   }
-
-  /**
-    * Adapts a source for the single lines of a sync log file to transforms the
-    * lines to ''SyncOperation'' objects.
-    *
-    * @param source the source for serialized sync operations
-    * @return the source emitting ''SyncOperation'' objects
-    */
-  private def toOperationSource(source: Source[String, Any]): Source[SyncOperation, Any] =
-    source.map(strOp => ElementSerializer.deserialize[SyncOperation](strOp).get)
