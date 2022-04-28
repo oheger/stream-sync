@@ -17,17 +17,17 @@
 package com.github.sync.stream
 
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
-import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncAction, SyncOperation}
+import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncAction, SyncOperation}
 import com.github.sync.log.ElementSerializer
 import com.github.sync.stream.LocalState.{LocalElementState, affectsLocalState}
-import com.github.sync.{AsyncTestHelper, FileTestHelper}
+import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
 import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 /**
   * Test class for ''LocalState''.
@@ -157,4 +157,92 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val sink = LocalState.localStateSink(testDirectory, StreamName)
     futureResult(source.runWith(sink))
     checkLocalStateFile(localStateFile, elements)
+  }
+
+  /**
+    * Obtains the source for the local state of the given stream and returns a
+    * sequence with its content.
+    *
+    * @param streamName the stream name
+    * @return a sequence with the elements from the stream's local state
+    */
+  private def readLocalStateSource(streamName: String): Seq[FsElement] =
+    val source = futureResult(LocalState.constructLocalStateSource(testDirectory, streamName))
+    readLocalStateSource(source)
+
+  /**
+    * Reads the given ''Source'' with elements from the local state and returns
+    * a sequence with its content.
+    *
+    * @param source the source
+    * @return a sequence with the elements from this source
+    */
+  private def readLocalStateSource(source: Source[FsElement, Any]): Seq[FsElement] =
+    val sink = Sink.fold[List[FsElement], FsElement](List.empty) { (list, elem) => elem :: list }
+    futureResult(source.runWith(sink)).reverse
+
+  /**
+    * Writes a local state file for the given elements.
+    *
+    * @param streamName the name of the stream
+    * @param elements   the sequence of elements
+    * @return the path to the file that was written
+    */
+  private def writeLocalStateFile(streamName: String, elements: Seq[LocalElementState]): Path =
+    val elemSource = Source(elements)
+    val sink = LocalState.localStateSink(testDirectory, streamName)
+    futureResult(elemSource.runWith(sink))
+
+  /**
+    * Renames the given temporary state file to the final state file.
+    *
+    * @param streamName the name of the stream
+    * @return the resulting final state file
+    */
+  private def promoteTempStateFile(streamName: String): Path =
+    val sourcePath = testDirectory.resolve(streamName + LocalState.ExtensionLocalStateIP)
+    val targetPath = testDirectory.resolve(streamName + LocalState.ExtensionLocalState)
+    Files.move(sourcePath, targetPath)
+
+  it should "construct an empty source for a non-existing local state file" in {
+    val source = futureResult(LocalState.constructLocalStateSource(testDirectory, "non-existing.lst"))
+
+    readLocalStateSource(source) shouldBe empty
+  }
+
+  it should "construct a source for an existing local state file" in {
+    val elements = (1 to 16) map { idx =>
+      val element = if idx % 2 == 0 then AbstractStageSpec.createFile(idx)
+      else AbstractStageSpec.createFolder(idx)
+      LocalElementState(element, removed = false)
+    }
+    val StreamName = "StreamWithLocalState"
+    writeLocalStateFile(StreamName, elements)
+    promoteTempStateFile(StreamName)
+
+    val stateElements = readLocalStateSource(StreamName)
+    stateElements should contain theSameElementsInOrderAs elements.map(_.element)
+  }
+
+  it should "construct a source that filters out removed elements from the local state file" in {
+    val elements = (1 to 8) map { idx =>
+      val element = if idx % 2 == 0 then AbstractStageSpec.createFile(idx)
+      else AbstractStageSpec.createFolder(idx)
+      LocalElementState(element, removed = false)
+    }
+    val removedElements = elements map { stateElem =>
+      val elem = stateElem.element match
+        case file: FsFile => file.copy(id = file.id + "_removedFile")
+        case folder: FsFolder => folder.copy(id = folder.id + "_removedFolder")
+      LocalElementState(elem, removed = true)
+    }
+    val allElements = elements.zip(removedElements).foldRight(List.empty[LocalElementState]) { (p, list) =>
+      p._1 :: p._2 :: list
+    }
+    val StreamName = "StreamWithRemovedElementsInLocalState"
+    writeLocalStateFile(StreamName, allElements)
+    promoteTempStateFile(StreamName)
+
+    val stateElements = readLocalStateSource(StreamName)
+    stateElements should contain theSameElementsInOrderAs elements.map(_.element)
   }

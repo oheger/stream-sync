@@ -16,11 +16,13 @@
 
 package com.github.sync.stream
 
-import akka.stream.scaladsl.{FileIO, Sink}
+import akka.NotUsed
+import akka.protobufv3.internal.DescriptorProtos.FileDescriptorSet
+import akka.stream.scaladsl.{FileIO, Sink, Source}
 import com.github.sync.SyncTypes.{FsElement, SyncAction, SyncOperation}
-import com.github.sync.log.{ElementSerializer, SerializationSupport}
+import com.github.sync.log.{ElementSerializer, SerializationSupport, SerializerStreamHelper}
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
@@ -115,3 +117,25 @@ private object LocalState:
     FileIO.toPath(targetFile).contramap[LocalElementState](ElementSerializer.serialize)
       .mapMaterializedValue(_.map(_ => targetFile))
 
+  /**
+    * Constructs a ''Source'' to load the local state of a sync process. This
+    * is actually a quite tricky operation, since the function has to deal with
+    * a process that has been interrupted. In this case, only a partial updated
+    * state is available. The function then needs to combine the updated state
+    * with the original one to come to the final input source. Therefore,
+    * result is a ''Future''.
+    *
+    * @param path       the path containing the file with state information
+    * @param streamName the name of this sync stream
+    * @param ec         the execution context
+    * @return a ''Future'' with the ''Source'' for the local state
+    */
+  def constructLocalStateSource(path: Path, streamName: String)
+                               (implicit ec: ExecutionContext): Future[Source[FsElement, Any]] = Future {
+    val stateFile = path.resolve(streamName + ExtensionLocalState)
+    if Files.isRegularFile(stateFile) then
+      SerializerStreamHelper.createDeserializationSource[LocalElementState](stateFile)
+        .filterNot(_.removed)
+        .map(_.element)
+    else Source.empty
+  }
