@@ -42,16 +42,6 @@ import scala.util.Try
   * transformations to apply sync operations on local elements.
   */
 private object LocalState:
-  /** The extension of a file storing local state information. */
-  final val ExtensionLocalState = ".lst"
-
-  /**
-    * The extension of a file storing local state information while the sync
-    * stream is in progress. This is a temporary file, which is renamed at the
-    * end of the stream.
-    */
-  final val ExtensionLocalStateIP = ExtensionLocalState + ".tmp"
-
   object LocalElementState:
     /**
       * A [[SerializationSupport]] instance providing serialization support for
@@ -88,6 +78,102 @@ private object LocalState:
   case class LocalElementState(element: FsElement,
                                removed: Boolean)
 
+  /** The extension of a file storing local state information. */
+  final val ExtensionLocalState = ".lst"
+
+  /**
+    * The extension of a file storing local state information while the sync
+    * stream is in progress. This is a temporary file, which is renamed at the
+    * end of the stream.
+    */
+  final val ExtensionLocalStateIP = ExtensionLocalState + ".tmp"
+
+  /**
+    * The extension of a file with local state information which is created
+    * temporarily while resuming an interrupted sync process.
+    */
+  final val ExtensionLocalStateResuming = ExtensionLocalState + ".rsm"
+
+  /**
+    * An enumeration defining the different types of local state files and
+    * their extensions that can be present in the storage folder for a sync
+    * stream's local state.
+    */
+  enum LocalStateFile(val fileExtension: String):
+    case Complete extends LocalStateFile(ExtensionLocalState)
+    case Interrupted extends LocalStateFile(ExtensionLocalStateIP)
+    case Resuming extends LocalStateFile(ExtensionLocalStateResuming)
+
+    /**
+      * Constructs the name of the local state file of the represented type for
+      * the sync stream with the given name.
+      *
+      * @param streamName the name of the sync stream
+      * @return the name of the file of this type for this sync stream
+      */
+    def fileName(streamName: String): String = streamName + fileExtension
+  end LocalStateFile
+  
+  /**
+    * A class with information about the storage path of the local state of a
+    * specific sync stream.
+    *
+    * Depending on the outcome of the last sync process, the local state can be
+    * stored in different files (e.g. a completed sync stream vs an interrupted
+    * one). The file names are derived from the name of the sync stream. Based
+    * on the specified storage path, the class allows resolving the different
+    * types of local state files.
+    *
+    * ''Note'': The class assumes that the name of the stream contains only
+    * valid characters for file names; no escaping or quoting is implemented.
+    *
+    * @param folder     the path to store local state files
+    * @param streamName the name of the current sync stream
+    */
+  case class LocalStateFolder(folder: Path, streamName: String):
+    /**
+      * Resolves the path to the local state file of the given type.
+      *
+      * @param file the file type
+      * @return the ''Path'' pointing to this state file for the associated
+      *         sync stream
+      */
+    def resolve(file: LocalStateFile): Path = folder.resolve(fileName(file))
+
+    /**
+      * Renames a local state file of one type to another type. This function
+      * is typically used when an operation is completed. Then a temporary file
+      * can be promoted to the complete state file.
+      *
+      * @param sourceFile      the type of the source file
+      * @param destinationFile the type of the destination file
+      * @return the path of the destination file
+      */
+    def rename(sourceFile: LocalStateFile, destinationFile: LocalStateFile): Path =
+      val source = resolve(sourceFile)
+      val destination = resolve(destinationFile)
+      Files.move(source, destination)
+
+    /**
+      * Renames a local state file to the name representing a completed state.
+      * This is a convenience function, since typically the target of a rename
+      * operation is the file for the completed state.
+      *
+      * @param sourceFile the type of the source file
+      * @return the path to the file with the completed state
+      */
+    def promoteToComplete(sourceFile: LocalStateFile): Path = rename(sourceFile, LocalStateFile.Complete)
+
+    /**
+      * Returns the name of the state file with the given type for the
+      * associated stream.
+      *
+      * @param fileType the file type
+      * @return the name of the file with this type
+      */
+    private def fileName(fileType: LocalStateFile): String = streamName + fileType.fileExtension
+  end LocalStateFolder
+
   /** A set with the action types that have an affect of the local state. */
   private val ActionsAffectingLocalState = Set(SyncAction.ActionLocalCreate, SyncAction.ActionLocalOverride,
     SyncAction.ActionLocalRemove)
@@ -106,14 +192,13 @@ private object LocalState:
     * from the stream name. The materialized value of the sink is a ''Future''
     * with the path to this file.
     *
-    * @param path       the path where to store local state information
-    * @param streamName the name of this sync stream
-    * @param ec         the execution context
+    * @param stateFolder refers to the folder containing state files
+    * @param ec          the execution context
     * @return the sink to update the local element state
     */
-  def localStateSink(path: Path, streamName: String)
+  def localStateSink(stateFolder: LocalStateFolder)
                     (implicit ec: ExecutionContext): Sink[LocalElementState, Future[Path]] =
-    val targetFile = path.resolve(streamName + ExtensionLocalStateIP)
+    val targetFile = stateFolder.resolve(LocalStateFile.Interrupted)
     FileIO.toPath(targetFile).contramap[LocalElementState](ElementSerializer.serialize)
       .mapMaterializedValue(_.map(_ => targetFile))
 
@@ -125,14 +210,13 @@ private object LocalState:
     * with the original one to come to the final input source. Therefore,
     * result is a ''Future''.
     *
-    * @param path       the path containing the file with state information
-    * @param streamName the name of this sync stream
-    * @param ec         the execution context
+    * @param stateFolder refers to the folder containing state files
+    * @param ec          the execution context
     * @return a ''Future'' with the ''Source'' for the local state
     */
-  def constructLocalStateSource(path: Path, streamName: String)
+  def constructLocalStateSource(stateFolder: LocalStateFolder)
                                (implicit ec: ExecutionContext): Future[Source[FsElement, Any]] = Future {
-    val stateFile = path.resolve(streamName + ExtensionLocalState)
+    val stateFile = stateFolder.resolve(LocalStateFile.Complete)
     if Files.isRegularFile(stateFile) then
       SerializerStreamHelper.createDeserializationSource[LocalElementState](stateFile)
         .filterNot(_.removed)

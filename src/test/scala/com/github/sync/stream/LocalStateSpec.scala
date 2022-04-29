@@ -21,7 +21,7 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncAction, SyncOperation}
 import com.github.sync.log.ElementSerializer
-import com.github.sync.stream.LocalState.{LocalElementState, affectsLocalState}
+import com.github.sync.stream.LocalState.{LocalElementState, LocalStateFile, LocalStateFolder, affectsLocalState}
 import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
 import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}
 import org.scalatest.matchers.should.Matchers
@@ -110,6 +110,15 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
   }
 
   /**
+    * Constructs a ''LocalStateFolder'' for the stream with the given name.
+    *
+    * @param streamName the stream name
+    * @return the ''LocalStateFolder'' for this stream
+    */
+  private def stateFolder(streamName: String): LocalStateFolder =
+    LocalStateFolder(testDirectory, streamName)
+
+  /**
     * Reads a file with serialized local state elements.
     *
     * @param path the path to the file to read
@@ -136,12 +145,12 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
       else AbstractStageSpec.createFolder(idx)
       LocalElementState(element, idx % 3 == 0)
     }
-    val StreamName = "TestSyncStream"
+    val folder = stateFolder("TestSyncStream")
     val source = Source(elements)
 
-    val sink = LocalState.localStateSink(testDirectory, StreamName)
+    val sink = LocalState.localStateSink(folder)
     val stateFileResult = futureResult(source.runWith(sink))
-    val localStateFile = createPathInDirectory(StreamName + ".lst.tmp")
+    val localStateFile = createPathInDirectory(folder.streamName + ".lst.tmp")
     stateFileResult.toAbsolutePath should be(localStateFile.toAbsolutePath)
     checkLocalStateFile(localStateFile, elements)
   }
@@ -151,10 +160,10 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
       LocalElementState(AbstractStageSpec.createFile(idx), removed = false)
     }
     val source = Source(elements)
-    val StreamName = "TestStreamOverride"
-    val localStateFile = writeFileContent(createPathInDirectory(StreamName + ".lst.tmp"), FileTestHelper.TestData)
+    val folder = stateFolder("TestStreamOverride")
+    val localStateFile = writeFileContent(folder.resolve(LocalStateFile.Interrupted), FileTestHelper.TestData)
 
-    val sink = LocalState.localStateSink(testDirectory, StreamName)
+    val sink = LocalState.localStateSink(folder)
     futureResult(source.runWith(sink))
     checkLocalStateFile(localStateFile, elements)
   }
@@ -163,11 +172,11 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     * Obtains the source for the local state of the given stream and returns a
     * sequence with its content.
     *
-    * @param streamName the stream name
+    * @param folder the folder containing the state files
     * @return a sequence with the elements from the stream's local state
     */
-  private def readLocalStateSource(streamName: String): Seq[FsElement] =
-    val source = futureResult(LocalState.constructLocalStateSource(testDirectory, streamName))
+  private def readLocalStateSource(folder: LocalStateFolder): Seq[FsElement] =
+    val source = futureResult(LocalState.constructLocalStateSource(folder))
     readLocalStateSource(source)
 
   /**
@@ -184,28 +193,18 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
   /**
     * Writes a local state file for the given elements.
     *
-    * @param streamName the name of the stream
-    * @param elements   the sequence of elements
+    * @param folder   the folder containing the state files
+    * @param elements the sequence of elements
     * @return the path to the file that was written
     */
-  private def writeLocalStateFile(streamName: String, elements: Seq[LocalElementState]): Path =
+  private def writeLocalStateFile(folder: LocalStateFolder, elements: Seq[LocalElementState]): Path =
     val elemSource = Source(elements)
-    val sink = LocalState.localStateSink(testDirectory, streamName)
+    val sink = LocalState.localStateSink(folder)
     futureResult(elemSource.runWith(sink))
 
-  /**
-    * Renames the given temporary state file to the final state file.
-    *
-    * @param streamName the name of the stream
-    * @return the resulting final state file
-    */
-  private def promoteTempStateFile(streamName: String): Path =
-    val sourcePath = testDirectory.resolve(streamName + LocalState.ExtensionLocalStateIP)
-    val targetPath = testDirectory.resolve(streamName + LocalState.ExtensionLocalState)
-    Files.move(sourcePath, targetPath)
-
   it should "construct an empty source for a non-existing local state file" in {
-    val source = futureResult(LocalState.constructLocalStateSource(testDirectory, "non-existing.lst"))
+    val folder = stateFolder("non-existing.lst")
+    val source = futureResult(LocalState.constructLocalStateSource(folder))
 
     readLocalStateSource(source) shouldBe empty
   }
@@ -216,11 +215,11 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
       else AbstractStageSpec.createFolder(idx)
       LocalElementState(element, removed = false)
     }
-    val StreamName = "StreamWithLocalState"
-    writeLocalStateFile(StreamName, elements)
-    promoteTempStateFile(StreamName)
+    val folder = stateFolder("StreamWithLocalState")
+    writeLocalStateFile(folder, elements)
+    folder.promoteToComplete(LocalStateFile.Interrupted)
 
-    val stateElements = readLocalStateSource(StreamName)
+    val stateElements = readLocalStateSource(folder)
     stateElements should contain theSameElementsInOrderAs elements.map(_.element)
   }
 
@@ -239,10 +238,10 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val allElements = elements.zip(removedElements).foldRight(List.empty[LocalElementState]) { (p, list) =>
       p._1 :: p._2 :: list
     }
-    val StreamName = "StreamWithRemovedElementsInLocalState"
-    writeLocalStateFile(StreamName, allElements)
-    promoteTempStateFile(StreamName)
+    val folder = stateFolder("StreamWithRemovedElementsInLocalState")
+    writeLocalStateFile(folder, allElements)
+    folder.promoteToComplete(LocalStateFile.Interrupted)
 
-    val stateElements = readLocalStateSource(StreamName)
+    val stateElements = readLocalStateSource(folder)
     stateElements should contain theSameElementsInOrderAs elements.map(_.element)
   }
