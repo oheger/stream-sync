@@ -59,7 +59,7 @@ object AbstractStageSpec:
     * @return the URI for this test element
     */
   def elementUri(index: Int, optParent: Option[FsElement] = None): String =
-    val path = s"/element$index"
+    val path = f"/element$index%02d"
     optParent.fold(s"/data$path") { elem =>
       UriEncodingHelper.removeTrailingSeparator(elem.relativeUri) + path
     }
