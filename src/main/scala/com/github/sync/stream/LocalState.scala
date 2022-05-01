@@ -18,11 +18,15 @@ package com.github.sync.stream
 
 import akka.NotUsed
 import akka.protobufv3.internal.DescriptorProtos.FileDescriptorSet
-import akka.stream.scaladsl.{FileIO, Sink, Source}
-import com.github.sync.SyncTypes.{FsElement, SyncAction, SyncOperation}
+import akka.stream.scaladsl.{Broadcast, FileIO, GraphDSL, RunnableGraph, Sink, Source}
+import akka.stream.{ClosedShape, IOResult, Materializer}
+import akka.util.ByteString
+import com.github.sync.SyncTypes
+import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncAction, SyncOperation}
 import com.github.sync.log.{ElementSerializer, SerializationSupport, SerializerStreamHelper}
+import org.apache.logging.log4j.LogManager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, StandardCopyOption, StandardOpenOption}
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
@@ -113,7 +117,7 @@ private object LocalState:
       */
     def fileName(streamName: String): String = streamName + fileExtension
   end LocalStateFile
-  
+
   /**
     * A class with information about the storage path of the local state of a
     * specific sync stream.
@@ -141,6 +145,16 @@ private object LocalState:
     def resolve(file: LocalStateFile): Path = folder.resolve(fileName(file))
 
     /**
+      * Resolves the path to the local state file of the given type and tests
+      * whether this file exists. If this is not the case, result is ''None''.
+      *
+      * @param file the file type
+      * @return an ''Option'' with the resolved existing state file
+      */
+    def resolveExisting(file: LocalStateFile): Option[Path] =
+      Some(resolve(file)) filter (p => Files.isRegularFile(p))
+
+    /**
       * Renames a local state file of one type to another type. This function
       * is typically used when an operation is completed. Then a temporary file
       * can be promoted to the complete state file.
@@ -152,7 +166,7 @@ private object LocalState:
     def rename(sourceFile: LocalStateFile, destinationFile: LocalStateFile): Path =
       val source = resolve(sourceFile)
       val destination = resolve(destinationFile)
-      Files.move(source, destination)
+      Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING)
 
     /**
       * Renames a local state file to the name representing a completed state.
@@ -177,6 +191,16 @@ private object LocalState:
   /** A set with the action types that have an affect of the local state. */
   private val ActionsAffectingLocalState = Set(SyncAction.ActionLocalCreate, SyncAction.ActionLocalOverride,
     SyncAction.ActionLocalRemove)
+
+  /**
+    * An element that is used as fallback if no last element from an
+    * interrupted stream can be obtained. This element has properties, so that
+    * all elements occurring in practice are considered greater.
+    */
+  private val UndefinedLastElement = FsFolder("", "", 0)
+
+  /** The logger. */
+  private val log = LogManager.getLogger(classOf[LocalState$])
 
   extension (operation: SyncOperation)
 
@@ -212,14 +236,162 @@ private object LocalState:
     *
     * @param stateFolder refers to the folder containing state files
     * @param ec          the execution context
+    * @param mat         the object to materialize streams
     * @return a ''Future'' with the ''Source'' for the local state
     */
-  def constructLocalStateSource(stateFolder: LocalStateFolder)
-                               (implicit ec: ExecutionContext): Future[Source[FsElement, Any]] = Future {
+  def constructLocalStateSource(stateFolder: LocalStateFolder)(implicit ec: ExecutionContext, mat: Materializer):
+  Future[Source[FsElement, Any]] =
+    stateFolder.resolveExisting(LocalStateFile.Interrupted) match
+      case None => localStateSourceFromStateFile(stateFolder)
+      case Some(pathInterrupted) => localStateSourceForInterruptedStream(stateFolder, pathInterrupted)
+
+  /**
+    * Constructs a ''Source'' for the local state of a sync process if no file
+    * for an interrupted process is available. In this case, the file with the
+    * local state can be read directly, or - if it does not exist - result is
+    * an empty source.
+    *
+    * @param stateFolder refers to the folder containing state files
+    * @param ec          the execution context
+    * @return a ''Future'' with the ''Source'' for the local state
+    */
+  private def localStateSourceFromStateFile(stateFolder: LocalStateFolder)(implicit ec: ExecutionContext):
+  Future[Source[FsElement, Any]] = Future {
     val stateFile = stateFolder.resolve(LocalStateFile.Complete)
     if Files.isRegularFile(stateFile) then
+      log.info("Reading local sync state from {}.", stateFile)
       SerializerStreamHelper.createDeserializationSource[LocalElementState](stateFile)
         .filterNot(_.removed)
         .map(_.element)
     else Source.empty
+  }
+
+  /**
+    * Constructs a ''Source'' for the local state of a sync process if the last
+    * process was interrupted. In this case, a file with the interrupted state
+    * is available. This file needs to be merged first with the regular local
+    * state before the actual source can be constructed.
+    *
+    * @param stateFolder     refers to the folder containing state files
+    * @param pathInterrupted the path to the interrupted state file
+    * @param ec              the execution context
+    * @param mat             the object to materialize streams
+    * @return a ''Future'' with the ''Source'' for the local state
+    */
+  private def localStateSourceForInterruptedStream(stateFolder: LocalStateFolder, pathInterrupted: Path)
+                                                  (implicit ec: ExecutionContext, mat: Materializer):
+  Future[Source[FsElement, Any]] =
+    log.info("Resuming an interrupted sync process from {}.", pathInterrupted)
+    val pathResuming = stateFolder.resolve(LocalStateFile.Resuming)
+    for
+      resumeElement <- processInterrupted(pathInterrupted, pathResuming)
+      _ <- mergeLocalState(pathResuming, stateFolder.resolveExisting(LocalStateFile.Complete),
+        resumeElement map (_.element))
+      _ <- promoteResuming(stateFolder, pathInterrupted)
+      source <- constructLocalStateSource(stateFolder)
+    yield source
+
+  /**
+    * Reads the temporary state file of an interrupted stream, copies it to a
+    * resuming file and extracts the last element at which the stream was
+    * stopped. Result is an ''Option'', since the interrupted state file may be
+    * empty.
+    *
+    * @param pathInterrupted the path to the interrupted state file
+    * @param pathResuming    the path to the resuming state file
+    * @param ec              the execution context
+    * @param mat             the object to materialize streams
+    * @return a ''Future'' with the optional element to resume
+    */
+  private def processInterrupted(pathInterrupted: Path, pathResuming: Path)
+                                (implicit ec: ExecutionContext, mat: Materializer): Future[Option[LocalElementState]] =
+    val source = FileIO.fromPath(pathInterrupted)
+    val sinkTarget = FileIO.toPath(pathResuming)
+    RunnableGraph.fromGraph(GraphDSL.createGraph(Sink.lastOption[String], sinkTarget)(lastElementToResume) {
+      implicit builder =>
+        (sinkLast, sinkCopy) =>
+          import GraphDSL.Implicits.*
+          val broadcastSink = builder.add(Broadcast[ByteString](2))
+          source ~> broadcastSink ~> sinkCopy.in
+          broadcastSink ~> SerializerStreamHelper.serializedElementFlow ~> sinkLast.in
+          ClosedShape
+    }).run()
+
+  /**
+    * Determines the last element that was processed before a sync stream was
+    * interrupted. Here the materialized result for the stream that copies the
+    * interrupted state to the resuming state is constructed.
+    *
+    * @param futLast   the future for the last serialized element
+    * @param futResult the future for the write operation
+    * @return the future for the deserialized last element
+    */
+  private def lastElementToResume(futLast: Future[Option[String]], futResult: Future[IOResult])
+                                 (implicit ec: ExecutionContext): Future[Option[LocalElementState]] =
+    for
+      _ <- futResult
+      optLastStr <- futLast
+      lastElem <- deserializeLastElement(optLastStr)
+    yield lastElem
+
+  /**
+    * Deserializes the string representation of the last element processed by
+    * an interrupted sync stream. Handles the case that no such element has
+    * been found.
+    *
+    * @param optLastString the optional string representation of the last
+    *                      element
+    * @param ec            the execution context
+    * @return a ''Future'' with the optional deserialized element
+    */
+  private def deserializeLastElement(optLastString: Option[String])
+                                    (implicit ec: ExecutionContext): Future[Option[LocalElementState]] =
+    optLastString.fold(Future.successful(None)) { lastStr =>
+      Future.fromTry(ElementSerializer.deserialize[LocalElementState](lastStr)) map (elem => Some(elem))
+    }
+
+  /**
+    * Merges the local state with the interrupted state in a resume operation.
+    * The file with the last completed local state is read, and the elements
+    * after the one where processing was interrupted are appended to the file
+    * with the resumed stated. (There is the corner case that the previous sync
+    * stream was interrupted before any element was processed. Then the last
+    * element is undefined. This means that all the elements from the last
+    * completed state must be copied over.) Afterwards the resumed state
+    * contains the merged local state.
+    *
+    * @param pathResuming   the path to the resumed state file
+    * @param optPathState   the path to the local state file if existing
+    * @param optLastElement the optional last element processed by the
+    *                       interrupted stream
+    * @param mat            the object to materialize streams
+    * @return the future with the result of the IO operation
+    */
+  private def mergeLocalState(pathResuming: Path, optPathState: Option[Path], optLastElement: Option[FsElement])
+                             (implicit mat: Materializer): Future[IOResult] =
+    val lastElement = optLastElement getOrElse UndefinedLastElement
+    log.debug("Resuming sync process after element {}.", lastElement.relativeUri)
+    val source = optPathState.fold(Source.empty) { pathState =>
+      SerializerStreamHelper.createDeserializationSource[LocalElementState](pathState)
+        .filter(current => SyncTypes.compareElements(lastElement, current.element) < 0)
+        .map(ElementSerializer.serialize)
+    }
+    val sink = FileIO.toPath(pathResuming, options = Set(StandardOpenOption.WRITE, StandardOpenOption.APPEND))
+    source.runWith(sink)
+
+  /**
+    * Renames the state file created during resuming to the final local state
+    * file. This function is called at the end of a resuming operation.
+    *
+    * @param stateFolder     refers to the folder containing state files
+    * @param pathInterrupted the path to the interrupted state file
+    * @param ec              the execution context
+    * @return the path to the resulting local state file
+    */
+  private def promoteResuming(stateFolder: LocalStateFolder, pathInterrupted: Path)
+                             (implicit ec: ExecutionContext): Future[Path] = Future {
+    val state = stateFolder.promoteToComplete(LocalStateFile.Resuming)
+    Files.delete(pathInterrupted)
+    log.info("Resuming successful.")
+    state
   }

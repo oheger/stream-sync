@@ -245,3 +245,52 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val stateElements = readLocalStateSource(folder)
     stateElements should contain theSameElementsInOrderAs elements.map(_.element)
   }
+
+  it should "construct a source that resumes an interrupted sync stream" in {
+    val orgElements = (1 to 32) map { idx =>
+      LocalElementState(AbstractStageSpec.createFile(idx), removed = false)
+    }
+    val interruptedElements = (1 to 20) map { idx =>
+      val deltaTime = if idx % 2 == 0 then 42 else 0
+      val removed = idx > 16
+      LocalElementState(AbstractStageSpec.createFile(idx, deltaTime = deltaTime), removed)
+    }
+    val folder = stateFolder("TestStreamThatWasInterrupted")
+    writeLocalStateFile(folder, orgElements)
+    folder.promoteToComplete(LocalStateFile.Interrupted)
+    writeLocalStateFile(folder, interruptedElements)
+    val expectedElements = interruptedElements.slice(0, 16) ++ orgElements.drop(20)
+
+    val stateElements = readLocalStateSource(folder)
+    stateElements should contain theSameElementsInOrderAs expectedElements.map(_.element)
+    folder.resolveExisting(LocalStateFile.Interrupted) shouldBe empty
+    folder.resolveExisting(LocalStateFile.Resuming) shouldBe empty
+    folder.resolveExisting(LocalStateFile.Complete) shouldBe defined
+  }
+
+  it should "construct a source that resumes an interrupted stream with a missing local state file" in {
+    val elements = (1 to 16) map { idx =>
+      val element = if idx % 2 == 0 then AbstractStageSpec.createFile(idx)
+      else AbstractStageSpec.createFolder(idx)
+      LocalElementState(element, removed = false)
+    }
+    val folder = stateFolder("TestStreamThatWasInterruptedWithoutLocalState")
+    writeLocalStateFile(folder, elements)
+
+    val stateElements = readLocalStateSource(folder)
+    stateElements should contain theSameElementsInOrderAs elements.map(_.element)
+  }
+
+  it should "construct a source that resumes an interrupted stream if the interrupted file is empty" in {
+    val elements = (1 to 8) map { idx =>
+      LocalElementState(AbstractStageSpec.createFile(idx), removed = false)
+    }
+    val folder = stateFolder("TestStreamThatWasDirectlyInterrupted")
+    writeLocalStateFile(folder, elements)
+    folder.promoteToComplete(LocalStateFile.Interrupted)
+    writeFileContent(folder.resolve(LocalStateFile.Interrupted), "")
+
+    val stateElements = readLocalStateSource(folder)
+    stateElements should contain theSameElementsInOrderAs elements.map(_.element)
+    folder.resolveExisting(LocalStateFile.Interrupted) shouldBe empty
+  }
