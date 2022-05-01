@@ -148,7 +148,7 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val folder = stateFolder("TestSyncStream")
     val source = Source(elements)
 
-    val sink = LocalState.localStateSink(folder)
+    val sink = LocalState.localStateSink(folder, promoteState = false)
     val stateFileResult = futureResult(source.runWith(sink))
     val localStateFile = createPathInDirectory(folder.streamName + ".lst.tmp")
     stateFileResult.toAbsolutePath should be(localStateFile.toAbsolutePath)
@@ -163,9 +163,26 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val folder = stateFolder("TestStreamOverride")
     val localStateFile = writeFileContent(folder.resolve(LocalStateFile.Interrupted), FileTestHelper.TestData)
 
-    val sink = LocalState.localStateSink(folder)
+    val sink = LocalState.localStateSink(folder, promoteState = false)
     futureResult(source.runWith(sink))
     checkLocalStateFile(localStateFile, elements)
+  }
+
+  it should "create a sink that promotes the temporary state to the final completed state" in {
+    val elements = (1 to 8) map { idx =>
+      val element = if idx % 2 == 0 then AbstractStageSpec.createFile(idx)
+      else AbstractStageSpec.createFolder(idx)
+      LocalElementState(element, idx % 3 == 0)
+    }
+    val folder = stateFolder("TestSyncStream")
+    val source = Source(elements)
+
+    val sink = LocalState.localStateSink(folder)
+    val stateFileResult = futureResult(source.runWith(sink))
+    val localStateFile = createPathInDirectory(folder.streamName + ".lst")
+    stateFileResult.toAbsolutePath should be(localStateFile.toAbsolutePath)
+    checkLocalStateFile(localStateFile, elements)
+    folder.resolveExisting(LocalStateFile.Interrupted) shouldBe empty
   }
 
   /**
@@ -199,7 +216,7 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     */
   private def writeLocalStateFile(folder: LocalStateFolder, elements: Seq[LocalElementState]): Path =
     val elemSource = Source(elements)
-    val sink = LocalState.localStateSink(folder)
+    val sink = LocalState.localStateSink(folder, promoteState = false)
     futureResult(elemSource.runWith(sink))
 
   it should "construct an empty source for a non-existing local state file" in {
