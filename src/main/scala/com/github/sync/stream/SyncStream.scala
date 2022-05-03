@@ -16,10 +16,10 @@
 
 package com.github.sync.stream
 
-import akka.Done
-import akka.stream.{ClosedShape, IOResult, SinkShape}
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
-import com.github.sync.SyncTypes.{SyncOperation, SyncOperationResult}
+import akka.stream.{ClosedShape, IOResult, SinkShape, SourceShape}
+import akka.{Done, NotUsed}
+import com.github.sync.SyncTypes.{FsElement, SyncOperation, SyncOperationResult}
 import com.github.sync.log.ElementSerializer
 
 import java.nio.file.{Path, StandardOpenOption}
@@ -71,6 +71,29 @@ object SyncStream:
                                             sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore)
 
   /**
+    * Creates a source for a mirror stream that mirrors a source folder
+    * structure to a destination structure.
+    *
+    * @param srcSource          yields the elements of the source structure of
+    *                           the mirror stream
+    * @param srcDestination     yields the elements of the destination
+    *                           structure of the mirror stream
+    * @param ignoreTimeDeltaSec a time difference in seconds that is to be 
+    *                           ignored when comparing two files
+    * @return the source for the mirror stream
+    */
+  def createMirrorSource(srcSource: Source[FsElement, Any], srcDestination: Source[FsElement, Any],
+                         ignoreTimeDeltaSec: Int = 0): Source[SyncOperation, NotUsed] =
+    Source.fromGraph(GraphDSL.create() {
+      implicit builder =>
+        import GraphDSL.Implicits.*
+        val syncStage = builder.add(new MirrorStage(ignoreTimeDeltaSec))
+        srcSource ~> syncStage.in0
+        srcDestination ~> syncStage.in1
+        SourceShape(syncStage.out)
+    })
+
+  /**
     * Returns a ''RunnableGraph'' representing the sync stream for the
     * parameters provided.
     *
@@ -87,7 +110,7 @@ object SyncStream:
     RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError)(createStreamMat) {
       implicit builder =>
         (sinkTotal, sinkError) =>
-          import GraphDSL.Implicits._
+          import GraphDSL.Implicits.*
           val broadcastSink = builder.add(Broadcast[SyncOperationResult](2))
           params.source ~> params.processFlow ~> broadcastSink ~> sinkTotal.in
           broadcastSink ~> filterError ~> sinkError.in
@@ -159,7 +182,7 @@ object SyncStream:
     Sink.fromGraph(GraphDSL.createGraph(otherSink, orgSink)(createCombinedSinkMat) {
       implicit builder =>
         (ignoreSink, resultSink) =>
-          import GraphDSL.Implicits._
+          import GraphDSL.Implicits.*
           val broadcast = builder.add(Broadcast[SyncOperationResult](2))
           broadcast ~> ignoreSink.in
           broadcast ~> resultSink.in

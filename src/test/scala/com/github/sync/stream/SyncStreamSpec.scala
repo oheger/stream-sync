@@ -21,8 +21,9 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.testkit.TestKit
 import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
-import com.github.sync.SyncTypes.{FsFile, SyncOperation, SyncOperationResult}
+import com.github.sync.SyncTypes.{FsFile, SyncAction, SyncOperation, SyncOperationResult}
 import com.github.sync.log.ElementSerializer
+import com.github.sync.stream.AbstractStageSpec.createFile
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -145,7 +146,25 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val graph = SyncStream.createSyncStream(params)
     futureResult(graph.run())
 
-  "SyncStream" should "pass all operations to the total sink" in {
+  "SyncStream" should "create a source for a mirror stream" in {
+    val file1 = createFile(1)
+    val file2 = createFile(2)
+    val file3 = createFile(3)
+    val file4 = createFile(4)
+    val sourceElems = List(file1, file2, file3)
+    val destElems = List(createFile(2, deltaTime = 1), createFile(3, deltaTime = 2), file4)
+    val expOps = List(SyncOperation(file1, SyncAction.ActionCreate, file1.level, "-"),
+      SyncOperation(file2, SyncAction.ActionNoop, file2.level, "-"),
+      SyncOperation(file3, SyncAction.ActionOverride, file3.level, file3.id),
+      SyncOperation(file4, SyncAction.ActionRemove, file4.level, file4.id))
+
+    val mirrorSource = SyncStream.createMirrorSource(Source(sourceElems), Source(destElems), ignoreTimeDeltaSec = 1)
+    val sink = AbstractStageSpec.foldSink[SyncOperation]
+    val result = futureResult(mirrorSource.runWith(sink))
+    result.reverse should contain theSameElementsInOrderAs expOps
+  }
+
+  it should "pass all operations to the total sink" in {
     val operations = List(createOperation(1), createOperation(2), createOperation(3))
     val expResults = operations map createOperationResult
     val params = syncParams(operations, collectingSink)
