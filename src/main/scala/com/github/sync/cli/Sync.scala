@@ -31,8 +31,8 @@ import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStructureConfig.{DestinationRoleType, SourceRoleType}
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
-import com.github.sync.stream.*
 import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
+import com.github.sync.stream.*
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.core.config.Configurator
 
@@ -113,9 +113,8 @@ object Sync:
 
     protocolHolder.registerCloseHandler(for
       source <- createSyncSource(config, protocolHolder)
-      decoratedSource <- decorateSource(source, config, protocolHolder)
       stage <- createApplyStage(config, spawner, protocolHolder)
-      g <- createSyncStream(decoratedSource, stage, config.logConfig.logFilePath, config.logConfig.errorLogFilePath)
+      g <- createSyncStream(source, stage, config, protocolHolder)
       res <- g.run()
     yield SyncResult(res.totalSinkMat, res.errorSinkMat))
 
@@ -139,43 +138,8 @@ object Sync:
     case None =>
       val srcSource = protocolHolder.createSourceElementSource()
       val dstSource = protocolHolder.createDestinationElementSource()
-      Future.successful(createGraphForSyncSource(srcSource, dstSource,
+      Future.successful(SyncStream.createMirrorSource(srcSource, dstSource,
         config.streamConfig.ignoreTimeDelta getOrElse 1))
-
-  /**
-    * Creates a ''Source'' that produces ''SyncOperation'' objects to sync the
-    * input sources provided.
-    *
-    * @param srcSource       the source for the source structure
-    * @param dstSource       the source for the destination structure
-    * @param ignoreTimeDelta the time delta between two files to ignore
-    * @return the sync source
-    */
-  private def createGraphForSyncSource(srcSource: Source[FsElement, Any],
-                                       dstSource: Source[FsElement, Any],
-                                       ignoreTimeDelta: Int): Source[SyncOperation, NotUsed] =
-    Source.fromGraph(GraphDSL.create() {
-      implicit builder =>
-        import GraphDSL.Implicits._
-        val syncStage = builder.add(new MirrorStage(ignoreTimeDelta))
-        srcSource ~> syncStage.in0
-        dstSource ~> syncStage.in1
-        SourceShape(syncStage.out)
-    })
-
-  /**
-    * Applies some further configuration options to the source of the sync
-    * process, such as filtering.
-    *
-    * @param source         the original source
-    * @param config         the sync configuration
-    * @param protocolHolder the ''SyncProtocolHolder''
-    * @return the decorated source
-    */
-  private def decorateSource(source: Source[SyncOperation, Any], config: SyncConfig,
-                             protocolHolder: SyncProtocolHolder): Future[Source[SyncOperation, Any]] =
-    val filteredSource = source.filter(createSyncFilter(config.filterData))
-    Future.successful(filteredSource.via(protocolHolder.oAuthRefreshKillSwitch.flow))
 
   /**
     * Creates the source for the sync process if a sync log is provided. The
@@ -223,31 +187,32 @@ object Sync:
     * The source for the ''SyncOperation'' objects to be processed is passed
     * in. The stream has two sinks that also determine the materialized
     * values of the graph: one sink counts all successful sync operations,
-    * the second sink counts the failed ones. If a log file path has been
-    * provided, the successful sync operations are also written to this log
-    * file.
+    * the second sink counts the failed ones. If log file paths have been
+    * provided in the configuration, the sync operations are also written to
+    * the corresponding log files.
     *
-    * @param source       the source producing ''SyncOperation'' objects
-    * @param flowProc     the flow that processes sync operations
-    * @param logFile      an optional path to a log file to write
-    * @param errorLogFile an optional path to a log file for errors
-    * @param ec           the execution context
+    * @param source         the source producing ''SyncOperation'' objects
+    * @param flowProc       the flow that processes sync operations
+    * @param config         the sync configuration
+    * @param protocolHolder the ''SyncProtocolHolder''
+    * @param ec             the execution context
     * @return a future with the runnable graph
     */
   private def createSyncStream(source: Source[SyncOperation, Any],
                                flowProc: Flow[SyncOperation, SyncOperationResult, Any],
-                               logFile: Option[Path],
-                               errorLogFile: Option[Path])
+                               config: SyncConfig,
+                               protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] = Future {
-    val sinkTotal = createCountSinkWithOptionalLogging(logFile, errorLog = false)
-    val sinkError = createErrorSink(errorLogFile)
+    val sinkTotal = createCountSinkWithOptionalLogging(config.logConfig.logFilePath, errorLog = false)
+    val sinkError = createErrorSink(config.logConfig.errorLogFilePath)
     val sinkSuccess = Flow[SyncOperationResult].filterNot { result =>
       result.optFailure.isDefined || result.op.action == ActionNoop
     }.toMat(sinkTotal)(Keep.right)
 
-    val params = SyncStream.SyncStreamParams(source = source, processFlow = flowProc,
-      sinkTotal = sinkSuccess, sinkError = sinkError)
+    val params = SyncStream.SyncStreamParams(source = source, processFlow = flowProc, sinkTotal = sinkSuccess,
+      sinkError = sinkError, operationFilter = createSyncFilter(config.filterData),
+      optKillSwitch = Some(protocolHolder.oAuthRefreshKillSwitch))
     val decider: Supervision.Decider = ex => {
       ex.printStackTrace()
       Supervision.Resume
