@@ -17,7 +17,7 @@
 package com.github.sync.stream
 
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
-import akka.stream.{ClosedShape, IOResult, SinkShape, SourceShape}
+import akka.stream.{ClosedShape, IOResult, SharedKillSwitch, SinkShape, SourceShape}
 import akka.{Done, NotUsed}
 import com.github.sync.SyncTypes.{FsElement, SyncOperation, SyncOperationResult}
 import com.github.sync.log.ElementSerializer
@@ -30,6 +30,14 @@ import scala.concurrent.{ExecutionContext, Future}
   * different types.
   */
 object SyncStream:
+  /**
+    * Type alias for a function that filters for sync operations.
+    */
+  type OperationFilter = SyncOperation => Boolean
+
+  /** Constant for an ''OperationFilter'' that accepts all operations. */
+  final val AcceptAllOperations: OperationFilter = _ => true
+
   /**
     * A data class representing the materialized result of a sync stream.
     *
@@ -55,20 +63,27 @@ object SyncStream:
     *    applied to the sync structures;
     *  - a flow stage that processes the sync operations;
     *  - a sink receiving the results of all sync operations;
-    *  - a sink receiving the failed sync operations only.
-    *    All these components can be specified via an instance of this class.
+    *  - a sink receiving the failed sync operations only;
+    *  - a filter to be applied to sync operations;
+    *  - an optional kill switch to cancel the stream from the outside.
     *
-    * @param source      the source of the sync stream
-    * @param processFlow the flow stage processing sync operations
-    * @param sinkTotal   the sink receiving all operation results
-    * @param sinkError   the sink receiving the failed operation results
+    * All these components can be specified via an instance of this class.
+    *
+    * @param source          the source of the sync stream
+    * @param processFlow     the flow stage processing sync operations
+    * @param sinkTotal       the sink receiving all operation results
+    * @param sinkError       the sink receiving the failed operation results
+    * @param operationFilter the filter for sync operations
+    * @param optKillSwitch   an optional kill switch to cancel the stream
     * @tparam TOTAL the type of the value produced by the total sink
     * @tparam ERROR the type of the value produced by the error sink
     */
   case class SyncStreamParams[TOTAL, ERROR](source: Source[SyncOperation, Any],
                                             processFlow: Flow[SyncOperation, SyncOperationResult, Any],
                                             sinkTotal: Sink[SyncOperationResult, Future[TOTAL]],
-                                            sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore)
+                                            sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore,
+                                            operationFilter: OperationFilter = AcceptAllOperations,
+                                            optKillSwitch: Option[SharedKillSwitch] = None)
 
   /**
     * Creates a source for a mirror stream that mirrors a source folder
@@ -106,13 +121,18 @@ object SyncStream:
   def createSyncStream[TOTAL, ERROR](params: SyncStreamParams[TOTAL, ERROR])
                                     (implicit ec: ExecutionContext):
   RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]] =
+    val filterOperations = Flow[SyncOperation].filter(params.operationFilter)
     val filterError = Flow[SyncOperationResult].filter(_.optFailure.isDefined)
+    val sourceKS = params.optKillSwitch.fold(params.source) { ks =>
+      params.source.via(ks.flow)
+    }
+
     RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError)(createStreamMat) {
       implicit builder =>
         (sinkTotal, sinkError) =>
           import GraphDSL.Implicits.*
           val broadcastSink = builder.add(Broadcast[SyncOperationResult](2))
-          params.source ~> params.processFlow ~> broadcastSink ~> sinkTotal.in
+          sourceKS ~> filterOperations ~> params.processFlow ~> broadcastSink ~> sinkTotal.in
           broadcastSink ~> filterError ~> sinkError.in
           ClosedShape
     })
