@@ -25,7 +25,7 @@ import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.stream.BaseMergeStage.{Input, MergeEmitData}
 
-object MirrorStage:
+private object MirrorStage:
   /**
     * Constant for a destination ID that is used when this property is
     * irrelevant.
@@ -260,7 +260,6 @@ object MirrorStage:
       *
       * @param eSrc            the source file
       * @param eDst            the destination file
-      * @param ignoreTimeDelta the delta in file times to be ignored
       * @return a flag whether these files have a different timestamp
       */
     private def differentFileTimes(eSrc: FsFile, eDst: FsFile): Boolean =
@@ -313,7 +312,7 @@ object MirrorStage:
   * @param ignoreTimeDeltaSec a time difference in seconds that is to be
   *                           ignored when comparing two files
   */
-class MirrorStage(val ignoreTimeDeltaSec: Int = 0)
+private class MirrorStage(val ignoreTimeDeltaSec: Int = 0)
   extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]] :
 
   import MirrorStage._
