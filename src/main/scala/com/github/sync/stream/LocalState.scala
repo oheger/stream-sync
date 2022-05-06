@@ -200,7 +200,7 @@ private object LocalState:
   private val UndefinedLastElement = FsFolder("", "", 0)
 
   /** The logger. */
-  private val log = LogManager.getLogger(classOf[LocalState$])
+  private val log = LogManager.getLogger(LocalState.getClass)
 
   extension (operation: SyncOperation)
 
