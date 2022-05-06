@@ -114,7 +114,7 @@ object Sync:
     protocolHolder.registerCloseHandler(for
       source <- createSyncSource(config, protocolHolder)
       stage <- createApplyStage(config, spawner, protocolHolder)
-      g <- createSyncStream(source, stage, config, protocolHolder)
+      g <- createMirrorStream(source, stage, config, protocolHolder)
       res <- g.run()
     yield SyncResult(res.totalSinkMat, res.errorSinkMat))
 
@@ -183,7 +183,7 @@ object Sync:
   }
 
   /**
-    * Creates a ''RunnableGraph'' representing the stream for a sync process.
+    * Creates a ''RunnableGraph'' representing the stream for a mirror process.
     * The source for the ''SyncOperation'' objects to be processed is passed
     * in. The stream has two sinks that also determine the materialized
     * values of the graph: one sink counts all successful sync operations,
@@ -198,11 +198,11 @@ object Sync:
     * @param ec             the execution context
     * @return a future with the runnable graph
     */
-  private def createSyncStream(source: Source[SyncOperation, Any],
-                               flowProc: Flow[SyncOperation, SyncOperationResult, Any],
-                               config: SyncConfig,
-                               protocolHolder: SyncProtocolHolder)
-                              (implicit ec: ExecutionContext):
+  private def createMirrorStream(source: Source[SyncOperation, Any],
+                                 flowProc: Flow[SyncOperation, SyncOperationResult, Any],
+                                 config: SyncConfig,
+                                 protocolHolder: SyncProtocolHolder)
+                                (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] = Future {
     val sinkTotal = createCountSinkWithOptionalLogging(config.logConfig.logFilePath, errorLog = false)
     val sinkError = createErrorSink(config.logConfig.errorLogFilePath)
@@ -210,7 +210,7 @@ object Sync:
       result.optFailure.isDefined || result.op.action == ActionNoop
     }.toMat(sinkTotal)(Keep.right)
 
-    val params = SyncStream.SyncStreamParams(source = source, processFlow = flowProc, sinkTotal = sinkSuccess,
+    val params = SyncStream.MirrorStreamParams(source = source, processFlow = flowProc, sinkTotal = sinkSuccess,
       sinkError = sinkError, operationFilter = createSyncFilter(config.filterData),
       optKillSwitch = Some(protocolHolder.oAuthRefreshKillSwitch))
     val decider: Supervision.Decider = ex => {
@@ -218,7 +218,7 @@ object Sync:
       Supervision.Resume
     }
 
-    SyncStream.createSyncStream(params).withAttributes(ActorAttributes.supervisionStrategy(decider))
+    SyncStream.createMirrorStream(params).withAttributes(ActorAttributes.supervisionStrategy(decider))
   }
 
   /**

@@ -100,7 +100,7 @@ object SyncStreamSpec:
     Sink.fold[List[SyncOperationResult], SyncOperationResult](List.empty) { (lst, op) => op :: lst }
 
   /**
-    * Convenience function to construct an object with parameters for a sync
+    * Convenience function to construct an object with parameters for a mirror
     * stream. Some defaults are already set.
     *
     * @param operations    the operations to pass through the stream
@@ -112,13 +112,13 @@ object SyncStreamSpec:
     * @tparam ERROR the type of the error sink
     * @return the parameters object
     */
-  private def syncParams[TOTAL, ERROR](operations: List[SyncOperation],
-                                       sinkTotal: Sink[SyncOperationResult, Future[TOTAL]],
-                                       sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore,
-                                       filter: SyncStream.OperationFilter = SyncStream.AcceptAllOperations,
-                                       optKillSwitch: Option[SharedKillSwitch] = None):
-  SyncStream.SyncStreamParams[TOTAL, ERROR] =
-    SyncStream.SyncStreamParams(source = Source(operations), processFlow = processingFlow,
+  private def mirrorParams[TOTAL, ERROR](operations: List[SyncOperation],
+                                         sinkTotal: Sink[SyncOperationResult, Future[TOTAL]],
+                                         sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore,
+                                         filter: SyncStream.OperationFilter = SyncStream.AcceptAllOperations,
+                                         optKillSwitch: Option[SharedKillSwitch] = None):
+  SyncStream.MirrorStreamParams[TOTAL, ERROR] =
+    SyncStream.MirrorStreamParams(source = Source(operations), processFlow = processingFlow,
       sinkTotal = sinkTotal, sinkError = sinkError, operationFilter = filter, optKillSwitch = optKillSwitch)
 
 /**
@@ -147,10 +147,10 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     * @tparam ERROR type of the error sink
     * @return the ''Future'' with the materialized stream result
     */
-  private def startStream[TOTAL, ERROR](params: SyncStream.SyncStreamParams[TOTAL, ERROR]):
+  private def startStream[TOTAL, ERROR](params: SyncStream.MirrorStreamParams[TOTAL, ERROR]):
   Future[SyncStream.SyncStreamMat[TOTAL, ERROR]] =
     import system.dispatcher
-    val graph = SyncStream.createSyncStream(params)
+    val graph = SyncStream.createMirrorStream(params)
     graph.run()
 
   /**
@@ -162,7 +162,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     * @tparam ERROR type of the error sink
     * @return the materialized stream result
     */
-  private def runStream[TOTAL, ERROR](params: SyncStream.SyncStreamParams[TOTAL, ERROR]):
+  private def runStream[TOTAL, ERROR](params: SyncStream.MirrorStreamParams[TOTAL, ERROR]):
   SyncStream.SyncStreamMat[TOTAL, ERROR] = futureResult(startStream(params))
 
   "SyncStream" should "create a source for a mirror stream" in {
@@ -183,20 +183,20 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     result.reverse should contain theSameElementsInOrderAs expOps
   }
 
-  it should "pass all operations to the total sink" in {
+  it should "pass all operations to the total sink in a mirror stream" in {
     val operations = List(createOperation(1), createOperation(2), createOperation(3))
     val expResults = operations map createOperationResult
-    val params = syncParams(operations, collectingSink)
+    val params = mirrorParams(operations, collectingSink)
 
     val result = runStream(params)
     result.totalSinkMat.reverse should contain theSameElementsInOrderAs expResults
     result.errorSinkMat should be(Done)
   }
 
-  it should "pass only failed operations to the error sink" in {
+  it should "pass only failed operations to the error sink in a mirror stream" in {
     val operations = List(createOperation(1), createOperation(2, success = false), createOperation(3))
     val expTotalResults = operations map createOperationResult
-    val params = syncParams(operations, collectingSink, collectingSink)
+    val params = mirrorParams(operations, collectingSink, collectingSink)
 
     val result = runStream(params)
     result.totalSinkMat.reverse should contain theSameElementsInOrderAs expTotalResults
@@ -209,7 +209,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val excludedOp = createOperation(2)
     val operations = List(op1, excludedOp, op3)
     val expResults = List(op1, op3) map createOperationResult
-    val params = syncParams(operations, collectingSink, filter = op => op != excludedOp)
+    val params = mirrorParams(operations, collectingSink, filter = op => op != excludedOp)
 
     val result = runStream(params)
     result.totalSinkMat should contain theSameElementsAs expResults
@@ -218,7 +218,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
   it should "support a kill switch for mirror streams" in {
     val operations = (1 to 8) map (idx => createOperation(idx))
     val killSwitch = KillSwitches.shared("killIt")
-    val params = syncParams(operations.toList, collectingSink, optKillSwitch = Some(killSwitch))
+    val params = mirrorParams(operations.toList, collectingSink, optKillSwitch = Some(killSwitch))
     val delayedParams = params.copy(source = params.source.delay(100.millis))
 
     val futResult = startStream(delayedParams)
@@ -230,7 +230,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
   it should "support the creation of a log sink" in {
     val operations = List(createOperation(1), createOperation(2, success = false), createOperation(3))
     val logFile = createFileReference()
-    val params = syncParams(operations, SyncStream.createLogSink(logFile))
+    val params = mirrorParams(operations, SyncStream.createLogSink(logFile))
 
     val result = runStream(params)
     result.totalSinkMat.status should be(Success(Done))
@@ -242,7 +242,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
   it should "support the creation of an error log sink" in {
     val operations = List(createOperation(1), createOperation(2, success = false), createOperation(3))
     val logFile = createFileReference()
-    val params = syncParams(operations, SyncStream.createLogSink(logFile, errorLog = true))
+    val params = mirrorParams(operations, SyncStream.createLogSink(logFile, errorLog = true))
 
     val result = runStream(params)
     result.totalSinkMat.status should be(Success(Done))
@@ -255,7 +255,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val OriginalContent = "This is an existing log line."
     val operations = List(createOperation(1))
     val logFile = writeFileContent(createFileReference(), OriginalContent + System.lineSeparator())
-    val params = syncParams(operations, SyncStream.createLogSink(logFile))
+    val params = mirrorParams(operations, SyncStream.createLogSink(logFile))
 
     runStream(params)
     val logLines = Files.readAllLines(logFile)
@@ -269,7 +269,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val expTotalResults = operations map createOperationResult
     val logFile = createFileReference()
     val sink = SyncStream.sinkWithLogging(collectingSink, logFile)
-    val params = syncParams(operations, sink)
+    val params = mirrorParams(operations, sink)
 
     val result = runStream(params)
     result.totalSinkMat.reverse should contain theSameElementsInOrderAs expTotalResults
@@ -283,7 +283,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val expTotalResults = operations map createOperationResult
     val logFile = createFileReference()
     val sink = SyncStream.sinkWithLogging(collectingSink, logFile, errorLog = true)
-    val params = syncParams(operations, sink)
+    val params = mirrorParams(operations, sink)
 
     val result = runStream(params)
     result.totalSinkMat.reverse should contain theSameElementsInOrderAs expTotalResults
@@ -294,7 +294,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
   it should "create a counting sink" in {
     val OperationCount = 16
     val operations = (1 to OperationCount) map (idx => createOperation(idx))
-    val params = syncParams(operations.toList, SyncStream.createCountSink())
+    val params = mirrorParams(operations.toList, SyncStream.createCountSink())
 
     val result = runStream(params)
     result.totalSinkMat should be(OperationCount)

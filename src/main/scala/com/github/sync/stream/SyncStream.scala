@@ -56,7 +56,8 @@ object SyncStream:
                                          errorSinkMat: ERROR)
 
   /**
-    * A data class that holds the parameters of a sync stream.
+    * A data class that holds the parameters of a mirror stream. Such a stream
+    * makes a destination structure an exact mirror of a source structure.
     *
     * The stream consists of
     *  - a (typically complex) source generating the sync operations to be
@@ -78,12 +79,12 @@ object SyncStream:
     * @tparam TOTAL the type of the value produced by the total sink
     * @tparam ERROR the type of the value produced by the error sink
     */
-  case class SyncStreamParams[TOTAL, ERROR](source: Source[SyncOperation, Any],
-                                            processFlow: Flow[SyncOperation, SyncOperationResult, Any],
-                                            sinkTotal: Sink[SyncOperationResult, Future[TOTAL]],
-                                            sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore,
-                                            operationFilter: OperationFilter = AcceptAllOperations,
-                                            optKillSwitch: Option[SharedKillSwitch] = None)
+  case class MirrorStreamParams[TOTAL, ERROR](source: Source[SyncOperation, Any],
+                                              processFlow: Flow[SyncOperation, SyncOperationResult, Any],
+                                              sinkTotal: Sink[SyncOperationResult, Future[TOTAL]],
+                                              sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore,
+                                              operationFilter: OperationFilter = AcceptAllOperations,
+                                              optKillSwitch: Option[SharedKillSwitch] = None)
 
   /**
     * Creates a source for a mirror stream that mirrors a source folder
@@ -93,7 +94,7 @@ object SyncStream:
     *                           the mirror stream
     * @param srcDestination     yields the elements of the destination
     *                           structure of the mirror stream
-    * @param ignoreTimeDeltaSec a time difference in seconds that is to be 
+    * @param ignoreTimeDeltaSec a time difference in seconds that is to be
     *                           ignored when comparing two files
     * @return the source for the mirror stream
     */
@@ -109,17 +110,17 @@ object SyncStream:
     })
 
   /**
-    * Returns a ''RunnableGraph'' representing the sync stream for the
+    * Returns a ''RunnableGraph'' representing the mirror stream for the
     * parameters provided.
     *
-    * @param params the parameters of the sync stream
+    * @param params the parameters of the mirror stream
     * @param ec     the execution context
     * @tparam TOTAL the type of the value produced by the total sink
     * @tparam ERROR the type of the value produced by the error sink
-    * @return the graph for the sync stream
+    * @return the graph for the mirror stream
     */
-  def createSyncStream[TOTAL, ERROR](params: SyncStreamParams[TOTAL, ERROR])
-                                    (implicit ec: ExecutionContext):
+  def createMirrorStream[TOTAL, ERROR](params: MirrorStreamParams[TOTAL, ERROR])
+                                      (implicit ec: ExecutionContext):
   RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]] =
     val filterOperations = Flow[SyncOperation].filter(params.operationFilter)
     val filterError = Flow[SyncOperationResult].filter(_.optFailure.isDefined)
