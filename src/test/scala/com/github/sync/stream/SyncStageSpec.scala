@@ -28,6 +28,8 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
+import scala.concurrent.duration.*
+
 object SyncStageSpec:
   /** Prefix for a remote ID. */
   private val RemoteID = "remote"
@@ -216,6 +218,21 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     result should contain theSameElementsInOrderAs expectedResults
   }
 
+  it should "generate a Noop for elements with equal URIs and modified times with a delta below the threshold" in {
+    val ignoreDelta = IgnoreTimeDelta(1.second)
+    val localFile = deltaElem(createFile(1), ChangeType.Changed)
+    val localFolder = deltaElem(createFolder(2), ChangeType.Unchanged)
+    val remoteElements = List(createFile(1, RemoteID, deltaTime = 1), createFolder(2, RemoteID))
+    val localElements = List(localFile, localFolder)
+    val expectedResults = List(createResult(SyncOperation(localElements.head.element, SyncAction.ActionNoop,
+      localElements.head.element.level, remoteElements.head.id), Some(localFile)),
+      createResult(SyncOperation(localElements(1).element, SyncAction.ActionNoop,
+        localElements(1).element.level, remoteElements(1).id), Some(localFolder)))
+
+    val result = runStage(new SyncStage(ignoreDelta), localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
   it should "not generate an operation if both elements have been removed" in {
     val localFolder = deltaElem(createFolder(2), ChangeType.Unchanged)
     val remoteElements = List(createFolder(2, RemoteID))
@@ -241,6 +258,22 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
         localElements(1).element.level, remoteElements(1).id), Some(localFolder)))
 
     val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "not generate a conflict if both elements have been changed within an accepted delta" in {
+    val remoteFile = createFile(1, RemoteID, deltaTime = 1)
+    val changedFile = deltaElem(createFile(1, deltaTime = 10), ChangeType.Changed)
+      .copy(lastLocalTime = remoteFile.lastModified.minusSeconds(2))
+    val localFolder = deltaElem(createFolder(2), ChangeType.Unchanged)
+    val remoteElements = List(remoteFile, createFolder(2, RemoteID))
+    val localElements = List(changedFile, localFolder)
+    val expectedResults = List(createResult(SyncOperation(localElements.head.element, SyncAction.ActionOverride,
+      localElements.head.element.level, remoteElements.head.id), Some(changedFile)),
+      createResult(SyncOperation(localElements(1).element, SyncAction.ActionNoop,
+        localElements(1).element.level, remoteElements(1).id), Some(localFolder)))
+
+    val result = runStage(new SyncStage(IgnoreTimeDelta(2.seconds)), localElements, remoteElements)
     result should contain theSameElementsInOrderAs expectedResults
   }
 
@@ -273,6 +306,20 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
         localElements(1).element.level, remoteElements(1).id), Some(localFolder)))
 
     val result = runStage(new SyncStage, localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
+  it should "not generate a conflict if a remote file was changed in an accepted delta and the local one removed" in {
+    val removedFile = deltaElem(createFile(1), ChangeType.Removed)
+    val localFolder = deltaElem(createFolder(2), ChangeType.Unchanged)
+    val remoteElements = List(createFile(1, RemoteID, deltaTime = 1), createFolder(2, RemoteID))
+    val localElements = List(removedFile, localFolder)
+    val expectedResults = List(createResult(SyncOperation(remoteElements.head, SyncAction.ActionRemove,
+      remoteElements.head.level, remoteElements.head.id), Some(removedFile)),
+      createResult(SyncOperation(localElements(1).element, SyncAction.ActionNoop,
+        localElements(1).element.level, remoteElements(1).id), Some(localFolder)))
+
+    val result = runStage(new SyncStage(IgnoreTimeDelta(1.second)), localElements, remoteElements)
     result should contain theSameElementsInOrderAs expectedResults
   }
 

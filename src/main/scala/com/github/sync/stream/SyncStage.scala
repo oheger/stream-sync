@@ -47,15 +47,18 @@ private object SyncStage:
     * An internal class implementing the logic of the sync stage and holding
     * its state.
     *
-    * @param shape the shape
-    * @param in1   the inlet for the first input source
-    * @param in2   the inlet for the second input source
-    * @param out   the outlet of this stage
+    * @param shape           the shape
+    * @param in1             the inlet for the first input source
+    * @param in2             the inlet for the second input source
+    * @param out             the outlet of this stage
+    * @param ignoreTimeDelta a time difference that is to be ignored when
+    *                        comparing two files
     */
   private class SyncStageLogic(shape: Shape,
                                in1: Inlet[ElementWithDelta],
                                in2: Inlet[FsElement],
-                               out: Outlet[SyncStageResult])
+                               out: Outlet[SyncStageResult],
+                               ignoreTimeDelta: IgnoreTimeDelta)
     extends GraphStageLogic(shape),
       BaseMergeStage[ElementWithDelta, FsElement, SyncStageResult](in1, in2, out),
       StageLogging :
@@ -256,13 +259,13 @@ private object SyncStage:
             val lastLocalTime = if local.lastLocalTime == null then Instant.MIN else local.lastLocalTime
 
             local.changeType match
-              case ChangeType.Removed if remoteModified != lastLocalTime =>
+              case ChangeType.Removed if ignoreTimeDelta.isDifferentTimes(remoteModified, lastLocalTime) =>
                 emitConflict(SyncOperation(remote, SyncAction.ActionLocalCreate, remote.level, remote.id), removeOp())
               case ChangeType.Removed =>
                 emitOp(removeOp())
-              case _ if localModified == remoteModified =>
+              case _ if !ignoreTimeDelta.isDifferentTimes(localModified, remoteModified) =>
                 emitOp(noop(local, remote))
-              case ChangeType.Changed if remoteModified != lastLocalTime =>
+              case ChangeType.Changed if ignoreTimeDelta.isDifferentTimes(remoteModified, lastLocalTime) =>
                 emitConflict(localOverrideOp(), overrideOp())
               case ChangeType.Changed =>
                 emitOp(overrideOp())
@@ -472,12 +475,16 @@ private object SyncStage:
   * A special stage that generates [[SyncOperation]]s for a local and a remote
   * input source.
   *
-  * This stage implements bidrectional sync logic between two sources. One
+  * This stage implements bidirectional sync logic between two sources. One
   * source is considered local, since its state of the last sync operation is
   * known. Therefore, conflicts caused by changes on elements in both sources
   * can be detected.
+  *
+  * @param ignoreTimeDelta a time difference that is to be ignored when
+  *                        comparing two files
   */
-private class SyncStage extends GraphStage[FanInShape2[ElementWithDelta, FsElement, SyncStageResult]] :
+private class SyncStage(ignoreTimeDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero)
+  extends GraphStage[FanInShape2[ElementWithDelta, FsElement, SyncStageResult]] :
   val out: Outlet[SyncStageResult] = Outlet[SyncStageResult]("SyncStage.out")
   val inLocal: Inlet[ElementWithDelta] = Inlet[ElementWithDelta]("SyncStage.inLocal")
   val inRemote: Inlet[FsElement] = Inlet[FsElement]("SyncStage.inRemote")
@@ -486,4 +493,4 @@ private class SyncStage extends GraphStage[FanInShape2[ElementWithDelta, FsEleme
     new FanInShape2[ElementWithDelta, FsElement, SyncStageResult](inLocal, inRemote, out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    SyncStage.SyncStageLogic(shape, inLocal, inRemote, out)
+    SyncStage.SyncStageLogic(shape, inLocal, inRemote, out, ignoreTimeDelta)
