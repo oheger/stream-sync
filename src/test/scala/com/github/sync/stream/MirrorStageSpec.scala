@@ -148,7 +148,7 @@ class MirrorStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with 
     val g = RunnableGraph.fromGraph(GraphDSL.createGraph(foldSink) { implicit builder =>
       sink =>
         import GraphDSL.Implicits._
-        val mirrorStage = builder.add(new MirrorStage(ignoreTimeDelta))
+        val mirrorStage = builder.add(new MirrorStage(IgnoreTimeDelta(ignoreTimeDelta.seconds)))
         source1 ~> mirrorStage.in0
         source2 ~> mirrorStage.in1
         mirrorStage.out ~> sink

@@ -139,7 +139,7 @@ object Sync:
       val srcSource = protocolHolder.createSourceElementSource()
       val dstSource = protocolHolder.createDestinationElementSource()
       Future.successful(SyncStream.createMirrorSource(srcSource, dstSource,
-        config.streamConfig.ignoreTimeDelta getOrElse 1))
+        config.streamConfig.ignoreTimeDelta getOrElse IgnoreTimeDelta(1.second)))
 
   /**
     * Creates the source for the sync process if a sync log is provided. The

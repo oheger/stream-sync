@@ -90,20 +90,20 @@ object SyncStream:
     * Creates a source for a mirror stream that mirrors a source folder
     * structure to a destination structure.
     *
-    * @param srcSource          yields the elements of the source structure of
-    *                           the mirror stream
-    * @param srcDestination     yields the elements of the destination
-    *                           structure of the mirror stream
-    * @param ignoreTimeDeltaSec a time difference in seconds that is to be
-    *                           ignored when comparing two files
+    * @param srcSource       yields the elements of the source structure of
+    *                        the mirror stream
+    * @param srcDestination  yields the elements of the destination
+    *                        structure of the mirror stream
+    * @param ignoreTimeDelta a time difference in seconds that is to be
+    *                        ignored when comparing two files
     * @return the source for the mirror stream
     */
   def createMirrorSource(srcSource: Source[FsElement, Any], srcDestination: Source[FsElement, Any],
-                         ignoreTimeDeltaSec: Int = 0): Source[SyncOperation, NotUsed] =
+                         ignoreTimeDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero): Source[SyncOperation, NotUsed] =
     Source.fromGraph(GraphDSL.create() {
       implicit builder =>
         import GraphDSL.Implicits.*
-        val syncStage = builder.add(new MirrorStage(ignoreTimeDeltaSec))
+        val syncStage = builder.add(new MirrorStage(ignoreTimeDelta))
         srcSource ~> syncStage.in0
         srcDestination ~> syncStage.in1
         SourceShape(syncStage.out)

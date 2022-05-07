@@ -20,7 +20,7 @@ import akka.util.Timeout
 import com.github.scli.ParameterExtractor.*
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
-import com.github.sync.stream.Throttle
+import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 import org.apache.logging.log4j.Level
 
 import java.nio.file.Path
@@ -368,7 +368,7 @@ object SyncParameterManager:
     */
   case class StreamConfig(dryRun: Boolean,
                           timeout: Timeout,
-                          ignoreTimeDelta: Option[Int],
+                          ignoreTimeDelta: Option[IgnoreTimeDelta],
                           opsPerUnit: Option[Int],
                           throttleUnit: Throttle.TimeUnit)
 
@@ -652,9 +652,10 @@ object SyncParameterManager:
     *
     * @return the extractor for the ignore time delta option
     */
-  private def ignoreTimeDeltaExtractor(): CliExtractor[Try[Option[Int]]] =
+  private def ignoreTimeDeltaExtractor(): CliExtractor[Try[Option[IgnoreTimeDelta]]] =
     optionValue(IgnoreTimeDeltaOption, Some(IgnoreTimeDeltaHelp))
       .toInt
+      .mapTo(sec => IgnoreTimeDelta(sec.seconds))
 
   /**
     * Returns an extractor that extracts the value of the option for the number
@@ -691,7 +692,7 @@ object SyncParameterManager:
     */
   private def createStreamConfig(triedDryRun: Try[Boolean],
                                  triedTimeout: Try[Timeout],
-                                 triedTimeDelta: Try[Option[Int]],
+                                 triedTimeDelta: Try[Option[IgnoreTimeDelta]],
                                  triedOpsPerUnit: Try[Option[Int]],
                                  triedThrottleUnit: Try[Throttle.TimeUnit]): Try[StreamConfig] =
     createRepresentation(triedDryRun, triedTimeout, triedTimeDelta, triedOpsPerUnit,

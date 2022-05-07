@@ -36,18 +36,18 @@ private object MirrorStage:
     * The internal class representing the logic and the state of the mirror
     * stage.
     *
-    * @param shape              the shape
-    * @param in1                the inlet for the first input source
-    * @param in2                the inlet for the second input source
-    * @param out                the outlet of this stage
-    * @param ignoreTimeDeltaSec a time difference in seconds that is to be
-    *                           ignored when comparing two files
+    * @param shape           the shape
+    * @param in1             the inlet for the first input source
+    * @param in2             the inlet for the second input source
+    * @param out             the outlet of this stage
+    * @param ignoreTimeDelta a time difference that is to be ignored when
+    *                        comparing two files
     */
   private class MirrorStageLogic(shape: Shape,
                                  in1: Inlet[FsElement],
                                  in2: Inlet[FsElement],
                                  out: Outlet[SyncOperation],
-                                 ignoreTimeDeltaSec: Int)
+                                 ignoreTimeDelta: IgnoreTimeDelta)
     extends GraphStageLogic(shape),
       BaseMergeStage[FsElement, FsElement, SyncOperation](in1, in2, out),
       ElementMergeStage[FsElement, FsElement, SyncOperation](in1, in2, out),
@@ -189,7 +189,7 @@ private object MirrorStage:
     Option[MergeResult] =
       (elemSource, elemDest) match
         case (eSrc: FsFile, eDst: FsFile)
-          if differentFileTimes(eSrc, eDst) || eSrc.size != eDst.size =>
+          if ignoreTimeDelta.isDifferentFileTimes(eSrc, eDst) || eSrc.size != eDst.size =>
           log.debug("Different file attributes: {} <=> {}.", eSrc, eDst)
           Some(emitAndPullBoth(List(SyncOperation(eSrc, ActionOverride, eSrc.level, dstID = eDst.id)), state))
 
@@ -255,27 +255,6 @@ private object MirrorStage:
       SyncOperation(element, ActionRemove, level, dstID = element.id)
 
     /**
-      * Checks whether the timestamps of the given files are different, taking
-      * the configured threshold for the time delta into account.
-      *
-      * @param eSrc            the source file
-      * @param eDst            the destination file
-      * @return a flag whether these files have a different timestamp
-      */
-    private def differentFileTimes(eSrc: FsFile, eDst: FsFile): Boolean =
-      math.abs(extractTime(eSrc) - extractTime(eDst)) > ignoreTimeDeltaSec
-
-    /**
-      * Extracts the time of a file that needs to be compared to detect modified
-      * files. This method ignores milliseconds as some structures that can be
-      * synced do not support file modification times with this granularity.
-      *
-      * @param file a file
-      * @return the modified time to be compared during a sync operations
-      */
-    private def extractTime(file: FsFile): Long = file.lastModified.getEpochSecond
-
-    /**
       * Compares the given elements and returns an integer value determining
       * which one is before the other: a value less than zero means that the
       * source element is before the destination element; a value greater than
@@ -309,13 +288,13 @@ private object MirrorStage:
   * guaranteed that all operations that remove the content of this folder have
   * been pushed before.
   *
-  * @param ignoreTimeDeltaSec a time difference in seconds that is to be
-  *                           ignored when comparing two files
+  * @param ignoreTimeDelta a time difference that is to be ignored when
+  *                        comparing two files
   */
-private class MirrorStage(val ignoreTimeDeltaSec: Int = 0)
+private class MirrorStage(val ignoreTimeDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero)
   extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]] :
 
-  import MirrorStage._
+  import MirrorStage.*
 
   val out: Outlet[SyncOperation] = Outlet[SyncOperation]("MirrorStage.out")
   val inSource: Inlet[FsElement] = Inlet[FsElement]("MirrorStage.inSource")
@@ -325,4 +304,4 @@ private class MirrorStage(val ignoreTimeDeltaSec: Int = 0)
     new FanInShape2[FsElement, FsElement, SyncOperation](inSource, inDest, out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new MirrorStageLogic(shape, inSource, inDest, out, ignoreTimeDeltaSec)
+    new MirrorStageLogic(shape, inSource, inDest, out, ignoreTimeDelta)

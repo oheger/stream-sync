@@ -27,7 +27,7 @@ import com.github.sync.cli.SyncParameterManager.*
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 import com.github.sync.oauth.SyncNoAuth
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig}
-import com.github.sync.stream.Throttle
+import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.apache.logging.log4j.Level
 import org.mockito.Mockito.*
@@ -265,7 +265,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val argsMap = ArgsMap + (SyncParameterManager.IgnoreTimeDeltaOption -> List(Delta.toString))
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.streamConfig.ignoreTimeDelta should be(Some(Delta))
+    config.streamConfig.ignoreTimeDelta.get.deltaSec should be(Delta)
   }
 
   it should "handle an invalid threshold for file time deltas" in {
@@ -455,7 +455,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       srcPassword = Some("pwd-dst"), srcCryptMode = CryptMode.Files, cryptCacheSize = 55)
     val logConfig = LogConfig(logFilePath = Some(Paths get "log"), errorLogFilePath = Some(Paths get "err"),
       syncLogPath = Some(Paths get "syncLog"), logLevel = Level.INFO)
-    val streamConfig = StreamConfig(dryRun = false, timeout = 1.minute, ignoreTimeDelta = Some(100),
+    val streamConfig = StreamConfig(dryRun = false, timeout = 1.minute,
+      ignoreTimeDelta = Some(IgnoreTimeDelta(100.seconds)),
       opsPerUnit = Some(100), throttleUnit = Throttle.TimeUnit.Minute)
     val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
       dstConfig = mock[StructureAuthConfig], logConfig = logConfig, cryptConfig = orgCryptConfig,

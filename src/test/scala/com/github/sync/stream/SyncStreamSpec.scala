@@ -177,7 +177,8 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
       SyncOperation(file3, SyncAction.ActionOverride, file3.level, file3.id),
       SyncOperation(file4, SyncAction.ActionRemove, file4.level, file4.id))
 
-    val mirrorSource = SyncStream.createMirrorSource(Source(sourceElems), Source(destElems), ignoreTimeDeltaSec = 1)
+    val mirrorSource = SyncStream.createMirrorSource(Source(sourceElems), Source(destElems),
+      ignoreTimeDelta = IgnoreTimeDelta(1.second))
     val sink = AbstractStageSpec.foldSink[SyncOperation]
     val result = futureResult(mirrorSource.runWith(sink))
     result.reverse should contain theSameElementsInOrderAs expOps
