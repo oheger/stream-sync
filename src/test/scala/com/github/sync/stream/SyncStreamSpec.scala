@@ -18,16 +18,16 @@ package com.github.sync.stream
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.stream.{KillSwitches, SharedKillSwitch}
 import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.{KillSwitches, SharedKillSwitch}
 import akka.testkit.TestKit
-import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
 import com.github.sync.SyncTypes.{FsFile, SyncAction, SyncOperation, SyncOperationResult}
 import com.github.sync.log.ElementSerializer
 import com.github.sync.stream.AbstractStageSpec.createFile
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
+import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
 import java.nio.file.Files
 import java.time.Instant
@@ -118,8 +118,9 @@ object SyncStreamSpec:
                                          filter: SyncStream.OperationFilter = SyncStream.AcceptAllOperations,
                                          optKillSwitch: Option[SharedKillSwitch] = None):
   SyncStream.MirrorStreamParams[TOTAL, ERROR] =
-    SyncStream.MirrorStreamParams(source = Source(operations), processFlow = processingFlow,
-      sinkTotal = sinkTotal, sinkError = sinkError, operationFilter = filter, optKillSwitch = optKillSwitch)
+    val baseParams = SyncStream.BaseStreamParams(processFlow = processingFlow, sinkTotal = sinkTotal,
+      sinkError = sinkError, operationFilter = filter, optKillSwitch = optKillSwitch)
+    SyncStream.MirrorStreamParams(source = Source(operations), baseParams = baseParams)
 
 /**
   * Test class for ''SyncStream''.

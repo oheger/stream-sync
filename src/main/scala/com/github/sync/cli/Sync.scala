@@ -210,9 +210,10 @@ object Sync:
       result.optFailure.isDefined || result.op.action == ActionNoop
     }.toMat(sinkTotal)(Keep.right)
 
-    val params = SyncStream.MirrorStreamParams(source = source, processFlow = flowProc, sinkTotal = sinkSuccess,
+    val baseParams = SyncStream.BaseStreamParams(processFlow = flowProc, sinkTotal = sinkSuccess,
       sinkError = sinkError, operationFilter = createSyncFilter(config.filterData),
       optKillSwitch = Some(protocolHolder.oAuthRefreshKillSwitch))
+    val params = SyncStream.MirrorStreamParams(baseParams, source)
     val decider: Supervision.Decider = ex => {
       ex.printStackTrace()
       Supervision.Resume

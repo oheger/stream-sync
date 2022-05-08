@@ -56,21 +56,15 @@ object SyncStream:
                                          errorSinkMat: ERROR)
 
   /**
-    * A data class that holds the parameters of a mirror stream. Such a stream
-    * makes a destination structure an exact mirror of a source structure.
-    *
-    * The stream consists of
-    *  - a (typically complex) source generating the sync operations to be
-    *    applied to the sync structures;
+    * A data class that holds the parameters common to all kinds of sync
+    * streams. Parameters for specific stream types include an instance of
+    * this class. It defines the following properties:
     *  - a flow stage that processes the sync operations;
     *  - a sink receiving the results of all sync operations;
     *  - a sink receiving the failed sync operations only;
     *  - a filter to be applied to sync operations;
     *  - an optional kill switch to cancel the stream from the outside.
     *
-    * All these components can be specified via an instance of this class.
-    *
-    * @param source          the source of the sync stream
     * @param processFlow     the flow stage processing sync operations
     * @param sinkTotal       the sink receiving all operation results
     * @param sinkError       the sink receiving the failed operation results
@@ -79,12 +73,29 @@ object SyncStream:
     * @tparam TOTAL the type of the value produced by the total sink
     * @tparam ERROR the type of the value produced by the error sink
     */
-  case class MirrorStreamParams[TOTAL, ERROR](source: Source[SyncOperation, Any],
-                                              processFlow: Flow[SyncOperation, SyncOperationResult, Any],
-                                              sinkTotal: Sink[SyncOperationResult, Future[TOTAL]],
-                                              sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore,
-                                              operationFilter: OperationFilter = AcceptAllOperations,
-                                              optKillSwitch: Option[SharedKillSwitch] = None)
+  case class BaseStreamParams[TOTAL, ERROR](processFlow: Flow[SyncOperation, SyncOperationResult, Any],
+                                            sinkTotal: Sink[SyncOperationResult, Future[TOTAL]],
+                                            sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore,
+                                            operationFilter: OperationFilter = AcceptAllOperations,
+                                            optKillSwitch: Option[SharedKillSwitch] = None)
+
+  /**
+    * A data class that holds the parameters of a mirror stream. Such a stream
+    * makes a destination structure an exact mirror of a source structure.
+    *
+    * In addition to the [[BaseStreamParams]], this class defines the
+    * (typically complex) source generating the sync operations to be applied
+    * to the sync structures. In practice, this can either be a source that
+    * compares two folder structures or a source that reads sync operations
+    * from a log file.
+    *
+    * @param baseParams the object with basic stream parameters
+    * @tparam TOTAL the type of the value produced by the total sink
+    * @tparam ERROR the type of the value produced by the error sink
+    */
+  case class MirrorStreamParams[TOTAL, ERROR](baseParams: BaseStreamParams[TOTAL, ERROR],
+                                              source: Source[SyncOperation, Any]):
+    export baseParams.*
 
   /**
     * Creates a source for a mirror stream that mirrors a source folder
