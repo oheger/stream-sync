@@ -18,10 +18,11 @@ package com.github.sync.stream
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.scaladsl.{FileIO, Flow, Sink, Source}
 import akka.stream.{KillSwitches, SharedKillSwitch}
 import akka.testkit.TestKit
-import com.github.sync.SyncTypes.{FsFile, SyncAction, SyncOperation, SyncOperationResult}
+import com.github.sync.SyncTypes.{FsElement, FsFile, SyncAction, SyncConflictException, SyncOperation, SyncOperationResult}
+import com.github.sync.cli.FilterManager.SyncOperationFilter
 import com.github.sync.log.ElementSerializer
 import com.github.sync.stream.AbstractStageSpec.createFile
 import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
@@ -33,14 +34,18 @@ import java.nio.file.Files
 import java.time.Instant
 import scala.concurrent.Future
 import scala.concurrent.duration.*
-import scala.util.Success
+import scala.io.Source as IOSource
+import scala.util.{Success, Using}
 
 object SyncStreamSpec:
   /** Name of an element that produce a failed operation result. */
   private val ErrorFileName = "error"
 
   /** Name of an element that produces a success operation result. */
-  private val SuccessFileName = "element"
+  private val SuccessFileName = "success"
+
+  /** A name for sync streams used by tests. */
+  private val StreamName = "TestSyncStream"
 
   /**
     * A special exception class to report operation errors. For the tests, an
@@ -51,19 +56,40 @@ object SyncStreamSpec:
   case class SyncStreamException(msg: String) extends Exception(msg)
 
   /**
-    * Creates a test sync operation based on the given index. The name of the
-    * element subject of the operation is determined by the ''success'' flag.
-    * The test processing stage will generate a failure result depending on
-    * this name.
+    * Creates a test element based on the given index. The name of the element
+    * subject of the operation is determined by the ''success'' flag. The test
+    * processing stage will generate a failure result depending on this name.
+    *
+    * @param index   the index
+    * @param success flag whether the element can be processed successfully
+    * @return the test element
+    */
+  private def createElement(index: Int, success: Boolean = true): FsFile =
+    successState(createFile(index), success)
+
+  /**
+    * Modifies the passed in element by adding a suffix to the URL that
+    * determines whether the element could be processed successfully. This is
+    * used to simulate failed operations.
+    *
+    * @param element the original element
+    * @param success the success state
+    * @return the modified element
+    */
+  private def successState(element: FsFile, success: Boolean): FsFile =
+    val elemName = if success then SuccessFileName else ErrorFileName
+    element.copy(relativeUri = s"${element.relativeUri}$elemName")
+
+  /**
+    * Creates a test sync operation based on the given index. This is an
+    * operation using an element created by ''createElement()'' as subject.
     *
     * @param index   the index
     * @param success flag whether the operation should be successful
     * @return the test ''SyncOperation''
     */
   private def createOperation(index: Int, success: Boolean = true): SyncOperation =
-    val elemName = if success then SuccessFileName else ErrorFileName
-    val element = FsFile("id" + index, s"/$elemName$index", level = index / 10,
-      lastModified = Instant.parse("2021-11-04T12:22:45Z"), size = 100 * index + 1)
+    val element = createElement(index, success)
     SyncOperation(element, SyncTypes.SyncAction.ActionOverride, element.level, "id" + index)
 
   /**
@@ -97,7 +123,7 @@ object SyncStreamSpec:
     * @return the collecting ''Sink''
     */
   private def collectingSink: Sink[SyncOperationResult, Future[List[SyncOperationResult]]] =
-    Sink.fold[List[SyncOperationResult], SyncOperationResult](List.empty) { (lst, op) => op :: lst }
+    AbstractStageSpec.foldSink[SyncOperationResult]
 
   /**
     * Convenience function to construct an object with parameters for a mirror
@@ -140,7 +166,67 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
   import SyncStreamSpec.*
 
   /**
-    * Constructs and starts a test stream based on the given parameters.
+    * Creates the parameters object for a sync stream setting some default
+    * values.
+    *
+    * @param localSource   the source for local elements
+    * @param remoteSource  the source for remote elements
+    * @param sinkTotal     the sink receiving all elements
+    * @param sinkError     the sink receiving the error elements
+    * @param filter        the filter for operations
+    * @param optKillSwitch the optional kill switch
+    * @param ignoreDelta   the ignore time delta
+    * @tparam TOTAL the type of the total sink
+    * @tparam ERROR the type of the error sink
+    * @return
+    */
+  private def syncParams[TOTAL, ERROR](localSource: Source[FsElement, Any],
+                                       remoteSource: Source[FsElement, Any],
+                                       sinkTotal: Sink[SyncOperationResult, Future[TOTAL]],
+                                       sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore,
+                                       filter: SyncStream.OperationFilter = SyncStream.AcceptAllOperations,
+                                       optKillSwitch: Option[SharedKillSwitch] = None,
+                                       ignoreDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero):
+  SyncStream.SyncStreamParams[TOTAL, ERROR] =
+    val baseParams = SyncStream.BaseStreamParams(processFlow = processingFlow, sinkTotal = sinkTotal,
+      sinkError = sinkError, operationFilter = filter, optKillSwitch = optKillSwitch)
+    SyncStream.SyncStreamParams(baseParams = baseParams, streamName = StreamName, stateFolder = testDirectory,
+      localSource = localSource, remoteSource = remoteSource, ignoreDelta = ignoreDelta)
+
+  /**
+    * Writes a file with local state information with the given content.
+    *
+    * @param state the content of the local state file
+    */
+  private def writeLocalState(state: Seq[LocalState.LocalElementState]): Unit =
+    val stateFolder = LocalState.LocalStateFolder(testDirectory, StreamName)
+    val sink = FileIO.toPath(stateFolder.resolve(LocalState.LocalStateFile.Complete))
+    val source = Source(state).map(ElementSerializer.serialize)
+    futureResult(source.runWith(sink))
+
+  /**
+    * Writes a file with local state information for the test stream that
+    * contains the given elements.
+    *
+    * @param elements the elements in the local state
+    */
+  private def writeLocalStateElements(elements: Seq[FsElement]): Unit =
+    writeLocalState(elements.map(elem => LocalState.LocalElementState(elem, removed = false)))
+
+  /**
+    * Reads the file with the local state of the test stream and deserializes
+    * the elements stored there.
+    *
+    * @return a sequence with the elements in the local state
+    */
+  private def readLocalState(): Seq[LocalState.LocalElementState] =
+    val stateFolder = LocalState.LocalStateFolder(testDirectory, StreamName)
+    Using(IOSource.fromFile(stateFolder.resolve(LocalState.LocalStateFile.Complete).toFile)) { src =>
+      src.getLines().toList.map(ElementSerializer.deserialize[LocalState.LocalElementState])
+    }.get map (_.get)
+
+  /**
+    * Constructs and starts a test mirror stream based on the given parameters.
     * Returns the ''Future'' with the result.
     *
     * @param params the parameters of the test stream
@@ -155,8 +241,9 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     graph.run()
 
   /**
-    * Constructs and runs a test stream based on the given parameters. Waits
-    * for the completion of the stream and returns the materialized result.
+    * Constructs and runs a test mirror stream based on the given parameters.
+    * Waits for the completion of the stream and returns the materialized
+    * result.
     *
     * @param params the parameters of the test stream
     * @tparam TOTAL type of the total sink
@@ -164,6 +251,36 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     * @return the materialized stream result
     */
   private def runStream[TOTAL, ERROR](params: SyncStream.MirrorStreamParams[TOTAL, ERROR]):
+  SyncStream.SyncStreamMat[TOTAL, ERROR] = futureResult(startStream(params))
+
+  /**
+    * Constructs and starts a test sync stream based on the given parameters.
+    * Returns the ''Future'' with the result.
+    *
+    * @param params the parameters of the test stream
+    * @tparam TOTAL type of the total sink
+    * @tparam ERROR type of the error sink
+    * @return the ''Future'' with the materialized stream result
+    */
+  private def startStream[TOTAL, ERROR](params: SyncStream.SyncStreamParams[TOTAL, ERROR]):
+  Future[SyncStream.SyncStreamMat[TOTAL, ERROR]] =
+    import system.dispatcher
+    for
+      graph <- SyncStream.createSyncStream(params)
+      result <- graph.run()
+    yield result
+
+  /**
+    * Constructs and runs a test sync stream based on the given parameters.
+    * Waits for the completion of the stream and returns the materialized
+    * result.
+    *
+    * @param params the parameters of the test stream
+    * @tparam TOTAL type of the total sink
+    * @tparam ERROR type of the error sink
+    * @return the materialized stream result
+    */
+  private def runStream[TOTAL, ERROR](params: SyncStream.SyncStreamParams[TOTAL, ERROR]):
   SyncStream.SyncStreamMat[TOTAL, ERROR] = futureResult(startStream(params))
 
   "SyncStream" should "create a source for a mirror stream" in {
@@ -301,4 +418,119 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val result = runStream(params)
     result.totalSinkMat should be(OperationCount)
   }
-  
+
+  it should "create a sync stream" in {
+    val localFile = createFile(1)
+    val remoteFile = createFile(2, idType = "remote")
+    val localElements = List(localFile)
+    val remoteElements = List(remoteFile)
+    val expOps = List(SyncOperation(localFile, SyncAction.ActionCreate, localFile.level, localFile.id),
+      SyncOperation(remoteFile, SyncAction.ActionLocalCreate, remoteFile.level, remoteFile.id))
+    val params = syncParams(Source(localElements), Source(remoteElements), collectingSink, collectingSink)
+
+    val result = runStream(params)
+    result.totalSinkMat should contain theSameElementsInOrderAs expOps.map(createOperationResult).reverse
+    result.errorSinkMat shouldBe empty
+  }
+
+  it should "create a correct local source for the local state" in {
+    val remoteFile = createFile(1, idType = "remote")
+    writeLocalStateElements(List(createFile(1)))
+    val expOp = SyncOperation(remoteFile, SyncAction.ActionRemove, remoteFile.level, remoteFile.id)
+    val params = syncParams(Source.empty, Source(List(remoteFile)), collectingSink)
+
+    val result = runStream(params)
+    result.totalSinkMat should contain only createOperationResult(expOp)
+  }
+
+  it should "pass only failed operations to the error sink in a sync stream" in {
+    val localElements = List(createElement(1), createElement(2, success = false),
+      createElement(3))
+    val remoteElements = List(successState(createFile(1, idType = "remote", deltaTime = 10), success = true),
+      successState(createFile(2, idType = "remote", deltaTime = 20), success = false),
+      successState(createFile(3, idType = "remote", deltaTime = 30), success = true))
+    writeLocalStateElements(localElements)
+    val expOps = localElements.zip(remoteElements).map { e =>
+      SyncOperation(e._2, SyncAction.ActionLocalOverride, e._2.level, e._1.id)
+    }
+    val expResults = expOps map createOperationResult
+    val params = syncParams(Source(localElements), Source(remoteElements), collectingSink, collectingSink)
+
+    val result = runStream(params)
+    result.totalSinkMat.reverse should contain theSameElementsInOrderAs expResults
+    result.errorSinkMat should contain only expResults(1)
+  }
+
+  it should "support a kill switch for sync streams" in {
+    val ElemCount = 16
+    val localElements = (1 to ElemCount) map { idx => createFile(idx) }
+    val remoteElements = (1 to ElemCount) map { idx => createFile(idx, idType = "remote") }
+    writeLocalStateElements(localElements)
+    val localSource = Source(localElements).delay(50.millis)
+    val remoteSource = Source(remoteElements)
+    val killSwitch = KillSwitches.shared("killSync")
+    val params = syncParams(localSource, remoteSource, collectingSink, optKillSwitch = Some(killSwitch))
+    val futResult = startStream(params)
+
+    killSwitch.shutdown()
+    val result = futureResult(futResult)
+    result.totalSinkMat.size should be < ElemCount
+  }
+
+  it should "update the local state of a sync stream" in {
+    val unchangedElement = createFile(1)
+    val changedElement = createFile(2, idType = "remote", deltaTime = 100)
+    val localElements = List(unchangedElement, createFile(2))
+    val remoteElements = List(createFile(1, idType = "remote"), changedElement)
+    writeLocalStateElements(localElements)
+    val params = syncParams(Source(localElements), Source(remoteElements), collectingSink)
+    val expState = List(LocalState.LocalElementState(unchangedElement, removed = false),
+      LocalState.LocalElementState(changedElement, removed = false))
+
+    runStream(params)
+    val state = readLocalState()
+    state should contain theSameElementsInOrderAs expState
+  }
+
+  it should "pass sync conflicts to the error sink" in {
+    val localChangedElement = createFile(1, deltaTime = 77)
+    val remoteChangedElement = createFile(1, deltaTime = 99)
+    val localUnchangedElement = createFile(1)
+    writeLocalStateElements(List(localUnchangedElement))
+    val params = syncParams(Source(List(localChangedElement)), Source(List(remoteChangedElement)),
+      collectingSink, collectingSink)
+
+    val result = runStream(params)
+    result.errorSinkMat should have size 1
+    result.errorSinkMat.head.optFailure.get match
+      case e: SyncConflictException =>
+        e.localOperations should contain only SyncOperation(remoteChangedElement, SyncAction.ActionLocalOverride,
+          remoteChangedElement.level, localChangedElement.id)
+        e.remoteOperations should contain only SyncOperation(localChangedElement, SyncAction.ActionOverride,
+          localChangedElement.level, remoteChangedElement.id)
+      case e2 => fail("Unexpected exception: " + e2)
+
+    val state = readLocalState()
+    state should contain only LocalState.LocalElementState(localChangedElement, removed = false)
+  }
+
+  it should "support an operation filter for sync streams" in {
+    val unchangedElement = createFile(1)
+    val deletedElement = createFile(2)
+    val localElements = List(unchangedElement, deletedElement)
+    val unchangedRemoteElement = createFile(1, idType = "remote")
+    writeLocalStateElements(localElements)
+    val opFilter: SyncOperationFilter = op => op.action != SyncAction.ActionLocalRemove
+    val params = syncParams(Source(localElements), Source(List(unchangedRemoteElement)),
+      collectingSink, filter = opFilter)
+    val expOps = List(SyncOperation(unchangedElement, SyncAction.ActionNoop, unchangedElement.level,
+      unchangedRemoteElement.id),
+      SyncOperation(deletedElement, SyncAction.ActionNoop, deletedElement.level, deletedElement.id))
+      .map(createOperationResult)
+    val expState = localElements.map(elem => LocalState.LocalElementState(elem, removed = false))
+
+    val result = runStream(params)
+    result.totalSinkMat.reverse should contain theSameElementsInOrderAs expOps
+    val state = readLocalState()
+    state should contain theSameElementsInOrderAs expState
+  }

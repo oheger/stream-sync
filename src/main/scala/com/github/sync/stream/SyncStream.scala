@@ -16,13 +16,16 @@
 
 package com.github.sync.stream
 
-import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
-import akka.stream.{ClosedShape, IOResult, SharedKillSwitch, SinkShape, SourceShape}
+import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, Merge, RunnableGraph, Sink, Source}
+import akka.stream.{ClosedShape, IOResult, KillSwitches, Materializer, SharedKillSwitch, SinkShape, SourceShape}
 import akka.{Done, NotUsed}
+import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.{FsElement, SyncOperation, SyncOperationResult}
 import com.github.sync.log.ElementSerializer
+import com.github.sync.stream.SyncStage.SyncStageResult
 
 import java.nio.file.{Path, StandardOpenOption}
+import java.time.Instant
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -98,6 +101,40 @@ object SyncStream:
     export baseParams.*
 
   /**
+    * A data class that holds the parameters of a sync stream. Such a stream
+    * implements a bidirectional synchronization between a local folder
+    * structure and a remote one. To detect changes and conflicts correctly, it
+    * stores a file with the state of the local structure.
+    *
+    * In addition to the [[BaseStreamParams]], this class defines the following
+    * properties:
+    *  - a name for the sync stream (used to determine the name of the file
+    *    storing local state information);
+    *  - the path where files with local state information are located;
+    *  - the source emitting the elements of the local folder structure;
+    *  - the source emitting the elements of the remote folder structure;
+    *  - a delta of timestamps to be ignored when comparing the last
+    *    modification dates of files
+    *
+    * @param baseParams   the object with basic stream parameters
+    * @param streamName   the name of the sync stream
+    * @param stateFolder  the folder containing files with state information
+    * @param localSource  the source for the local folder structure
+    * @param remoteSource the source for the remote folder structure
+    * @param ignoreDelta  a time difference that is to be ignored when
+    *                     comparing two files
+    * @tparam TOTAL the type of the value produced by the total sink
+    * @tparam ERROR the type of the value produced by the error sink
+    */
+  case class SyncStreamParams[TOTAL, ERROR](baseParams: BaseStreamParams[TOTAL, ERROR],
+                                            streamName: String,
+                                            stateFolder: Path,
+                                            localSource: Source[FsElement, Any],
+                                            remoteSource: Source[FsElement, Any],
+                                            ignoreDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero):
+    export baseParams.*
+
+  /**
     * Creates a source for a mirror stream that mirrors a source folder
     * structure to a destination structure.
     *
@@ -139,7 +176,7 @@ object SyncStream:
       params.source.via(ks.flow)
     }
 
-    RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError)(createStreamMat) {
+    RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError)(mirrorStreamMat) {
       implicit builder =>
         (sinkTotal, sinkError) =>
           import GraphDSL.Implicits.*
@@ -148,6 +185,56 @@ object SyncStream:
           broadcastSink ~> filterError ~> sinkError.in
           ClosedShape
     })
+
+  /**
+    * Constructs a ''RunnableGraph'' representing the sync stream for the
+    * parameters provided.
+    *
+    * @param params the parameters of the sync stream
+    * @param ec     the execution context
+    * @param mat    the object to materialize streams
+    * @tparam TOTAL the type of the value produced by the total sink
+    * @tparam ERROR the type of the value produced by the error sink
+    * @return the ''Future'' with the graph for the sync stream
+    */
+  def createSyncStream[TOTAL, ERROR](params: SyncStreamParams[TOTAL, ERROR])
+                                    (implicit ec: ExecutionContext, mat: Materializer):
+  Future[RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]]] =
+    val stateFolder = LocalState.LocalStateFolder(params.stateFolder, params.streamName)
+    val stateSink = LocalState.localStateSink(stateFolder)
+    val killSwitch = params.optKillSwitch getOrElse KillSwitches.shared("dummy")
+
+    LocalState.constructLocalStateSource(stateFolder) map { stateSource =>
+      RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError, stateSink)(syncStreamMat) {
+        implicit builder =>
+          (sinkTotal, sinkError, sinkState) =>
+            import GraphDSL.Implicits.*
+            val broadcastSink = builder.add(Broadcast[SyncOperationResult](2))
+            val broadcastSyncResults = builder.add(Broadcast[SyncStageResult](3))
+            val broadcastOps = builder.add(Broadcast[SyncOperationResult](2))
+            val mergeConflicts = builder.add(Merge[SyncOperationResult](2))
+            val syncOpMap = builder.add(mapSyncResultToOp)
+            val conflictMap = builder.add(mapConflictToOp)
+            val errorFilter = builder.add(Flow[SyncOperationResult].filter(_.optFailure.isDefined))
+            val opFilter = builder.add(filterOperations(params.operationFilter))
+            val stateStage = builder.add(new LocalStateStage(Instant.now()))
+            val syncStage = builder.add(new SyncStage())
+            val stateUpdateStage = builder.add(new LocalStateUpdateStage)
+
+            params.localSource ~> stateStage.in0
+            stateSource ~> stateStage.in1
+            stateStage.out ~> syncStage.in0
+            params.remoteSource ~> syncStage.in1
+            syncStage.out ~> killSwitch.flow ~> opFilter ~> broadcastSyncResults
+            broadcastSyncResults ~> syncOpMap ~> params.processFlow ~> broadcastOps ~> broadcastSink ~> sinkTotal.in
+            broadcastSyncResults ~> stateUpdateStage.in0
+            broadcastSyncResults ~> conflictMap ~> mergeConflicts ~> sinkError
+            broadcastOps ~> stateUpdateStage.in1
+            broadcastSink ~> errorFilter ~> mergeConflicts
+            stateUpdateStage.out ~> sinkState
+            ClosedShape
+      })
+    }
 
   /**
     * Creates a ''Sink'' that logs the received [[SyncOperation]]s to a file.
@@ -222,7 +309,7 @@ object SyncStream:
     })
 
   /**
-    * Constructs the materialized value of the sync stream from the results of
+    * Constructs the materialized value of a mirror stream from the results of
     * the two sinks. The values of the sinks are obtained and stored in a
     * [[SyncStreamMat]] object.
     *
@@ -233,12 +320,28 @@ object SyncStream:
     * @tparam ERROR the type of the error sink
     * @return a ''SyncStreamMat'' object with the combined result
     */
-  private def createStreamMat[TOTAL, ERROR](matTotal: Future[TOTAL], matError: Future[ERROR])
+  private def mirrorStreamMat[TOTAL, ERROR](matTotal: Future[TOTAL], matError: Future[ERROR])
                                            (implicit ec: ExecutionContext): Future[SyncStreamMat[TOTAL, ERROR]] =
     for
       total <- matTotal
       error <- matError
     yield SyncStreamMat(total, error)
+
+  /**
+    * Constructs the materialized value of a sync stream and also ensures that
+    * the sink for updating the local state is complete.
+    *
+    * @param matTotal the materialized value of the total sink
+    * @param matError the materialized value of the error sink
+    * @param matState the materialized value of the state sink
+    * @param ec       the execution context
+    * @tparam TOTAL the type of the total sink
+    * @tparam ERROR the type of the error sink
+    * @return a ''SyncStreamMat'' object with the combined result
+    */
+  private def syncStreamMat[TOTAL, ERROR](matTotal: Future[TOTAL], matError: Future[ERROR], matState: Future[Path])
+                                         (implicit ec: ExecutionContext): Future[SyncStreamMat[TOTAL, ERROR]] =
+    createCombinedSinkMat(matState, mirrorStreamMat(matTotal, matError))
 
   /**
     * Constructs the materialized value of a sink that has been combined with a
@@ -259,3 +362,51 @@ object SyncStream:
       _ <- matIgnore
       result <- matOrg
     yield result
+
+  /**
+    * Returns a ''Flow'' that generates the sync operations to execute for a
+    * result of the sync stage.
+    *
+    * @return the mapping flow
+    */
+  private def mapSyncResultToOp: Flow[SyncStageResult, SyncOperation, NotUsed] =
+    Flow[SyncStageResult].mapConcat { result =>
+      result.elementResult.toSeq.flatten
+    }
+
+  /**
+    * Returns a ''Flow'' that maps a ''SyncConflictException'' to a (failed)
+    * [[SyncOperation]].
+    *
+    * @return the mapping flow
+    */
+  private def mapConflictToOp: Flow[SyncStageResult, SyncOperationResult, NotUsed] =
+    Flow[SyncStageResult].mapConcat { result =>
+      result.elementResult match
+        case Left(conflict) =>
+          List(SyncOperationResult(
+            conflict.localOperations.headOption getOrElse conflict.remoteOperations.head, Some(conflict)))
+        case _ => List.empty
+    }
+
+  /**
+    * Returns a ''Flow'' that applies the given [[OperationFilter]] to the sync
+    * stream. Note that in this streams operations cannot be actually filtered,
+    * since all elements have to reach the state for the updated local state
+    * eventually. Therefore, the unwanted operations are mapped to actions of
+    * type Noop.
+    *
+    * @param operationFilter the filter from the sync stream parameters
+    * @return the flow that filters operations
+    */
+  private def filterOperations(operationFilter: OperationFilter): Flow[SyncStageResult, SyncStageResult, NotUsed] =
+    Flow[SyncStageResult].map { result =>
+      result.elementResult match
+        case Right(operations) if operations.exists(op => !operationFilter(op)) =>
+          val filteredOperations = operations map { op =>
+            if operationFilter(op) then op
+            else op.copy(action = SyncTypes.SyncAction.ActionNoop)
+          }
+          result.copy(elementResult = Right(filteredOperations))
+        case _ => result
+    }
