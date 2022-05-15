@@ -83,7 +83,7 @@ class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport 
     */
   private implicit def executionContext: ExecutionContext = system.executionContext
 
-  "ProtocolOperationHandler" should "handle an operation to remove a file" in {
+  "ProtocolOperationHandler" should "handle an operation to remove a remote file" in {
     val op = createOp(TestFile, ActionRemove)
     val protocol = mock[SyncProtocol]
     when(protocol.removeFile(ElementID)).thenReturn(Future.successful(()))
@@ -93,7 +93,17 @@ class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport 
     verify(protocol).removeFile(ElementID)
   }
 
-  it should "handle an operation to remove a folder" in {
+  it should "handle an operation to remove a local file" in {
+    val op = createOp(TestFile, ActionLocalRemove)
+    val protocol = mock[SyncProtocol]
+    when(protocol.removeFile(ElementID)).thenReturn(Future.successful(()))
+    val handler = new ProtocolOperationHandler(null, protocol)
+
+    futureResult(handler.execute(op))
+    verify(protocol).removeFile(ElementID)
+  }
+
+  it should "handle an operation to remove a remote folder" in {
     val op = createOp(TestFolder, ActionRemove)
     val protocol = mock[SyncProtocol]
     when(protocol.removeFolder(ElementID)).thenReturn(Future.successful(()))
@@ -103,7 +113,17 @@ class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport 
     verify(protocol).removeFolder(ElementID)
   }
 
-  it should "handle an operation to create a folder" in {
+  it should "handle an operation to remove a local folder" in {
+    val op = createOp(TestFolder, ActionLocalRemove)
+    val protocol = mock[SyncProtocol]
+    when(protocol.removeFolder(ElementID)).thenReturn(Future.successful(()))
+    val handler = new ProtocolOperationHandler(null, protocol)
+
+    futureResult(handler.execute(op))
+    verify(protocol).removeFolder(ElementID)
+  }
+
+  it should "handle an operation to create a remote folder" in {
     val op = createOp(TestFolder, ActionCreate, dstID = null)
     val protocol = mock[SyncProtocol]
     when(protocol.createFolder(ElementParent, ElementName, TestFolder)).thenReturn(Future.successful(()))
@@ -113,29 +133,64 @@ class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport 
     verify(protocol).createFolder(ElementParent, ElementName, TestFolder)
   }
 
-  it should "handle an operation to create a file" in {
-    val op = createOp(TestFile, ActionCreate, dstID = null)
+  it should "handle an operation to create a local folder" in {
+    val op = createOp(TestFolder, ActionLocalCreate, dstID = null)
     val protocol = mock[SyncProtocol]
-    val downloadProtocol = mock[SyncProtocol]
-    when(downloadProtocol.downloadFile(TestFile.id)).thenReturn(Future.successful(FileContent))
-    when(protocol.createFile(ElementParent, ElementName, TestFile, FileContent)).thenReturn(Future.successful(()))
-    val handler = new ProtocolOperationHandler(protocol, downloadProtocol)
+    when(protocol.createFolder(ElementParent, ElementName, TestFolder)).thenReturn(Future.successful(()))
+    val handler = new ProtocolOperationHandler(null, protocol)
 
     futureResult(handler.execute(op))
-    verify(protocol).createFile(ElementParent, ElementName, TestFile, FileContent)
+    verify(protocol).createFolder(ElementParent, ElementName, TestFolder)
   }
 
-  it should "handle an operation to override a file" in {
-    val DstFile = TestFile.copy(id = ElementID)
-    val op = createOp(TestFile, ActionOverride)
-    val protocol = mock[SyncProtocol]
-    val downloadProtocol = mock[SyncProtocol]
-    when(downloadProtocol.downloadFile(TestFile.id)).thenReturn(Future.successful(FileContent))
-    when(protocol.updateFile(DstFile, FileContent)).thenReturn(Future.successful(()))
-    val handler = new ProtocolOperationHandler(protocol, downloadProtocol)
+  it should "handle an operation to create a remote file" in {
+    val op = createOp(TestFile, ActionCreate, dstID = null)
+    val remoteProtocol = mock[SyncProtocol]
+    val localProtocol = mock[SyncProtocol]
+    when(localProtocol.downloadFile(TestFile.id)).thenReturn(Future.successful(FileContent))
+    when(remoteProtocol.createFile(ElementParent, ElementName, TestFile, FileContent)).thenReturn(Future.successful(()))
+    val handler = new ProtocolOperationHandler(remoteProtocol, localProtocol)
 
     futureResult(handler.execute(op))
-    verify(protocol).updateFile(DstFile, FileContent)
+    verify(remoteProtocol).createFile(ElementParent, ElementName, TestFile, FileContent)
+  }
+
+  it should "handle an operation to create a local file" in {
+    val op = createOp(TestFile, ActionLocalCreate, dstID = null)
+    val remoteProtocol = mock[SyncProtocol]
+    val localProtocol = mock[SyncProtocol]
+    when(remoteProtocol.downloadFile(TestFile.id)).thenReturn(Future.successful(FileContent))
+    when(localProtocol.createFile(ElementParent, ElementName, TestFile, FileContent)).thenReturn(Future.successful(()))
+    val handler = new ProtocolOperationHandler(remoteProtocol, localProtocol)
+
+    futureResult(handler.execute(op))
+    verify(localProtocol).createFile(ElementParent, ElementName, TestFile, FileContent)
+  }
+
+  it should "handle an operation to override a remote file" in {
+    val DstFile = TestFile.copy(id = ElementID)
+    val op = createOp(TestFile, ActionOverride)
+    val remoteProtocol = mock[SyncProtocol]
+    val localProtocol = mock[SyncProtocol]
+    when(localProtocol.downloadFile(TestFile.id)).thenReturn(Future.successful(FileContent))
+    when(remoteProtocol.updateFile(DstFile, FileContent)).thenReturn(Future.successful(()))
+    val handler = new ProtocolOperationHandler(remoteProtocol, localProtocol)
+
+    futureResult(handler.execute(op))
+    verify(remoteProtocol).updateFile(DstFile, FileContent)
+  }
+
+  it should "handle an operation to override a local file" in {
+    val DstFile = TestFile.copy(id = ElementID)
+    val op = createOp(TestFile, ActionLocalOverride)
+    val remoteProtocol = mock[SyncProtocol]
+    val localProtocol = mock[SyncProtocol]
+    when(remoteProtocol.downloadFile(TestFile.id)).thenReturn(Future.successful(FileContent))
+    when(localProtocol.updateFile(DstFile, FileContent)).thenReturn(Future.successful(()))
+    val handler = new ProtocolOperationHandler(remoteProtocol, localProtocol)
+
+    futureResult(handler.execute(op))
+    verify(localProtocol).updateFile(DstFile, FileContent)
   }
 
   it should "handle a Noop" in {
@@ -148,7 +203,7 @@ class ProtocolOperationHandlerSpec extends AnyFlatSpec with ActorTestKitSupport 
   }
 
   it should "handle an unexpected operation" in {
-    val op = createOp(null, ActionRemove)
+    val op = createOp(TestFolder, ActionOverride)
     val handler = new ProtocolOperationHandler(mock[SyncProtocol], null)
 
     val exception = expectFailedFuture[IllegalStateException](handler.execute(op))
