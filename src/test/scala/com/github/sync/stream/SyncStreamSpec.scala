@@ -237,8 +237,10 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
   private def startStream[TOTAL, ERROR](params: SyncStream.MirrorStreamParams[TOTAL, ERROR]):
   Future[SyncStream.SyncStreamMat[TOTAL, ERROR]] =
     import system.dispatcher
-    val graph = SyncStream.createMirrorStream(params)
-    graph.run()
+    for
+      graph <- SyncStream.createMirrorStream(params)
+      result <- graph.run()
+    yield result
 
   /**
     * Constructs and runs a test mirror stream based on the given parameters.

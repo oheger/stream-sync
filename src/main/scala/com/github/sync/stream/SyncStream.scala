@@ -158,18 +158,18 @@ object SyncStream:
     })
 
   /**
-    * Returns a ''RunnableGraph'' representing the mirror stream for the
+    * Constructs a ''RunnableGraph'' representing the mirror stream for the
     * parameters provided.
     *
     * @param params the parameters of the mirror stream
     * @param ec     the execution context
     * @tparam TOTAL the type of the value produced by the total sink
     * @tparam ERROR the type of the value produced by the error sink
-    * @return the graph for the mirror stream
+    * @return the ''Future'' for the graph for the mirror stream
     */
   def createMirrorStream[TOTAL, ERROR](params: MirrorStreamParams[TOTAL, ERROR])
                                       (implicit ec: ExecutionContext):
-  RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]] =
+  Future[RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]]] = Future {
     val filterOperations = Flow[SyncOperation].filter(params.operationFilter)
     val filterError = Flow[SyncOperationResult].filter(_.optFailure.isDefined)
     val sourceKS = params.optKillSwitch.fold(params.source) { ks =>
@@ -185,6 +185,7 @@ object SyncStream:
           broadcastSink ~> filterError ~> sinkError.in
           ClosedShape
     })
+  }
 
   /**
     * Constructs a ''RunnableGraph'' representing the sync stream for the

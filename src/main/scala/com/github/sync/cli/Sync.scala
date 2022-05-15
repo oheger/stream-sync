@@ -203,7 +203,7 @@ object Sync:
                                  config: SyncConfig,
                                  protocolHolder: SyncProtocolHolder)
                                 (implicit ec: ExecutionContext):
-  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] = Future {
+  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
     val sinkTotal = createCountSinkWithOptionalLogging(config.logConfig.logFilePath, errorLog = false)
     val sinkError = createErrorSink(config.logConfig.errorLogFilePath)
     val sinkSuccess = Flow[SyncOperationResult].filterNot { result =>
@@ -219,8 +219,7 @@ object Sync:
       Supervision.Resume
     }
 
-    SyncStream.createMirrorStream(params).withAttributes(ActorAttributes.supervisionStrategy(decider))
-  }
+    SyncStream.createMirrorStream(params) map(_.withAttributes(ActorAttributes.supervisionStrategy(decider)))
 
   /**
     * Creates the ''Sink'' that receives all failed sync operation results. The
