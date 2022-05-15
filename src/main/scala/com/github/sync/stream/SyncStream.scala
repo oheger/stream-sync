@@ -238,6 +238,53 @@ object SyncStream:
     }
 
   /**
+    * Constructs a ''RunnableGraph'' for a stream that imports the local state
+    * for a sync stream. This function can be used when setting up a new sync
+    * stream for an already existing local folder structure. The stream
+    * returned by this function iterates over the local source are writes all
+    * encountered elements into the local state file. Based on this, future
+    * changes can be detected. Note that only parts of the parameters are
+    * evaluated; for instance, the remote source is ignored. Also, as there
+    * cannot be errors for single elements, the error sink will always yield an
+    * empty result. The total sink is passed synthetic operations to create new
+    * local elements for each element emitted by the local source.
+    *
+    * @param params the parameters of the sync stream
+    * @param ec     the execution context
+    * @tparam TOTAL the type of the value produced by the total sink
+    * @tparam ERROR the type of the value produced by the error sink
+    * @return
+    */
+  def createStateImportStream[TOTAL, ERROR](params: SyncStreamParams[TOTAL, ERROR])
+                                           (implicit ec: ExecutionContext, mat: Materializer):
+  Future[RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]]] = Future {
+    val stateFolder = LocalState.LocalStateFolder(params.stateFolder, params.streamName)
+    val stateSink = LocalState.localStateSink(stateFolder)
+
+    RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError, stateSink)(syncStreamMat) {
+      implicit builder =>
+        (sinkTotal, sinkError, sinkState) =>
+          import GraphDSL.Implicits.*
+          val broadcastResults = builder.add(Broadcast[FsElement](2))
+          val broadcastSink = builder.add(Broadcast[SyncOperationResult](2))
+          val mapState = builder.add(Flow[FsElement].map { elem =>
+            LocalState.LocalElementState(elem, removed = false)
+          })
+          val mapOp = builder.add(Flow[FsElement].map { elem =>
+            SyncOperationResult(SyncOperation(elem, SyncTypes.SyncAction.ActionLocalCreate, elem.level, elem.id),
+              optFailure = None)
+          })
+          val filterError = builder.add(Flow[SyncOperationResult].filter(_.optFailure.isDefined))
+
+          params.localSource ~> broadcastResults ~> mapState ~> sinkState
+          broadcastResults ~> mapOp ~> broadcastSink ~> sinkTotal
+          broadcastSink ~> filterError ~> sinkError.in
+          ClosedShape
+    })
+
+  }
+
+  /**
     * Creates a ''Sink'' that logs the received [[SyncOperation]]s to a file.
     * Optionally, the sink can be configured to log only failed operations,
     * together with the exceptions causing the failures. In this mode, the sink

@@ -536,3 +536,24 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val state = readLocalState()
     state should contain theSameElementsInOrderAs expState
   }
+
+  it should "create an import stream" in {
+    val elements = (1 to 8) map (idx => createFile(idx))
+    val params = syncParams(Source(elements), Source.empty, collectingSink, collectingSink)
+    val expOps = elements map { elem =>
+      val op = SyncOperation(elem, SyncAction.ActionLocalCreate, elem.level, elem.id)
+      SyncOperationResult(op, optFailure = None)
+    }
+    val expState = elements map (elem => LocalState.LocalElementState(elem, removed = false))
+
+    import system.dispatcher
+    val result = futureResult(for
+      graph <- SyncStream.createStateImportStream(params)
+      res <- graph.run()
+    yield res)
+
+    result.errorSinkMat shouldBe empty
+    result.totalSinkMat.reverse should contain theSameElementsInOrderAs expOps
+    val state = readLocalState()
+    state should contain theSameElementsInOrderAs expState
+  }
