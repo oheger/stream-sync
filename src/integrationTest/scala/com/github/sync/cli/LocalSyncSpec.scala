@@ -108,7 +108,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val options = Array("--filter", "exclude:*.tmp", "--foo", "bar")
 
     val output = checkSyncOutput(options, "<sourceURI>", "<destinationURI>",
-      SyncParameterManager.DryRunOption, SyncParameterManager.TimeoutOption,
+      SyncCliStreamConfig.DryRunOption, SyncCliStreamConfig.TimeoutOption,
       SyncParameterManager.LogFileOption, FilterManager.ArgCommonFilter, FilterManager.ArgCreateFilter,
       "--" + CliActorSystemLifeCycle.FileOption)
     output should not include "src-" + SyncCliStructureConfig.PropOneDrivePath

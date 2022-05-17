@@ -23,6 +23,7 @@ import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractio
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.FilterManager.SyncFilterData
+import com.github.sync.cli.SyncCliStreamConfig.StreamConfig
 import com.github.sync.cli.SyncParameterManager.*
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 import com.github.sync.oauth.SyncNoAuth
@@ -54,7 +55,7 @@ object SyncParameterManagerSpec:
 
   /** A map with test parameter values. */
   private val ArgsMap = Map(ParameterParser.InputParameter.key -> List(SourceUri, DestinationUri),
-    SyncParameterManager.TimeoutOption -> List(TimeoutValue.toString))
+    SyncCliStreamConfig.TimeoutOption -> List(TimeoutValue.toString))
 
   /**
     * Runs the sync config processor on the given map with parameters and 
@@ -163,42 +164,10 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
   }
 
   it should "not return a single option value if there are multiple" in {
-    val argsMap = ArgsMap + (SyncParameterManager.TimeoutOption -> List("100", "200"))
+    val argsMap = ArgsMap + (SyncCliStreamConfig.TimeoutOption -> List("100", "200"))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      SyncParameterManager.TimeoutOption, "Single value expected")
-  }
-
-  it should "return a default dry-run mode" in {
-    val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-    config.streamConfig.dryRun shouldBe false
-  }
-
-  it should "support enabling the dry-run mode" in {
-    val argsMap = ArgsMap + (SyncParameterManager.DryRunOption -> List("true"))
-
-    val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.streamConfig.dryRun shouldBe true
-  }
-
-  it should "return a default timeout if no timeout option is provided" in {
-    val argsMap = ArgsMap - SyncParameterManager.TimeoutOption
-
-    val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.streamConfig.timeout should be(SyncParameterManager.DefaultTimeout)
-  }
-
-  it should "return the configured timeout option value" in {
-    val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-    config.streamConfig.timeout should be(Timeout(TimeoutValue.seconds))
-  }
-
-  it should "handle an invalid timeout value" in {
-    val timeoutStr = "invalidTimeout!"
-    val argsMap = ArgsMap + (SyncParameterManager.TimeoutOption -> List(timeoutStr))
-
-    expectFailedFuture(extractSyncConfig(argsMap),
-      SyncParameterManager.TimeoutOption, timeoutStr)
+      SyncCliStreamConfig.TimeoutOption, "Single value expected")
   }
 
   it should "have an undefined log file option if none is specified" in {
@@ -252,68 +221,6 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
     expectFailedFuture(extractSyncConfig(argsMap),
       SyncParameterManager.SyncLogOption, "Single value expected")
-  }
-
-  it should "handle an undefined option for the file times threshold" in {
-    val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-
-    config.streamConfig.ignoreTimeDelta should be(None)
-  }
-
-  it should "evaluate the threshold for file time deltas" in {
-    val Delta = 28
-    val argsMap = ArgsMap + (SyncParameterManager.IgnoreTimeDeltaOption -> List(Delta.toString))
-
-    val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.streamConfig.ignoreTimeDelta.get.deltaSec should be(Delta)
-  }
-
-  it should "handle an invalid threshold for file time deltas" in {
-    val InvalidValue = "not a threshold for a time delta!"
-    val argsMap = ArgsMap + (SyncParameterManager.IgnoreTimeDeltaOption -> List(InvalidValue))
-
-    expectFailedFuture(extractSyncConfig(argsMap),
-      InvalidValue, SyncParameterManager.IgnoreTimeDeltaOption)
-  }
-
-  it should "handle an undefined option for the operations per unit" in {
-    val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-
-    config.streamConfig.opsPerUnit should be(None)
-  }
-
-  it should "evaluate the threshold for the operations per unit" in {
-    val OpsCount = 17
-    val argsMap = ArgsMap + (SyncParameterManager.OpsPerUnitOption -> List(OpsCount.toString))
-
-    val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.streamConfig.opsPerUnit should be(Some(OpsCount))
-  }
-
-  it should "handle an invalid threshold for the operations per second" in {
-    val InvalidValue = "not a valid number of ops per sec"
-    val argsMap = ArgsMap + (SyncParameterManager.OpsPerUnitOption -> List(InvalidValue))
-
-    expectFailedFuture(extractSyncConfig(argsMap),
-      InvalidValue, SyncParameterManager.OpsPerUnitOption)
-  }
-
-  it should "evaluate the time unit for throttling" in {
-    val namesToUnits = Map("s" -> Throttle.TimeUnit.Second, "second" -> Throttle.TimeUnit.Second,
-      "m" -> Throttle.TimeUnit.Minute, "MINUTE" -> Throttle.TimeUnit.Minute,
-      "H" -> Throttle.TimeUnit.Hour, "hour" -> Throttle.TimeUnit.Hour)
-
-    namesToUnits foreach { (name, unit) =>
-      val argsMap = ArgsMap + (SyncParameterManager.ThrottleUnitOption -> List(name))
-      val (config, _) = futureResult(extractSyncConfig(argsMap))
-      config.streamConfig.throttleUnit should be(unit)
-    }
-  }
-
-  it should "set a default for the time unit for throttling" in {
-    val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-
-    config.streamConfig.throttleUnit should be(Throttle.TimeUnit.Second)
   }
 
   it should "return correct default options related to encryption" in {
@@ -428,23 +335,23 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       SyncParameterManager.SourceCryptModeOption -> List("files"),
       SyncParameterManager.DestCryptModeOption -> List("files"))
     val argsMap = ArgsMap ++ otherOptions +
-      (SyncParameterManager.IgnoreTimeDeltaOption -> List("1"))
+      (SyncCliStreamConfig.IgnoreTimeDeltaOption -> List("1"))
 
     val (_, updCtx) = futureResult(extractSyncConfig(argsMap))
-    accessedKeys(updCtx) should contain allOf(SyncParameterManager.DryRunOption,
-      SyncParameterManager.TimeoutOption, SyncParameterManager.LogFileOption, SyncParameterManager.SyncLogOption,
-      SyncParameterManager.IgnoreTimeDeltaOption, SyncParameterManager.OpsPerUnitOption,
+    accessedKeys(updCtx) should contain allOf(SyncCliStreamConfig.DryRunOption,
+      SyncCliStreamConfig.TimeoutOption, SyncParameterManager.LogFileOption, SyncParameterManager.SyncLogOption,
+      SyncCliStreamConfig.IgnoreTimeDeltaOption, SyncCliStreamConfig.OpsPerUnitOption,
       SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption,
       SyncParameterManager.SourceCryptModeOption, SyncParameterManager.DestCryptModeOption)
   }
 
   it should "combine multiple error messages when parsing the sync config" in {
     val argsMap = Map(ParameterParser.InputParameter.key -> List(SourceUri),
-      SyncParameterManager.TimeoutOption -> List("invalidTimeout"),
+      SyncCliStreamConfig.TimeoutOption -> List("invalidTimeout"),
       SyncParameterManager.CryptCacheSizeOption -> List("invalidCacheSize"))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      "destinationURI: Mandatory parameter", SyncParameterManager.TimeoutOption,
+      "destinationURI: Mandatory parameter", SyncCliStreamConfig.TimeoutOption,
       SyncParameterManager.CryptCacheSizeOption)
   }
 

@@ -24,7 +24,8 @@ import akka.util.Timeout
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.*
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
-import com.github.sync.cli.SyncParameterManager.{LogConfig, StreamConfig, SyncConfig}
+import com.github.sync.cli.SyncCliStreamConfig.StreamConfig
+import com.github.sync.cli.SyncParameterManager.{LogConfig, SyncConfig}
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig}
 import com.github.sync.protocol.gdrive.GoogleDriveProtocolFactory
