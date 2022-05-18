@@ -24,7 +24,7 @@ import akka.util.Timeout
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.*
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
-import com.github.sync.cli.SyncCliStreamConfig.StreamConfig
+import com.github.sync.cli.SyncCliStreamConfig.{MirrorStreamConfig, StreamConfig}
 import com.github.sync.cli.SyncParameterManager.{LogConfig, SyncConfig}
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig}
@@ -55,7 +55,7 @@ object SyncSetupSpec:
   /** A test sync configuration. */
   private val TestSyncConfig = SyncConfig(srcUri = "someSrcUri", dstUri = "someDstUri", srcConfig = null,
     dstConfig = null, logConfig = LogConfig(None, None, None, Level.DEBUG), cryptConfig = null,
-    streamConfig = StreamConfig(false, SyncTimeout, None, None, Throttle.TimeUnit.Second),
+    streamConfig = StreamConfig(false, SyncTimeout, None, None, Throttle.TimeUnit.Second, MirrorStreamConfig),
     filterData = null, switched = false)
 
   /** A test configuration for HTTP actors. */

@@ -176,3 +176,9 @@ class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers :
 
     config.throttleUnit should be(Throttle.TimeUnit.Second)
   }
+
+  it should "assume mirror mode per default" in {
+    val config = extractConfig(Map.empty)
+
+    config.modeConfig should be(SyncCliStreamConfig.MirrorStreamConfig)
+  }

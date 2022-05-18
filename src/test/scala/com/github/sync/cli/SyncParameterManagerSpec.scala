@@ -23,7 +23,7 @@ import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractio
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.FilterManager.SyncFilterData
-import com.github.sync.cli.SyncCliStreamConfig.StreamConfig
+import com.github.sync.cli.SyncCliStreamConfig.{MirrorStreamConfig, StreamConfig}
 import com.github.sync.cli.SyncParameterManager.*
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 import com.github.sync.oauth.SyncNoAuth
@@ -364,7 +364,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       syncLogPath = Some(Paths get "syncLog"), logLevel = Level.INFO)
     val streamConfig = StreamConfig(dryRun = false, timeout = 1.minute,
       ignoreTimeDelta = Some(IgnoreTimeDelta(100.seconds)),
-      opsPerUnit = Some(100), throttleUnit = Throttle.TimeUnit.Minute)
+      opsPerUnit = Some(100), throttleUnit = Throttle.TimeUnit.Minute, MirrorStreamConfig)
     val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
       dstConfig = mock[StructureAuthConfig], logConfig = logConfig, cryptConfig = orgCryptConfig,
       streamConfig = streamConfig, filterData = mock[SyncFilterData], switched = true)

@@ -20,7 +20,8 @@ import akka.util.Timeout
 import com.github.scli.ParameterExtractor.{CliExtractor, createRepresentation, optionValue, switchValue}
 import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 
-import scala.util.Try
+import java.nio.file.Path
+import scala.util.{Success, Try}
 import scala.concurrent.duration.*
 
 /**
@@ -95,6 +96,49 @@ object SyncCliStreamConfig:
       |'M' or 'Minute', 'H' or 'Hour' (case does not matter). For instance, the options '--throttle 1000 \
       |--throttle-unit Hour' would define a threshold of 1000 operations per hour. Defaults to 'Second'.""".stripMargin
 
+  /**
+    * Name of the option that defines the path where to store local state data
+    * for sync streams.
+    */
+  final val StatePathOption = "state-path"
+
+  /** Help text for the state path option. */
+  final val StatePathHelp =
+    """Sets the path where local state information about sync streams is stored. This is per default a subfolder \
+      |of the user's home directory. The path is created automatically if it does not exist yet.""".stripMargin
+
+  /** Name of the option that allows setting a name for a sync stream. */
+  final val StreamNameOption = "stream-name"
+
+  /** Help text for the stream name option. */
+  final val StreamNameHelp =
+    """Allows setting a nam for the current sync stream. This is mainly used to derive the names of files \
+      |storing local state information. If no name is specified, a (non-readable) name is generated from the URLs \
+      |defining the local and the remote structures.""".stripMargin
+
+  /** Name of the option to import the local state of a sync stream. */
+  final val ImportStateOption = "import-state"
+
+  /** Help text for the import state option. */
+  final val ImportStateHelp =
+    """Specifies that only the local structure is to be imported into the local state. This import should be done \
+      |once to setup the sync stream if local data is already available.""".stripMargin
+
+  /** Name of the switch option that enables mirror mode. */
+  final val MirrorMode = "mirror"
+
+  /** Help text for the mirror mode option. */
+  final val MirrorModeHelp =
+    """Enables mirror mode. In this mode, a destination structure is modified to become an exact mirror of a \
+      |source structure.""".stripMargin
+
+  /** Name of the switch option that enables sync mode. */
+  final val SyncMode = "sync"
+
+  /** Help text for the sync mode option. */
+  final val SyncModeHelp =
+    """Enables sync mode. In this mode, the changes from a local and a remote structure are synced."""
+
   /** The default timeout for sync operations. */
   final val DefaultTimeout: Timeout = Timeout(1.minute)
 
@@ -107,9 +151,33 @@ object SyncCliStreamConfig:
     "s" -> Throttle.TimeUnit.Second, "second" -> Throttle.TimeUnit.Second)
 
   /**
+    * A trait defining a sub-configuration for a stream that depends on the 
+    * type of the stream. Concrete subclasses declare options specific to
+    * concrete stream types.
+    */
+  sealed trait StreamModeConfig
+
+  /**
+    * A data class defining specific parameters for sync streams.
+    *
+    * @param statePath   the path where to store files with state information
+    * @param streamName  the name of the stream
+    * @param stateImport flag whether to import local state only
+    */
+  case class SyncStreamConfig(statePath: Path,
+                              streamName: String,
+                              stateImport: Boolean) extends StreamModeConfig
+
+  /**
+    * An object representing the configuration of a mirror stream. Currently,
+    * there are no specific options for mirror streams, but this may change
+    * in future.
+    */
+  case object MirrorStreamConfig extends StreamModeConfig
+
+  /**
     * A configuration class that combines all the properties of the sync
-    * stream that are not related to a specific category, such as logging or
-    * cryptography.
+    * stream that are not related to a specific category.
     *
     * @param dryRun          flag whether only a dry-run should be done
     * @param timeout         a timeout for sync operations
@@ -118,12 +186,14 @@ object SyncCliStreamConfig:
     * @param opsPerUnit      optional restriction for the number of sync
     *                        operations per time unit
     * @param throttleUnit    defines the time unit for throttling
+    * @param modeConfig      the mode-specific config                        
     */
   case class StreamConfig(dryRun: Boolean,
                           timeout: Timeout,
                           ignoreTimeDelta: Option[IgnoreTimeDelta],
                           opsPerUnit: Option[Int],
-                          throttleUnit: Throttle.TimeUnit)
+                          throttleUnit: Throttle.TimeUnit,
+                          modeConfig: StreamModeConfig)
 
   /**
     * Returns an extractor that extracts the parameters related to the stream.
@@ -213,5 +283,5 @@ object SyncCliStreamConfig:
                                  triedOpsPerUnit: Try[Option[Int]],
                                  triedThrottleUnit: Try[Throttle.TimeUnit]): Try[StreamConfig] =
     createRepresentation(triedDryRun, triedTimeout, triedTimeDelta, triedOpsPerUnit,
-      triedThrottleUnit)(StreamConfig.apply)
+      triedThrottleUnit, Success(MirrorStreamConfig))(StreamConfig.apply)
 
