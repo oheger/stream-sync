@@ -25,6 +25,7 @@ import com.github.sync.stream.Throttle
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import java.nio.file.Paths
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.*
 
@@ -181,4 +182,34 @@ class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers :
     val config = extractConfig(Map.empty)
 
     config.modeConfig should be(SyncCliStreamConfig.MirrorStreamConfig)
+  }
+
+  it should "allow specifying mirror mode explicitly" in {
+    val argsMap = Map(SyncCliStreamConfig.MirrorMode -> "true")
+
+    val config = extractConfig(argsMap)
+    config.modeConfig should be(SyncCliStreamConfig.MirrorStreamConfig)
+  }
+
+  it should "allow specifying the options of a sync stream" in {
+    val syncConfig = SyncCliStreamConfig.SyncStreamConfig(statePath = Paths.get("the", "state", "path"),
+      stateImport = false, streamName = "myTestStream")
+    val argsMap = Map(SyncCliStreamConfig.SyncMode -> "true",
+      SyncCliStreamConfig.StatePathOption -> syncConfig.statePath.toString,
+      SyncCliStreamConfig.StreamNameOption -> syncConfig.streamName)
+
+    val config = extractConfig(argsMap)
+    config.modeConfig should be(syncConfig)
+  }
+
+  it should "allow setting the state import flag for a sync stream" in {
+    val syncConfig = SyncCliStreamConfig.SyncStreamConfig(statePath = Paths.get( "state", "path"),
+      stateImport = true, streamName = "myTestStream")
+    val argsMap = Map(SyncCliStreamConfig.SyncMode -> "true",
+      SyncCliStreamConfig.StatePathOption -> syncConfig.statePath.toString,
+      SyncCliStreamConfig.StreamNameOption -> syncConfig.streamName,
+      SyncCliStreamConfig.ImportStateOption -> "true")
+
+    val config = extractConfig(argsMap)
+    config.modeConfig should be(syncConfig)
   }

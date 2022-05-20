@@ -17,7 +17,7 @@
 package com.github.sync.cli
 
 import akka.util.Timeout
-import com.github.scli.ParameterExtractor.{CliExtractor, createRepresentation, optionValue, switchValue}
+import com.github.scli.ParameterExtractor.{CliExtractor, conditionalGroupValue, constantExtractor, createRepresentation, excludingSwitches, optionValue, switchValue}
 import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 
 import java.nio.file.Path
@@ -207,7 +207,8 @@ object SyncCliStreamConfig:
       timeDelta <- ignoreTimeDeltaExtractor()
       opsPerUnit <- opsPerUnitExtractor()
       throttleUnit <- throttleTimeUnitExtractor()
-    yield createStreamConfig(dryRun, timeout, timeDelta, opsPerUnit, throttleUnit)
+      modeConfig <- modeConfigExtractor
+    yield createStreamConfig(dryRun, timeout, timeDelta, opsPerUnit, throttleUnit, modeConfig)
 
   /**
     * Returns an extractor for the dry-run switch.
@@ -268,6 +269,53 @@ object SyncCliStreamConfig:
       .mandatory
 
   /**
+    * Returns an extractor that extracts the [[StreamModeConfig]] for the
+    * current stream. The mode config is determined based on the presence of
+    * the ''mirror'' or ''sync'' switches.
+    *
+    * @return the extractor for the mode config
+    */
+  private def modeConfigExtractor: CliExtractor[Try[StreamModeConfig]] =
+    val extMirrorMode = switchValue(MirrorMode, Some(MirrorModeHelp)).alias("M")
+    val extSyncMode = switchValue(SyncMode, Some(SyncModeHelp))
+    val extMode = excludingSwitches(allowOverride = false, extMirrorMode, extSyncMode)
+      .fallbackValue(MirrorMode)
+      .mandatory
+
+    val extMap = Map(MirrorMode -> mirrorConfigExtractor,
+      SyncMode -> syncStreamConfigExtractor)
+    conditionalGroupValue(extMode, extMap)
+
+  /**
+    * Returns an extractor that extracts the configuration of a mirror stream.
+    *
+    * @return the extractor for the [[MirrorStreamConfig]]
+    */
+  private def mirrorConfigExtractor: CliExtractor[Try[StreamModeConfig]] =
+  // Note: Currently, there are no options specific to mirror streams. If this changes,
+  // new options can be added here.
+    constantExtractor(Try(MirrorStreamConfig))
+
+  /**
+    * Returns an extractor that extracts the configuration of a sync stream.
+    *
+    * @return the extractor for the [[SyncCliStreamConfig]]
+    */
+  private def syncStreamConfigExtractor: CliExtractor[Try[StreamModeConfig]] =
+    val extStatePath = optionValue(StatePathOption, Some(StatePathHelp))
+      .toPath
+      .mandatory
+    val extStreamName = optionValue(StreamNameOption, Some(StreamNameHelp))
+      .mandatory
+    val extStateImport = switchValue(ImportStateOption, Some(ImportStateHelp))
+
+    for
+      statePath <- extStatePath
+      streamName <- extStreamName
+      stateImport <- extStateImport
+    yield createSyncStreamConfig(statePath, streamName, stateImport)
+
+  /**
     * Tries to construct a ''StreamConfig'' object from the passed in components.
     *
     * @param triedDryRun       the dry-run component
@@ -275,13 +323,28 @@ object SyncCliStreamConfig:
     * @param triedTimeDelta    the ignore file time delta component
     * @param triedOpsPerUnit   the ops per unit component
     * @param triedThrottleUnit the throttle unit component
+    * @param triedModeConfig   the mode config component
     * @return a ''Try'' with the ''StreamConfig''
     */
   private def createStreamConfig(triedDryRun: Try[Boolean],
                                  triedTimeout: Try[Timeout],
                                  triedTimeDelta: Try[Option[IgnoreTimeDelta]],
                                  triedOpsPerUnit: Try[Option[Int]],
-                                 triedThrottleUnit: Try[Throttle.TimeUnit]): Try[StreamConfig] =
+                                 triedThrottleUnit: Try[Throttle.TimeUnit],
+                                 triedModeConfig: Try[StreamModeConfig]): Try[StreamConfig] =
     createRepresentation(triedDryRun, triedTimeout, triedTimeDelta, triedOpsPerUnit,
-      triedThrottleUnit, Success(MirrorStreamConfig))(StreamConfig.apply)
+      triedThrottleUnit, triedModeConfig)(StreamConfig.apply)
 
+  /**
+    * Tries to construct a [[SyncStreamConfig]] object from the passed in
+    * components.
+    *
+    * @param triedStatePath  the path to the local state component
+    * @param triedStreamName the stream name component
+    * @param triedImport     the import state component
+    * @return a ''Try'' with the config of the sync stream
+    */
+  private def createSyncStreamConfig(triedStatePath: Try[Path],
+                                     triedStreamName: Try[String],
+                                     triedImport: Try[Boolean]): Try[SyncStreamConfig] =
+    createRepresentation(triedStatePath, triedStreamName, triedImport)(SyncStreamConfig.apply)

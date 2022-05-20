@@ -56,7 +56,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, "ignored.tmp")
     createTestFile(dstFolder, "toBeRemoved.txt")
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--filter", "exclude:*.tmp")
+      "--filter", "exclude:*.tmp", "--mirror")
 
     val result = futureResult(runSync(options))
     result.totalOperations should be(result.successfulOperations)
@@ -327,7 +327,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val changedPath = createTestFile(dstFolder, ChangedFile, fileTime = Some(Time2))
     val logFile = createFileReference()
     val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
-      "--log", logFile.toAbsolutePath.toString, "--dst-time-zone", s"UTC+0$DeltaHours:00")
+      "--log", logFile.toAbsolutePath.toString, "--dst-time-zone", s"UTC+0$DeltaHours:00", "-M")
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(1)
