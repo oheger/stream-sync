@@ -176,6 +176,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     * @param filter        the filter for operations
     * @param optKillSwitch the optional kill switch
     * @param ignoreDelta   the ignore time delta
+    * @param dryRun        the dry-run flag
     * @tparam TOTAL the type of the total sink
     * @tparam ERROR the type of the error sink
     * @return
@@ -186,12 +187,13 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
                                        sinkError: Sink[SyncOperationResult, Future[ERROR]] = Sink.ignore,
                                        filter: SyncStream.OperationFilter = SyncStream.AcceptAllOperations,
                                        optKillSwitch: Option[SharedKillSwitch] = None,
-                                       ignoreDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero):
+                                       ignoreDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero,
+                                       dryRun: Boolean = false):
   SyncStream.SyncStreamParams[TOTAL, ERROR] =
     val baseParams = SyncStream.BaseStreamParams(processFlow = processingFlow, sinkTotal = sinkTotal,
       sinkError = sinkError, operationFilter = filter, optKillSwitch = optKillSwitch)
     SyncStream.SyncStreamParams(baseParams = baseParams, streamName = StreamName, stateFolder = testDirectory,
-      localSource = localSource, remoteSource = remoteSource, ignoreDelta = ignoreDelta)
+      localSource = localSource, remoteSource = remoteSource, ignoreDelta = ignoreDelta, dryRun = dryRun)
 
   /**
     * Writes a file with local state information with the given content.
@@ -533,6 +535,21 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
 
     val result = runStream(params)
     result.totalSinkMat.reverse should contain theSameElementsInOrderAs expOps
+    val state = readLocalState()
+    state should contain theSameElementsInOrderAs expState
+  }
+
+  it should "support a dry-run flag for sync streams" in {
+    val unchangedElement = createFile(1)
+    val changedElement = createFile(2, idType = "remote", deltaTime = 100)
+    val localElements = List(unchangedElement, createFile(2))
+    val remoteElements = List(createFile(1, idType = "remote"), changedElement)
+    writeLocalStateElements(localElements)
+    val params = syncParams(Source(localElements), Source(remoteElements), collectingSink, dryRun = true)
+    val expState = localElements map { elem => LocalState.LocalElementState(elem, removed = false) }
+
+    val result = runStream(params)
+    result.totalSinkMat should have size 2
     val state = readLocalState()
     state should contain theSameElementsInOrderAs expState
   }

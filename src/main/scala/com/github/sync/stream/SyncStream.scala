@@ -114,7 +114,9 @@ object SyncStream:
     *  - the source emitting the elements of the local folder structure;
     *  - the source emitting the elements of the remote folder structure;
     *  - a delta of timestamps to be ignored when comparing the last
-    *    modification dates of files
+    *    modification dates of files;
+    *  - a flag whether the stream should run in dry-run mode (in this case, no
+    *    updated local state is written)
     *
     * @param baseParams   the object with basic stream parameters
     * @param streamName   the name of the sync stream
@@ -123,6 +125,7 @@ object SyncStream:
     * @param remoteSource the source for the remote folder structure
     * @param ignoreDelta  a time difference that is to be ignored when
     *                     comparing two files
+    * @param dryRun       the dry-run flag
     * @tparam TOTAL the type of the value produced by the total sink
     * @tparam ERROR the type of the value produced by the error sink
     */
@@ -131,7 +134,8 @@ object SyncStream:
                                             stateFolder: Path,
                                             localSource: Source[FsElement, Any],
                                             remoteSource: Source[FsElement, Any],
-                                            ignoreDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero):
+                                            ignoreDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero,
+                                            dryRun: Boolean = false):
     export baseParams.*
 
   /**
@@ -202,7 +206,8 @@ object SyncStream:
                                     (implicit ec: ExecutionContext, mat: Materializer):
   Future[RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]]] =
     val stateFolder = LocalState.LocalStateFolder(params.stateFolder, params.streamName)
-    val stateSink = LocalState.localStateSink(stateFolder)
+    val stateSink = if params.dryRun then Sink.ignore
+    else LocalState.localStateSink(stateFolder)
     val killSwitch = params.optKillSwitch getOrElse KillSwitches.shared("dummy")
 
     LocalState.constructLocalStateSource(stateFolder) map { stateSource =>
@@ -387,7 +392,7 @@ object SyncStream:
     * @tparam ERROR the type of the error sink
     * @return a ''SyncStreamMat'' object with the combined result
     */
-  private def syncStreamMat[TOTAL, ERROR](matTotal: Future[TOTAL], matError: Future[ERROR], matState: Future[Path])
+  private def syncStreamMat[TOTAL, ERROR](matTotal: Future[TOTAL], matError: Future[ERROR], matState: Future[Any])
                                          (implicit ec: ExecutionContext): Future[SyncStreamMat[TOTAL, ERROR]] =
     createCombinedSinkMat(matState, mirrorStreamMat(matTotal, matError))
 
