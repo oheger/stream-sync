@@ -330,6 +330,16 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     config.logConfig.logLevel == Level.ERROR || config.logConfig.logLevel == Level.INFO shouldBe true
   }
 
+  it should "generate a default name for a sync stream" in {
+    val argsMap = ArgsMap + (SyncCliStreamConfig.SyncMode -> List("true"))
+
+    val (config, _) = futureResult(extractSyncConfig(argsMap))
+    config.streamConfig.modeConfig match
+      case syncConf: SyncCliStreamConfig.SyncStreamConfig =>
+        syncConf.streamName should be("6Bl-KvnXhq_Tqsj091YQTGdP4I0=")
+      case c => fail("Unexpected stream mode config: " + c)
+  }
+
   it should "mark all options contained in the sync config as accessed" in {
     val otherOptions = Map("foo" -> List("v1"), "bar" -> List("v2", "v3"),
       SyncParameterManager.SourceCryptModeOption -> List("files"),

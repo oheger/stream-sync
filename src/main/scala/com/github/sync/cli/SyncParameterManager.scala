@@ -335,7 +335,7 @@ object SyncParameterManager:
       DestinationUriOption)
     logConfig <- logConfigExtractor
     cryptConf <- cryptConfigExtractor
-    streamConf <- streamConfigExtractor
+    streamConf <- streamConfigExtractor(generateDefaultSyncStreamName(srcUri, dstUri))
     filters <- FilterManager.filterDataExtractor
     switched <- switchValue(SwitchOption, optHelp = Some(SwitchOptionHelp)).alias("S")
     _ <- CliActorSystemLifeCycle.FileExtractor
@@ -369,6 +369,18 @@ object SyncParameterManager:
                                triedSwitch: Try[Boolean]): Try[SyncConfig] =
     createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
       triedLogConfig, triedCryptConfig, triedStreamConfig, triedFilterData, triedSwitch)(SyncConfig.apply)
+
+  /**
+    * Generates a default name for a sync stream in case the user did not
+    * specify one.
+    *
+    * @param localUri  a ''Try'' for the local URI
+    * @param remoteUri a ''Try'' for the remote URI
+    * @return the default name for this sync stream
+    */
+  private def generateDefaultSyncStreamName(localUri: Try[String], remoteUri: Try[String]): String =
+  // The Tries should actually be successful when the default value is accessed.
+    SyncCliStreamConfig.streamNameForUris(localUri.getOrElse("local"), remoteUri.getOrElse("remote"))
 
   /**
     * Returns an extractor that extracts the source URI from the first input

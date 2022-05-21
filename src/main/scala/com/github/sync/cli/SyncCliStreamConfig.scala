@@ -146,6 +146,12 @@ object SyncCliStreamConfig:
   final val DefaultTimeout: Timeout = Timeout(1.minute)
 
   /**
+    * The default name of a folder storing local state information for sync
+    * streams. This folder is created in the user's home directory.
+    */
+  final val DefaultStateSubFolder = ".stream-sync"
+
+  /**
     * A map assigning the supported names for time units to the corresponding
     * objects.
     */
@@ -204,18 +210,19 @@ object SyncCliStreamConfig:
   /**
     * Returns an extractor that extracts the parameters related to the stream.
     *
+    * @param defaultStreamName a function to generate a stream name in case the
+    *                          user did not specify one
     * @return the extractor for the ''StreamConfig''
     */
-  def streamConfigExtractor: CliExtractor[Try[StreamConfig]] =
+  def streamConfigExtractor(defaultStreamName: => String): CliExtractor[Try[StreamConfig]] =
     for
       dryRun <- dryRunExtractor()
       timeout <- timeoutExtractor()
       timeDelta <- ignoreTimeDeltaExtractor()
       opsPerUnit <- opsPerUnitExtractor()
       throttleUnit <- throttleTimeUnitExtractor()
-      modeConfig <- modeConfigExtractor
+      modeConfig <- modeConfigExtractor(defaultStreamName)
     yield createStreamConfig(dryRun, timeout, timeDelta, opsPerUnit, throttleUnit, modeConfig)
-
   /**
     * Generates a (not readable) name for a sync stream based on the URIs for
     * the local and remote structures.
@@ -293,9 +300,10 @@ object SyncCliStreamConfig:
     * current stream. The mode config is determined based on the presence of
     * the ''mirror'' or ''sync'' switches.
     *
+    * @param defaultStreamName a default name for sync streams
     * @return the extractor for the mode config
     */
-  private def modeConfigExtractor: CliExtractor[Try[StreamModeConfig]] =
+  private def modeConfigExtractor(defaultStreamName: => String): CliExtractor[Try[StreamModeConfig]] =
     val extMirrorMode = switchValue(MirrorMode, Some(MirrorModeHelp)).alias("M")
     val extSyncMode = switchValue(SyncMode, Some(SyncModeHelp))
     val extMode = excludingSwitches(allowOverride = false, extMirrorMode, extSyncMode)
@@ -303,7 +311,7 @@ object SyncCliStreamConfig:
       .mandatory
 
     val extMap = Map(MirrorMode -> mirrorConfigExtractor,
-      SyncMode -> syncStreamConfigExtractor)
+      SyncMode -> syncStreamConfigExtractor(defaultStreamName))
     conditionalGroupValue(extMode, extMap)
 
   /**
@@ -319,13 +327,16 @@ object SyncCliStreamConfig:
   /**
     * Returns an extractor that extracts the configuration of a sync stream.
     *
+    * @param defaultStreamName a default name for a stream
     * @return the extractor for the [[SyncCliStreamConfig]]
     */
-  private def syncStreamConfigExtractor: CliExtractor[Try[StreamModeConfig]] =
+  private def syncStreamConfigExtractor(defaultStreamName: => String): CliExtractor[Try[StreamModeConfig]] =
     val extStatePath = optionValue(StatePathOption, Some(StatePathHelp))
+      .fallbackValue(s"${System.getProperty("user.home")}/$DefaultStateSubFolder")
       .toPath
       .mandatory
     val extStreamName = optionValue(StreamNameOption, Some(StreamNameHelp))
+      .fallbackValue(defaultStreamName)
       .mandatory
     val extStateImport = switchValue(ImportStateOption, Some(ImportStateHelp))
 

@@ -30,6 +30,8 @@ import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.*
 
 object SyncCliStreamConfigSpec:
+  /** A default name for sync streams. */
+  private val DefaultStreamName = "TestSyncStream"
 
   /**
     * Executes the extractor for the stream config against the parameters
@@ -40,7 +42,7 @@ object SyncCliStreamConfigSpec:
     */
   private def runConfigExtractor(args: Map[String, String]): (Try[StreamConfig], ExtractionContext) =
     val paramCtx = toExtractionContext(toParametersMap(args))
-    ParameterExtractor.runExtractor(SyncCliStreamConfig.streamConfigExtractor, paramCtx)
+    ParameterExtractor.runExtractor(SyncCliStreamConfig.streamConfigExtractor(DefaultStreamName), paramCtx)
 
   /**
     * Executes the extractor for the stream config against the parameters
@@ -224,7 +226,7 @@ class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers :
   }
 
   it should "allow setting the state import flag for a sync stream" in {
-    val syncConfig = SyncCliStreamConfig.SyncStreamConfig(statePath = Paths.get( "state", "path"),
+    val syncConfig = SyncCliStreamConfig.SyncStreamConfig(statePath = Paths.get("state", "path"),
       stateImport = true, streamName = "myTestStream")
     val argsMap = Map(SyncCliStreamConfig.SyncMode -> "true",
       SyncCliStreamConfig.StatePathOption -> syncConfig.statePath.toString,
@@ -233,4 +235,15 @@ class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers :
 
     val config = extractConfig(argsMap)
     config.modeConfig should be(syncConfig)
+  }
+
+  it should "use correct default values for the options of a sync stream" in {
+    val argsMap = Map(SyncCliStreamConfig.SyncMode -> "true")
+
+    extractConfig(argsMap).modeConfig match
+      case config: SyncCliStreamConfig.SyncStreamConfig =>
+        config.statePath should be(Paths.get(System.getProperty("user.home"), ".stream-sync"))
+        config.streamName should be(DefaultStreamName)
+        config.stateImport shouldBe false
+      case c => fail("Unexpected configuration class: " + c)
   }
