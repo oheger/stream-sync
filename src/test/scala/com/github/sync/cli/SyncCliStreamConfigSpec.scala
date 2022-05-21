@@ -178,6 +178,27 @@ class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers :
     config.throttleUnit should be(Throttle.TimeUnit.Second)
   }
 
+  it should "generate a stream name based on the URIs provided" in {
+    val LocalUri = "local://test/foo"
+    val RemoteUri = "remote://sync/structure"
+
+    val name1 = SyncCliStreamConfig.streamNameForUris(LocalUri, RemoteUri)
+    val name2 = SyncCliStreamConfig.streamNameForUris(LocalUri, RemoteUri)
+    name1 should be(name2)
+  }
+
+  it should "generate different stream names for different URIs" in {
+    val LocalUri = "local://test/foo"
+    val RemoteUri = "remote://sync/structure"
+
+    val name1 = SyncCliStreamConfig.streamNameForUris(LocalUri, RemoteUri)
+    val name2 = SyncCliStreamConfig.streamNameForUris(RemoteUri, LocalUri)
+    val name3 = SyncCliStreamConfig.streamNameForUris(LocalUri + "/bar", RemoteUri)
+    val name4 = SyncCliStreamConfig.streamNameForUris(LocalUri, RemoteUri + "/other")
+    val names = Set(name1, name2, name3, name4)
+    names should have size 4
+  }
+
   it should "assume mirror mode per default" in {
     val config = extractConfig(Map.empty)
 

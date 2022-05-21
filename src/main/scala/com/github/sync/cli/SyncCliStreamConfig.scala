@@ -20,9 +20,12 @@ import akka.util.Timeout
 import com.github.scli.ParameterExtractor.{CliExtractor, conditionalGroupValue, constantExtractor, createRepresentation, excludingSwitches, optionValue, switchValue}
 import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
-import scala.util.{Success, Try}
+import java.security.MessageDigest
+import java.util.Base64
 import scala.concurrent.duration.*
+import scala.util.{Success, Try}
 
 /**
   * A module defining CLI-related configuration parameters for the sync stream
@@ -150,6 +153,9 @@ object SyncCliStreamConfig:
     "m" -> Throttle.TimeUnit.Minute, "minute" -> Throttle.TimeUnit.Minute,
     "s" -> Throttle.TimeUnit.Second, "second" -> Throttle.TimeUnit.Second)
 
+  /** Name of the algorithm to generate hashes for sync stream names. */
+  private val NameHashAlgorithm = "SHA-1"
+
   /**
     * A trait defining a sub-configuration for a stream that depends on the 
     * type of the stream. Concrete subclasses declare options specific to
@@ -209,6 +215,20 @@ object SyncCliStreamConfig:
       throttleUnit <- throttleTimeUnitExtractor()
       modeConfig <- modeConfigExtractor
     yield createStreamConfig(dryRun, timeout, timeDelta, opsPerUnit, throttleUnit, modeConfig)
+
+  /**
+    * Generates a (not readable) name for a sync stream based on the URIs for
+    * the local and remote structures.
+    *
+    * @param localUri  the URI of the local structure
+    * @param remoteUri the URI of the remote structure
+    * @return the generated stream name
+    */
+  def streamNameForUris(localUri: String, remoteUri: String): String =
+    val uriStr = s"$localUri<=>$remoteUri"
+    val digest = MessageDigest.getInstance(NameHashAlgorithm)
+    val hash = digest.digest(uriStr.getBytes(StandardCharsets.UTF_8))
+    Base64.getUrlEncoder.encodeToString(hash)
 
   /**
     * Returns an extractor for the dry-run switch.
