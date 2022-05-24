@@ -233,6 +233,22 @@ class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSyste
     result should contain theSameElementsInOrderAs expectedResults
   }
 
+  it should "not override a local file if the delta of modified times is below the threshold" in {
+    val ignoreDelta = IgnoreTimeDelta(10.seconds)
+    val localFile = deltaElem(createFile(1), ChangeType.Unchanged)
+    val localFolder = deltaElem(createFolder(2), ChangeType.Unchanged)
+    val remoteElements = List(createFile(1, RemoteID, deltaTime = ignoreDelta.deltaSec),
+      createFolder(2, RemoteID))
+    val localElements = List(localFile, localFolder)
+    val expectedResults = List(createResult(SyncOperation(localElements.head.element, SyncAction.ActionNoop,
+      localElements.head.element.level, remoteElements.head.id), Some(localFile)),
+      createResult(SyncOperation(localElements(1).element, SyncAction.ActionNoop,
+        localElements(1).element.level, remoteElements(1).id), Some(localFolder)))
+
+    val result = runStage(new SyncStage(ignoreDelta), localElements, remoteElements)
+    result should contain theSameElementsInOrderAs expectedResults
+  }
+
   it should "not generate an operation if both elements have been removed" in {
     val localFolder = deltaElem(createFolder(2), ChangeType.Unchanged)
     val remoteElements = List(createFolder(2, RemoteID))

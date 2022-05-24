@@ -269,7 +269,7 @@ private object SyncStage:
                 emitConflict(localOverrideOp(), overrideOp())
               case ChangeType.Changed =>
                 emitOp(overrideOp())
-              case ChangeType.Unchanged if remoteModified.isAfter(localModified) =>
+              case ChangeType.Unchanged if ignoreTimeDelta.isDifferentTimes(localModified, remoteModified) =>
                 emitOp(localOverrideOp())
               case ChangeType.Created =>
                 emitConflict(localOverrideOp(), overrideOp())
