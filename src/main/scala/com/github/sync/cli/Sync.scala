@@ -55,6 +55,12 @@ object Sync:
       |supported by this structure type are listed as well.""".stripMargin
 
   /**
+    * Alias for the complex ''RunnableGraph'' type representing a sync stream.
+    * This type appears quite often as return type.
+    */
+  private type FutureSyncGraph = Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]]
+
+  /**
     * A class representing the result of a sync process.
     *
     * From the properties of this class client code can learn how many sync
@@ -202,8 +208,7 @@ object Sync:
   private def createStream(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
                            config: SyncConfig,
                            protocolHolder: SyncProtocolHolder)
-                          (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+                          (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     config.streamConfig.modeConfig match
       case syncConfig: SyncCliStreamConfig.SyncStreamConfig =>
         createSyncStream(flowProc, config, syncConfig, protocolHolder)
@@ -223,8 +228,7 @@ object Sync:
   private def createMirrorStream(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
                                  config: SyncConfig,
                                  protocolHolder: SyncProtocolHolder)
-                                (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+                                (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     for
       source <- createMirrorSource(config, protocolHolder)
       stream <- createMirrorStreamForSource(source, flowProc, config, protocolHolder)
@@ -244,8 +248,7 @@ object Sync:
                                           flowProc: Flow[SyncOperation, SyncOperationResult, Any],
                                           config: SyncConfig,
                                           protocolHolder: SyncProtocolHolder)
-                                         (implicit ec: ExecutionContext):
-  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+                                         (implicit ec: ExecutionContext): FutureSyncGraph =
     val baseParams = createBaseStreamParams(flowProc, config, protocolHolder)
     val params = SyncStream.MirrorStreamParams(baseParams, source)
     SyncStream.createMirrorStream(params)
@@ -266,8 +269,7 @@ object Sync:
                                config: SyncConfig,
                                syncStreamConfig: SyncCliStreamConfig.SyncStreamConfig,
                                protocolHolder: SyncProtocolHolder)
-                              (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+                              (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     val baseParams = createBaseStreamParams(flowProc, config, protocolHolder)
     val syncParams = SyncStream.SyncStreamParams(baseParams, streamName = syncStreamConfig.streamName,
       stateFolder = syncStreamConfig.statePath, localSource = protocolHolder.createSourceElementSource(),
@@ -284,9 +286,7 @@ object Sync:
     * @param ec        the execution context
     * @return a mapped ''Future'' with the stream with added supervision
     */
-  private def enableSupervision(futStream: Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]])
-                               (implicit ec: ExecutionContext):
-  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+  private def enableSupervision(futStream: FutureSyncGraph)(implicit ec: ExecutionContext): FutureSyncGraph =
     val decider: Decider = ex => {
       ex.printStackTrace()
       Supervision.Resume
