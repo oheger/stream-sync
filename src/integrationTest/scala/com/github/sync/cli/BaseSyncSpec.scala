@@ -174,14 +174,14 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
   /**
     * Executes a sync process with the given command line options.
     *
-    * @param args                 the array with command line options
+    * @param args                 the sequence with command line options
     * @param optProtocolSetupFunc optional function to setup protocol factories
     * @return the future result of the sync process
     */
-  protected def runSync(args: Array[String],
+  protected def runSync(args: Seq[String],
                         optProtocolSetupFunc: Option[SyncSetup.ProtocolFactorySetupFunc] = None):
   Future[SyncResult] =
-    CliActorSystemLifeCycle.processCommandLine(args.toSeq, SyncParameterManager.syncConfigExtractor(),
+    CliActorSystemLifeCycle.processCommandLine(args, SyncParameterManager.syncConfigExtractor(),
       "HelpHelp") match
       case Left(_) =>
         Future.failed(new AssertionError("Could not parse command line."))

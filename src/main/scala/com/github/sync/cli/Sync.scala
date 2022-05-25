@@ -20,6 +20,7 @@ import akka.NotUsed
 import akka.actor.typed.scaladsl.adapter.*
 import akka.actor.{ActorSystem, typed}
 import akka.stream.*
+import akka.stream.Supervision.Decider
 import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import com.github.cloudfiles.core.http.factory.Spawner
 import com.github.scli.HelpGenerator.ParameterFilter
@@ -112,14 +113,13 @@ object Sync:
     Configurator.setRootLevel(config.logConfig.logLevel)
 
     protocolHolder.registerCloseHandler(for
-      source <- createSyncSource(config, protocolHolder)
       stage <- createApplyStage(config, spawner, protocolHolder)
-      g <- createMirrorStream(source, stage, config, protocolHolder)
+      g <- enableSupervision(createStream(stage, config, protocolHolder))
       res <- g.run()
     yield SyncResult(res.totalSinkMat, res.errorSinkMat))
 
   /**
-    * Creates the source for the sync process based on the given configuration.
+    * Creates the source for a mirror stream based on the given configuration.
     * Per default, a source is returned that determines the delta of two folder
     * structures. If however a sync log is provided, a source reading this file
     * is returned.
@@ -130,11 +130,11 @@ object Sync:
     * @param system         the actor system
     * @return the source for the sync process
     */
-  private def createSyncSource(config: SyncConfig, protocolHolder: SyncProtocolHolder)
-                              (implicit ec: ExecutionContext, system: ActorSystem):
+  private def createMirrorSource(config: SyncConfig, protocolHolder: SyncProtocolHolder)
+                                (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Source[SyncOperation, Any]] = config.logConfig.syncLogPath match
     case Some(path) =>
-      createSyncSourceFromLog(config, path)
+      createMirrorSourceFromLog(config, path)
     case None =>
       val srcSource = protocolHolder.createSourceElementSource()
       val dstSource = protocolHolder.createDestinationElementSource()
@@ -151,8 +151,8 @@ object Sync:
     * @param system      the actor system
     * @return the source to read from a sync log file
     */
-  private def createSyncSourceFromLog(config: SyncConfig, syncLogPath: Path)
-                                     (implicit ec: ExecutionContext, system: ActorSystem):
+  private def createMirrorSourceFromLog(config: SyncConfig, syncLogPath: Path)
+                                       (implicit ec: ExecutionContext, system: ActorSystem):
   Future[Source[SyncOperation, Any]] = config.logConfig.logFilePath match
     case Some(processedLog) =>
       SerializerStreamHelper.createSyncOperationSourceWithProcessedLog(syncLogPath, processedLog)
@@ -183,13 +183,55 @@ object Sync:
   }
 
   /**
-    * Creates a ''RunnableGraph'' representing the stream for a mirror process.
-    * The source for the ''SyncOperation'' objects to be processed is passed
-    * in. The stream has two sinks that also determine the materialized
-    * values of the graph: one sink counts all successful sync operations,
-    * the second sink counts the failed ones. If log file paths have been
-    * provided in the configuration, the sync operations are also written to
-    * the corresponding log files.
+    * Creates a ''RunnableGraph'' representing the stream to be executed for
+    * the current sync or mirror process. The type of stream to be created is
+    * determined using the stream configuration from the provided config. The
+    * stream has two sinks that also determine the materialized values of the
+    * graph: one sink counts all successful sync operations, the second sink
+    * counts the failed ones. If log file paths have been provided in the
+    * configuration, the sync operations are also written to the corresponding
+    * log files.
+    *
+    * @param flowProc       the flow that processes sync operations
+    * @param config         the sync configuration
+    * @param protocolHolder the ''SyncProtocolHolder''
+    * @param ec             the execution context
+    * @param system         the actor system
+    * @return a future with the runnable graph
+    */
+  private def createStream(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
+                           config: SyncConfig,
+                           protocolHolder: SyncProtocolHolder)
+                          (implicit ec: ExecutionContext, system: ActorSystem):
+  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+    config.streamConfig.modeConfig match
+      case syncConfig: SyncCliStreamConfig.SyncStreamConfig =>
+        createSyncStream(flowProc, config, syncConfig, protocolHolder)
+      case SyncCliStreamConfig.MirrorStreamConfig =>
+        createMirrorStream(flowProc, config, protocolHolder)
+
+  /**
+    * Creates the full stream for a mirror process including its source.
+    *
+    * @param flowProc       the flow that processes sync operations
+    * @param config         the sync configuration
+    * @param protocolHolder the ''SyncProtocolHolder''
+    * @param ec             the execution context
+    * @param system         the actor system
+    * @return a future with the graph for the mirror stream
+    */
+  private def createMirrorStream(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
+                                 config: SyncConfig,
+                                 protocolHolder: SyncProtocolHolder)
+                                (implicit ec: ExecutionContext, system: ActorSystem):
+  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+    for
+      source <- createMirrorSource(config, protocolHolder)
+      stream <- createMirrorStreamForSource(source, flowProc, config, protocolHolder)
+    yield stream
+
+  /**
+    * Creates the stream for a mirror process using the ''Source'' provided.
     *
     * @param source         the source producing ''SyncOperation'' objects
     * @param flowProc       the flow that processes sync operations
@@ -198,28 +240,82 @@ object Sync:
     * @param ec             the execution context
     * @return a future with the runnable graph
     */
-  private def createMirrorStream(source: Source[SyncOperation, Any],
-                                 flowProc: Flow[SyncOperation, SyncOperationResult, Any],
-                                 config: SyncConfig,
-                                 protocolHolder: SyncProtocolHolder)
-                                (implicit ec: ExecutionContext):
+  private def createMirrorStreamForSource(source: Source[SyncOperation, Any],
+                                          flowProc: Flow[SyncOperation, SyncOperationResult, Any],
+                                          config: SyncConfig,
+                                          protocolHolder: SyncProtocolHolder)
+                                         (implicit ec: ExecutionContext):
   Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+    val baseParams = createBaseStreamParams(flowProc, config, protocolHolder)
+    val params = SyncStream.MirrorStreamParams(baseParams, source)
+    SyncStream.createMirrorStream(params)
+
+  /**
+    * Creates the full stream for a sync process.
+    *
+    * @param flowProc         the flow that processes sync operations
+    * @param config           the sync configuration
+    * @param syncStreamConfig the config for the sync stream
+    * @param protocolHolder   the ''SyncProtocolHolder''
+    * @param ec               the execution context
+    * @param system           the actor system
+    * @return a future with the runnable graph
+    * @return a ''Future'' with the runnable graph of the sync stream
+    */
+  private def createSyncStream(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
+                               config: SyncConfig,
+                               syncStreamConfig: SyncCliStreamConfig.SyncStreamConfig,
+                               protocolHolder: SyncProtocolHolder)
+                              (implicit ec: ExecutionContext, system: ActorSystem):
+  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+    val baseParams = createBaseStreamParams(flowProc, config, protocolHolder)
+    val syncParams = SyncStream.SyncStreamParams(baseParams, streamName = syncStreamConfig.streamName,
+      stateFolder = syncStreamConfig.statePath, localSource = protocolHolder.createSourceElementSource(),
+      remoteSource = protocolHolder.createDestinationElementSource(),
+      ignoreDelta = config.streamConfig.ignoreTimeDelta getOrElse IgnoreTimeDelta(1.second),
+      dryRun = config.streamConfig.dryRun)
+    if syncStreamConfig.stateImport then SyncStream.createStateImportStream(syncParams)
+    else SyncStream.createSyncStream(syncParams)
+
+  /**
+    * Adds a supervision strategy to the given stream.
+    *
+    * @param futStream a ''Future'' with the stream
+    * @param ec        the execution context
+    * @return a mapped ''Future'' with the stream with added supervision
+    */
+  private def enableSupervision(futStream: Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]])
+                               (implicit ec: ExecutionContext):
+  Future[RunnableGraph[Future[SyncStream.SyncStreamMat[Int, Int]]]] =
+    val decider: Decider = ex => {
+      ex.printStackTrace()
+      Supervision.Resume
+    }
+    futStream map (_.withAttributes(ActorAttributes.supervisionStrategy(decider)))
+
+  /**
+    * Creates a [[SyncStream.BaseStreamParams]] object from the given
+    * parameters. This includes the ''Sink'' objects producing the results of
+    * the sync process.
+    *
+    * @param flowProc       the flow for the apply stage
+    * @param config         the configuration for the sync process
+    * @param protocolHolder the ''SyncProtocolHolder''
+    * @param ec             the execution context
+    * @return the ''BaseStreamParams'' object
+    */
+  private def createBaseStreamParams(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
+                                     config: SyncConfig, protocolHolder: SyncProtocolHolder)
+                                    (implicit ec: ExecutionContext): SyncStream.BaseStreamParams[Int, Int] =
     val sinkTotal = createCountSinkWithOptionalLogging(config.logConfig.logFilePath, errorLog = false)
     val sinkError = createErrorSink(config.logConfig.errorLogFilePath)
     val sinkSuccess = Flow[SyncOperationResult].filterNot { result =>
       result.optFailure.isDefined || result.op.action == ActionNoop
     }.toMat(sinkTotal)(Keep.right)
 
-    val baseParams = SyncStream.BaseStreamParams(processFlow = flowProc, sinkTotal = sinkSuccess,
+    SyncStream.BaseStreamParams(processFlow = flowProc, sinkTotal = sinkSuccess,
       sinkError = sinkError, operationFilter = createSyncFilter(config.filterData),
       optKillSwitch = Some(protocolHolder.oAuthRefreshKillSwitch))
-    val params = SyncStream.MirrorStreamParams(baseParams, source)
-    val decider: Supervision.Decider = ex => {
-      ex.printStackTrace()
-      Supervision.Resume
-    }
-
-    SyncStream.createMirrorStream(params) map(_.withAttributes(ActorAttributes.supervisionStrategy(decider)))
 
   /**
     * Creates the ''Sink'' that receives all failed sync operation results. The
