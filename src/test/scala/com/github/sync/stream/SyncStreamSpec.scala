@@ -554,6 +554,24 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     state should contain theSameElementsInOrderAs expState
   }
 
+  it should "support a threshold for time deltas in sync streams" in {
+    val DeltaTime = 11
+    val unchangedElement = createFile(1)
+    val changedElement = createFile(2, idType = "remote", deltaTime = DeltaTime + 1)
+    val localElements = List(unchangedElement, createFile(2))
+    val remoteElements = List(createFile(1, idType = "remote", deltaTime = DeltaTime), changedElement)
+    writeLocalStateElements(localElements)
+    val expOps = List(SyncOperation(unchangedElement, SyncAction.ActionNoop, unchangedElement.level,
+      remoteElements.head.id),
+      SyncOperation(changedElement, SyncAction.ActionLocalOverride, changedElement.level, localElements(1).id))
+      .map(createOperationResult)
+    val params = syncParams(Source(localElements), Source(remoteElements), collectingSink,
+      ignoreDelta = IgnoreTimeDelta(DeltaTime.seconds))
+
+    val result = runStream(params)
+    result.totalSinkMat.reverse should contain theSameElementsInOrderAs expOps
+  }
+
   it should "create an import stream" in {
     val elements = (1 to 8) map (idx => createFile(idx))
     val params = syncParams(Source(elements), Source.empty, collectingSink, collectingSink)

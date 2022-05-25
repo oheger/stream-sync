@@ -224,7 +224,7 @@ object SyncStream:
             val errorFilter = builder.add(Flow[SyncOperationResult].filter(_.optFailure.isDefined))
             val opFilter = builder.add(filterOperations(params.operationFilter))
             val stateStage = builder.add(new LocalStateStage(Instant.now()))
-            val syncStage = builder.add(new SyncStage())
+            val syncStage = builder.add(new SyncStage(params.ignoreDelta))
             val stateUpdateStage = builder.add(new LocalStateUpdateStage)
 
             params.localSource ~> stateStage.in0
