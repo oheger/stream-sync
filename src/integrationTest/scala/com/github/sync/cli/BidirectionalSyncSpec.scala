@@ -30,6 +30,14 @@ object BidirectionalSyncSpec:
     */
   private def fileTime(file: Path): Instant = Files.getLastModifiedTime(file).toInstant
 
+  /**
+    * Generates the name of a test file based on an index.
+    *
+    * @param idx the index of the test file
+    * @return the name for this file
+    */
+  private def testFileName(idx: Int): String = s"testFile$idx.txt"
+
 /**
   * Integration test class for bidirectional sync processes. The tests operate
   * on local folders.
@@ -72,6 +80,23 @@ class BidirectionalSyncSpec extends BaseSyncSpec :
     val commandLine = srcFolder.toAbsolutePath.toString :: dstFolder.toAbsolutePath.toString ::
       "--state-path" :: stateFolder.toAbsolutePath.toString :: "--sync" :: args.toList
     futureResult(runSync(commandLine))
+
+  /**
+    * Creates a sub folder for the given parent and a number of test files in
+    * this folder.
+    *
+    * @param parent     the parent folder
+    * @param folderName the name of the new sub folder
+    * @param count      the number of test files in this folder
+    * @param time       the timestamp to compute the times of the test files
+    * @return the ''Path'' to the new folder
+    */
+  private def createFolderWithTestFiles(parent: Path, folderName: String, count: Int, time: Instant): Path =
+    val subFolder = Files.createDirectory(parent.resolve(folderName))
+    (1 to count) foreach { idx =>
+      createTestFile(subFolder, testFileName(idx), fileTime = Some(time.plusSeconds(idx * 60)))
+    }
+    subFolder
 
   "A Sync stream" should "sync two structures" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
@@ -154,4 +179,31 @@ class BidirectionalSyncSpec extends BaseSyncSpec :
     fileTime(stateFile) should be(stateFileTime)
     checkFile(srcFolder, "superfluousFile.txt")
     checkFileNotPresent(dstFolder, "newDocument.txt")
+  }
+
+  it should "handle more complex sync operations" in {
+    val localFolder = Files.createDirectory(createPathInDirectory("local"))
+    val remoteFolder = Files.createDirectory(createPathInDirectory("remote"))
+    val BaseTime = Instant.parse("2022-05-26T16:26:55.12Z")
+    val ConflictFileName = "fileCausingConflict.err"
+    val errorLogFile = createPathInDirectory("errors.log")
+    createFolderWithTestFiles(localFolder, "unchanged", 8, BaseTime)
+    createFolderWithTestFiles(remoteFolder, "unchanged", 8, BaseTime)
+    createFolderWithTestFiles(localFolder, "deleted", 4, BaseTime)
+    val conflictFolder = createFolderWithTestFiles(localFolder, "deleteConflict", 8, BaseTime)
+    val stateFolder = stateImport(localFolder, remoteFolder)
+    createFolderWithTestFiles(localFolder, "newFolder", 2, BaseTime.plusSeconds(3600))
+    createTestFile(conflictFolder, ConflictFileName)
+
+    val result = runSync(localFolder, remoteFolder, stateFolder,
+      "--error-log", errorLogFile.toAbsolutePath.toString)
+    result.failedOperations should be(1)
+    checkFile(conflictFolder, testFileName(1))
+    checkFile(conflictFolder, ConflictFileName)
+    val newRemoteFolder = remoteFolder.resolve("newFolder")
+    checkFile(newRemoteFolder, testFileName(1))
+
+    val errors = readDataFile(errorLogFile)
+    errors should include(conflictFolder.getFileName.toString)
+    errors should include(ConflictFileName)
   }
