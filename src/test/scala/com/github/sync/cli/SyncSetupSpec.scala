@@ -54,9 +54,9 @@ object SyncSetupSpec:
 
   /** A test sync configuration. */
   private val TestSyncConfig = SyncConfig(srcUri = "someSrcUri", dstUri = "someDstUri", srcConfig = null,
-    dstConfig = null, logConfig = LogConfig(None, None, None, Level.DEBUG), cryptConfig = null,
-    streamConfig = StreamConfig(false, SyncTimeout, None, None, Throttle.TimeUnit.Second, MirrorStreamConfig),
-    filterData = null, switched = false)
+    dstConfig = null, logConfig = LogConfig(None, None, Level.DEBUG), cryptConfig = null,
+    streamConfig = StreamConfig(false, SyncTimeout, None, None, Throttle.TimeUnit.Second,
+      MirrorStreamConfig(None, switched = false)), filterData = null)
 
   /** A test configuration for HTTP actors. */
   private val TestSenderConfig = HttpRequestSenderConfig(actorName = Some("testActor"))

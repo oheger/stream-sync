@@ -204,14 +204,24 @@ class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers :
   it should "assume mirror mode per default" in {
     val config = extractConfig(Map.empty)
 
-    config.modeConfig should be(SyncCliStreamConfig.MirrorStreamConfig)
+    config.modeConfig should be(SyncCliStreamConfig.MirrorStreamConfig(None, switched = false))
   }
 
   it should "allow specifying mirror mode explicitly" in {
     val argsMap = Map(SyncCliStreamConfig.MirrorMode -> "true")
 
     val config = extractConfig(argsMap)
-    config.modeConfig should be(SyncCliStreamConfig.MirrorStreamConfig)
+    config.modeConfig should be(SyncCliStreamConfig.MirrorStreamConfig(None, switched = false))
+  }
+
+  it should "allow specifying the options of a mirror stream" in {
+    val logPath = Paths.get("sync", "log", "path", "sync-log.log")
+    val argsMap = Map(SyncCliStreamConfig.SwitchOption -> "true",
+      SyncCliStreamConfig.SyncLogOption -> logPath.toString)
+    val expConfig = SyncCliStreamConfig.MirrorStreamConfig(Some(logPath), switched = true)
+
+    val config = extractConfig(argsMap)
+    config.modeConfig should be(expConfig)
   }
 
   it should "allow specifying the options of a sync stream" in {

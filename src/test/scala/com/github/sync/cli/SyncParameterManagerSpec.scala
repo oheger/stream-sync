@@ -203,24 +203,11 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     config.logConfig.errorLogFilePath should be(Some(logFile))
   }
 
-  it should "have an undefined sync log option if none is specified" in {
-    val (config, _) = futureResult(extractSyncConfig(ArgsMap))
-    config.logConfig.syncLogPath should be(None)
-  }
-
-  it should "store the path to the sync log file in the sync config" in {
-    val syncLogFile = Paths.get("data", "sync", "log", "sync.log").toAbsolutePath
-    val argsMap = ArgsMap + (SyncParameterManager.SyncLogOption -> List(syncLogFile.toString))
-
-    val (config, _) = futureResult(extractSyncConfig(argsMap))
-    config.logConfig.syncLogPath should be(Some(syncLogFile))
-  }
-
   it should "handle a sync log option with multiple values" in {
-    val argsMap = ArgsMap + (SyncParameterManager.SyncLogOption -> List("log1", "log2"))
+    val argsMap = ArgsMap + (SyncCliStreamConfig.SyncLogOption -> List("log1", "log2"))
 
     expectFailedFuture(extractSyncConfig(argsMap),
-      SyncParameterManager.SyncLogOption, "Single value expected")
+      SyncCliStreamConfig.SyncLogOption, "Single value expected")
   }
 
   it should "return correct default options related to encryption" in {
@@ -349,7 +336,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
 
     val (_, updCtx) = futureResult(extractSyncConfig(argsMap))
     accessedKeys(updCtx) should contain allOf(SyncCliStreamConfig.DryRunOption,
-      SyncCliStreamConfig.TimeoutOption, SyncParameterManager.LogFileOption, SyncParameterManager.SyncLogOption,
+      SyncCliStreamConfig.TimeoutOption, SyncParameterManager.LogFileOption, SyncCliStreamConfig.SyncLogOption,
       SyncCliStreamConfig.IgnoreTimeDeltaOption, SyncCliStreamConfig.OpsPerUnitOption,
       SyncParameterManager.SourcePasswordOption, SyncParameterManager.DestPasswordOption,
       SyncParameterManager.SourceCryptModeOption, SyncParameterManager.DestCryptModeOption)
@@ -371,16 +358,18 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val expCryptConfig = CryptConfig(dstPassword = Some("pwd-src"), dstCryptMode = CryptMode.FilesAndNames,
       srcPassword = Some("pwd-dst"), srcCryptMode = CryptMode.Files, cryptCacheSize = 55)
     val logConfig = LogConfig(logFilePath = Some(Paths get "log"), errorLogFilePath = Some(Paths get "err"),
-      syncLogPath = Some(Paths get "syncLog"), logLevel = Level.INFO)
+      logLevel = Level.INFO)
+    val orgMirrorStreamConfig = MirrorStreamConfig(Some(Paths get "syncLog"), switched = true)
     val streamConfig = StreamConfig(dryRun = false, timeout = 1.minute,
       ignoreTimeDelta = Some(IgnoreTimeDelta(100.seconds)),
-      opsPerUnit = Some(100), throttleUnit = Throttle.TimeUnit.Minute, MirrorStreamConfig)
+      opsPerUnit = Some(100), throttleUnit = Throttle.TimeUnit.Minute, orgMirrorStreamConfig)
+    val expStreamConfig = streamConfig.copy(modeConfig = orgMirrorStreamConfig.copy(switched = false))
     val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
       dstConfig = mock[StructureAuthConfig], logConfig = logConfig, cryptConfig = orgCryptConfig,
-      streamConfig = streamConfig, filterData = mock[SyncFilterData], switched = true)
+      streamConfig = streamConfig, filterData = mock[SyncFilterData])
     val expNormalized = orgConfig.copy(srcUri = orgConfig.dstUri, dstUri = orgConfig.srcUri,
       srcConfig = orgConfig.dstConfig, dstConfig = orgConfig.srcConfig, cryptConfig = expCryptConfig,
-      switched = false)
+      streamConfig = expStreamConfig)
 
     orgConfig.normalized should be(expNormalized)
   }

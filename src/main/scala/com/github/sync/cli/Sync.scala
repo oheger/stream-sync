@@ -131,14 +131,16 @@ object Sync:
     * is returned.
     *
     * @param config         the sync configuration
+    * @param mirrorConfig   the configuration for the mirror stream
     * @param protocolHolder the ''SyncProtocolHolder''
     * @param ec             the execution context
     * @param system         the actor system
     * @return the source for the sync process
     */
-  private def createMirrorSource(config: SyncConfig, protocolHolder: SyncProtocolHolder)
+  private def createMirrorSource(config: SyncConfig, mirrorConfig: SyncCliStreamConfig.MirrorStreamConfig,
+                                 protocolHolder: SyncProtocolHolder)
                                 (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[Source[SyncOperation, Any]] = config.logConfig.syncLogPath match
+  Future[Source[SyncOperation, Any]] = mirrorConfig.syncLogPath match
     case Some(path) =>
       createMirrorSourceFromLog(config, path)
     case None =>
@@ -212,14 +214,15 @@ object Sync:
     config.streamConfig.modeConfig match
       case syncConfig: SyncCliStreamConfig.SyncStreamConfig =>
         createSyncStream(flowProc, config, syncConfig, protocolHolder)
-      case SyncCliStreamConfig.MirrorStreamConfig =>
-        createMirrorStream(flowProc, config, protocolHolder)
+      case mirrorConfig: SyncCliStreamConfig.MirrorStreamConfig =>
+        createMirrorStream(flowProc, config, mirrorConfig, protocolHolder)
 
   /**
     * Creates the full stream for a mirror process including its source.
     *
     * @param flowProc       the flow that processes sync operations
     * @param config         the sync configuration
+    * @param mirrorConfig   the config specific to the mirror stream
     * @param protocolHolder the ''SyncProtocolHolder''
     * @param ec             the execution context
     * @param system         the actor system
@@ -227,10 +230,11 @@ object Sync:
     */
   private def createMirrorStream(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
                                  config: SyncConfig,
+                                 mirrorConfig: SyncCliStreamConfig.MirrorStreamConfig,
                                  protocolHolder: SyncProtocolHolder)
                                 (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     for
-      source <- createMirrorSource(config, protocolHolder)
+      source <- createMirrorSource(config, mirrorConfig, protocolHolder)
       stream <- createMirrorStreamForSource(source, flowProc, config, protocolHolder)
     yield stream
 

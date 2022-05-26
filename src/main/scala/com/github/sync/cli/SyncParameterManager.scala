@@ -83,16 +83,6 @@ object SyncParameterManager:
     """Defines the path to a log file where failed sync operations (together with the corresponding \
       |exceptions are logged. If this option is not provided, no error log file is written.""".stripMargin
 
-  /** Name of the option that defines the path to the sync log file. */
-  final val SyncLogOption: String = "sync-log"
-
-  /** Help text for the sync log option. */
-  final val SyncLogHelp =
-    """Defines the path from where to read the sync log. If specified, the sync process does not \
-      |address the differences between the source and the destination structure, but executes the \
-      |operations defined in the sync log.
-      |""".stripMargin
-
   /**
     * Name of the option defining the encryption password for the source
     * structure. If defined, files from the source are decrypted using this
@@ -151,13 +141,6 @@ object SyncParameterManager:
       |encrypted; this can reduce the number of encrypt operations.
       |""".stripMargin
 
-  /**
-    * Name of the option that switches the source and destination structures.
-    * This offers an easy means to let the sync happen in the opposite
-    * direction.
-    */
-  final val SwitchOption = "switch"
-
   /** The name of the switch that enables debug logging. */
   final val LogLevelDebug = "debug"
 
@@ -201,13 +184,6 @@ object SyncParameterManager:
 
   /** The name of the switch to request help explicitly. */
   final val HelpOption = "help"
-
-  /** Help text for the switch option. */
-  final val SwitchOptionHelp =
-    """If this flag is provided, the source and destination structures are switched, so that the sync \
-      |process basically runs in the opposite direction. This is useful if you occasionally need to \
-      |fetch data from the destination; then you do not have to write another sync command, but just \
-      |add this flag to the existing one and revert the sync direction.""".stripMargin
 
   /** The short alias for the help option. */
   final val HelpAlias = "h"
@@ -272,13 +248,10 @@ object SyncParameterManager:
     *
     * @param logFilePath      an option with the path to the log file if defined
     * @param errorLogFilePath an option with the path to an error log file
-    * @param syncLogPath      an option with the path to a file containing sync
-    *                         operations to be executed
     * @param logLevel         the log level for the sync process
     */
   case class LogConfig(logFilePath: Option[Path],
                        errorLogFilePath: Option[Path],
-                       syncLogPath: Option[Path],
                        logLevel: Level)
 
   /**
@@ -295,8 +268,6 @@ object SyncParameterManager:
     * @param cryptConfig  the configuration related to encryption
     * @param streamConfig the configuration related to stream parameters
     * @param filterData   an object with information about filters
-    * @param switched     a flag whether src and dst configs should be
-    *                     switched
     */
   case class SyncConfig(srcUri: String,
                         dstUri: String,
@@ -305,8 +276,7 @@ object SyncParameterManager:
                         logConfig: LogConfig,
                         cryptConfig: CryptConfig,
                         streamConfig: StreamConfig,
-                        filterData: SyncFilterData,
-                        switched: Boolean):
+                        filterData: SyncFilterData):
     /**
       * Returns a normalized ''SyncConfig'' for this instance. If the
       * ''switched'' flag is '''false''', the normalized instance is the same
@@ -316,10 +286,12 @@ object SyncParameterManager:
       * @return the normalized ''SyncConfig''
       */
     def normalized: SyncConfig =
-      if switched then
-        copy(srcUri = dstUri, dstUri = srcUri, srcConfig = dstConfig, dstConfig = srcConfig,
-          cryptConfig = switchCryptConfig(cryptConfig), switched = false)
-      else this
+      streamConfig.modeConfig match
+        case mirrorConf@SyncCliStreamConfig.MirrorStreamConfig(_, true) =>
+          copy(srcUri = dstUri, dstUri = srcUri, srcConfig = dstConfig, dstConfig = srcConfig,
+            cryptConfig = switchCryptConfig(cryptConfig),
+            streamConfig = streamConfig.copy(modeConfig = mirrorConf.copy(switched = false)))
+        case _ => this
 
   /**
     * Returns an extractor that extracts the ''SyncConfig'' from the command
@@ -337,10 +309,9 @@ object SyncParameterManager:
     cryptConf <- cryptConfigExtractor
     streamConf <- streamConfigExtractor(generateDefaultSyncStreamName(srcUri, dstUri))
     filters <- FilterManager.filterDataExtractor
-    switched <- switchValue(SwitchOption, optHelp = Some(SwitchOptionHelp)).alias("S")
     _ <- CliActorSystemLifeCycle.FileExtractor
   yield createSyncConfig(srcUri, dstUri, srcConfig, dstConfig, logConfig, cryptConf, streamConf,
-    filters, switched) map (_.normalized)
+    filters) map (_.normalized)
 
   /**
     * Constructs a ''SyncConfig'' object from the passed in components. If all
@@ -355,7 +326,6 @@ object SyncParameterManager:
     * @param triedLogConfig   the configuration related to logging
     * @param triedCryptConfig the component with the crypt config
     * @param triedFilterData  the component with the filter data
-    * @param triedSwitch      the component for the switch flag
     * @return a ''Try'' with the config
     */
   private def createSyncConfig(triedSrcUri: Try[String],
@@ -365,10 +335,9 @@ object SyncParameterManager:
                                triedLogConfig: Try[LogConfig],
                                triedCryptConfig: Try[CryptConfig],
                                triedStreamConfig: Try[StreamConfig],
-                               triedFilterData: Try[SyncFilterData],
-                               triedSwitch: Try[Boolean]): Try[SyncConfig] =
+                               triedFilterData: Try[SyncFilterData]): Try[SyncConfig] =
     createRepresentation(triedSrcUri, triedDstUri, triedSrcConfig, triedDstConfig,
-      triedLogConfig, triedCryptConfig, triedStreamConfig, triedFilterData, triedSwitch)(SyncConfig.apply)
+      triedLogConfig, triedCryptConfig, triedStreamConfig, triedFilterData)(SyncConfig.apply)
 
   /**
     * Generates a default name for a sync stream in case the user did not
@@ -491,9 +460,8 @@ object SyncParameterManager:
     for
       logFile <- optionValue(LogFileOption, Some(LogFileHelp)).alias("l").toPath
       errLog <- optionValue(ErrorLogFileOption, Some(ErrorLogFileHelp)).toPath
-      syncLog <- optionValue(SyncLogOption, Some(SyncLogHelp)).toPath
       logLevel <- logLevelExtractor()
-    yield createLogConfig(logFile, errLog, syncLog, logLevel)
+    yield createLogConfig(logFile, errLog, logLevel)
 
   /**
     * Returns an extractor for the log level option. The log level can be
@@ -519,15 +487,13 @@ object SyncParameterManager:
     *
     * @param triedLogFile  the log file component
     * @param triedErrorLog the error log file component
-    * @param triedSyncLog  the sync log component
     * @param triedLogLevel the component for the log level
     * @return a ''Try'' with the ''LogConfig''
     */
   private def createLogConfig(triedLogFile: Try[Option[Path]],
                               triedErrorLog: Try[Option[Path]],
-                              triedSyncLog: Try[Option[Path]],
                               triedLogLevel: Try[Level]): Try[LogConfig] =
-    createRepresentation(triedLogFile, triedErrorLog, triedSyncLog, triedLogLevel)(LogConfig.apply)
+    createRepresentation(triedLogFile, triedErrorLog, triedLogLevel)(LogConfig.apply)
 
   /**
     * Switches the fields related to source and destination structures in the

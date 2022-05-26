@@ -99,6 +99,30 @@ object SyncCliStreamConfig:
       |'M' or 'Minute', 'H' or 'Hour' (case does not matter). For instance, the options '--throttle 1000 \
       |--throttle-unit Hour' would define a threshold of 1000 operations per hour. Defaults to 'Second'.""".stripMargin
 
+  /** Name of the option that defines the path to the sync log file. */
+  final val SyncLogOption: String = "sync-log"
+
+  /** Help text for the sync log option. */
+  final val SyncLogHelp =
+    """Defines the path from where to read the sync log. If specified, the sync process does not \
+      |address the differences between the source and the destination structure, but executes the \
+      |operations defined in the sync log.
+      |""".stripMargin
+
+  /**
+    * Name of the option that switches the source and destination structures
+    * for mirror streams. This offers an easy means to let the mirror stream
+    * work in the opposite direction.
+    */
+  final val SwitchOption = "switch"
+
+  /** Help text for the switch option. */
+  final val SwitchOptionHelp =
+    """If this flag is provided, the source and destination structures are switched, so that the sync \
+      |process basically runs in the opposite direction. This is useful if you occasionally need to \
+      |fetch data from the destination; then you do not have to write another sync command, but just \
+      |add this flag to the existing one and revert the sync direction.""".stripMargin
+
   /**
     * Name of the option that defines the path where to store local state data
     * for sync streams.
@@ -181,11 +205,15 @@ object SyncCliStreamConfig:
                               stateImport: Boolean) extends StreamModeConfig
 
   /**
-    * An object representing the configuration of a mirror stream. Currently,
-    * there are no specific options for mirror streams, but this may change
-    * in future.
+    * An data class defining specific parameters for mirror streams.
+    *
+    * @param syncLogPath an option with the path to a file containing sync
+    *                    operations to be executed
+    * @param switched    a flag whether src and dst configs should be
+    *                    switched
     */
-  case object MirrorStreamConfig extends StreamModeConfig
+  case class MirrorStreamConfig(syncLogPath: Option[Path],
+                                switched: Boolean) extends StreamModeConfig
 
   /**
     * A configuration class that combines all the properties of the sync
@@ -223,6 +251,7 @@ object SyncCliStreamConfig:
       throttleUnit <- throttleTimeUnitExtractor()
       modeConfig <- modeConfigExtractor(defaultStreamName)
     yield createStreamConfig(dryRun, timeout, timeDelta, opsPerUnit, throttleUnit, modeConfig)
+
   /**
     * Generates a (not readable) name for a sync stream based on the URIs for
     * the local and remote structures.
@@ -320,9 +349,10 @@ object SyncCliStreamConfig:
     * @return the extractor for the [[MirrorStreamConfig]]
     */
   private def mirrorConfigExtractor: CliExtractor[Try[StreamModeConfig]] =
-  // Note: Currently, there are no options specific to mirror streams. If this changes,
-  // new options can be added here.
-    constantExtractor(Try(MirrorStreamConfig))
+    for
+      syncLog <- optionValue(SyncLogOption, Some(SyncLogHelp)).toPath
+      switched <- switchValue(SwitchOption, optHelp = Some(SwitchOptionHelp)).alias("S")
+    yield createMirrorStreamConfig(syncLog, switched)
 
   /**
     * Returns an extractor that extracts the configuration of a sync stream.
@@ -379,3 +409,15 @@ object SyncCliStreamConfig:
                                      triedStreamName: Try[String],
                                      triedImport: Try[Boolean]): Try[SyncStreamConfig] =
     createRepresentation(triedStatePath, triedStreamName, triedImport)(SyncStreamConfig.apply)
+
+  /**
+    * Tries to construct a [[MirrorStreamConfig]] object from the passed in
+    * components.
+    *
+    * @param triedSyncLogPath the sync log path component
+    * @param triedSwitched    the switched component
+    * @return a ''Try'' with the config of the mirror stream
+    */
+  private def createMirrorStreamConfig(triedSyncLogPath: Try[Option[Path]],
+                                       triedSwitched: Try[Boolean]): Try[MirrorStreamConfig] =
+    createRepresentation(triedSyncLogPath, triedSwitched)(MirrorStreamConfig.apply)
