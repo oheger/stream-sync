@@ -181,6 +181,18 @@ class BidirectionalSyncSpec extends BaseSyncSpec :
     checkFileNotPresent(dstFolder, "newDocument.txt")
   }
 
+  it should "detect invalid sync stream parameters in mirror mode" in {
+    val options = Array("src", "dst", "--state-path", ".state", "--stream-name", "my-sync-stream")
+
+    checkSyncOutput(options, "Invalid command line options", "--state-path", "--stream-name")
+  }
+
+  it should "detect invalid mirror stream parameters in sync mode" in {
+    val options = Array("local", "remote", "--sync-log", "my-log.log", "--switch", "--sync")
+
+    checkSyncOutput(options, "Invalid command line options", "--sync-log", "--switch")
+  }
+
   it should "handle more complex sync operations" in {
     val localFolder = Files.createDirectory(createPathInDirectory("local"))
     val remoteFolder = Files.createDirectory(createPathInDirectory("remote"))
