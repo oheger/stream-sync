@@ -18,7 +18,7 @@ package com.github.sync.cli
 
 import com.github.sync.cli.Sync.SyncResult
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
 
 object BidirectionalSyncSpec:
@@ -218,4 +218,30 @@ class BidirectionalSyncSpec extends BaseSyncSpec :
     val errors = readDataFile(errorLogFile)
     errors should include(conflictFolder.getFileName.toString)
     errors should include(ConflictFileName)
+  }
+
+  it should "initialize the local structure from the remote one" in {
+    val localFolder = Files.createDirectory(createPathInDirectory("empty_local"))
+    val remoteFolder = Files.createDirectory(createPathInDirectory("remote_to_import"))
+    val BaseTime = Instant.parse("2022-05-27T19:54:57.88Z")
+    val DataFile = "important-data.doc"
+    val DataFolder = "more-data"
+    createTestFile(remoteFolder, DataFile)
+    createFolderWithTestFiles(remoteFolder, DataFolder, 8, BaseTime)
+    val stateFolder = testDirectory.resolve(Paths.get("deeply", "nested", "state", "folder"))
+
+    val resultInit = runSync(localFolder, remoteFolder, stateFolder)
+    resultInit.successfulOperations should be(10)
+    checkFile(localFolder, DataFile)
+    val localDataFolder = localFolder.resolve(DataFolder)
+    val modifiedFileName = testFileName(2)
+    checkFile(localDataFolder, modifiedFileName)
+    val localModifiedFile = localDataFolder.resolve(modifiedFileName)
+    val ModifiedContent = "This file has been changed locally."
+    Files.delete(localModifiedFile)
+    createTestFile(localDataFolder, modifiedFileName, content = Some(ModifiedContent))
+
+    val result2 = runSync(localFolder, remoteFolder, stateFolder)
+    result2.successfulOperations should be(1)
+    readDataFile(remoteFolder.resolve(DataFolder).resolve(modifiedFileName)) should be(ModifiedContent)
   }
