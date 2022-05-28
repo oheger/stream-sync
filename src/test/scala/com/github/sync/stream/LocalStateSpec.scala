@@ -27,7 +27,7 @@ import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 /**
   * Test class for ''LocalState''.
@@ -148,7 +148,7 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val folder = stateFolder("TestSyncStream")
     val source = Source(elements)
 
-    val sink = LocalState.localStateSink(folder, promoteState = false)
+    val sink = futureResult(LocalState.constructLocalStateSink(folder, promoteState = false))
     val stateFileResult = futureResult(source.runWith(sink))
     val localStateFile = createPathInDirectory(folder.streamName + ".lst.tmp")
     stateFileResult.toAbsolutePath should be(localStateFile.toAbsolutePath)
@@ -163,7 +163,7 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val folder = stateFolder("TestStreamOverride")
     val localStateFile = writeFileContent(folder.resolve(LocalStateFile.Interrupted), FileTestHelper.TestData)
 
-    val sink = LocalState.localStateSink(folder, promoteState = false)
+    val sink = futureResult(LocalState.constructLocalStateSink(folder, promoteState = false))
     futureResult(source.runWith(sink))
     checkLocalStateFile(localStateFile, elements)
   }
@@ -177,12 +177,23 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val folder = stateFolder("TestSyncStream")
     val source = Source(elements)
 
-    val sink = LocalState.localStateSink(folder)
+    val sink = futureResult(LocalState.constructLocalStateSink(folder))
     val stateFileResult = futureResult(source.runWith(sink))
     val localStateFile = createPathInDirectory(folder.streamName + ".lst")
     stateFileResult.toAbsolutePath should be(localStateFile.toAbsolutePath)
     checkLocalStateFile(localStateFile, elements)
     folder.resolveExisting(LocalStateFile.Interrupted) shouldBe empty
+  }
+
+  it should "create a sink that creates missing sub folders to the state file" in {
+    val statePath = testDirectory.resolve(Paths.get("deeply", "nested", "state", "folder"))
+    val folder = LocalStateFolder(statePath, "TestNewStream")
+    val elements = List(LocalElementState(AbstractStageSpec.createFile(42), removed = false))
+    val source = Source(elements)
+
+    val sink = futureResult(LocalState.constructLocalStateSink(folder))
+    val stateFilePath = futureResult(source.runWith(sink))
+    checkLocalStateFile(stateFilePath, elements)
   }
 
   /**
@@ -216,7 +227,7 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     */
   private def writeLocalStateFile(folder: LocalStateFolder, elements: Seq[LocalElementState]): Path =
     val elemSource = Source(elements)
-    val sink = LocalState.localStateSink(folder, promoteState = false)
+    val sink = futureResult(LocalState.constructLocalStateSink(folder, promoteState = false))
     futureResult(elemSource.runWith(sink))
 
   it should "construct an empty source for a non-existing local state file" in {

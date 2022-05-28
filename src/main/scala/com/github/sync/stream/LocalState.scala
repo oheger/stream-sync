@@ -179,6 +179,16 @@ private object LocalState:
     def promoteToComplete(sourceFile: LocalStateFile): Path = rename(sourceFile, LocalStateFile.Complete)
 
     /**
+      * Makes sure that the referenced folder exists. Creates it if necessary.
+      * If this fails, an ''IOException'' is thrown.
+      *
+      * @return a reference to this object
+      */
+    def ensureExisting(): LocalStateFolder =
+      Files.createDirectories(folder)
+      this
+
+    /**
       * Returns the name of the state file with the given type for the
       * associated stream.
       *
@@ -211,29 +221,31 @@ private object LocalState:
     def affectsLocalState: Boolean = ActionsAffectingLocalState(operation.action)
 
   /**
-    * Returns a ''Sink'' for the updated local element state of a sync stream.
-    * The state is stored in the given folder in a file whose name is derived
-    * from the stream name. The materialized value of the sink is a ''Future''
-    * with the path to this file. While the stream is ongoing, the update
-    * local state is written to a temporary file. Only after completion of the
-    * process, this file is promoted to the new local state file. That way, it
-    * is possible to detect that a stream was interrupted and to resume it at
-    * the very same position.
+    * Constructs a ''Sink'' for the updated local element state of a sync 
+    * stream. The state is stored in the given folder in a file whose name is 
+    * derived from the stream name. The materialized value of the sink is a 
+    * ''Future'' with the path to this file. The path components to this file
+    * are created automatically if necessary. Because of that the operation can
+    * fail. While the stream is ongoing, the updated local state is written to 
+    * a temporary file. Only after completion of the process, this file is 
+    * promoted to the new local state file. That way, it is possible to detect
+    * that a stream was interrupted and to resume it at the very same position.
     *
     * @param stateFolder  refers to the folder containing state files
     * @param promoteState flag whether the temporary state file should be moved
     *                     to the final state after the stream completed
     * @param ec           the execution context
-    * @return the sink to update the local element state
+    * @return a ''Future'' with the sink to update the local element state
     */
-  def localStateSink(stateFolder: LocalStateFolder, promoteState: Boolean = true)
-                    (implicit ec: ExecutionContext): Sink[LocalElementState, Future[Path]] =
-    val targetFile = stateFolder.resolve(LocalStateFile.Interrupted)
+  def constructLocalStateSink(stateFolder: LocalStateFolder, promoteState: Boolean = true)
+                             (implicit ec: ExecutionContext): Future[Sink[LocalElementState, Future[Path]]] = Future {
+    val targetFile = stateFolder.ensureExisting().resolve(LocalStateFile.Interrupted)
     FileIO.toPath(targetFile).contramap[LocalElementState](ElementSerializer.serialize)
       .mapMaterializedValue(_.map { _ =>
         if promoteState then stateFolder.promoteToComplete(LocalStateFile.Interrupted)
         else targetFile
       })
+  }
 
   /**
     * Constructs a ''Source'' to load the local state of a sync process. This

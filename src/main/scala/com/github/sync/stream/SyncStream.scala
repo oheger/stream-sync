@@ -206,41 +206,10 @@ object SyncStream:
                                     (implicit ec: ExecutionContext, mat: Materializer):
   Future[RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]]] =
     val stateFolder = LocalState.LocalStateFolder(params.stateFolder, params.streamName)
-    val stateSink = if params.dryRun then Sink.ignore
-    else LocalState.localStateSink(stateFolder)
-    val killSwitch = params.optKillSwitch getOrElse KillSwitches.shared("dummy")
-
-    LocalState.constructLocalStateSource(stateFolder) map { stateSource =>
-      RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError, stateSink)(syncStreamMat) {
-        implicit builder =>
-          (sinkTotal, sinkError, sinkState) =>
-            import GraphDSL.Implicits.*
-            val broadcastSink = builder.add(Broadcast[SyncOperationResult](2))
-            val broadcastSyncResults = builder.add(Broadcast[SyncStageResult](3))
-            val broadcastOps = builder.add(Broadcast[SyncOperationResult](2))
-            val mergeConflicts = builder.add(Merge[SyncOperationResult](2))
-            val syncOpMap = builder.add(mapSyncResultToOp)
-            val conflictMap = builder.add(mapConflictToOp)
-            val errorFilter = builder.add(Flow[SyncOperationResult].filter(_.optFailure.isDefined))
-            val opFilter = builder.add(filterOperations(params.operationFilter))
-            val stateStage = builder.add(new LocalStateStage(Instant.now()))
-            val syncStage = builder.add(new SyncStage(params.ignoreDelta))
-            val stateUpdateStage = builder.add(new LocalStateUpdateStage)
-
-            params.localSource ~> stateStage.in0
-            stateSource ~> stateStage.in1
-            stateStage.out ~> syncStage.in0
-            params.remoteSource ~> syncStage.in1
-            syncStage.out ~> killSwitch.flow ~> opFilter ~> broadcastSyncResults
-            broadcastSyncResults ~> syncOpMap ~> params.processFlow ~> broadcastOps ~> broadcastSink ~> sinkTotal.in
-            broadcastSyncResults ~> stateUpdateStage.in0
-            broadcastSyncResults ~> conflictMap ~> mergeConflicts ~> sinkError
-            broadcastOps ~> stateUpdateStage.in1
-            broadcastSink ~> errorFilter ~> mergeConflicts
-            stateUpdateStage.out ~> sinkState
-            ClosedShape
-      })
-    }
+    for
+      stateSink <- createStateSink(params, stateFolder)
+      stateSource <- LocalState.constructLocalStateSource(stateFolder)
+    yield createSyncGraph(stateSource, stateSink, params)
 
   /**
     * Constructs a ''RunnableGraph'' for a stream that imports the local state
@@ -262,32 +231,30 @@ object SyncStream:
     */
   def createStateImportStream[TOTAL, ERROR](params: SyncStreamParams[TOTAL, ERROR])
                                            (implicit ec: ExecutionContext, mat: Materializer):
-  Future[RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]]] = Future {
+  Future[RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]]] =
     val stateFolder = LocalState.LocalStateFolder(params.stateFolder, params.streamName)
-    val stateSink = LocalState.localStateSink(stateFolder)
+    LocalState.constructLocalStateSink(stateFolder) map { stateSink =>
+      RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError, stateSink)(syncStreamMat) {
+        implicit builder =>
+          (sinkTotal, sinkError, sinkState) =>
+            import GraphDSL.Implicits.*
+            val broadcastResults = builder.add(Broadcast[FsElement](2))
+            val broadcastSink = builder.add(Broadcast[SyncOperationResult](2))
+            val mapState = builder.add(Flow[FsElement].map { elem =>
+              LocalState.LocalElementState(elem, removed = false)
+            })
+            val mapOp = builder.add(Flow[FsElement].map { elem =>
+              SyncOperationResult(SyncOperation(elem, SyncTypes.SyncAction.ActionLocalCreate, elem.level, elem.id),
+                optFailure = None)
+            })
+            val filterError = builder.add(Flow[SyncOperationResult].filter(_.optFailure.isDefined))
 
-    RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError, stateSink)(syncStreamMat) {
-      implicit builder =>
-        (sinkTotal, sinkError, sinkState) =>
-          import GraphDSL.Implicits.*
-          val broadcastResults = builder.add(Broadcast[FsElement](2))
-          val broadcastSink = builder.add(Broadcast[SyncOperationResult](2))
-          val mapState = builder.add(Flow[FsElement].map { elem =>
-            LocalState.LocalElementState(elem, removed = false)
-          })
-          val mapOp = builder.add(Flow[FsElement].map { elem =>
-            SyncOperationResult(SyncOperation(elem, SyncTypes.SyncAction.ActionLocalCreate, elem.level, elem.id),
-              optFailure = None)
-          })
-          val filterError = builder.add(Flow[SyncOperationResult].filter(_.optFailure.isDefined))
-
-          params.localSource ~> broadcastResults ~> mapState ~> sinkState
-          broadcastResults ~> mapOp ~> broadcastSink ~> sinkTotal
-          broadcastSink ~> filterError ~> sinkError.in
-          ClosedShape
-    })
-
-  }
+            params.localSource ~> broadcastResults ~> mapState ~> sinkState
+            broadcastResults ~> mapOp ~> broadcastSink ~> sinkTotal
+            broadcastSink ~> filterError ~> sinkError.in
+            ClosedShape
+      })
+    }
 
   /**
     * Creates a ''Sink'' that logs the received [[SyncOperation]]s to a file.
@@ -360,6 +327,74 @@ object SyncStream:
           broadcast ~> resultSink.in
           SinkShape(broadcast.in)
     })
+
+  /**
+    * Returns a ''RunnableGraph'' representing the sync stream for the given
+    * state source, state sink, and stream parameters.
+    *
+    * @param stateSource the ''Source'' to read local state information
+    * @param stateSink   the ''Sink'' to store updated state information
+    * @param params      the parameters of the sync stream
+    * @param ec          the execution context
+    * @tparam TOTAL the type of the value produced by the total sink
+    * @tparam ERROR the type of the value produced by the error sink
+    * @return the graph for the sync stream
+    */
+  private def createSyncGraph[TOTAL, ERROR](stateSource: Source[FsElement, Any],
+                                            stateSink: Sink[LocalState.LocalElementState, Future[Any]],
+                                            params: SyncStreamParams[TOTAL, ERROR])
+                                           (implicit ec: ExecutionContext):
+  RunnableGraph[Future[SyncStreamMat[TOTAL, ERROR]]] =
+    val killSwitch = params.optKillSwitch getOrElse KillSwitches.shared("dummy")
+    RunnableGraph.fromGraph(GraphDSL.createGraph(params.sinkTotal, params.sinkError, stateSink)(syncStreamMat) {
+      implicit builder =>
+        (sinkTotal, sinkError, sinkState) =>
+          import GraphDSL.Implicits.*
+          val broadcastSink = builder.add(Broadcast[SyncOperationResult](2))
+          val broadcastSyncResults = builder.add(Broadcast[SyncStageResult](3))
+          val broadcastOps = builder.add(Broadcast[SyncOperationResult](2))
+          val mergeConflicts = builder.add(Merge[SyncOperationResult](2))
+          val syncOpMap = builder.add(mapSyncResultToOp)
+          val conflictMap = builder.add(mapConflictToOp)
+          val errorFilter = builder.add(Flow[SyncOperationResult].filter(_.optFailure.isDefined))
+          val opFilter = builder.add(filterOperations(params.operationFilter))
+          val stateStage = builder.add(new LocalStateStage(Instant.now()))
+          val syncStage = builder.add(new SyncStage(params.ignoreDelta))
+          val stateUpdateStage = builder.add(new LocalStateUpdateStage)
+
+          params.localSource ~> stateStage.in0
+          stateSource ~> stateStage.in1
+          stateStage.out ~> syncStage.in0
+          params.remoteSource ~> syncStage.in1
+          syncStage.out ~> killSwitch.flow ~> opFilter ~> broadcastSyncResults
+          broadcastSyncResults ~> syncOpMap ~> params.processFlow ~> broadcastOps ~> broadcastSink ~> sinkTotal.in
+          broadcastSyncResults ~> stateUpdateStage.in0
+          broadcastSyncResults ~> conflictMap ~> mergeConflicts ~> sinkError
+          broadcastOps ~> stateUpdateStage.in1
+          broadcastSink ~> errorFilter ~> mergeConflicts
+          stateUpdateStage.out ~> sinkState
+          ClosedShape
+    })
+
+  /**
+    * Constructs the ''Sink'' for storing updated local state information based
+    * on the given stream parameters. Per default, the sink writes into a
+    * temporary state file. In dry-run mode, however, no state updates are
+    * written.
+    *
+    * @param params      the parameters of the sync stream
+    * @param stateFolder the folder where to store state information
+    * @param ec          the execution context
+    * @tparam TOTAL the type of the value produced by the total sink
+    * @tparam ERROR the type of the value produced by the error sink
+    * @return a ''Future'' with the ''Sink'' for local state information
+    */
+  private def createStateSink[ERROR, TOTAL](params: SyncStreamParams[TOTAL, ERROR],
+                                            stateFolder: LocalState.LocalStateFolder)
+                                           (implicit ec: ExecutionContext):
+  Future[Sink[LocalState.LocalElementState, Future[Any]]] =
+    if params.dryRun then Future.successful(Sink.ignore)
+    else LocalState.constructLocalStateSink(stateFolder)
 
   /**
     * Constructs the materialized value of a mirror stream from the results of
