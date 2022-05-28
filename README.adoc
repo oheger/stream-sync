@@ -3,12 +3,11 @@
 :toclevels: 3
 = Stream Sync
 
-Stream Sync is a tool to update one directory structure to become a copy of 
-another structure. Both structures are compared. Files or directories existing 
-in the source structure, but not in the destination structure are created
-there. Files that have been modified in the source structure override their
-counterparts in the destination structure. Files or directories that exist in
-the destination structure, but not in the source structure are removed.
+Stream Sync is a tool to synchronize two folder structures. It copies or
+updates files between the structures until their content is equivalent. The
+folder structures can reside on a local disk or on various cloud storages.
+Different modes for the synchronization are supported addressing different use
+cases; refer to <<Operation modes>> for further details.
 
 toc::[]
 
@@ -19,12 +18,68 @@ project has been checked out, you can cd into the project directory and enter
 the sbt console by typing `sbt`. Then the following commands are of interest:
 
 * `test` compiles everything and executes the unit tests
-* `integrationTest:test` compiles everything and executes the integration tests
+* `ITest / test` compiles everything and executes the integration tests
 * `assembly` as the build makes use of the
   https://github.com/sbt/sbt-assembly[sbt-assembly plugin], with this command
   a so-called fat jar can be built that is executable and contains all the
   dependencies of Stream Sync. This makes it easy to run the tool from the
   command line without having to bother with a large class path.
+
+== Operation modes
+When running Stream Sync it compares two folder structures and updates them
+to achieve a desired target state. Depending on a concrete use case, different
+target states are possible. The exact way how Stream Sync updates the
+structures it processes is controlled by its _operation mode_. The following
+subsections describe the operation modes supported by the tool.
+
+=== Mirror mode
+In _mirror mode_, a _destination_ directory structure becomes an exact copy of a
+_source_ structure. Both structures are compared. Files or directories existing
+in the source structure, but not in the destination structure are created
+there. Files that have been modified in the source structure override their
+counterparts in the destination structure. Files or directories that exist in
+the destination structure, but not in the source structure are removed. So,
+changes are applied only on the destination structure; the source structure is
+not modified.
+
+This mode is suitable to create an exact (non-incremental) copy of data
+stored in a folder structure. For instance, you have a local working state and
+want to back up this state to an external storage medium or upload it to a
+cloud storage. After modifying the local working state, you can run the tool
+again, and it will adjust the destination structure according to your latest
+changes.
+
+WARNING: Note that such a "mirror" is typically not a replacement for a full
+backup, since files deleted in the source structure are deleted in the
+destination structure as well and cannot be restored later.
+
+=== Sync mode
+The typical use case for _sync mode_ is a shared set of data that is used
+from multiple devices. A central copy of the data is available on a storage
+accessible from all devices, and each device has a local copy. When data on one
+device is changed, the changes are synced to the central copy. From there, they
+can be downloaded to all other devices.
+
+In contrast to _mirror mode_, there is not a source and a destination
+structure, but a _local_ and a _remote_ structure. During a run of Stream Sync,
+both structures may be modified: changes done locally are applied to the remote
+copy, changes on the remote data are synced to the local files. This mode is
+more complex than mirror mode. Single sync operations can fail if a conflict is
+detected; for instance if a file was changed both locally and on the remote
+side. In this case, the conflicting operation is skipped, an error is reported,
+and the user has to resolve the conflict manually.
+
+To be able to detect changes on the local copy and potential conflicts in a
+reliable manner, Stream Sync stores information about the managed data in a
+local file. Each sync run compares the current state of the local data with the
+information stored in the file and can thus determine what has actually
+changed. The file is then updated with the new local state resulting from the
+current sync run.
+
+CAUTION: The current implementation assumes that the data is modified on
+different devices by the same user at different times. It cannot handle
+parallel sync processes run at the same time from multiple devices against the
+central copy of data.
 
 == Usage
 
