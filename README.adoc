@@ -132,15 +132,13 @@ are paths on a local file system (or a network share that can be accessed in
 the same way as a local directory). In this case, the paths can be specified
 directly.
 
-To reference a different type of structure, specific prefixes need to be used.
-The meaning of the part after this prefix is then specific to the structure
-type; it can be for instance a URL pointing to a server on the internet.
-
-Currently, only a single prefix is supported: _dav:_. This prefix indicates
-that the structure is hosted on a WebDav server. The root URL to the directory
-on the server to be synced must be specified after the prefix. The following
-example shows how to sync a path on the local file system with a directory on a
-WebDav server:
+To reference a different type of structure, specific URIs need to be used.
+These URIs typically start with a prefix followed by a part specific to a
+dedicated structure type. To give a concrete example, one prefix that is
+currently supported is _dav:_. This prefix indicates that the structure is
+hosted on a WebDav server. The root URL to the directory on the server to be
+synced must be specified after the prefix. The following snippet shows how to
+sync a path on the local file system with a directory on a WebDav server:
 
  Sync [options] /data/local/music dav:https://my.cloud-space.com/data/music
 
@@ -153,7 +151,7 @@ destination of the sync process; therefore, when providing additional options
 it must be clear to which structure they apply. This is achieved by using
 special prefixes: `src-` for options to be applied to the source structure,
 and `dst-` for options referring to the destination structure. In the example
-above the WebDav structure is the destination; therefore, the user name and
+above the WebDav structure is the destination; therefore, the username and
 password options must be specified using the `dst-` prefix:
 
 [source]
@@ -174,8 +172,9 @@ Sync dav:https://server1.online.com/source \
 ----
 
 This convention makes it clear, which option applies to which structure. The
-structure types supported are described in more detail later in this document.
-It is then listed for each structure type which additional options it supports.
+structure types supported are described in more detail in the
+<<Structure types>> section later in this document. This section also lists for
+each structure type which additional options it supports.
 
 === Option syntax
 
