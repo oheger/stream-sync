@@ -86,12 +86,31 @@ central copy of data.
 The tool offers a command line interface (CLI) that is invoked using the
 following general syntax:
 
- Sync [options] <sourceStructure> <destinationStructure>
+ Sync <sourceStructure> <destinationStructure> [--mirror] [options]
 
-where _sourceStructure_ points to the structure serving as the source of the
-sync process, and _destinationDirectory_ refers to the destination structure.
-After a successful execution, changes have been applied to
-_destinationDirectory_ , so that it is now a copy of the source structure.
+for <<Mirror mode>>, where _sourceStructure_ points to the structure serving
+as the source of the mirror process, and _destinationStructure_ refers to the
+destination structure; or
+
+ Sync <localStructure> <remoteStructure> --sync [options]
+
+to enable <<Sync mode>>, where _localStructure_ references the local copy of
+the data, and _remoteStructure_ is a URL pointing to the central copy. The
+`--mirror` switch is optional; _mirror mode_ is the default operation mode.
+
+The following subsections provide further details about the command line
+options supported by the tool. Most of these options work in all operation
+modes; so no explicit distinction is needed. Therefore, this documentation is a
+bit lax with the terms it uses:
+
+* The term _sync process_ is used to refer to a run of the Stream Sync tool in
+  all operation modes; it can especially mean a run in _mirror_ mode as well.
+* The structures processed by the tool are usually referred to as _source_ and
+  _destination_ structure. This wording also covers the _local_ and _remote_
+  structure of runs in _sync_ mode.
+
+Options that are operation mode-specific are marked as such in their
+description.
 
 _Note:_ Being written in Scala, Stream Sync requires a Java Virtual Machine to
 run. So the full command to be executed has to launch Java and specify the full
