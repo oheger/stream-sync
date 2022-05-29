@@ -359,53 +359,18 @@ before a given reference date.
 before 2018.
 |====
 
-=== Sync log files
+=== Log files
 
 The sync operations executed during a sync process can also be written in a
 textual representation to a log file. This is achieved by adding the `--log`
-option whose value is the path to the log file to be written.
+option whose value is the path to the log file to be written. With this option,
+a protocol of the operations that have been executed can be generated.
 
-It is also possible to use such a log file as input for another sync process.
-Then the sync operations to be executed are not calculated as the delta between
-two structures, but are directly read from the log file. This is achieved by
-specifying the `--sync-log` option whose value is the path to the log file to
-be read. Note that in this mode still the URIs for both the source and
-destination structure need to be specified; log files contain only relative
-URIs, and in order to resolve them correctly the root URIs of the original
-structures must be provided.
-
-If the structures to be synced are pretty complex and/or large files need to
-be transferred over a slow network connection, sync processes can take a while.
-With the support for log files this problem can be dealt with by running
-multiple incremental sync operations. This works as follows:
-
-1. An initial sync process is run for the structures in question that has the
-   `--log` option set and specifies an apply mode of `None`. This does not
-   execute any actions, but creates a log file with the operations that need to
-   be done.
-2. Now further sync processes can be started to process the sync log written in
-   the first step. For such operations the following options must be set:
-   * `--sync-log` is set to the path of the log file written in the first step.
-   * `--log` is set to a file keeping track on the progress of the overall
-     operation. This file is continuously updated with the sync operations that
-     have been executed.
-
-The sync processes can now be interrupted at any time and resumed again
-later. When restarted with these options the process ignores all sync
-operations listed in the progress log and only executes those that are still
-pending. This is further outlined in the _Examples_ section.
-
-There is another kind of log file that can be written during a sync process: an
-error log. This file contains all sync operations that could not be applied due
+If only failed operations are of interest, the _error log_ file is the right
+choice. This file contains all sync operations that could not be applied due
 to some exception, followed by this exception. This gives an overview over what
 went wrong and which files may not be up-to-date. To enable this error log, use
 the `--error-log` option and provide the path to the error log file.
-
-In the incremental mode, as described above, the error log file has no further
-function than reporting errors. Sync operations that appear in the error log
-are not written to the normal log and are not considered to be completed. So
-when running another sync process from the sync log, these operations are
-retried (and if they fail again, they are written anew to the error log).
 
 === Adjust granularity of timestamps
 
@@ -976,19 +941,63 @@ destination structure, and a sync log file can be specified, in which the sync
 operations are written. It will, however, not apply any actual changes to the
 destination structure.
 
-=== Switching source and destination structures
+=== Options specific to Mirror mode
+This section describes the options that are only allowed in <<Mirror mode>>.
 
-The typical use case for Stream Sync is transferring data from one system - the
-leading system - to another data structure; the destination structure gets
-modified to become a clone of the original system. From time to time you may
-need to run a sync process in the inverse direction.
+==== Sync log files
+Section <<Log files>> described the usage of the `--log` option to produce a
+protocol of the operations executed during a sync/mirror process. While such a
+log file is meaningful on its own, for mirror processes it can serve an
+additional purpose:
+
+It is possible to use such a log file as input for another mirror process.
+Then the sync operations to be executed are not calculated as the delta between
+two structures, but are directly read from the log file. This is achieved by
+specifying the `--sync-log` option whose value is the path to the log file to
+be read. Note that in this mode still the URIs for both the source and
+destination structure need to be specified; log files contain only relative
+URIs, and in order to resolve them correctly the root URIs of the original
+structures must be provided.
+
+If the structures to be synced are pretty complex and/or large files need to
+be transferred over a slow network connection, sync processes can take a while.
+With the support for log files this problem can be dealt with by running
+multiple incremental mirror processes. This works as follows:
+
+1. An initial mirror process is run for the structures in question that has the
+`--log` option set and enables <<Dry-run mode>>. This does not execute any
+actions, but creates a log file with the operations that need to be done.
+2. Now further mirror processes can be started to process the sync log written
+in the first step. For such operations the following options must be set:
+* `--sync-log` is set to the path of the log file written in the first step.
+* `--log` is set to a file keeping track on the progress of the overall
+operation. This file is continuously updated with the sync operations that
+have been executed.
+
+The mirror processes can now be interrupted at any time and resumed again
+later. When restarted with these options the process ignores all sync
+operations listed in the progress log and only executes those that are still
+pending. This is further outlined in the <<Examples and use cases>> section.
+
+In the incremental mode, as described above, the error log file has no further
+function than reporting errors. Sync operations that appear in the error log
+are not written to the normal log and are not considered to be completed. So
+when running another mirror process from the sync log, these operations are
+retried (and if they fail again, they are written anew to the error log).
+
+==== Switching source and destination structures
+
+The typical use case for Stream Sync in _mirror mode_ is transferring data from
+one system - the leading system - to another data structure; the destination
+structure gets modified to become a clone of the original system. From time to
+time you may need to run a mirror process in the inverse direction.
 
 Consider for example that you use Stream Sync as a backup tool. If you mess up
 with your original data, you will probably want to replace it from the backup
 storage. This is of course easily possible: you just have to rewrite the sync
 command you use for your backup to work in the opposite direction. This can be
-done rather mechanically; the source and destination URIs have be exchanged, as
-well as the `src-` and `dst-` prefixes of the parameters that configure your
+done rather mechanically; the source and destination URIs have to be exchanged,
+as well as the `src-` and `dst-` prefixes of the parameters that configure your
 data structures.
 
 Sync commands tend to be become complex; you often need a bunch of parameters
@@ -1035,6 +1044,11 @@ the `--switch` parameter:
 
  ./backup.sh --switch
 
+NOTE: The `--switch` option is available only in _mirror mode_, since in _sync
+mode_ the structures have different semantics attached to them. The local
+structure is the one that is backed by a local state file. Therefore, it is not
+easily possible to switch the direction of the process.
+
 === Examples and use cases
 
 ==== Sync a local directory to an external USB hard disk
@@ -1079,7 +1093,7 @@ transferred to the backup medium.
 
 ==== Interrupt and resume long-running sync processes
 
-As described under _Sync log files_, with the correct options sync processes
+As described under <<Sync log files>>, with the correct options mirror processes
 can be stopped at any time and resumed at a later point in time. The first
 step is to generate a so-called _sync log_, i.e. a file containing the
 operations to be executed to sync the structures in question:
@@ -1091,7 +1105,7 @@ creates a file _/data/sync.log_ with a textual description of the operations to
 execute. (Such files have a pretty straight-forward structure. Each line
 represents an operation including an action and the element affected.)
 
-Now another sync process can be started that takes this log file as input. To
+Now another mirror process can be started that takes this log file as input. To
 keep track on the progress that is made, a second log file has to be written -
 the _progress log_:
 
