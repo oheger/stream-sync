@@ -1049,6 +1049,89 @@ mode_ the structures have different semantics attached to them. The local
 structure is the one that is backed by a local state file. Therefore, it is not
 easily possible to switch the direction of the process.
 
+=== Options specific to Sync mode
+As it is the case for _mirror mode_, a number of command line options is
+available only if <<Sync mode>> is active. In most cases, these are related to
+the local state managed by Stream Sync for sync processes. The following
+subsections deal with these options.
+
+==== Managing local state files
+As has been shortly mentioned in the <<Sync mode>> section, Stream Sync manages
+a file with information about the local state for each sync stream. Based on
+this file, it can detect local updates and compute the changes to be applied to
+the remote structure (or recognize conflicting changes). A sync stream is
+identified by its local and remote sources; for each combination of a local and
+a remote source, a separate state file is created.
+
+Per default Stream Sync can manage these state files transparently without user
+interaction. They are stored in a subfolder named `.stream-sync` in the current
+user's home directory and have a (non-readable) name derived from the URIs of the
+local and remote structures. (Actually, the name is computed by concatenating
+the local and the remote URI, calculating a SHA-1 hash on this string, and
+applying a Base64-encoding on the result; but this is merely an implementation
+detail.)
+
+While these defaults should work well in most cases, they can be overridden
+with some command line options:
+
+* `--state-path` allows specifying the path in which the state file is created.
+  Here the user can provide an arbitrary directory. The path will be created if
+  it does not exist.
+* `--stream-name` can be used to set a name for the sync stream. The state file
+  is then given this name instead of the cryptic auto-generated one.
+
+The following fragment shows a usage example of these options:
+
+.Specifying options for the local state file
+[source,shell script]
+----
+Sync /data/documents dav:https://webdav.my-storage.com/backup/ --sync \
+  --state-path /data/sync/state
+  --stream-name 'documents-backup'
+  --dst-user backup-user
+----
+
+==== Importing local state
+Every run of a sync process updates the local state file associated with the
+stream. For the initial execution of the stream, a state file does not exist
+yet. This is no problem if one of the structures taking part in the sync
+process is empty and will be initialized from the other side. Then the initial
+sync run actually becomes a _mirror_: Stream Sync copies all the files found in
+the existing structure to the empty one and writes an up-to-date local state
+file automatically.
+
+If there is already data on both sides, however, there should better be a valid
+local state file available before running a first sync process. Otherwise,
+Stream Sync considers all local files as newly created and will treat changes
+on remote files as conflicts. To avoid this, you should create a clean local
+state file that reflects the current state of the local structure. This is
+achieved by adding the `--import-state` switch to the command line. The switch
+enables a special mode, in which only the local structure is iterated over, and
+all files encountered are recorded in the state file. Afterwards, a fresh and
+up-to-date state file exists. A (re-)import of the local state can also be done
+if the state file got corrupted for whatever reason.
+
+For the example sync stream from the previous section, an import command could
+look as follows:
+
+.Importing local state
+[source,shell script]
+----
+Sync /data/documents dav:https://webdav.my-storage.com/backup/ --sync --import-state \
+  --state-path /data/sync/state
+  --stream-name 'documents-backup'
+  --dst-user backup-user
+----
+
+NOTE: You could of course drop the options that configure the local state file.
+Then the file would be created and initialized at its default location in the
+user's home directory.
+
+NOTE: The remote side of the sync process must be fully specified, even if it
+will not be accessed by this sync run. This is because the default name of the
+state file is derived from the URIs for the local and remote structures; so
+it must be present.
+
 === Examples and use cases
 
 ==== Sync a local directory to an external USB hard disk
