@@ -23,7 +23,7 @@ lazy val VersionAkkaHttp = "10.2.9"
 lazy val VersionCloudFiles = "0.5"
 lazy val VersionDisruptor = "3.4.4"
 lazy val VersionLog4j = "2.17.2"
-lazy val VersionScala = "3.1.1"
+lazy val VersionScala = "3.1.2"
 lazy val VersionScli = "1.1.0"
 
 /** Definition of versions for test dependencies. */
