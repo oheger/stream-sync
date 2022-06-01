@@ -27,9 +27,9 @@ lazy val VersionScala = "3.1.2"
 lazy val VersionScli = "1.1.0"
 
 /** Definition of versions for test dependencies. */
-lazy val VersionScalaTest = "3.2.11"
+lazy val VersionScalaTest = "3.2.12"
 lazy val VersionScalaTestMockito = "3.2.11.0"
-lazy val VersionWireMock = "2.32.0"
+lazy val VersionWireMock = "2.33.2"
 
 scalacOptions ++=
   Seq(
