@@ -1484,6 +1484,76 @@ Sync /data/google/music googledrive:music \
 Of course, all other options provided by Stream Sync, like encryption or
 filters, are available as well.
 
+==== Setting up a sync process for existing data
+This section discusses the initialization of a sync process over already
+existing data on a concrete example. It assumes that the _mirror mode_ of
+Stream Sync has already been used to keep a backup of a local folder with music
+files on a Google Drive account. (For simplicity, we use the example from the
+previous section about
+<<Sync from a local directory to Google Drive,Google Drive>>.) Now another
+device comes into play that should have read and write access to the music
+collection. The challenge here lies in the correct setup of the local state
+file.
+
+The first step is to make sure that the local folder contains the most recent
+data and is in sync with the content of the Google Drive folder. The
+straight-forward way to achieve this is by running again a mirror process that
+applies all local changes to the Cloud folder:
+
+.Mirror run to apply all local changes to the Google Drive folder
+[source]
+----
+Sync /data/google/music googledrive:music \
+  --dst-idp-storage-path $TOKEN_STORE \
+  --dst-idp-name google
+----
+
+This assumes that modifications were done only locally, since all changes on
+the Google Drive Folder are overridden. If this was not the case, you would
+have to manually ensure that both structures contain the same, up-to-date data.
+
+After the local folder has the correct content, the local state can now be
+imported using the command below. We use the standard name and location for the
+local state file:
+
+.Importing local state
+[source]
+----
+Sync /data/google/music googledrive:music \
+  --sync \
+  --import-state \
+  --dst-idp-storage-path $TOKEN_STORE \
+  --dst-idp-name google
+----
+
+This should finish rather fast, since only the local file system is processed.
+The command yields a file with local state information in the `.stream-sync`
+subfolder of the user's home directory.
+
+The second device that should have access to the music collection can be
+initialized in a similar way. Probably, we want to run a mirror process first,
+but this time using the Google Drive folder as source and the local folder as
+destination structure - after the steps performed on the first computer, the
+Google Drive should contain the most recent data. After this is done, the local
+state can be imported as described before; execute an equivalent command, maybe
+the path to the local folder has to be adapted.
+
+In the future, manipulations can be done on the data on both devices. Start a
+sync process when appropriate using a command like this:
+
+.Regular sync run
+[source]
+----
+Sync /data/google/music googledrive:music \
+  --sync \
+  --dst-idp-storage-path $TOKEN_STORE \
+  --dst-idp-name google
+----
+
+(This is basically the same command as for importing the local state, just
+without the `--import-state` flag.) Stream Sync will sync the changes from
+both devices or issue warnings if it detects conflicting changes.
+
 == Architecture
 
 The Stream Sync tool makes use of http://www.reactive-streams.org/[Reactive streams]
