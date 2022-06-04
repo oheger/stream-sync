@@ -15,7 +15,7 @@
  */
 
 /** The version of this project. */
-lazy val VersionStreamSync = "0.15-SNAPSHOT"
+lazy val VersionStreamSync = "0.15"
 
 /** Definition of versions for compile-time dependencies. */
 lazy val VersionAkka = "2.6.19"
