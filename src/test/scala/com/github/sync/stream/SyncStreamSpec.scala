@@ -355,8 +355,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val logFile = createFileReference()
     val params = mirrorParams(operations, SyncStream.createLogSink(logFile))
 
-    val result = runStream(params)
-    result.totalSinkMat.status should be(Success(Done))
+    runStream(params)
     val logLines = Files.readAllLines(logFile)
     logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serialize(operations.head).utf8String)
     logLines.get(1) + System.lineSeparator() should be(ElementSerializer.serialize(operations(1)).utf8String)
@@ -367,8 +366,7 @@ class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     val logFile = createFileReference()
     val params = mirrorParams(operations, SyncStream.createLogSink(logFile, errorLog = true))
 
-    val result = runStream(params)
-    result.totalSinkMat.status should be(Success(Done))
+    runStream(params)
     val logLines = Files.readAllLines(logFile)
     logLines.get(0) + System.lineSeparator() should be(ElementSerializer.serialize(operations(1)).utf8String)
     logLines.get(1) should include(operations(1).toString + " failed")

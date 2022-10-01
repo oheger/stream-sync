@@ -187,7 +187,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
   it should "handle a command to log into an IDP" in {
     val ResultText = "Login successful :-)"
     val storageConfig = SyncOAuthStorageConfig(testDirectory, "testIdp", None)
-    val args = Array(OAuthParameterManager.CommandLoginIDP, cmdOpt(OAuthParameterManager.StoragePathOption),
+    val args = IndexedSeq(OAuthParameterManager.CommandLoginIDP, cmdOpt(OAuthParameterManager.StoragePathOption),
       storageConfig.rootDir.toString, cmdOpt(OAuthParameterManager.NameOption), storageConfig.baseName,
       cmdOpt(OAuthParameterManager.PasswordOption), "password")
     val commands = mock[OAuthCommands]

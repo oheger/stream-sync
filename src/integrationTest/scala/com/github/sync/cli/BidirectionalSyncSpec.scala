@@ -182,13 +182,13 @@ class BidirectionalSyncSpec extends BaseSyncSpec :
   }
 
   it should "detect invalid sync stream parameters in mirror mode" in {
-    val options = Array("src", "dst", "--state-path", ".state", "--stream-name", "my-sync-stream")
+    val options = IndexedSeq("src", "dst", "--state-path", ".state", "--stream-name", "my-sync-stream")
 
     checkSyncOutput(options, "Invalid command line options", "--state-path", "--stream-name")
   }
 
   it should "detect invalid mirror stream parameters in sync mode" in {
-    val options = Array("local", "remote", "--sync-log", "my-log.log", "--switch", "--sync")
+    val options = IndexedSeq("local", "remote", "--sync-log", "my-log.log", "--switch", "--sync")
 
     checkSyncOutput(options, "Invalid command line options", "--sync-log", "--switch")
   }

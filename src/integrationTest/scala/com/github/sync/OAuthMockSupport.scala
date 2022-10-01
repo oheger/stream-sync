@@ -121,9 +121,9 @@ trait OAuthMockSupport:
     * @return the resulting array with options
     */
   protected def withOAuthOptions(storageConfig: SyncOAuthStorageConfig, prefix: String, options: String*):
-  Array[String] =
+  IndexedSeq[String] =
     val pwdOptions = storageConfig.optPassword match
-      case Some(pwd) => Array(prefix + "idp-password", pwd.secret)
-      case None => Array(prefix + "store-unencrypted")
-    options.toArray ++ pwdOptions ++ Array(prefix + "idp-name", storageConfig.baseName,
+      case Some(pwd) => IndexedSeq(prefix + "idp-password", pwd.secret)
+      case None => IndexedSeq(prefix + "store-unencrypted")
+    options.toIndexedSeq ++ pwdOptions ++ IndexedSeq(prefix + "idp-name", storageConfig.baseName,
       prefix + "idp-storage-path", testDirectory.toAbsolutePath.toString)

@@ -158,7 +158,7 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
     stubResolvePathRequest(FolderID, authFunc = BasicAuthFunc)
     stubOneDriveFolderRequest(FolderID, "folder3.json", authFunc = BasicAuthFunc)
     stubDownloadRequest(FileID, BasicAuthFunc)
-    val options = Array("onedrive:" + DriveID, dstFolder.toAbsolutePath.toString, "--src-path", ServerPath,
+    val options = IndexedSeq("onedrive:" + DriveID, dstFolder.toAbsolutePath.toString, "--src-path", ServerPath,
       "--src-server-uri", serverUri("/"), "--src-user", UserId, "--src-password", Password)
 
     val result = futureResult(runSync(options))
@@ -191,7 +191,7 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
   }
 
   it should "not support short alias names for storage configuration options" in {
-    val options = Array("-n", "someIDP", "-D", testDirectory.toAbsolutePath.toString, "-U", "some/src/path",
+    val options = IndexedSeq("-n", "someIDP", "-D", testDirectory.toAbsolutePath.toString, "-U", "some/src/path",
       "onedrive:" + DriveID, "--dst-path", "ServerPath", "--dst-server-uri", serverUri("/"))
 
     val output = checkSyncOutput(options, "Invalid")
@@ -210,7 +210,7 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
     stubResolvePathRequest(FolderID, authFunc = BasicAuthFunc)
     stubOneDriveFolderRequest(FolderID, "folder3.json", authFunc = BasicAuthFunc)
     stubFor(BasicAuthFunc(delete(anyUrl())).willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
-    val options = Array(srcFolder.toAbsolutePath.toString, "onedrive:" + DriveID, "--dst-path", ServerPath,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, "onedrive:" + DriveID, "--dst-path", ServerPath,
       "--dst-server-uri", serverUri("/"), "--dst-user", UserId, "--dst-password", Password)
 
     val result = futureResult(runSync(options))
@@ -231,7 +231,7 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
       bodyFile("encrypted2.dat"))
     stubDownloadRequest("xxxyyyzzz1234567!27123", BasicAuthFunc, bodyFile("encrypted3.dat"))
     stubDownloadRequest("xxxyyyzzz1234567!27222", BasicAuthFunc, bodyFile("encrypted4.dat"))
-    val options = Array("onedrive:" + DriveID, dstFolder.toAbsolutePath.toString, "--src-path", ServerPath,
+    val options = IndexedSeq("onedrive:" + DriveID, dstFolder.toAbsolutePath.toString, "--src-path", ServerPath,
       "--src-server-uri", serverUri("/"), "--src-user", UserId, "--src-password", Password,
       "--src-encrypt-password", CryptPassword, "--src-crypt-mode", "filesAndNames")
 
@@ -246,7 +246,7 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
   }
 
   it should "generate a usage message if invalid parameters are passed in" in {
-    val options = Array("onedrive:" + DriveID, "/some/path")
+    val options = IndexedSeq("onedrive:" + DriveID, "/some/path")
 
     checkSyncOutput(options, "src-" + SyncCliStructureConfig.PropOneDrivePath,
       "src-" + SyncCliStructureConfig.PropOneDriveServer, "src-" + SyncCliStructureConfig.PropOneDriveUploadChunkSize,

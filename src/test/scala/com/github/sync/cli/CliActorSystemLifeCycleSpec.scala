@@ -38,7 +38,7 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers:
   "ActorSystemLifeCycle" should "manage the life-cycle of an actor system" in {
     val SrcPath = "/src/sync/data"
     val DstPath = "/dst/sync/target"
-    val CommandLine = Array(SrcPath, DstPath)
+    val CommandLine = IndexedSeq(SrcPath, DstPath)
     val myApp = new CliActorSystemLifeCycleTestImpl {
       override val name: String = "TestApp"
 
@@ -74,7 +74,7 @@ class CliActorSystemLifeCycleSpec extends AnyFlatSpec with Matchers:
 
     val outStream = new ByteArrayOutputStream
     Console.withOut(outStream) {
-      myApp.run(Array("/src", "/dst"))
+      myApp.run(IndexedSeq("/src", "/dst"))
       val output = new String(outStream.toByteArray)
       output should include(exception.getClass.getName)
       output should include(exception.getMessage)

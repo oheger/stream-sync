@@ -81,7 +81,7 @@ object Sync:
 
   def main(args: Array[String]): Unit =
     val sync = new Sync
-    sync.run(args)
+    sync.run(args.toIndexedSeq)
 
   /**
     * Implements a sync process based on the parameters provided. Result is a

@@ -125,7 +125,7 @@ class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFl
     * @return a sequence with the elements extracted from the file
     */
   private def readLocalStateFile(path: Path): Seq[LocalElementState] =
-    val lines = readDataFile(path).split(System.lineSeparator())
+    val lines = readDataFile(path).split(System.lineSeparator()).toIndexedSeq
     lines.map(line => ElementSerializer.deserialize[LocalElementState](line).get)
 
   /**

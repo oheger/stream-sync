@@ -55,7 +55,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, "test2.txt")
     createTestFile(srcFolder, "ignored.tmp")
     createTestFile(dstFolder, "toBeRemoved.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--filter", "exclude:*.tmp", "--mirror")
 
     val result = futureResult(runSync(options))
@@ -77,7 +77,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, "test2.txt")
     createTestFile(srcFolder, "ignored.tmp")
     createTestFile(dstFolder, "toBeRemoved.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--file", filterFile.toAbsolutePath.toString)
 
     val result = futureResult(runSync(options))
@@ -94,7 +94,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, "test2.txt")
     createTestFile(srcFolder, "ignored.tmp")
     createTestFile(dstFolder, "toBeRemoved.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "-f", "exclude:*.tmp")
     val sync = createSync()
 
@@ -105,7 +105,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
   }
 
   it should "generate a usage message if no structure URIs are passed in" in {
-    val options = Array("--filter", "exclude:*.tmp", "--foo", "bar")
+    val options = IndexedSeq("--filter", "exclude:*.tmp", "--foo", "bar")
 
     val output = checkSyncOutput(options, "<sourceURI>", "<destinationURI>",
       SyncCliStreamConfig.DryRunOption, SyncCliStreamConfig.TimeoutOption,
@@ -116,7 +116,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
   }
 
   it should "generate a usage message with the options for the local file system" in {
-    val options = Array("src/directory", "dav:directory", "--filter", "exclude:*.tmp", "--help")
+    val options = IndexedSeq("src/directory", "dav:directory", "--filter", "exclude:*.tmp", "--help")
 
     val output = checkSyncOutput(options, "src-" + SyncCliStructureConfig.PropLocalFsTimeZone)
     output should not include "dst-" + SyncCliStructureConfig.PropLocalFsTimeZone
@@ -126,14 +126,14 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
   }
 
   it should "generate a usage and error message if unsupported options are passed in" in {
-    val options = Array("src/directory", "dst/targetFolder", "--unknown", "yes",
+    val options = IndexedSeq("src/directory", "dst/targetFolder", "--unknown", "yes",
       "--filter", "exclude:*.tmp", "--foo", "bar")
 
     checkSyncOutput(options, "unknown", "foo", "Invalid command line options")
   }
 
   it should "display parameter alias names in the usage message" in {
-    val options = Array("src/directory", "dst/folder", "-h")
+    val options = IndexedSeq("src/directory", "dst/folder", "-h")
 
     checkSyncOutput(options, "--filter, -f", "--help, -h")
   }
@@ -146,7 +146,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, "ignored.tmp")
     val removeFile = createTestFile(dstFolder, "removed.txt")
     val removeFileID = UriEncodingHelper encode removeFile.toString
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--filter", "exclude:*.tmp", "--log", logFile.toAbsolutePath.toString)
 
     val result = futureResult(runSync(options))
@@ -164,7 +164,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val LogHeader = "This is my log." + System.lineSeparator()
     val logFile = createDataFile(content = LogHeader)
     createTestFile(srcFolder, "fileToSync.dat")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "-d", "-l", logFile.toAbsolutePath.toString)
 
     futureResult(runSync(options))
@@ -177,7 +177,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, "file1.txt")
     createTestFile(srcFolder, "file2.txt")
     createTestFile(dstFolder, "removed.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "-d")
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "-d")
 
     val result = futureResult(runSync(options))
     result.successfulOperations should be(3)
@@ -202,7 +202,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
       s"CREATE 0 - FOLDER $NewFolderName /$NewFolderName 0",
       s"REMOVE 0 ${encodePath(removeFile)} FILE $RemoveFileName /$RemoveFileName 0 2018-09-12T21:12:45.00Z 10")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString)
 
     val result = futureResult(runSync(options))
@@ -224,7 +224,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val operations = List("not a valid sync operation!?",
       s"CREATE 0 null FILE ${encodePath(successPath)} /$SuccessFile 0 $lastModified 42")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString)
 
     createSync().run(options)
@@ -240,7 +240,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val operations = List(s"OVERRIDE 0 nonExisting.dat FILE f1 /nonExisting.file 0 $lastModified 10",
       s"CREATE 0 null FILE ${encodePath(successPath)} /$SuccessFile 0 $lastModified 42")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--timeout", "2")
 
     createSync().run(options)
@@ -258,7 +258,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
       s"CREATE 0 null FILE ${encodePath(successPath)} /$SuccessFile 0 $lastModified 42")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val logFile = createFileReference()
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString,
       "--timeout", "2")
 
@@ -280,7 +280,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val operations = List(ProcessedOp, s"CREATE 0 null FILE ${encodePath(newPath)} /$NewFile 0 $lastModified 4")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val logFile = createDataFile(content = ProcessedOp)
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString)
 
     val result = futureResult(runSync(options))
@@ -305,7 +305,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
       if uri == dstFolder.toString then dstProtocol else srcProtocol
     })
     val protocolSetupFunc: ProtocolFactorySetupFunc = (_, _, _, _) => protocolFactory
-    val options = Array(srcFolder.toString, dstFolder.toString)
+    val options = IndexedSeq(srcFolder.toString, dstFolder.toString)
 
     futureResult(runSync(options, optProtocolSetupFunc = Some(protocolSetupFunc)))
     verify(srcProtocol).close()
@@ -326,7 +326,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, ChangedFile, fileTime = Some(Time2))
     val changedPath = createTestFile(dstFolder, ChangedFile, fileTime = Some(Time2))
     val logFile = createFileReference()
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--log", logFile.toAbsolutePath.toString, "--dst-time-zone", s"UTC+0$DeltaHours:00", "-M")
 
     val result = futureResult(runSync(options))
@@ -350,7 +350,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, Name2, fileTime = Some(Time1))
     createTestFile(dstFolder, Name1, fileTime = Some(Time2))
     createTestFile(dstFolder, Name2, fileTime = Some(Time3))
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--ignore-time-delta", TimeDeltaThreshold.toString)
 
     val result = futureResult(runSync(options))
@@ -362,7 +362,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val TestFileName = "TestFileToBeEncrypted.txt"
     createTestFile(srcFolder, TestFileName)
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", "!encryptDest!", "--dst-crypt-mode", "files")
 
     val result = futureResult(runSync(options))
@@ -377,11 +377,11 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val TestFileName = "TestFileToBeEncryptedAndDecrypted.txt"
     val Password = "privacy"
     createTestFile(srcFolder, TestFileName)
-    val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
+    val options1 = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "files")
     futureResult(runSync(options1))
 
-    val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
+    val options2 = IndexedSeq(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
       "--src-encrypt-password", Password, "--src-crypt-mode", "files")
     val result = futureResult(runSync(options2))
     result.totalOperations should be(result.successfulOperations)
@@ -394,9 +394,9 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val TestFileName = "TestFileToBeEncrypted.txt"
     createTestFile(srcFolder, TestFileName)
     val Password = "let's_crypt"
-    val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options1 = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "files")
-    val options2 = Array(dstFolder.toAbsolutePath.toString, srcFolder.toAbsolutePath.toString,
+    val options2 = IndexedSeq(dstFolder.toAbsolutePath.toString, srcFolder.toAbsolutePath.toString,
       "--src-encrypt-password", Password, "--src-crypt-mode", "files")
     futureResult(runSync(options1))
 
@@ -411,7 +411,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val TestFileName = "TestFileToBeEncryptedAndScrambled.txt"
     createTestFile(srcFolder, TestFileName)
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", "crYptiC", "--dst-crypt-mode", "FilesAndNames")
 
     val result = futureResult(runSync(options))
@@ -433,7 +433,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val pathOverride = createTestFile(dstFolder, encOverrideName)
     val delFolder = Files.createDirectory(dstFolder.resolve(delFolderName))
     createTestFile(delFolder, delFileName)
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "filesAndNames")
 
     val result = futureResult(runSync(options))
@@ -452,15 +452,15 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(subDir, "sub.dat")
     createTestFile(subDir, "anotherSub.txt")
     val Password = "test-privacy"
-    val options1 = Array(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
+    val options1 = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder1.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "filesAndNames")
     futureResult(runSync(options1))
 
-    val options2 = Array(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
+    val options2 = IndexedSeq(dstFolder1.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString,
       "--src-encrypt-password", Password, "--src-crypt-mode", "filesAndNames")
     futureResult(runSync(options2))
     checkFile(dstFolder2, "top.txt")
-    val options3 = Array(srcFolder.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString)
+    val options3 = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder2.toAbsolutePath.toString)
     val result = futureResult(runSync(options3))
     result.totalOperations should be(0)
   }
@@ -474,7 +474,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(subDir, "sub.txt")
     createTestFile(subSubDir, "deep1.txt")
     val Password = "Complex?"
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--dst-encrypt-password", Password, "--dst-crypt-mode", "filesAndNames")
     futureResult(runSync(options)).successfulOperations should be(5)
 
@@ -502,7 +502,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(srcFolder, "smallFile2.txt")
     createTestFile(srcFolder, "smallFile3.txt")
     createTestFile(srcFolder, "smallFile4.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--throttle", "1")
 
     intercept[TimeoutException] {
@@ -518,7 +518,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     (1 to FilesCount) foreach { idx =>
       createTestFile(srcFolder, s"testFile$idx.txt")
     }
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--throttle", FilesCount.toString, "--throttle-unit", "Minute")
 
     intercept[TimeoutException] {
@@ -538,7 +538,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
       createTestFile(srcFolder, fileName, fileTime = Some(timestamp))
       createTestFile(dstFolder, fileName, fileTime = Some(timestamp))
     }
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--throttle", "1")
 
     val result = futureResult(runSync(options))
@@ -555,7 +555,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
       s"CREATE 0 $NewFolderName FOLDER $NewFolderName %2F$NewFolderName 0")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val errorLogFile = createFileReference()
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString,
       "--error-log", errorLogFile.toAbsolutePath.toString)
 
@@ -574,7 +574,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val operations = List(s"OVERRIDE 0 $FailedFile FILE $FailedFile /$FailedFile 0 $lastModified 10")
     val syncLogFile = createDataFile(content = operations.mkString("\n"))
     val logFile = createFileReference()
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", logFile.toAbsolutePath.toString,
       "--timeout", "2")
 
@@ -589,7 +589,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val f1 = createTestFile(srcFolder, "test1.txt")
     val f2 = createTestFile(srcFolder, "test2.txt")
     val f3 = createTestFile(dstFolder, "toBeRemoved.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--debug")
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--debug")
 
     val log = runSyncAndCaptureLogs(options)
     List(f1, f2, f3) foreach { file =>
@@ -601,7 +601,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val f = createTestFile(srcFolder, "test1.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--info")
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--info")
 
     val log = runSyncAndCaptureLogs(options)
     log should not include f.getFileName.toString
@@ -617,7 +617,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(dstSubFolder, "dest.dat")
     createTestFile(srcSubFolder1, "src.dat")
     createTestFile(srcSubFolder2, "moreData.txt")
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--info")
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--info")
 
     val log = runSyncAndCaptureLogs(options)
     List(srcSubFolder1, srcSubFolder2) foreach { folder =>
@@ -637,7 +637,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
     createTestFile(dstFolder, UnchangedFile, fileTime = Some(Time1))
     createTestFile(srcFolder, ChangedFile, fileTime = Some(Time2))
     createTestFile(dstFolder, ChangedFile, fileTime = Some(Time3))
-    val options = Array(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--debug")
+    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--debug")
 
     val log = runSyncAndCaptureLogs(options)
     log should not include Time1.toString

@@ -55,7 +55,7 @@ object OAuth:
     * @param args the command line arguments
     */
   def main(args: Array[String]): Unit =
-    new OAuth(OAuthCommandsImpl).run(args)
+    new OAuth(OAuthCommandsImpl).run(args.toIndexedSeq)
 
 /**
   * The implementation class of the CLI extending [[CliActorSystemLifeCycle]].
