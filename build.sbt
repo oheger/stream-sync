@@ -18,11 +18,11 @@
 lazy val VersionStreamSync = "0.16-SNAPSHOT"
 
 /** Definition of versions for compile-time dependencies. */
-lazy val VersionAkka = "2.6.19"
-lazy val VersionAkkaHttp = "10.2.9"
+lazy val VersionAkka = "2.6.20"
+lazy val VersionAkkaHttp = "10.2.10"
 lazy val VersionCloudFiles = "0.5"
 lazy val VersionDisruptor = "3.4.4"
-lazy val VersionLog4j = "2.17.2"
+lazy val VersionLog4j = "2.19.0"
 lazy val VersionScala = "3.2.0"
 lazy val VersionScli = "1.1.0"
 
