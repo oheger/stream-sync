@@ -29,7 +29,7 @@ lazy val VersionScli = "1.1.0"
 /** Definition of versions for test dependencies. */
 lazy val VersionScalaTest = "3.2.14"
 lazy val VersionScalaTestMockito = "3.2.14.0"
-lazy val VersionWireMock = "2.33.2"
+lazy val VersionWireMock = "2.34.0"
 
 scalacOptions ++=
   Seq(
@@ -63,7 +63,9 @@ lazy val cloudFilesDependencies = Seq(
 
 lazy val loggingDependencies = Seq(
   "org.apache.logging.log4j" % "log4j-api" % VersionLog4j,
-  "org.apache.logging.log4j" % "log4j-slf4j-impl" % VersionLog4j,
+  "org.apache.logging.log4j" % "log4j-core" % VersionLog4j,
+  "org.apache.logging.log4j" % "log4j-slf4j-impl" % VersionLog4j % "compile,runtime",
+  "org.apache.logging.log4j" % "log4j-slf4j2-impl" % VersionLog4j % Test,
   "com.lmax" % "disruptor" % VersionDisruptor
 )
 
