@@ -213,6 +213,15 @@ class OAuthTokenRetrieverServiceImplSpec extends AnyFlatSpec with ActorTestKitSu
     query("scope") should be(TestConfig.scope)
     query("redirect_uri") should be(TestConfig.oauthConfig.redirectUri)
     query("response_type") should be("code")
+    query should not contain "state"
+  }
+
+  it should "generate an authorize URL with a state parameter" in {
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    val state = "my_state_parameter"
+    val uri = futureResult(OAuthTokenRetrieverServiceImpl.authorizeUrl(TestConfig, Some(state)))
+
+    uri.query().toMap("state") should be(state)
   }
 
   it should "handle an invalid URI when generating the authorize URL" in {

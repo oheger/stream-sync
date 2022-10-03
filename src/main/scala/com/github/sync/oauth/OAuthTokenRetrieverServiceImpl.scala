@@ -55,6 +55,9 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
   /** Parameter for the refresh token. */
   private val ParamRefreshToken = "refresh_token"
 
+  /** Parameter for the state. */
+  private val ParamState = "state"
+
   /** Constant for the response type code. */
   private val ResponseTypeCode = "code"
 
@@ -73,10 +76,12 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
   /** A timeout for invoking the request actor. */
   private implicit val timeout: Timeout = Timeout(1.minute)
 
-  override def authorizeUrl(config: IDPConfig)(implicit system: ActorSystem[_]): Future[Uri] = Future {
+  override def authorizeUrl(config: IDPConfig, optState: Option[String] = None)(implicit system: ActorSystem[_]):
+  Future[Uri] = Future {
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamScope -> config.scope,
       ParamRedirectUri -> config.oauthConfig.redirectUri, ParamResponseType -> ResponseTypeCode)
-    Uri(config.authorizationEndpoint).withQuery(Query(params))
+    val paramsWithState = optState.fold(params) { state => params + (ParamState -> state) }
+    Uri(config.authorizationEndpoint).withQuery(Query(paramsWithState))
   }
 
   override def fetchTokens(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,

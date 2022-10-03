@@ -36,13 +36,15 @@ import scala.concurrent.Future
 trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS]:
   /**
     * Generates the URI for an authorization request based on the given OAuth
-    * configuration.
+    * configuration. Optionally, a state parameter can be provided, which is
+    * added to the URL.
     *
     * @param config the OAuth configuration
+    * @param optState an optional state to be added to the URL               
     * @param system the actor system
     * @return a ''Future'' with the authorization URI
     */
-  def authorizeUrl(config: CONFIG)(implicit system: ActorSystem[_]): Future[Uri]
+  def authorizeUrl(config: CONFIG, optState: Option[String] = None)(implicit system: ActorSystem[_]): Future[Uri]
 
   /**
     * Sends a request to the token endpoint of the referenced IDP to exchange
