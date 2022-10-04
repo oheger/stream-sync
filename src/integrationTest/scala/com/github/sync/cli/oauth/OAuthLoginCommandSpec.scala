@@ -27,12 +27,12 @@ import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.oauth.{SyncOAuthStorageConfig, _}
+import com.github.sync.oauth.{SyncOAuthStorageConfig, *}
 import com.github.sync.{AsyncTestHelper, WireMockSupport}
-import com.github.tomakehurst.wiremock.client.WireMock._
-import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito
-import org.mockito.Mockito._
+import com.github.tomakehurst.wiremock.client.WireMock.*
+import org.mockito.ArgumentMatchers.{any, eq as argEq}
+import org.mockito.{ArgumentCaptor, Mockito}
+import org.mockito.Mockito.*
 import org.mockito.invocation.InvocationOnMock
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -120,7 +120,7 @@ object OAuthLoginCommandSpec:
   * Test class for OAuth login functionality.
   */
 class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with Matchers with MockitoSugar with WireMockSupport with AsyncTestHelper:
+  with BeforeAndAfterAll with Matchers with MockitoSugar with WireMockSupport with AsyncTestHelper :
   def this() = this(ActorSystem("OAuthLoginCommandSpec"))
 
   override protected def afterAll(): Unit =
@@ -215,11 +215,58 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     val helper = new CommandTestHelper(config)
 
     val exception = expectFailedFuture[IllegalStateException] {
-      helper.prepareBrowserHandlerToCallRedirectUri(config.oauthConfig.redirectUri, StatusCodes.BadRequest)
+      helper.prepareBrowserHandlerToCallRedirectUri(config.oauthConfig.redirectUri + "?q=p", StatusCodes.BadRequest)
         .runCommand()
     }
     exception.getMessage should include("authorization code")
     checkHttpServerClosed(port)
+  }
+
+  /**
+    * Checks whether an incorrect state value passed to the redirect URI is
+    * detected and correctly handled.
+    *
+    * @param uriQuery the query part to be added to the redirect URI
+    */
+  private def checkInvalidStateValueIsHandled(uriQuery: String): Unit =
+    val port = fetchFreePort()
+    val orgConfig = createTestOAuthConfig()
+    val config = orgConfig.copy(oauthConfig = orgConfig.oauthConfig.copy(redirectUri = s"http://localhost:$port"))
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+    val helper = new CommandTestHelper(config)
+
+    val exception = expectFailedFuture[IllegalStateException] {
+      helper.prepareBrowserHandlerToCallRedirectUri(config.oauthConfig.redirectUri + uriQuery,
+        StatusCodes.BadRequest, includeState = false)
+        .runCommand()
+    }
+    exception.getMessage should include("state value")
+    checkHttpServerClosed(port)
+
+
+  it should "check the state value when handling a redirect" in {
+    checkInvalidStateValueIsHandled(s"?code=$Code&state=wrongState")
+  }
+
+  it should "handle a missing state value in the redirect URI" in {
+    checkInvalidStateValueIsHandled("?code=" + Code)
+  }
+
+  it should "use random state values in the authorize URL" in {
+    val orgConfig = createTestOAuthConfig()
+    implicit val consoleReader: ConsoleReader = mock[ConsoleReader]
+
+    def doLoginAndObtainState(): String =
+      val port = fetchFreePort()
+      val config = orgConfig.copy(oauthConfig = orgConfig.oauthConfig.copy(redirectUri = s"http://localhost:$port"))
+      val helper = new CommandTestHelper(config)
+      futureResult(helper.prepareBrowserHandlerToCallRedirectUri(config.oauthConfig.redirectUri + "?code=" + Code)
+        .runCommand())
+      helper.fetchState()
+
+    val state1 = doLoginAndObtainState()
+    val state2 = doLoginAndObtainState()
+    state1 should not be state2
   }
 
   /**
@@ -328,12 +375,21 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       * with the code as parameter. This is used to test whether localhost
       * redirect URIs are handled in a special way.
       *
+      * @param uri          the URI to redirect to
+      * @param expStatus    the expected response status
+      * @param includeState flag whether to include the state that was passed
+      *                     to the token service
       * @return this test helper
       */
-    def prepareBrowserHandlerToCallRedirectUri(uri: String, expStatus: StatusCode = StatusCodes.OK):
-    CommandTestHelper =
+    def prepareBrowserHandlerToCallRedirectUri(uri: String, expStatus: StatusCode = StatusCodes.OK,
+                                               includeState: Boolean = true): CommandTestHelper =
       when(browserHandler.openBrowser(AuthorizationUri)).thenAnswer((_: InvocationOnMock) => {
-        val redirectRequest = HttpRequest(uri = uri)
+        val redirectUri = if includeState then
+          val state = fetchState()
+          s"$uri&state=$state"
+        else uri
+
+        val redirectRequest = HttpRequest(uri = redirectUri)
         val response = futureResult(Http().singleRequest(redirectRequest))
         response.status should be(expStatus)
         true
@@ -359,6 +415,16 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     def failAuthorizationUri(ex: Throwable): CommandTestHelper =
       initTokenServiceAuthorizationUri(tokenService, Future.failed(ex))
       this
+
+    /**
+      * Returns the state string that was passed to the token service.
+      *
+      * @return the state string
+      */
+    def fetchState(): String =
+      val captor = ArgumentCaptor.forClass(classOf[Option[String]])
+      Mockito.verify(tokenService).authorizeUrl(any(), captor.capture())(any())
+      captor.getValue.get
 
     /**
       * Initializes the browser handler mock to return the given success result
@@ -390,7 +456,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       */
     private def initTokenServiceAuthorizationUri(service: OAuthTokenRetrieverService[IDPConfig, Secret,
       OAuthTokenData], uriFuture: Future[Uri]): Unit =
-      when(service.authorizeUrl(testOAutConfig)).thenReturn(uriFuture)
+      when(service.authorizeUrl(argEq(testOAutConfig), any())(any())).thenReturn(uriFuture)
 
     /**
       * Creates the mock for the token service and initializes it to return the

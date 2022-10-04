@@ -25,9 +25,10 @@ import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.oauth._
+import com.github.sync.oauth.*
 
 import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.util.Random
 
 /**
   * A module implementing the logic behind the commands accepted by the OAuth
@@ -37,7 +38,7 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
   * to be executed and its specific arguments. Based on this, the corresponding
   * function of this module is called.
   */
-object OAuthCommandsImpl extends OAuthCommands:
+object OAuthCommandsImpl extends OAuthCommands :
 
   import OAuthCommands._
 
@@ -59,12 +60,14 @@ object OAuthCommandsImpl extends OAuthCommands:
                      printFunc: PrintFunc = ConsolePrintFunc)
                     (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     implicit val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
+    val state = new Random().nextInt().toString
+
     for config <- storageService.loadIdpConfig(loginConfig.storageConfig)
-         authUri <- tokenService.authorizeUrl(config)
-         code <- obtainCode(config, authUri, browserHandler, consoleReader, printFunc)
-         tokens <- fetchTokens(config, code, tokenService)
-         _ <- storageService.saveTokens(loginConfig.storageConfig, tokens)
-         yield "Login into identity provider was successful. Token data has been stored."
+        authUri <- tokenService.authorizeUrl(config, optState = Some(state))
+        code <- obtainCode(config, authUri, browserHandler, consoleReader, printFunc, state)
+        tokens <- fetchTokens(config, code, tokenService)
+        _ <- storageService.saveTokens(loginConfig.storageConfig, tokens)
+    yield "Login into identity provider was successful. Token data has been stored."
 
   override def removeIdp(removeConfig: RemoveCommandConfig, storageService: StorageService)
                         (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
@@ -88,15 +91,17 @@ object OAuthCommandsImpl extends OAuthCommands:
     * @param browserHandler the ''BrowserHandler''
     * @param reader         the console reader to prompt the user
     * @param printFunc      the function to output strings
+    * @param state          the state to add to the authorize URL
     * @param ec             the execution context
     * @param system         the actor system
     * @return a ''Future'' with the code
     */
   private def obtainCode(config: IDPConfig, authUri: Uri, browserHandler: BrowserHandler, reader: ConsoleReader,
-                         printFunc: PrintFunc)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
+                         printFunc: PrintFunc, state: String)(implicit ec: ExecutionContext, system: ActorSystem):
+  Future[String] =
     checkLocalRedirectUri(config) match
       case Some(port) =>
-        val futCode = obtainCodeFromRedirect(port)
+        val futCode = obtainCodeFromRedirect(port, state)
         openBrowser(authUri, browserHandler, printFunc)
         futCode
       case None =>
@@ -137,22 +142,33 @@ object OAuthCommandsImpl extends OAuthCommands:
     * Tries to obtain the authorization code from a redirect to a local port.
     * This method is called for redirect URIs referring to ''localhost''. It
     * opens a web server at the port specified and waits for a request that
-    * contains the code as parameter.
+    * contains the code and expected state as parameter.
     *
-    * @param port   the port to bind the server
-    * @param ec     the execution context
-    * @param system the actor system
+    * @param port          the port to bind the server
+    * @param expectedState the expected state value
+    * @param ec            the execution context
+    * @param system        the actor system
     * @return a ''Future'' with the authorization code
     */
-  private def obtainCodeFromRedirect(port: Int)(implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
+  private def obtainCodeFromRedirect(port: Int, expectedState: String)
+                                    (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =
     val promiseCode = Promise[String]()
     val handler: HttpRequest => HttpResponse = request => {
-      val status = request.uri.query().get("code") match
-        case Some(code) =>
+      val params = for
+        code <- request.uri.query().get("code")
+        state <- request.uri.query().get("state")
+      yield (code, state)
+
+      val status = params match
+        case Some((code, state)) if state == expectedState =>
           promiseCode.trySuccess(code)
           StatusCodes.OK
+        case Some(_) =>
+          promiseCode.tryFailure(new IllegalStateException("Wrong state value in redirect URI."))
+          StatusCodes.BadRequest
         case None =>
-          promiseCode.tryFailure(new IllegalStateException("No authorization code passed to redirect URI."))
+          promiseCode.tryFailure(
+            new IllegalStateException("No authorization code or state value passed to redirect URI."))
           StatusCodes.BadRequest
       HttpResponse(status)
     }
