@@ -17,6 +17,21 @@
 package com.github.sync.oauth
 
 import com.github.cloudfiles.core.http.auth.OAuthConfig
+import com.github.sync.oauth.IDPConfig.hasMostlyNonPrintableChars
+
+object IDPConfig:
+  /** Regular expression to detect non-printable characters. */
+  private val RegExNonPrintable = """\p{C}""".r
+
+  /**
+    * Returns a flag whether the given string has more non-printable than
+    * printable characters.
+    *
+    * @param s the string to check
+    * @return a flag whether the string has more non-printable characters
+    */
+  private def hasMostlyNonPrintableChars(s: String): Boolean =
+    RegExNonPrintable.findAllIn(s).size > s.length / 2
 
 /**
   * A data class collecting the properties required for an OAuth client
@@ -33,4 +48,16 @@ import com.github.cloudfiles.core.http.auth.OAuthConfig
   */
 case class IDPConfig(oauthConfig: OAuthConfig,
                      authorizationEndpoint: String,
-                     scope: String)
+                     scope: String):
+  /**
+    * Returns a flag whether the client secret used in this configuration seems
+    * to be valid. Since the secret has typically been decrypted, this function
+    * can be used to check whether the password used for decryption was
+    * correct. In case of a wrong password, the secret should mostly consist of
+    * special, non printable characters.
+    *
+    * @return a flag whether a valid client secret is provided
+    */
+  def hasValidSecret: Boolean =
+    val clientSecret = oauthConfig.clientSecret.secret
+    !clientSecret.isBlank && !hasMostlyNonPrintableChars(clientSecret)
