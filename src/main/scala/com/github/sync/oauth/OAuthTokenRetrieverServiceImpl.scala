@@ -23,14 +23,15 @@ import akka.stream.scaladsl.Sink
 import akka.util.{ByteString, Timeout}
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
+import org.apache.logging.log4j.LogManager
 
 import java.io.IOException
 import java.util.regex.Pattern
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
 
-object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]:
+object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData] :
   /** Parameter for the client ID. */
   private val ParamClientId = "client_id"
 
@@ -76,6 +77,8 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
   /** A timeout for invoking the request actor. */
   private implicit val timeout: Timeout = Timeout(1.minute)
 
+  private val log = LogManager.getLogger(getClass)
+
   override def authorizeUrl(config: IDPConfig, optState: Option[String] = None)(implicit system: ActorSystem[_]):
   Future[Uri] = Future {
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamScope -> config.scope,
@@ -112,12 +115,14 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
   private def sendTokenRequest(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
                                params: Map[String, String])
                               (implicit system: ActorSystem[_]): Future[OAuthTokenData] =
+    checkConfig(config)
+
     val futResult = HttpRequestSender.sendRequestSuccess(request = HttpRequest(uri = config.oauthConfig.tokenEndpoint,
       entity = FormData(params).toEntity, method = HttpMethods.POST), requestData = null, sender = httpActor)
     for result <- futResult
-         content <- responseBody(result)
-         tokenData <- extractTokenData(content)
-         yield tokenData
+        content <- responseBody(result)
+        tokenData <- extractTokenData(content)
+    yield tokenData
 
   /**
     * Extracts the text content from the given result object.
@@ -141,8 +146,8 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     */
   private def extractTokenData(response: String): Future[OAuthTokenData] =
     val optTokens = for access <- regAccessToken.findFirstMatchIn(response)
-                         refresh <- regRefreshToken.findFirstMatchIn(response)
-                         yield OAuthTokenData(accessToken = access.group(1), refreshToken = refresh.group(1))
+                        refresh <- regRefreshToken.findFirstMatchIn(response)
+    yield OAuthTokenData(accessToken = access.group(1), refreshToken = refresh.group(1))
     optTokens.fold[Future[OAuthTokenData]](Future.failed(new IOException(
       s"Could not extract token data from IDP response: '$response'.")))(Future.successful)
 
@@ -155,6 +160,16 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     */
   private def jsonPropRegEx(property: String): Regex =
     raw""""${Pattern.quote(property)}"\s*:\s*"([^"]+)"""".r
+
+  /**
+    * Checks the given configuration and especially the client secret. Logs a
+    * warning if the secret seems to be invalid.
+    *
+    * @param config the configuration to check
+    */
+  private def checkConfig(config: IDPConfig): Unit =
+    if !config.hasValidSecret then
+      log.warn("Client secret seems to be invalid. Was an incorrect password used for decryption?")
 
   /**
     * Obtains an implicit execution context from an implicit actor system.
