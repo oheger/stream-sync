@@ -34,8 +34,8 @@ import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
 import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
 import com.github.sync.stream.*
-import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.core.config.Configurator
+import org.slf4j.LoggerFactory
 
 import java.nio.file.{Path, StandardOpenOption}
 import scala.concurrent.duration.*
@@ -335,7 +335,7 @@ object Sync:
   private def createErrorSink(errorLogFile: Option[Path])(implicit ec: ExecutionContext):
   Sink[SyncOperationResult, Future[Int]] =
     val countSink = createCountSinkWithOptionalLogging(errorLogFile, errorLog = true)
-    val logger = LogManager.getLogger(classOf[Sync])
+    val logger = LoggerFactory.getLogger(classOf[Sync])
     val consoleLogSink = Sink.foreach[SyncOperationResult] { result =>
       logger.error(s"Failed to apply operation '${result.op}'.", result.optFailure.get)
     }

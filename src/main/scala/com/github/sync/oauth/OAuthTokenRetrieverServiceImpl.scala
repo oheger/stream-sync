@@ -23,7 +23,7 @@ import akka.stream.scaladsl.Sink
 import akka.util.{ByteString, Timeout}
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
-import org.apache.logging.log4j.LogManager
+import org.slf4j.LoggerFactory
 
 import java.io.IOException
 import java.util.regex.Pattern
@@ -77,7 +77,7 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
   /** A timeout for invoking the request actor. */
   private implicit val timeout: Timeout = Timeout(1.minute)
 
-  private val log = LogManager.getLogger(getClass)
+  private val log = LoggerFactory.getLogger(getClass)
 
   override def authorizeUrl(config: IDPConfig, optState: Option[String] = None)(implicit system: ActorSystem[_]):
   Future[Uri] = Future {

@@ -24,7 +24,7 @@ import akka.util.ByteString
 import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncAction, SyncOperation}
 import com.github.sync.log.{ElementSerializer, SerializationSupport, SerializerStreamHelper}
-import org.apache.logging.log4j.LogManager
+import org.slf4j.LoggerFactory
 
 import java.nio.file.{Files, Path, StandardCopyOption, StandardOpenOption}
 import scala.collection.mutable
@@ -210,7 +210,7 @@ private object LocalState:
   private val UndefinedLastElement = FsFolder("", "", 0)
 
   /** The logger. */
-  private val log = LogManager.getLogger(LocalState.getClass)
+  private val log = LoggerFactory.getLogger(LocalState.getClass)
 
   extension (operation: SyncOperation)
 
