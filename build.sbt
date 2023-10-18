@@ -27,9 +27,9 @@ lazy val VersionScala = "3.3.1"
 lazy val VersionScli = "1.1.0"
 
 /** Definition of versions for test dependencies. */
-lazy val VersionScalaTest = "3.2.14"
-lazy val VersionScalaTestMockito = "3.2.14.0"
-lazy val VersionWireMock = "2.34.0"
+lazy val VersionScalaTest = "3.2.17"
+lazy val VersionScalaTestMockito = "3.2.17.0"
+lazy val VersionWireMock = "2.35.1"
 
 scalacOptions ++=
   Seq(
@@ -71,7 +71,7 @@ lazy val loggingDependencies = Seq(
 
 lazy val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % VersionScalaTest % Test exclude("org.scala-lang.modules", "scala-xml_3"),
-  "org.scalatestplus" %% "mockito-4-6" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
+  "org.scalatestplus" %% "mockito-4-11" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
   ("com.typesafe.akka" %% "akka-testkit" % VersionAkka % Test).cross(CrossVersion.for3Use2_13),
   ("com.typesafe.akka" %% "akka-actor-testkit-typed" % VersionAkka % Test).cross(CrossVersion.for3Use2_13),
   "com.github.tomakehurst" % "wiremock-jre8" % VersionWireMock % Test
