@@ -22,7 +22,7 @@ lazy val VersionAkka = "2.6.20"
 lazy val VersionAkkaHttp = "10.2.10"
 lazy val VersionCloudFiles = "0.5"
 lazy val VersionDisruptor = "3.4.4"
-lazy val VersionLog4j = "2.19.0"
+lazy val VersionLog4j = "2.21.0"
 lazy val VersionScala = "3.3.1"
 lazy val VersionScli = "1.1.0"
 
@@ -90,5 +90,11 @@ lazy val StreamSync = (project in file("."))
     libraryDependencies ++= testDependencies,
     resolvers += Resolver.mavenLocal,
     name := "stream-sync",
-    assembly / mainClass := Some("com.github.sync.cli.Sync")
+    assembly / mainClass := Some("com.github.sync.cli.Sync"),
+    assembly / assemblyMergeStrategy := {
+      case "module-info.class" => MergeStrategy.discard
+      case x =>
+        val oldStrategy = (ThisBuild / assemblyMergeStrategy).value
+        oldStrategy(x)
+    }
   )
