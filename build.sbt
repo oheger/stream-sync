@@ -29,7 +29,7 @@ lazy val VersionScli = "1.1.0"
 /** Definition of versions for test dependencies. */
 lazy val VersionScalaTest = "3.2.17"
 lazy val VersionScalaTestMockito = "3.2.17.0"
-lazy val VersionWireMock = "2.35.1"
+lazy val VersionWireMock = "3.2.0"
 
 scalacOptions ++=
   Seq(
@@ -74,7 +74,7 @@ lazy val testDependencies = Seq(
   "org.scalatestplus" %% "mockito-4-11" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
   ("org.apache.pekko" %% "pekko-testkit" % VersionPekko % Test).cross(CrossVersion.for3Use2_13),
   ("org.apache.pekko" %% "pekko-actor-testkit-typed" % VersionPekko % Test).cross(CrossVersion.for3Use2_13),
-  "com.github.tomakehurst" % "wiremock-jre8" % VersionWireMock % Test
+  "org.wiremock" % "wiremock" % VersionWireMock % Test
 )
 
 lazy val StreamSync = (project in file("."))
