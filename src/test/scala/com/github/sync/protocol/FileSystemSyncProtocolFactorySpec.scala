@@ -16,8 +16,6 @@
 
 package com.github.sync.protocol
 
-import akka.actor.typed.{ActorRef, Behavior, Props}
-import akka.util.Timeout
 import com.github.cloudfiles.core.delegate.ExtensibleFileSystem
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
@@ -26,6 +24,8 @@ import com.github.cloudfiles.crypt.alg.aes.Aes
 import com.github.cloudfiles.crypt.fs.{CryptConfig, CryptContentFileSystem, CryptNamesFileSystem}
 import com.github.sync.ActorTestKitSupport
 import com.github.sync.protocol.config.{StructureConfig, StructureCryptConfig}
+import org.apache.pekko.actor.typed.{ActorRef, Behavior, Props}
+import org.apache.pekko.util.Timeout
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -55,7 +55,7 @@ object FileSystemSyncProtocolFactorySpec:
   */
 class FileSystemSyncProtocolFactorySpec extends AnyFlatSpec with ActorTestKitSupport with Matchers with MockitoSugar:
 
-  import FileSystemSyncProtocolFactorySpec._
+  import FileSystemSyncProtocolFactorySpec.*
 
   /**
     * Checks whether the given config contains the expected values.

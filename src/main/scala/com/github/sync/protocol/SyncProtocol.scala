@@ -16,9 +16,9 @@
 
 package com.github.sync.protocol
 
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
 
 import scala.concurrent.Future
 

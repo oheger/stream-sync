@@ -16,11 +16,6 @@
 
 package com.github.sync.cli
 
-import akka.actor.typed.scaladsl.adapter._
-import akka.actor.{ActorSystem, typed}
-import akka.stream.scaladsl.{Sink, Source}
-import akka.testkit.{ImplicitSender, TestKit}
-import akka.util.ByteString
 import com.github.cloudfiles.crypt.alg.aes.Aes
 import com.github.cloudfiles.crypt.service.CryptService
 import com.github.sync.cli.Sync.SyncResult
@@ -29,6 +24,11 @@ import org.apache.logging.log4j.core.appender.{AbstractOutputStreamAppender, Out
 import org.apache.logging.log4j.core.config.Configurator
 import org.apache.logging.log4j.core.layout.PatternLayout
 import org.apache.logging.log4j.core.{LogEvent, LoggerContext}
+import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.actor.{ActorSystem, typed}
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
+import org.apache.pekko.testkit.{ImplicitSender, TestKit}
+import org.apache.pekko.util.ByteString
 import org.mockito.Mockito
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -41,7 +41,7 @@ import java.security.SecureRandom
 import java.time.Instant
 import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 import scala.annotation.tailrec
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters.CollectionHasAsScala
 

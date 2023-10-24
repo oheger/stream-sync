@@ -16,10 +16,6 @@
 
 package com.github.sync.cli
 
-import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.adapter._
-import akka.stream.KillSwitch
-import akka.{actor => classic}
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthConfig.TokenRefreshNotificationFunc
 import com.github.cloudfiles.core.http.auth.{AuthConfig, BasicAuthConfig, NoAuthConfig, OAuthTokenData}
@@ -32,6 +28,10 @@ import com.github.sync.protocol.gdrive.GoogleDriveProtocolFactory
 import com.github.sync.protocol.local.LocalProtocolFactory
 import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
 import com.github.sync.protocol.webdav.DavProtocolFactory
+import org.apache.pekko.actor as classic
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.stream.KillSwitch
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}

@@ -16,12 +16,12 @@
 
 package com.github.sync.cli
 
-import akka.http.scaladsl.model.{StatusCodes, Uri}
 import com.github.sync.OAuthMockSupport.{CurrentTokenData, RefreshedTokenData}
-import com.github.sync.WireMockSupport._
+import com.github.sync.WireMockSupport.*
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
-import com.github.tomakehurst.wiremock.client.WireMock._
+import com.github.tomakehurst.wiremock.client.WireMock.*
+import org.apache.pekko.http.scaladsl.model.{StatusCodes, Uri}
 
 import java.nio.file.Files
 import java.util.UUID
@@ -66,7 +66,7 @@ object OneDriveSyncSpec:
 class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockSupport:
   override implicit val ec: ExecutionContext = system.dispatcher
 
-  import OneDriveSyncSpec._
+  import OneDriveSyncSpec.*
 
   /**
     * Adds a stubbing declaration for a request to resolve the given path.

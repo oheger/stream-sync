@@ -16,12 +16,6 @@
 
 package com.github.sync.cli
 
-import akka.NotUsed
-import akka.actor.typed.scaladsl.adapter.*
-import akka.actor.{ActorSystem, typed}
-import akka.stream.*
-import akka.stream.Supervision.Decider
-import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import com.github.cloudfiles.core.http.factory.Spawner
 import com.github.scli.HelpGenerator.ParameterFilter
 import com.github.scli.ParameterManager.ProcessingContext
@@ -35,6 +29,12 @@ import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
 import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
 import com.github.sync.stream.*
 import org.apache.logging.log4j.core.config.Configurator
+import org.apache.pekko.NotUsed
+import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.actor.{ActorSystem, typed}
+import org.apache.pekko.stream.*
+import org.apache.pekko.stream.Supervision.Decider
+import org.apache.pekko.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
 import org.slf4j.LoggerFactory
 
 import java.nio.file.{Path, StandardOpenOption}

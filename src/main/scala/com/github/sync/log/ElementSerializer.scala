@@ -16,14 +16,14 @@
 
 package com.github.sync.log
 
-import java.time.Instant
-import akka.util.ByteString
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.cloudfiles.core.http.UriEncodingHelper.encode
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
+import org.apache.pekko.util.ByteString
 
 import java.io.{ByteArrayOutputStream, PrintWriter, StringWriter}
+import java.time.Instant
 import scala.collection.mutable
 import scala.util.Try
 

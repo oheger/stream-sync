@@ -16,18 +16,18 @@
 
 package com.github.sync.protocol.onedrive
 
-import akka.actor.typed.ActorRef
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
 import com.github.cloudfiles.onedrive.{OneDriveConfig, OneDriveFileSystem}
 import com.github.sync.protocol.config.OneDriveStructureConfig
+import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.util.Timeout
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 
 /**
   * Test class for ''OneDriveProtocolCreator''.

@@ -16,12 +16,12 @@
 
 package com.github.sync.cli.oauth
 
-import akka.actor.ActorSystem
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, OAuthTokenRetrieverService, SyncOAuthStorageConfig}
+import org.apache.pekko.actor.ActorSystem
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -60,7 +60,7 @@ object OAuthCommands:
   */
 trait OAuthCommands:
 
-  import OAuthCommands._
+  import OAuthCommands.*
 
   /**
     * Creates a persistent configuration of an IDP based on the passed in

@@ -16,11 +16,6 @@
 
 package com.github.sync.cli
 
-import akka.actor as classic
-import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.adapter.*
-import akka.stream.KillSwitch
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.*
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
@@ -35,6 +30,11 @@ import com.github.sync.protocol.webdav.DavProtocolFactory
 import com.github.sync.stream.Throttle
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
 import org.apache.logging.log4j.Level
+import org.apache.pekko.actor as classic
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.stream.KillSwitch
+import org.apache.pekko.util.Timeout
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{never, verify, verifyNoInteractions, when}
 import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}

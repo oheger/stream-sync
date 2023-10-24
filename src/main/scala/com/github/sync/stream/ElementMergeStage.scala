@@ -16,10 +16,10 @@
 
 package com.github.sync.stream
 
-import akka.stream.stage.StageLogging
-import akka.stream.{Inlet, Outlet}
 import com.github.sync.SyncTypes.FsElement
 import com.github.sync.stream.BaseMergeStage.Input
+import org.apache.pekko.stream.stage.StageLogging
+import org.apache.pekko.stream.{Inlet, Outlet}
 
 /**
   * A trait defining common logic for implementations of ''GraphStageLogic''

@@ -16,16 +16,16 @@
 
 package com.github.sync.cli.oauth
 
-import akka.Done
-import akka.actor.ActorSystem
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.oauth.OAuthParameterManager.InitCommandConfig
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncOAuthStorageConfig}
+import org.apache.pekko.Done
+import org.apache.pekko.actor.ActorSystem
 import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.{any, eq => eqArg}
-import org.mockito.Mockito._
+import org.mockito.ArgumentMatchers.{any, eq as eqArg}
+import org.mockito.Mockito.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
@@ -59,7 +59,7 @@ object OAuthInitCommandSpec:
   */
 class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar with AsyncTestHelper:
 
-  import OAuthInitCommandSpec._
+  import OAuthInitCommandSpec.*
 
   "OAuthCommands" should "initialize a new IDP" in {
     val helper = new CommandTestHelper

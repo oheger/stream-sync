@@ -18,11 +18,11 @@
 lazy val VersionStreamSync = "0.16-SNAPSHOT"
 
 /** Definition of versions for compile-time dependencies. */
-lazy val VersionAkka = "2.6.20"
-lazy val VersionAkkaHttp = "10.2.10"
-lazy val VersionCloudFiles = "0.5"
+lazy val VersionCloudFiles = "0.6"
 lazy val VersionDisruptor = "3.4.4"
 lazy val VersionLog4j = "2.21.0"
+lazy val VersionPekko = "1.0.1"
+lazy val VersionPekkoHttp = "1.0.0"
 lazy val VersionScala = "3.3.1"
 lazy val VersionScli = "1.1.0"
 
@@ -44,11 +44,11 @@ lazy val ITest = config("integrationTest") extend Test
 ITest / parallelExecution := false
 
 lazy val akkaDependencies = Seq(
-  ("com.typesafe.akka" %% "akka-actor" % VersionAkka).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-actor-typed" % VersionAkka).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-stream" % VersionAkka).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-http" % VersionAkkaHttp).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-http-spray-json" % VersionAkkaHttp).cross(CrossVersion.for3Use2_13)
+  ("org.apache.pekko" %% "pekko-actor" % VersionPekko).cross(CrossVersion.for3Use2_13),
+  ("org.apache.pekko" %% "pekko-actor-typed" % VersionPekko).cross(CrossVersion.for3Use2_13),
+  ("org.apache.pekko" %% "pekko-stream" % VersionPekko).cross(CrossVersion.for3Use2_13),
+  ("org.apache.pekko" %% "pekko-http" % VersionPekkoHttp).cross(CrossVersion.for3Use2_13),
+  ("org.apache.pekko" %% "pekko-http-spray-json" % VersionPekkoHttp).cross(CrossVersion.for3Use2_13)
 )
 
 lazy val cloudFilesDependencies = Seq(
@@ -72,8 +72,8 @@ lazy val loggingDependencies = Seq(
 lazy val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % VersionScalaTest % Test exclude("org.scala-lang.modules", "scala-xml_3"),
   "org.scalatestplus" %% "mockito-4-11" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
-  ("com.typesafe.akka" %% "akka-testkit" % VersionAkka % Test).cross(CrossVersion.for3Use2_13),
-  ("com.typesafe.akka" %% "akka-actor-testkit-typed" % VersionAkka % Test).cross(CrossVersion.for3Use2_13),
+  ("org.apache.pekko" %% "pekko-testkit" % VersionPekko % Test).cross(CrossVersion.for3Use2_13),
+  ("org.apache.pekko" %% "pekko-actor-testkit-typed" % VersionPekko % Test).cross(CrossVersion.for3Use2_13),
   "com.github.tomakehurst" % "wiremock-jre8" % VersionWireMock % Test
 )
 

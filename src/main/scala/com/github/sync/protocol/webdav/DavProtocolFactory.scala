@@ -16,13 +16,13 @@
 
 package com.github.sync.protocol.webdav
 
-import akka.actor.typed.ActorSystem
-import akka.http.scaladsl.model.Uri
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.cloudfiles.webdav.DavModel
 import com.github.sync.protocol.FileSystemSyncProtocolFactory
 import com.github.sync.protocol.config.DavStructureConfig
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.http.scaladsl.model.Uri
+import org.apache.pekko.util.Timeout
 
 /**
   * A concrete ''SyncProtocolFactory'' for creating a protocol to access a

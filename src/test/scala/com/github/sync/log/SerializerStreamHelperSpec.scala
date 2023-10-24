@@ -16,18 +16,17 @@
 
 package com.github.sync.log
 
-import java.time.Instant
-
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Sink, Source}
-import akka.testkit.TestKit
+import com.github.sync.*
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
-import com.github.sync.*
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
+import org.apache.pekko.testkit.TestKit
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
+import java.time.Instant
 import scala.concurrent.Future
 
 /**

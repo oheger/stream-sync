@@ -16,12 +16,12 @@
 
 package com.github.sync
 
-import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.model.headers.Authorization
 import com.github.tomakehurst.wiremock.WireMockServer
+import com.github.tomakehurst.wiremock.client.WireMock.*
 import com.github.tomakehurst.wiremock.client.{MappingBuilder, ResponseDefinitionBuilder}
-import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
+import org.apache.pekko.http.scaladsl.model.StatusCodes
+import org.apache.pekko.http.scaladsl.model.headers.Authorization
 import org.scalatest.{BeforeAndAfterEach, Suite}
 
 object WireMockSupport:
@@ -121,7 +121,7 @@ object WireMockSupport:
 trait WireMockSupport extends BeforeAndAfterEach:
   this: Suite =>
 
-  import WireMockSupport._
+  import WireMockSupport.*
 
   /** The managed WireMock server. */
   private val wireMockServer = new WireMockServer(wireMockConfig()

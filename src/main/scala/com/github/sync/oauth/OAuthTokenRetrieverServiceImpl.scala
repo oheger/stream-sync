@@ -16,13 +16,13 @@
 
 package com.github.sync.oauth
 
-import akka.actor.typed.{ActorRef, ActorSystem}
-import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model.{FormData, HttpMethods, HttpRequest, Uri}
-import akka.stream.scaladsl.Sink
-import akka.util.{ByteString, Timeout}
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
+import org.apache.pekko.actor.typed.{ActorRef, ActorSystem}
+import org.apache.pekko.http.scaladsl.model.Uri.Query
+import org.apache.pekko.http.scaladsl.model.{FormData, HttpMethods, HttpRequest, Uri}
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.util.{ByteString, Timeout}
 import org.slf4j.LoggerFactory
 
 import java.io.IOException

@@ -16,16 +16,16 @@
 
 package com.github.sync.oauth
 
-import java.nio.file.Files
-import akka.actor.ActorSystem
-import akka.testkit.TestKit
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.testkit.TestKit
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
+import java.nio.file.Files
 import scala.xml.SAXParseException
 
 object OAuthStorageServiceImplSpec:
@@ -73,7 +73,7 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     tearDownTestFile()
   }
 
-  import OAuthStorageServiceImplSpec._
+  import OAuthStorageServiceImplSpec.*
   import system.dispatcher
 
   /**

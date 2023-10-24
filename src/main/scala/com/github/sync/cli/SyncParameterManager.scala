@@ -16,13 +16,13 @@
 
 package com.github.sync.cli
 
-import akka.util.Timeout
 import com.github.scli.ParameterExtractor.*
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStreamConfig.{StreamConfig, streamConfigExtractor}
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
 import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 import org.apache.logging.log4j.Level
+import org.apache.pekko.util.Timeout
 
 import java.nio.file.Path
 import java.util.Locale

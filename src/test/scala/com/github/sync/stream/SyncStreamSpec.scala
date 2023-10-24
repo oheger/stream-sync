@@ -16,16 +16,16 @@
 
 package com.github.sync.stream
 
-import akka.Done
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.{FileIO, Flow, Sink, Source}
-import akka.stream.{KillSwitches, SharedKillSwitch}
-import akka.testkit.TestKit
 import com.github.sync.SyncTypes.{FsElement, FsFile, SyncAction, SyncConflictException, SyncOperation, SyncOperationResult}
 import com.github.sync.cli.FilterManager.SyncOperationFilter
 import com.github.sync.log.ElementSerializer
 import com.github.sync.stream.AbstractStageSpec.createFile
 import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
+import org.apache.pekko.Done
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.{FileIO, Flow, Sink, Source}
+import org.apache.pekko.stream.{KillSwitches, SharedKillSwitch}
+import org.apache.pekko.testkit.TestKit
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}

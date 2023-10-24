@@ -16,16 +16,16 @@
 
 package com.github.sync.cli.oauth
 
-import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
-import akka.actor.{ActorSystem, typed}
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
-import akka.stream.scaladsl.Sink
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.oauth.*
+import org.apache.pekko.actor.typed.scaladsl.adapter.ClassicActorSystemOps
+import org.apache.pekko.actor.{ActorSystem, typed}
+import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
+import org.apache.pekko.stream.scaladsl.Sink
 
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.Random
@@ -40,7 +40,7 @@ import scala.util.Random
   */
 object OAuthCommandsImpl extends OAuthCommands :
 
-  import OAuthCommands._
+  import OAuthCommands.*
 
   override def initIdp(config: InitCommandConfig, storageService: StorageService)
                       (implicit ec: ExecutionContext, system: ActorSystem): Future[String] =

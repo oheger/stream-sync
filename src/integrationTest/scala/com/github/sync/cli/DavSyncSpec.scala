@@ -16,8 +16,6 @@
 
 package com.github.sync.cli
 
-import akka.http.scaladsl.model.StatusCodes
-import akka.util.ByteString
 import com.github.cloudfiles.core.http.{HttpRequestSender, UriEncodingHelper}
 import com.github.sync.WireMockSupport.*
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
@@ -26,6 +24,8 @@ import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock.*
 import com.github.tomakehurst.wiremock.http.RequestMethod
+import org.apache.pekko.http.scaladsl.model.StatusCodes
+import org.apache.pekko.util.ByteString
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{verify, when}
 import org.mockito.invocation.InvocationOnMock
@@ -46,8 +46,8 @@ object DavSyncSpec:
   */
 class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport with OAuthMockSupport:
 
-  import DavSyncSpec._
-  import OAuthMockSupport._
+  import DavSyncSpec.*
+  import OAuthMockSupport.*
 
   override implicit val ec: ExecutionContext = system.dispatcher
 
@@ -140,7 +140,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     lines.size() should be(1)
     lines.get(0) should be(expLine)
 
-    import scala.jdk.CollectionConverters._
+    import scala.jdk.CollectionConverters.*
     getAllServeEvents.asScala foreach { event =>
       event.getRequest.containsHeader("Authorization") shouldBe false
     }
@@ -400,7 +400,7 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
       "--dst-password", Password)
 
     futureResult(runSync(options)).successfulOperations should be(1)
-    import scala.jdk.CollectionConverters._
+    import scala.jdk.CollectionConverters.*
     val events = getAllServeEvents.asScala
     val putRequest = events.find(event => event.getRequest.getMethod == RequestMethod.PUT).get.getRequest
     val (parent, fileUri) = UriEncodingHelper.splitParent(putRequest.getUrl)

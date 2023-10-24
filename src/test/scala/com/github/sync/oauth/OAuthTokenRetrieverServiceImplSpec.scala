@@ -16,17 +16,17 @@
 
 package com.github.sync.oauth
 
-import akka.Done
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model.*
-import akka.http.scaladsl.model.headers.`Content-Type`
-import akka.stream.scaladsl.Sink
-import akka.util.ByteString
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
+import org.apache.pekko.Done
+import org.apache.pekko.actor.typed.scaladsl.Behaviors
+import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, Behavior}
+import org.apache.pekko.http.scaladsl.model.*
+import org.apache.pekko.http.scaladsl.model.Uri.Query
+import org.apache.pekko.http.scaladsl.model.headers.`Content-Type`
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.util.ByteString
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -189,7 +189,7 @@ object OAuthTokenRetrieverServiceImplSpec:
 class OAuthTokenRetrieverServiceImplSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
   with AsyncTestHelper:
 
-  import OAuthTokenRetrieverServiceImplSpec._
+  import OAuthTokenRetrieverServiceImplSpec.*
 
   /**
     * Convenience function to create a stub actor with the given parameters.

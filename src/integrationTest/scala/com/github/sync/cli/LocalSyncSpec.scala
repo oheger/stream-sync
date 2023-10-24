@@ -16,11 +16,11 @@
 
 package com.github.sync.cli
 
-import akka.util.ByteString
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.cli.LocalSyncSpec.encodePath
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
+import org.apache.pekko.util.ByteString
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{verify, when}
 import org.mockito.invocation.InvocationOnMock
@@ -30,7 +30,7 @@ import java.io.File
 import java.nio.file.{Files, Path}
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.concurrent.{Await, Future, TimeoutException}
 
 object LocalSyncSpec:

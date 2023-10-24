@@ -16,10 +16,10 @@
 
 package com.github.sync.stream
 
-import akka.stream.{Attributes, FanInShape2, FlowShape, Inlet, Outlet}
-import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge, RunnableGraph}
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import com.github.sync.SyncTypes.{FsElement, SyncAction, SyncOperation, SyncOperationResult}
+import org.apache.pekko.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge, RunnableGraph}
+import org.apache.pekko.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
+import org.apache.pekko.stream.{Attributes, FanInShape2, FlowShape, Inlet, Outlet}
 
 import scala.concurrent.duration.*
 

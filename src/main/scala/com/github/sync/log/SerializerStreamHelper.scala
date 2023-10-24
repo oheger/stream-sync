@@ -16,12 +16,12 @@
 
 package com.github.sync.log
 
-import java.nio.file.Path
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.{FileIO, Flow, Framing, Sink, Source}
-import akka.util.ByteString
 import com.github.sync.SyncTypes.SyncOperation
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.{FileIO, Flow, Framing, Sink, Source}
+import org.apache.pekko.util.ByteString
 
+import java.nio.file.Path
 import scala.concurrent.{ExecutionContext, Future}
 
 /**

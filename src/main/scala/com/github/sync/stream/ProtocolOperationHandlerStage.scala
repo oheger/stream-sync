@@ -16,16 +16,16 @@
 
 package com.github.sync.stream
 
-import akka.NotUsed
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-import akka.pattern.StatusReply
-import akka.actor.typed.scaladsl.AskPattern._
-import akka.stream.scaladsl.Flow
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.Spawner
-import com.github.sync.SyncTypes.{FsFolder, SyncOperation, SyncOperationResult}
 import com.github.sync.SyncTypes.SyncAction.*
+import com.github.sync.SyncTypes.{FsFolder, SyncOperation, SyncOperationResult}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
+import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
+import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, Behavior}
+import org.apache.pekko.pattern.StatusReply
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.util.Timeout
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
@@ -59,7 +59,7 @@ import scala.util.{Failure, Success}
   */
 object ProtocolOperationHandlerStage:
   /** The configuration property for the size of the connection pool. */
-  private val PropMaxConnections = "akka.http.host-connection-pool.max-connections"
+  private val PropMaxConnections = "pekko.http.host-connection-pool.max-connections"
 
   /**
     * A base trait for the hierarchy of commands supported by the internal

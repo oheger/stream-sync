@@ -16,10 +16,10 @@
 
 package com.github.sync.protocol.webdav
 
-import akka.http.scaladsl.model.Uri
 import com.github.cloudfiles.webdav.{DavModel, DavParser}
 import com.github.sync.SyncTypes
 import com.github.sync.protocol.config.DavStructureConfig
+import org.apache.pekko.http.scaladsl.model.Uri
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -58,7 +58,7 @@ object DavProtocolConverterSpec:
   */
 class DavProtocolConverterSpec extends AnyFlatSpec with Matchers:
 
-  import DavProtocolConverterSpec._
+  import DavProtocolConverterSpec.*
 
   "DavProtocolConverter" should "convert a string ID to a URI" in {
     val converter = new DavProtocolConverter(PlainConfig, None)

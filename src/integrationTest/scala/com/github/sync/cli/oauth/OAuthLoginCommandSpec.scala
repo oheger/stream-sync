@@ -16,24 +16,24 @@
 
 package com.github.sync.cli.oauth
 
-import akka.Done
-import akka.actor.typed.ActorRef
-import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
-import akka.actor.{ActorSystem, typed}
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
-import akka.testkit.TestKit
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
 import com.github.scli.ConsoleReader
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.oauth.{SyncOAuthStorageConfig, *}
+import com.github.sync.oauth.*
 import com.github.sync.{AsyncTestHelper, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock.*
+import org.apache.pekko.Done
+import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.actor.typed.scaladsl.adapter.ClassicActorSystemOps
+import org.apache.pekko.actor.{ActorSystem, typed}
+import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.model.{HttpRequest, StatusCode, StatusCodes, Uri}
+import org.apache.pekko.testkit.TestKit
 import org.mockito.ArgumentMatchers.{any, eq as argEq}
-import org.mockito.{ArgumentCaptor, Mockito}
 import org.mockito.Mockito.*
 import org.mockito.invocation.InvocationOnMock
+import org.mockito.{ArgumentCaptor, Mockito}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -127,7 +127,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     super.afterAll()
     TestKit shutdownActorSystem system
 
-  import OAuthLoginCommandSpec._
+  import OAuthLoginCommandSpec.*
   import system.dispatcher
 
   implicit val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
@@ -473,7 +473,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
           val args = invocation.getArguments
           OAuthTokenRetrieverServiceImpl.fetchTokens(args.head.asInstanceOf[ActorRef[HttpRequestSender.HttpCommand]],
             args(1).asInstanceOf[IDPConfig], args(2).asInstanceOf[Secret],
-            args(3).asInstanceOf[String])(args(4).asInstanceOf[akka.actor.typed.ActorSystem[_]])
+            args(3).asInstanceOf[String])(args(4).asInstanceOf[org.apache.pekko.actor.typed.ActorSystem[_]])
         })
       service
 

@@ -16,8 +16,6 @@
 
 package com.github.sync.protocol.gdrive
 
-import akka.actor.typed.ActorRef
-import akka.util.Timeout
 import com.github.cloudfiles.core.Model
 import com.github.cloudfiles.core.delegate.ExtensibleFileSystem
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
@@ -25,6 +23,8 @@ import com.github.cloudfiles.core.http.{HttpRequestSender, UriEncodingHelper}
 import com.github.cloudfiles.gdrive.{GoogleDriveConfig, GoogleDriveFileSystem, GoogleDriveModel}
 import com.github.sync.protocol.config.GoogleDriveStructureConfig
 import com.github.sync.protocol.{FileSystemProtocolConverter, FileSystemProtocolCreator}
+import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.util.Timeout
 
 /**
   * A [[FileSystemProtocolCreator]] implementation for structures accessed via

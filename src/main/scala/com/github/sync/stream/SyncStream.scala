@@ -16,13 +16,13 @@
 
 package com.github.sync.stream
 
-import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, Merge, RunnableGraph, Sink, Source}
-import akka.stream.{ClosedShape, IOResult, KillSwitches, Materializer, SharedKillSwitch, SinkShape, SourceShape}
-import akka.{Done, NotUsed}
 import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.{FsElement, SyncOperation, SyncOperationResult}
 import com.github.sync.log.ElementSerializer
 import com.github.sync.stream.SyncStage.SyncStageResult
+import org.apache.pekko.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, Merge, RunnableGraph, Sink, Source}
+import org.apache.pekko.stream.{ClosedShape, IOResult, KillSwitches, Materializer, SharedKillSwitch, SinkShape, SourceShape}
+import org.apache.pekko.{Done, NotUsed}
 
 import java.nio.file.{Path, StandardOpenOption}
 import java.time.Instant

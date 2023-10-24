@@ -16,19 +16,18 @@
 
 package com.github.sync.stream
 
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-
-import akka.actor.ActorSystem
-import akka.stream.ClosedShape
-import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
-import akka.testkit.TestKit
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.ClosedShape
+import org.apache.pekko.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
+import org.apache.pekko.testkit.TestKit
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import scala.concurrent.Await
 import scala.concurrent.duration.*
 
@@ -128,7 +127,7 @@ class MirrorStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with 
   override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system
 
-  import MirrorStageSpec._
+  import MirrorStageSpec.*
 
   /**
     * Runs the sync stage with the sources specified and returns the resulting
@@ -147,7 +146,7 @@ class MirrorStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with 
       }
     val g = RunnableGraph.fromGraph(GraphDSL.createGraph(foldSink) { implicit builder =>
       sink =>
-        import GraphDSL.Implicits._
+        import GraphDSL.Implicits.*
         val mirrorStage = builder.add(new MirrorStage(IgnoreTimeDelta(ignoreTimeDelta.seconds)))
         source1 ~> mirrorStage.in0
         source2 ~> mirrorStage.in1

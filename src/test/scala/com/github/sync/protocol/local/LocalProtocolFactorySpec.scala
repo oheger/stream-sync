@@ -16,16 +16,16 @@
 
 package com.github.sync.protocol.local
 
-import akka.actor.typed.ActorSystem
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.sync.protocol.config.FsStructureConfig
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.util.Timeout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 
 /**
   * Test class for ''LocalProtocolFactory''.

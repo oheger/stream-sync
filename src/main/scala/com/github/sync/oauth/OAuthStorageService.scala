@@ -16,11 +16,10 @@
 
 package com.github.sync.oauth
 
+import org.apache.pekko.Done
+import org.apache.pekko.actor.ActorSystem
+
 import java.nio.file.Path
-
-import akka.Done
-import akka.actor.ActorSystem
-
 import scala.concurrent.{ExecutionContext, Future}
 
 /**

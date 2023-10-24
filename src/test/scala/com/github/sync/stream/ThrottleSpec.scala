@@ -16,19 +16,19 @@
 
 package com.github.sync.stream
 
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Flow, Source}
-import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes.{FsElement, SyncAction, SyncOperation, SyncOperationResult}
 import com.github.sync.stream.ThrottleSpec.createResult
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.{Flow, Source}
+import org.apache.pekko.testkit.TestKit
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}
 import org.scalatest.matchers.should.Matchers
 
 import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
-import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 import scala.concurrent.duration.*
+import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 
 object ThrottleSpec:
   /**

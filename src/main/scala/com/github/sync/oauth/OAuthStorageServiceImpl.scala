@@ -16,16 +16,16 @@
 
 package com.github.sync.oauth
 
-import akka.Done
-import akka.actor.ActorSystem
-import akka.stream.IOResult
-import akka.stream.scaladsl.{FileIO, Sink, Source}
-import akka.util.ByteString
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.crypt.alg.CryptAlgorithm
 import com.github.cloudfiles.crypt.alg.aes.Aes
 import com.github.cloudfiles.crypt.service.CryptService
+import org.apache.pekko.Done
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.IOResult
+import org.apache.pekko.stream.scaladsl.{FileIO, Sink, Source}
+import org.apache.pekko.util.ByteString
 
 import java.nio.file.{Files, Path}
 import java.security.{Key, SecureRandom}

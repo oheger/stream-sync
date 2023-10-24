@@ -16,9 +16,9 @@
 
 package com.github.sync.oauth
 
-import akka.actor.typed.{ActorRef, ActorSystem}
-import akka.http.scaladsl.model.Uri
 import com.github.cloudfiles.core.http.HttpRequestSender
+import org.apache.pekko.actor.typed.{ActorRef, ActorSystem}
+import org.apache.pekko.http.scaladsl.model.Uri
 
 import scala.concurrent.Future
 

@@ -16,14 +16,14 @@
 
 package com.github.sync.stream
 
-import akka.event.LoggingAdapter
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler, StageLogging}
-import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.stream.BaseMergeStage.{Input, MergeEmitData}
+import org.apache.pekko.event.LoggingAdapter
+import org.apache.pekko.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler, StageLogging}
+import org.apache.pekko.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 
 private object MirrorStage:
   /**

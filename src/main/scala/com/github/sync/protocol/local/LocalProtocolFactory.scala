@@ -16,12 +16,12 @@
 
 package com.github.sync.protocol.local
 
-import akka.actor.typed.ActorSystem
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.cloudfiles.localfs.LocalFsModel
 import com.github.sync.protocol.FileSystemSyncProtocolFactory
 import com.github.sync.protocol.config.FsStructureConfig
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.util.Timeout
 
 import java.nio.file.Path
 import scala.concurrent.ExecutionContext

@@ -16,13 +16,13 @@
 
 package com.github.sync.protocol
 
-import akka.NotUsed
-import akka.http.scaladsl.model.ResponseEntity
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.{FileSystem, Model}
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper, FileTestHelper, SyncTypes}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.http.scaladsl.model.ResponseEntity
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
 import org.mockito.Mockito.{verify, when}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

@@ -16,13 +16,13 @@
 
 package com.github.sync
 
-import akka.actor.ActorSystem
-import akka.http.scaladsl.model.headers.`Content-Type`
-import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.oauth.{IDPConfig, OAuthStorageServiceImpl, SyncOAuthStorageConfig}
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, post, stubFor, urlPathEqualTo}
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.http.scaladsl.model.headers.`Content-Type`
+import org.apache.pekko.http.scaladsl.model.{ContentTypes, StatusCodes}
 import org.scalatest.Suite
 
 import scala.concurrent.ExecutionContext
@@ -53,7 +53,7 @@ object OAuthMockSupport:
 trait OAuthMockSupport:
   this: Suite with AsyncTestHelper with FileTestHelper with WireMockSupport =>
 
-  import OAuthMockSupport._
+  import OAuthMockSupport.*
 
   protected implicit val ec: ExecutionContext
   protected implicit val system: ActorSystem

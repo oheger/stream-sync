@@ -16,14 +16,14 @@
 
 package com.github.sync.stream
 
-import akka.NotUsed
-import akka.protobufv3.internal.DescriptorProtos.FileDescriptorSet
-import akka.stream.scaladsl.{Broadcast, FileIO, GraphDSL, RunnableGraph, Sink, Source}
-import akka.stream.{ClosedShape, IOResult, Materializer}
-import akka.util.ByteString
 import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncAction, SyncOperation}
 import com.github.sync.log.{ElementSerializer, SerializationSupport, SerializerStreamHelper}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.protobufv3.internal.DescriptorProtos.FileDescriptorSet
+import org.apache.pekko.stream.scaladsl.{Broadcast, FileIO, GraphDSL, RunnableGraph, Sink, Source}
+import org.apache.pekko.stream.{ClosedShape, IOResult, Materializer}
+import org.apache.pekko.util.ByteString
 import org.slf4j.LoggerFactory
 
 import java.nio.file.{Files, Path, StandardCopyOption, StandardOpenOption}

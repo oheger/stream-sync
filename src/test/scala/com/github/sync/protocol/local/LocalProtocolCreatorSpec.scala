@@ -16,12 +16,12 @@
 
 package com.github.sync.protocol.local
 
-import akka.actor.typed.ActorRef
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
 import com.github.cloudfiles.localfs.LocalFileSystem
 import com.github.sync.protocol.config.FsStructureConfig
+import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.util.Timeout
 import org.mockito.ArgumentMatchers.{any, eq as argEq}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
@@ -42,7 +42,7 @@ object LocalProtocolCreatorSpec:
   */
 class LocalProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar:
 
-  import LocalProtocolCreatorSpec._
+  import LocalProtocolCreatorSpec.*
 
   /**
     * Returns a new test creator instance.

@@ -16,9 +16,9 @@
 
 package com.github.sync.stream
 
-import akka.event.LoggingAdapter
-import akka.stream.{Inlet, Outlet}
-import akka.stream.stage.{GraphStageLogic, InHandler, OutHandler, StageLogging}
+import org.apache.pekko.event.LoggingAdapter
+import org.apache.pekko.stream.stage.{GraphStageLogic, InHandler, OutHandler, StageLogging}
+import org.apache.pekko.stream.{Inlet, Outlet}
 
 object BaseMergeStage:
   /**

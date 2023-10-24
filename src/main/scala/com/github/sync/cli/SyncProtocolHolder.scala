@@ -16,19 +16,19 @@
 
 package com.github.sync.cli
 
-import akka.NotUsed
-import akka.actor.typed.ActorSystem
-import akka.stream.scaladsl.{Flow, Source}
-import akka.stream.{KillSwitch, KillSwitches, SharedKillSwitch}
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.sync.SyncTypes.{FsElement, SyncOperation, SyncOperationResult}
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, CryptMode, SyncConfig}
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
-import com.github.sync.stream.{ProtocolElementSource, ProtocolOperationHandler, ProtocolOperationHandlerStage}
 import com.github.sync.oauth.SyncAuthConfig
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.protocol.config.StructureCryptConfig
+import com.github.sync.stream.{ProtocolElementSource, ProtocolOperationHandler, ProtocolOperationHandlerStage}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.stream.scaladsl.{Flow, Source}
+import org.apache.pekko.stream.{KillSwitch, KillSwitches, SharedKillSwitch}
+import org.apache.pekko.util.Timeout
 
 import scala.concurrent.{ExecutionContext, Future}
 

@@ -16,9 +16,9 @@
 
 package com.github.sync.cli
 
-import akka.util.Timeout
 import com.github.scli.ParameterExtractor.{CliExtractor, conditionalGroupValue, constantExtractor, createRepresentation, excludingSwitches, optionValue, switchValue}
 import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
+import org.apache.pekko.util.Timeout
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path

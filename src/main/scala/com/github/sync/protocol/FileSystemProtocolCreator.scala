@@ -16,12 +16,12 @@
 
 package com.github.sync.protocol
 
-import akka.actor.typed.ActorRef
-import akka.util.Timeout
 import com.github.cloudfiles.core.Model
 import com.github.cloudfiles.core.delegate.ExtensibleFileSystem
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
+import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.util.Timeout
 
 /**
   * A trait defining a number of creation functions to create the single

@@ -16,8 +16,6 @@
 
 package com.github.sync.protocol
 
-import akka.actor.typed.ActorSystem
-import akka.util.Timeout
 import com.github.cloudfiles.core.Model
 import com.github.cloudfiles.core.delegate.ExtensibleFileSystem
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, HttpRequestSenderFactoryImpl, Spawner}
@@ -26,6 +24,8 @@ import com.github.cloudfiles.crypt.fs.resolver.CachePathComponentsResolver
 import com.github.cloudfiles.crypt.fs.{CryptConfig, CryptContentFileSystem, CryptNamesConfig, CryptNamesFileSystem}
 import com.github.sync.protocol.FileSystemSyncProtocolFactory.createCryptConfig
 import com.github.sync.protocol.config.{StructureConfig, StructureCryptConfig}
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.util.Timeout
 
 import java.security.SecureRandom
 

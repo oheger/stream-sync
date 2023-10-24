@@ -16,12 +16,12 @@
 
 package com.github.sync.stream
 
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper, FileTestHelper}
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
 import org.mockito.Mockito.{verify, verifyNoInteractions, when}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

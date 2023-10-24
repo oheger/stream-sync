@@ -16,17 +16,16 @@
 
 package com.github.sync.cli
 
-import java.util.Locale
-
-import akka.actor.ActorSystem
-import akka.http.scaladsl.Http
 import com.github.scli.HelpGenerator.ParameterFilter
 import com.github.scli.ParameterExtractor.{CliExtractor, switchValue}
 import com.github.scli.ParameterManager.{ExtractionSpec, ProcessingContext}
 import com.github.scli.ParameterModel.{AttrErrCause, AttrFallbackValue, AttrHelpText, ParameterKey}
 import com.github.scli.{HelpGenerator, ParameterExtractor, ParameterManager}
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.http.scaladsl.Http
 
-import scala.concurrent.duration._
+import java.util.Locale
+import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 
@@ -102,7 +101,7 @@ object CliActorSystemLifeCycle:
   */
 trait CliActorSystemLifeCycle[C]:
 
-  import CliActorSystemLifeCycle._
+  import CliActorSystemLifeCycle.*
 
   /**
     * A name for the application implementing this trait. This name is also
@@ -255,7 +254,7 @@ trait CliActorSystemLifeCycle[C]:
     */
   private def generateCliErrorMessage(context: ProcessingContext): StringBuilder =
     context.optFailureContext map { failureContext =>
-      import HelpGenerator._
+      import HelpGenerator.*
       val colKey = parameterAliasColumnGenerator()
       val colErr = wrapColumnGenerator(attributeColumnGenerator(AttrErrCause), 70)
       val buf = new StringBuilder(8192)
@@ -276,7 +275,7 @@ trait CliActorSystemLifeCycle[C]:
     * @return the help text
     */
   private def generateCliHelp(processingContext: ProcessingContext): String =
-    import HelpGenerator._
+    import HelpGenerator.*
 
     val modelContext = processingContext.parameterContext.modelContext
     val keyGenerator = parameterKeyWithAliasesColumnGenerator(maxLength = 24)

@@ -16,8 +16,8 @@
 
 package com.github.sync
 
-import akka.actor.testkit.typed.scaladsl.ActorTestKit
-import akka.actor.typed.ActorSystem
+import org.apache.pekko.actor.testkit.typed.scaladsl.ActorTestKit
+import org.apache.pekko.actor.typed.ActorSystem
 import org.scalatest.{BeforeAndAfterAll, Suite}
 
 /**

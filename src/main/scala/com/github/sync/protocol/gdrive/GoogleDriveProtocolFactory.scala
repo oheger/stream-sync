@@ -16,12 +16,12 @@
 
 package com.github.sync.protocol.gdrive
 
-import akka.actor.typed.ActorSystem
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.cloudfiles.gdrive.GoogleDriveModel
 import com.github.sync.protocol.FileSystemSyncProtocolFactory
 import com.github.sync.protocol.config.GoogleDriveStructureConfig
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.util.Timeout
 
 /**
   * A concrete ''SyncProtocolFactory'' for creating a protocol to access a

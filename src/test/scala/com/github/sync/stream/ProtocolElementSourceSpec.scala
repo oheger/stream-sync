@@ -16,12 +16,12 @@
 
 package com.github.sync.stream
 
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Sink, Source}
-import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
 import com.github.sync.protocol.SyncProtocol
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
+import org.apache.pekko.testkit.TestKit
 import org.mockito.Mockito.when
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -88,7 +88,7 @@ class ProtocolElementSourceSpec(testSystem: ActorSystem) extends TestKit(testSys
     TestKit shutdownActorSystem system
     super.afterAll()
 
-  import ProtocolElementSourceSpec._
+  import ProtocolElementSourceSpec.*
 
   "ProtocolElementSource" should "handle an empty source structure" in {
     val helper = new SourceTestHelper

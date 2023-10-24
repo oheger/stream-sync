@@ -16,13 +16,13 @@
 
 package com.github.sync.stream
 
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Sink, Source}
-import akka.testkit.TestKit
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncAction, SyncOperation}
 import com.github.sync.log.ElementSerializer
 import com.github.sync.stream.LocalState.{LocalElementState, LocalStateFile, LocalStateFolder, affectsLocalState}
 import com.github.sync.{AsyncTestHelper, FileTestHelper, SyncTypes}
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
+import org.apache.pekko.testkit.TestKit
 import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}

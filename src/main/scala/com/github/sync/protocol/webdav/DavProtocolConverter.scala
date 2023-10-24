@@ -16,16 +16,16 @@
 
 package com.github.sync.protocol.webdav
 
-import akka.http.scaladsl.model.Uri
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.cloudfiles.webdav.{DavModel, DavParser}
 import com.github.sync.SyncTypes
 import com.github.sync.protocol.FileSystemProtocolConverter
 import com.github.sync.protocol.config.DavStructureConfig
 import com.github.sync.protocol.webdav.DavProtocolConverter.PatchTimeFormatter
+import org.apache.pekko.http.scaladsl.model.Uri
 
-import java.time.{Instant, ZoneId}
 import java.time.format.DateTimeFormatter
+import java.time.{Instant, ZoneId}
 
 private object DavProtocolConverter:
   /**

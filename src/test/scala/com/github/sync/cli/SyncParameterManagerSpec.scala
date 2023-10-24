@@ -16,21 +16,21 @@
 
 package com.github.sync.cli
 
-import akka.actor.ActorSystem
-import akka.testkit.TestKit
-import akka.util.Timeout
 import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractionException}
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStreamConfig.{MirrorStreamConfig, StreamConfig}
-import com.github.sync.cli.SyncParameterManager.*
 import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
+import com.github.sync.cli.SyncParameterManager.*
 import com.github.sync.oauth.SyncNoAuth
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.apache.logging.log4j.Level
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.testkit.TestKit
+import org.apache.pekko.util.Timeout
 import org.mockito.Mockito.*
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -87,7 +87,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     tearDownTestFile()
   }
 
-  import SyncParameterManagerSpec._
+  import SyncParameterManagerSpec.*
 
   /**
     * Expects a failed future from a parsing operation. It is checked whether

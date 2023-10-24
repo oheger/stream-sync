@@ -16,18 +16,18 @@
 
 package com.github.sync.cli
 
-import akka.util.Timeout
 import com.github.scli.ParameterExtractor
 import com.github.scli.ParameterExtractor.ExtractionContext
 import com.github.sync.cli.ExtractorTestHelper.{toExtractionContext, toParametersMap}
 import com.github.sync.cli.SyncCliStreamConfig.StreamConfig
 import com.github.sync.stream.Throttle
+import org.apache.pekko.util.Timeout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.nio.file.Paths
-import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.*
+import scala.util.{Failure, Success, Try}
 
 object SyncCliStreamConfigSpec:
   /** A default name for sync streams. */

@@ -16,19 +16,18 @@
 
 package com.github.sync.cli
 
-import java.io.ByteArrayOutputStream
-
-import akka.actor.{Actor, Props}
-import akka.pattern.ask
-import akka.util.Timeout
 import com.github.scli.ParameterExtractor
 import com.github.scli.ParameterManager.ProcessingContext
 import com.github.sync.cli.SyncParameterManager.SyncConfig
+import org.apache.pekko.actor.{Actor, Props}
+import org.apache.pekko.pattern.ask
+import org.apache.pekko.util.Timeout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import java.io.ByteArrayOutputStream
 import scala.concurrent.Future
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.util.Try
 
 /**

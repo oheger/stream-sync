@@ -16,14 +16,14 @@
 
 package com.github.sync.stream
 
-import akka.actor.DeadLetter
-import akka.actor.typed.{ActorRef, Behavior, Props}
-import akka.stream.scaladsl.{Sink, Source}
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.factory.Spawner
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
+import org.apache.pekko.actor.DeadLetter
+import org.apache.pekko.actor.typed.{ActorRef, Behavior, Props}
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
+import org.apache.pekko.util.Timeout
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when
 import org.mockito.invocation.InvocationOnMock

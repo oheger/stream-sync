@@ -16,15 +16,15 @@
 
 package com.github.sync.stream
 
-import akka.actor.ActorSystem
-import akka.stream.{ClosedShape, FanInShape2}
-import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
-import akka.stream.stage.GraphStage
-import akka.testkit.TestKit
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncElementResult}
 import com.github.sync.stream.LocalStateStage.ElementWithDelta
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
+import org.apache.pekko.stream.stage.GraphStage
+import org.apache.pekko.stream.{ClosedShape, FanInShape2}
+import org.apache.pekko.testkit.TestKit
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -141,7 +141,7 @@ class AbstractStageSpec(testSystem: ActorSystem) extends TestKit(testSystem), An
                                         source2: Source[IN2, Any]): Seq[OUT] =
     val g = RunnableGraph.fromGraph(GraphDSL.createGraph(AbstractStageSpec.foldSink[OUT]) { implicit builder =>
       sink =>
-        import GraphDSL.Implicits._
+        import GraphDSL.Implicits.*
         val syncStage = builder.add(stage)
         source1 ~> syncStage.in0
         source2 ~> syncStage.in1

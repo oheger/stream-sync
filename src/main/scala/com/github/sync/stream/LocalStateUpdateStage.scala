@@ -16,13 +16,13 @@
 
 package com.github.sync.stream
 
-import akka.stream.{Attributes, FanInShape2, Inlet, Outlet}
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.{FsElement, SyncAction, SyncConflictException, SyncOperation, SyncOperationResult}
 import com.github.sync.stream.LocalState.affectsLocalState
 import com.github.sync.stream.LocalStateStage.ElementWithDelta
 import com.github.sync.stream.LocalStateUpdateStage.{LocalAffectingUpdate, NonLocalAffectingUpdate, StateUpdate, filterNones, hasNonDeferredOperations, updateOperationResults}
+import org.apache.pekko.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
+import org.apache.pekko.stream.{Attributes, FanInShape2, Inlet, Outlet}
 
 private object LocalStateUpdateStage:
   /**

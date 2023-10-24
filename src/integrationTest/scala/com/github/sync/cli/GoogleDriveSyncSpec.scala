@@ -16,11 +16,11 @@
 
 package com.github.sync.cli
 
-import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import com.github.sync.OAuthMockSupport.{CurrentTokenData, RefreshedTokenData}
 import com.github.sync.WireMockSupport.{AuthFunc, TokenAuthFunc}
 import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
-import com.github.tomakehurst.wiremock.client.WireMock._
+import com.github.tomakehurst.wiremock.client.WireMock.*
+import org.apache.pekko.http.scaladsl.model.{StatusCode, StatusCodes}
 
 import java.nio.file.Files
 import scala.concurrent.ExecutionContext
@@ -37,7 +37,7 @@ object GoogleDriveSyncSpec:
 class GoogleDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockSupport:
   override protected implicit val ec: ExecutionContext = system.dispatcher
 
-  import GoogleDriveSyncSpec._
+  import GoogleDriveSyncSpec.*
 
   /**
     * Stubs a request to the GoogleDrive root folder and returns a JSON

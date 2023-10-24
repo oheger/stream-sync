@@ -16,16 +16,16 @@
 
 package com.github.sync.protocol.webdav
 
-import akka.actor.typed.ActorRef
-import akka.http.scaladsl.model.Uri
-import akka.util.Timeout
 import com.github.cloudfiles.core.Model
 import com.github.cloudfiles.core.delegate.ExtensibleFileSystem
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
 import com.github.cloudfiles.webdav.{DavConfig, DavFileSystem, DavModel, DavParser}
-import com.github.sync.protocol.{FileSystemProtocolConverter, FileSystemProtocolCreator}
 import com.github.sync.protocol.config.DavStructureConfig
+import com.github.sync.protocol.{FileSystemProtocolConverter, FileSystemProtocolCreator}
+import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.http.scaladsl.model.Uri
+import org.apache.pekko.util.Timeout
 
 /**
   * A [[FileSystemProtocolCreator]] implementation for structures accessed via

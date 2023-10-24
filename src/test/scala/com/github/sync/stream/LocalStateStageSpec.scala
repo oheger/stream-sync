@@ -16,13 +16,13 @@
 
 package com.github.sync.stream
 
-import akka.actor.ActorSystem
-import akka.stream.ClosedShape
-import akka.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
-import akka.testkit.TestKit
 import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder, SyncOperation}
 import com.github.sync.stream.LocalStateStage.ElementWithDelta
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.ClosedShape
+import org.apache.pekko.stream.scaladsl.{GraphDSL, RunnableGraph, Sink, Source}
+import org.apache.pekko.testkit.TestKit
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers

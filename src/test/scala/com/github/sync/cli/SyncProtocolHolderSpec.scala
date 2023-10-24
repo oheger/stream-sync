@@ -16,9 +16,9 @@
 
 package com.github.sync.cli
 
-import akka.stream.KillSwitches
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
+import org.apache.pekko.stream.KillSwitches
 import org.mockito.Mockito.verify
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

@@ -16,12 +16,12 @@
 
 package com.github.sync.protocol.webdav
 
-import akka.actor.typed.ActorRef
-import akka.util.Timeout
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, HttpRequestSenderFactory, Spawner}
 import com.github.cloudfiles.webdav.{DavConfig, DavFileSystem, DavModel, DavParser}
 import com.github.sync.protocol.config.DavStructureConfig
+import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.util.Timeout
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -45,7 +45,7 @@ object DavProtocolCreatorSpec:
   */
 class DavProtocolCreatorSpec extends AnyFlatSpec with Matchers with MockitoSugar:
 
-  import DavProtocolCreatorSpec._
+  import DavProtocolCreatorSpec.*
 
   "DavProtocolCreator" should "create a correct file system if no modified property is set" in {
     val expDavConfig = DavConfig(rootUri = TestUri, deleteBeforeOverride = TestConfig.deleteBeforeOverride,

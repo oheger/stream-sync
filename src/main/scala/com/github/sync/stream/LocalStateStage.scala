@@ -16,12 +16,12 @@
 
 package com.github.sync.stream
 
-import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
-import akka.stream.stage.{GraphStage, GraphStageLogic, StageLogging}
 import com.github.sync.SyncTypes
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
 import com.github.sync.stream.BaseMergeStage.{Input, MergeEmitData}
 import com.github.sync.stream.LocalStateStage.{ElementWithDelta, LocalStateStageLogic}
+import org.apache.pekko.stream.stage.{GraphStage, GraphStageLogic, StageLogging}
+import org.apache.pekko.stream.{Attributes, FanInShape2, Inlet, Outlet, Shape}
 
 import java.time.Instant
 

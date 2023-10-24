@@ -16,11 +16,11 @@
 
 package com.github.sync.stream
 
-import akka.stream.{Attributes, Outlet, SourceShape}
-import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.SyncTypes.{FsElement, FsFolder, SyncFolderData}
 import com.github.sync.protocol.SyncProtocol
+import org.apache.pekko.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
+import org.apache.pekko.stream.{Attributes, Outlet, SourceShape}
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
