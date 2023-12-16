@@ -17,17 +17,18 @@
 package com.github.sync.stream
 
 import com.github.cloudfiles.core.http.factory.Spawner
+import com.github.sync.AsyncTestHelper
 import com.github.sync.SyncTypes.*
 import com.github.sync.SyncTypes.SyncAction.*
-import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
 import org.apache.pekko.actor.DeadLetter
+import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, Props}
 import org.apache.pekko.stream.scaladsl.{Sink, Source}
 import org.apache.pekko.util.Timeout
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when
 import org.mockito.invocation.InvocationOnMock
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -103,7 +104,7 @@ object ProtocolOperationHandlerStageSpec:
 /**
   * Test class for ''ProtocolOperationHandlerStageSpec''.
   */
-class ProtocolOperationHandlerStageSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
+class ProtocolOperationHandlerStageSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers
   with MockitoSugar with AsyncTestHelper:
 
   import ProtocolOperationHandlerStageSpec.*

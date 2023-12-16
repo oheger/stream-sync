@@ -16,11 +16,12 @@
 
 package com.github.sync.cli
 
+import com.github.sync.AsyncTestHelper
 import com.github.sync.protocol.SyncProtocol
-import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
+import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.apache.pekko.stream.KillSwitches
 import org.mockito.Mockito.verify
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -30,7 +31,7 @@ import scala.concurrent.Promise
   * Test class for ''SyncProtocolHolder''. Note that the major part of the
   * functionality provided by this class is tested by integration tests.
   */
-class SyncProtocolHolderSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers with MockitoSugar
+class SyncProtocolHolderSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers with MockitoSugar
   with AsyncTestHelper:
   "SyncProtocolHandler" should "register a handler that closes protocols on a successful completion" in {
     val srcProtocol = mock[SyncProtocol]

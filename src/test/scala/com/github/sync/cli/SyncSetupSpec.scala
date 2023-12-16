@@ -19,6 +19,7 @@ package com.github.sync.cli
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.*
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
+import com.github.sync.AsyncTestHelper
 import com.github.sync.cli.SyncCliStreamConfig.{MirrorStreamConfig, StreamConfig}
 import com.github.sync.cli.SyncParameterManager.{LogConfig, SyncConfig}
 import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
@@ -28,16 +29,16 @@ import com.github.sync.protocol.local.LocalProtocolFactory
 import com.github.sync.protocol.onedrive.OneDriveProtocolFactory
 import com.github.sync.protocol.webdav.DavProtocolFactory
 import com.github.sync.stream.Throttle
-import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
 import org.apache.logging.log4j.Level
 import org.apache.pekko.actor as classic
+import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.apache.pekko.actor.typed.ActorSystem
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.stream.KillSwitch
 import org.apache.pekko.util.Timeout
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{never, verify, verifyNoInteractions, when}
-import org.scalatest.flatspec.{AnyFlatSpec, AnyFlatSpecLike}
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -64,7 +65,7 @@ object SyncSetupSpec:
 /**
   * Test class for ''SyncSetup''.
   */
-class SyncSetupSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers with MockitoSugar
+class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers with MockitoSugar
   with AsyncTestHelper:
 
   import SyncSetupSpec.*

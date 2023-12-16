@@ -18,8 +18,9 @@ package com.github.sync.oauth
 
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
-import com.github.sync.{ActorTestKitSupport, AsyncTestHelper}
+import com.github.sync.AsyncTestHelper
 import org.apache.pekko.Done
+import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, Behavior}
 import org.apache.pekko.http.scaladsl.model.*
@@ -27,7 +28,7 @@ import org.apache.pekko.http.scaladsl.model.Uri.Query
 import org.apache.pekko.http.scaladsl.model.headers.`Content-Type`
 import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.util.ByteString
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
 import java.io.IOException
@@ -186,7 +187,7 @@ object OAuthTokenRetrieverServiceImplSpec:
 /**
   * Test class for ''OAuthTokenRetrieverServiceImpl''.
   */
-class OAuthTokenRetrieverServiceImplSpec extends AnyFlatSpec with ActorTestKitSupport with Matchers
+class OAuthTokenRetrieverServiceImplSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers
   with AsyncTestHelper:
 
   import OAuthTokenRetrieverServiceImplSpec.*
