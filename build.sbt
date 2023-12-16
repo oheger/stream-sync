@@ -65,8 +65,7 @@ lazy val cloudFilesDependencies = Seq(
 lazy val loggingDependencies = Seq(
   "org.apache.logging.log4j" % "log4j-api" % VersionLog4j,
   "org.apache.logging.log4j" % "log4j-core" % VersionLog4j,
-  "org.apache.logging.log4j" % "log4j-slf4j-impl" % VersionLog4j % "compile,runtime",
-  "org.apache.logging.log4j" % "log4j-slf4j2-impl" % VersionLog4j % Test,
+  "org.apache.logging.log4j" % "log4j-slf4j2-impl" % VersionLog4j,
   "com.lmax" % "disruptor" % VersionDisruptor
 )
 
