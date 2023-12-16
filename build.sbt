@@ -18,12 +18,13 @@
 lazy val VersionStreamSync = "0.17-SNAPSHOT"
 
 /** Definition of versions for compile-time dependencies. */
-lazy val VersionCloudFiles = "0.6"
+lazy val VersionCloudFiles = "0.7.1"
 lazy val VersionDisruptor = "3.4.4"
 lazy val VersionLog4j = "2.22.0"
 lazy val VersionPekko = "1.0.2"
 lazy val VersionPekkoHttp = "1.0.0"
 lazy val VersionScala = "3.3.1"
+lazy val VersionScalaXml = "2.2.0"
 lazy val VersionScli = "1.1.0"
 
 /** Definition of versions for test dependencies. */
@@ -85,6 +86,7 @@ lazy val StreamSync = (project in file("."))
     scalaVersion := VersionScala,
     libraryDependencies ++= akkaDependencies,
     libraryDependencies += ("com.github.oheger" %% "scli" % VersionScli).cross(CrossVersion.for3Use2_13),
+    libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
     libraryDependencies ++= cloudFilesDependencies,
     libraryDependencies ++= loggingDependencies,
     libraryDependencies ++= testDependencies,

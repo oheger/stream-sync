@@ -25,7 +25,9 @@ import com.github.sync.protocol.webdav.DavProtocolConverter.PatchTimeFormatter
 import org.apache.pekko.http.scaladsl.model.Uri
 
 import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalQuery
 import java.time.{Instant, ZoneId}
+import scala.util.Try
 
 private object DavProtocolConverter:
   /**
@@ -81,5 +83,19 @@ private class DavProtocolConverter(val davConfig: DavStructureConfig,
     * @return the last modified time
     */
   private def fetchModifiedTime(file: DavModel.DavFile): Instant =
-    optModifiedAttribute flatMap file.attributes.values.get map DavParser.parseTimeAttribute getOrElse
+    optModifiedAttribute flatMap file.attributes.values.get map parseTimeAttribute getOrElse
       file.lastModifiedAt
+
+  /**
+    * Parses a date in string form to a corresponding ''Instant''. The date is
+    * expected to be in the format defined by RFC 1123, but this function tries
+    * to be more tolerant and accepts also ISO timestamps. If parsing of the
+    * date fails, result is the ''DateUndefined'' constant.
+    *
+    * @param strDate the date as string
+    * @return the resulting ''Instant''
+    */
+  private def parseTimeAttribute(strDate: String): Instant = Try {
+    val query: TemporalQuery[Instant] = Instant.from _
+    DateTimeFormatter.RFC_1123_DATE_TIME.parse(strDate, query)
+  } orElse Try(Instant.parse(strDate)) getOrElse DavParser.UndefinedDate
