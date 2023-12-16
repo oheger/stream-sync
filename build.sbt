@@ -45,21 +45,21 @@ lazy val ITest = config("integrationTest") extend Test
 ITest / parallelExecution := false
 
 lazy val akkaDependencies = Seq(
-  ("org.apache.pekko" %% "pekko-actor" % VersionPekko).cross(CrossVersion.for3Use2_13),
-  ("org.apache.pekko" %% "pekko-actor-typed" % VersionPekko).cross(CrossVersion.for3Use2_13),
-  ("org.apache.pekko" %% "pekko-stream" % VersionPekko).cross(CrossVersion.for3Use2_13),
-  ("org.apache.pekko" %% "pekko-http" % VersionPekkoHttp).cross(CrossVersion.for3Use2_13),
-  ("org.apache.pekko" %% "pekko-http-spray-json" % VersionPekkoHttp).cross(CrossVersion.for3Use2_13)
+  "org.apache.pekko" %% "pekko-actor" % VersionPekko,
+  "org.apache.pekko" %% "pekko-actor-typed" % VersionPekko,
+  "org.apache.pekko" %% "pekko-stream" % VersionPekko,
+  "org.apache.pekko" %% "pekko-http" % VersionPekkoHttp,
+  "org.apache.pekko" %% "pekko-http-spray-json" % VersionPekkoHttp
 )
 
 lazy val cloudFilesDependencies = Seq(
-  ("com.github.oheger" %% "cloud-files-core" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
-  ("com.github.oheger" %% "cloud-files-crypt" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
-  ("com.github.oheger" %% "cloud-files-cryptalg-aes" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
-  ("com.github.oheger" %% "cloud-files-localfs" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
-  ("com.github.oheger" %% "cloud-files-webdav" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
-  ("com.github.oheger" %% "cloud-files-onedrive" % VersionCloudFiles).cross(CrossVersion.for3Use2_13),
-  ("com.github.oheger" %% "cloud-files-googledrive" % VersionCloudFiles).cross(CrossVersion.for3Use2_13)
+  "com.github.oheger" %% "cloud-files-core" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-crypt" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-cryptalg-aes" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-localfs" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-webdav" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-onedrive" % VersionCloudFiles,
+  "com.github.oheger" %% "cloud-files-googledrive" % VersionCloudFiles
 )
 
 lazy val loggingDependencies = Seq(
@@ -73,14 +73,14 @@ lazy val loggingDependencies = Seq(
 lazy val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % VersionScalaTest % Test exclude("org.scala-lang.modules", "scala-xml_3"),
   "org.scalatestplus" %% "mockito-4-11" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
-  ("org.apache.pekko" %% "pekko-testkit" % VersionPekko % Test).cross(CrossVersion.for3Use2_13),
-  ("org.apache.pekko" %% "pekko-actor-testkit-typed" % VersionPekko % Test).cross(CrossVersion.for3Use2_13),
+  "org.apache.pekko" %% "pekko-testkit" % VersionPekko % Test,
+  "org.apache.pekko" %% "pekko-actor-testkit-typed" % VersionPekko % Test,
   "org.wiremock" % "wiremock" % VersionWireMock % Test
 )
 
 lazy val StreamSync = (project in file("."))
   .configs(ITest)
-  .settings(inConfig(ITest)(Defaults.testSettings): _*)
+  .settings(inConfig(ITest)(Defaults.testSettings) *)
   .settings(
     version := VersionStreamSync,
     scalaVersion := VersionScala,
