@@ -19,8 +19,8 @@ package com.github.sync.cli.oauth
 import com.github.scli.HelpGenerator.ParameterFilter
 import com.github.scli.ParameterManager.ProcessingContext
 import com.github.scli.{ConsoleReader, DefaultConsoleReader, HelpGenerator, ParameterExtractor}
-import com.github.sync.cli._
-import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
+import com.github.sync.cli.*
+import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, ListTokensCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
 
 import scala.concurrent.Future
@@ -92,6 +92,8 @@ class OAuth(commands: OAuthCommands) extends CliActorSystemLifeCycle[CommandConf
           consoleReader)
       case removeConfig: RemoveCommandConfig =>
         commands.removeIdp(removeConfig, storageService)
+      case listTokensConfig: ListTokensCommandConfig =>
+        commands.listTokens(listTokensConfig, storageService)
 
   override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[CommandConfig]] =
     OAuthParameterManager.commandConfigExtractor

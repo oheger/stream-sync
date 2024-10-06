@@ -41,6 +41,9 @@ object OAuthParameterManager:
   /** The command to perform a login into an IDP. */
   final val CommandLoginIDP = "login"
 
+  /** The command to list the values of the current tokens. */
+  final val CommandListTokens = "list-tokens"
+
   /** The option that defines the storage path for OAuth data. */
   final val StoragePathOption = "idp-storage-path"
 
@@ -155,6 +158,7 @@ object OAuthParameterManager:
        |$CommandInitIDP: Adds a new OAuth Identity Provider (IDP) with its options.
        |$CommandLoginIDP: Starts an authorization code grant flow with an IDP.
        |$CommandRemoveIDP: Removes the data about a specific IDP.
+       |$CommandListTokens: Lists the values of the current tokens.
        |Pass in a command name without any further options to see the parameters that are \\
        |supported by this specific command.""".stripMargin
 
@@ -207,6 +211,16 @@ object OAuthParameterManager:
   case class RemoveCommandConfig(override val storageConfig: SyncOAuthStorageConfig) extends CommandConfig
 
   /**
+    * A data class collecting all the data required by the command to list the
+    * tokens of an OAuth identity provider.
+    *
+    * The list tokens command requires no additional configuration.
+    *
+    * @param storageConfig the ''OAuthStorageConfig''
+    */
+  case class ListTokensCommandConfig(override val storageConfig: SyncOAuthStorageConfig) extends CommandConfig
+
+  /**
     * A data class collecting all the data required by the command to login
     * into an OAuth identity provider.
     *
@@ -237,7 +251,8 @@ object OAuthParameterManager:
   def commandConfigExtractor: CliExtractor[Try[CommandConfig]] =
     val groupMap = Map(CommandInitIDP -> commandInitExtractor,
       CommandLoginIDP -> commandLoginExtractor,
-      CommandRemoveIDP -> commandRemoveExtractor)
+      CommandRemoveIDP -> commandRemoveExtractor,
+      CommandListTokens -> commandListTokensExtractor)
     val cmdConfExt = conditionalGroupValue(commandExtractor, groupMap)
 
     for
@@ -266,10 +281,10 @@ object OAuthParameterManager:
       .mandatory, "n", addAlias)
 
     for name <- procName
-         path <- procPath
-         pwd <- storagePasswordExtractor(needPassword, prefix + EncryptOption, prefix + PasswordOption, addAlias)
-         crypt <- cryptFlagExtractor(prefix + EncryptOption, addAlias)
-         yield createStorageConfig(name, path, pwd, crypt)
+        path <- procPath
+        pwd <- storagePasswordExtractor(needPassword, prefix + EncryptOption, prefix + PasswordOption, addAlias)
+        crypt <- cryptFlagExtractor(prefix + EncryptOption, addAlias)
+    yield createStorageConfig(name, path, pwd, crypt)
 
   /**
     * Returns a ''CliExtractor'' to extract the data for an IDP from the
@@ -279,13 +294,13 @@ object OAuthParameterManager:
     */
   private def commandInitExtractor: CliExtractor[Try[CommandConfig]] =
     for triedAuthUrl <- mandatoryStringOption(AuthEndpointOption, HelpAuthEndpointOption)
-         triedTokenUrl <- mandatoryStringOption(TokenEndpointOption, HelpTokenEndpointOption)
-         triedScope <- scopeExtractor
-         triedRedirect <- mandatoryStringOption(RedirectUrlOption, HelpRedirectUrlOption)
-         triedID <- mandatoryStringOption(ClientIDOption, HelpClientIDOption)
-         triedSecret <- clientSecretExtractor
-         triedStorage <- storageConfigExtractor(needPassword = true)
-         yield createIdpConfig(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect, triedID,
+        triedTokenUrl <- mandatoryStringOption(TokenEndpointOption, HelpTokenEndpointOption)
+        triedScope <- scopeExtractor
+        triedRedirect <- mandatoryStringOption(RedirectUrlOption, HelpRedirectUrlOption)
+        triedID <- mandatoryStringOption(ClientIDOption, HelpClientIDOption)
+        triedSecret <- clientSecretExtractor
+        triedStorage <- storageConfigExtractor(needPassword = true)
+    yield createIdpConfig(triedAuthUrl, triedTokenUrl, triedScope, triedRedirect, triedID,
       triedSecret, triedStorage)
 
   /**
@@ -307,6 +322,16 @@ object OAuthParameterManager:
   private def commandRemoveExtractor: CliExtractor[Try[CommandConfig]] =
     storageConfigExtractor(needPassword = false)
       .map(_.map(RemoveCommandConfig.apply))
+
+  /**
+    * Returns a [[CliExtractor]] to extract the configuration for the list
+    * tokens command.
+    *
+    * @return the list tokens command extractor
+    */
+  private def commandListTokensExtractor: CliExtractor[Try[CommandConfig]] =
+    storageConfigExtractor(needPassword = true)
+      .map(_.map(ListTokensCommandConfig.apply))
 
   /**
     * Returns a ''CliExtractor'' for extracting the password of the storage
@@ -403,7 +428,7 @@ object OAuthParameterManager:
       triedID, triedSecret, triedStorage) { (authUrl, tokenUrl, scope, redirect, id, secret, storage) =>
       val oauthConfig = OAuthConfig(tokenEndpoint = tokenUrl, redirectUri = redirect, clientID = id,
         clientSecret = secret, initTokenData = OAuthTokenData(null, null))
-      val idpConfig = IDPConfig(authorizationEndpoint = authUrl,  scope = scope, oauthConfig = oauthConfig)
+      val idpConfig = IDPConfig(authorizationEndpoint = authUrl, scope = scope, oauthConfig = oauthConfig)
       InitCommandConfig(idpConfig, storage)
     }
 
