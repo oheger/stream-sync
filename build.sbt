@@ -28,9 +28,9 @@ lazy val VersionScalaXml = "2.2.0"
 lazy val VersionScli = "1.1.0"
 
 /** Definition of versions for test dependencies. */
-lazy val VersionScalaTest = "3.2.17"
-lazy val VersionScalaTestMockito = "3.2.17.0"
-lazy val VersionWireMock = "3.3.1"
+lazy val VersionScalaTest = "3.2.19"
+lazy val VersionScalaTestMockito = "3.2.19.0"
+lazy val VersionWireMock = "3.9.1"
 
 scalacOptions ++=
   Seq(
@@ -71,7 +71,7 @@ lazy val loggingDependencies = Seq(
 
 lazy val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % VersionScalaTest % Test exclude("org.scala-lang.modules", "scala-xml_3"),
-  "org.scalatestplus" %% "mockito-4-11" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
+  "org.scalatestplus" %% "mockito-5-12" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
   "org.apache.pekko" %% "pekko-testkit" % VersionPekko % Test,
   "org.apache.pekko" %% "pekko-actor-testkit-typed" % VersionPekko % Test,
   "org.wiremock" % "wiremock" % VersionWireMock % Test
