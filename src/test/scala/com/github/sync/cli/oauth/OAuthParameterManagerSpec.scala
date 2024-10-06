@@ -20,10 +20,10 @@ import java.nio.file.Paths
 import com.github.scli.ParameterExtractor.{ExtractionContext, Parameters, tryExtractor}
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterParser}
 import com.github.sync.AsyncTestHelper
-import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
+import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, ListTokensCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.cli.{CliActorSystemLifeCycle, ExtractorTestHelper}
 import com.github.sync.oauth.SyncOAuthStorageConfig
-import org.mockito.Mockito._
+import org.mockito.Mockito.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
@@ -181,6 +181,24 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
       OAuthParameterManager.EncryptOption, ParameterParser.InputParameter.key, CliActorSystemLifeCycle.FileOption)
   }
+  
+  it should "extract a valid list tokens command config" in:
+    val params = createBasicParametersMap(OAuthParameterManager.CommandListTokens)
+    val (config, nextCtx) = futureResult(extractCommandConfig(params))
+
+    config match
+      case ListTokensCommandConfig(storageConfig) =>
+        checkStorageConfig(storageConfig)
+      case c =>
+        fail("Unexpected result: " + c)
+    ExtractorTestHelper.accessedKeys(nextCtx) should contain only(
+      OAuthParameterManager.StoragePathOption,
+      OAuthParameterManager.PasswordOption,
+      OAuthParameterManager.NameOption,
+      OAuthParameterManager.EncryptOption,
+      ParameterParser.InputParameter.key,
+      CliActorSystemLifeCycle.FileOption
+    )
 
   it should "report missing mandatory parameters when creating a storage config" in {
     val args = Map(OAuthParameterManager.PasswordOption -> Password,

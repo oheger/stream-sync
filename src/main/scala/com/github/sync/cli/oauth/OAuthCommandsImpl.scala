@@ -19,7 +19,7 @@ package com.github.sync.cli.oauth
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
-import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, LoginCommandConfig, RemoveCommandConfig}
+import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, ListTokensCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.oauth.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import org.apache.pekko.actor.{ActorSystem, typed}
@@ -77,6 +77,16 @@ object OAuthCommandsImpl extends OAuthCommands :
         s"Removed data for IDP ${removeConfig.storageConfig.baseName}: $removeMsg"
       case _ =>
         s"Unknown identity provider '${removeConfig.storageConfig.baseName}'; no files have been removed."
+    }
+
+  override def listTokens(listTokensConfig: ListTokensCommandConfig, storageService: StorageService)
+                         (using ec: ExecutionContext, system: ActorSystem): Future[String] =
+    storageService.loadIdpConfig(listTokensConfig.storageConfig).map { idpConfig =>
+      s"""
+        |Tokens for IDP ${listTokensConfig.storageConfig.baseName}:
+        |Access token:  ${idpConfig.oauthConfig.initTokenData.accessToken}
+        |Refresh token: ${idpConfig.oauthConfig.initTokenData.refreshToken}
+        |""".stripMargin
     }
 
   /**
