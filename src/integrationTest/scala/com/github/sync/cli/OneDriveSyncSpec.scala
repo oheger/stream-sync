@@ -125,7 +125,7 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
     stubFor(authFunc(get(urlEqualTo(itemUri(id, "/content"))))
       .willReturn(aResponse().withStatus(302)
         .withHeader("Location", serverUri(downloadPath))))
-    stubFor(authFunc(get(urlPathEqualTo(downloadPath)))
+    stubFor(get(urlPathEqualTo(downloadPath))
       .willReturn(contentFunc(aResponse().withStatus(StatusCodes.OK.intValue))))
 
   "Sync" should "support a OneDrive URI for the source structure with OAuth" in {
