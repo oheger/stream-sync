@@ -17,6 +17,7 @@
 package com.github.sync.protocol
 
 import com.github.sync.SyncTypes.{FsElement, FsFile, FsFolder}
+import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.util.ByteString
 
@@ -61,6 +62,14 @@ trait SyncProtocol extends AutoCloseable:
     *         folder
     */
   def readFolder(id: String, path: String, level: Int): Future[List[FsElement]]
+
+  /**
+    * Returns the [[Source]] for iterating over all elements in the structure to
+    * be synced. This becomes the source of the sync stream.
+    *
+    * @return the [[Source]] yielding the elements to be synced
+    */
+  def elementSource: Future[Source[FsElement, NotUsed]]
 
   /**
     * Removes the file with the given ID.
