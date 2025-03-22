@@ -16,14 +16,52 @@
 
 package com.github.sync.protocol
 
-import com.github.cloudfiles.core.http.HttpRequestSender
+import com.github.cloudfiles.core.http.{HttpRequestSender, UriEncodingHelper}
+import com.github.cloudfiles.core.utils.Walk
 import com.github.cloudfiles.core.{FileSystem, Model}
 import com.github.sync.SyncTypes
+import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem}
 import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.util.ByteString
 
 import scala.concurrent.{ExecutionContext, Future}
+
+object FileSystemSyncProtocol:
+  /**
+    * A function that can serve as ''ParentDataFunc'' to generate the path of
+    * an element when iterating over a structure. The function simply obtains
+    * the folder name, so that a path can be constructed by concatenating the
+    * list of parent data.
+    *
+    * @param folder the current folder
+    * @tparam ID the type of the element ID
+    * @return the extracted data for this folder
+    */
+  private def extractName[ID](folder: Model.Folder[ID]): Option[String] = Some(folder.name)
+
+  /**
+    * Generates the path of an element based on the list of names of its parent
+    * folders.
+    *
+    * @param parentNames the list of parent folders
+    * @return the generated path for this element
+    */
+  private def generatePath(parentNames: List[String]): String =
+    parentNames.reverse.mkString(start = "/", sep = "/", end = "")
+
+  /**
+    * A function that determines the order in which elements are iterated over
+    * in a folder. To have a deterministic order, elements are sorted by their
+    * names.
+    *
+    * @param elements the original list of elements
+    * @tparam ID the type of the element ID
+    * @return the sorted list of elements
+    */
+  private def sortElements[ID](elements: List[Model.Element[ID]]): List[Model.Element[ID]] =
+    elements.sortWith(_.name < _.name)
+end FileSystemSyncProtocol
 
 /**
   * An implementation of [[SyncProtocol]] that uses a [[FileSystem]] to access
@@ -47,11 +85,32 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
                               val httpSender: ActorRef[HttpRequestSender.HttpCommand],
                               val converter: FileSystemProtocolConverter[ID, FILE, FOLDER])
                              (implicit system: ActorSystem[_]) extends SyncProtocol:
+
+  import FileSystemSyncProtocol.*
+
   override def readRootFolder(): Future[List[SyncTypes.FsElement]] =
     run(fileSystem.rootID) flatMap (id => readFolderWithID(id, "/", 0))
 
   override def readFolder(id: String, path: String, level: Int): Future[List[SyncTypes.FsElement]] =
     readFolderWithID(converter.elementIDFromString(id), path, level)
+
+  override def elementSource: Future[Source[SyncTypes.FsElement, NotUsed]] =
+    fileSystem.rootID.run(httpSender).map { rootID =>
+      val walkConfig = Walk.WalkConfig(
+        fileSystem = fileSystem,
+        httpActor = httpSender,
+        rootID = rootID,
+        transform = sortElements
+      )
+      Walk.bfsSourceWithParentData(walkConfig)(extractName)
+        .map { elemWithParentData =>
+          val path = UriEncodingHelper.withTrailingSeparator(generatePath(elemWithParentData.parentData))
+          val level = elemWithParentData.parentData.size
+          elemWithParentData.element match
+            case f: Model.File[ID] => converter.toFileElement(f.asInstanceOf[FILE], path, level)
+            case f: Model.Folder[ID] => converter.toFolderElement(f.asInstanceOf[FOLDER], path, level)
+        }
+    }
 
   override def removeFile(id: String): Future[Unit] =
     run(fileSystem.deleteFile(converter.elementIDFromString(id)))
