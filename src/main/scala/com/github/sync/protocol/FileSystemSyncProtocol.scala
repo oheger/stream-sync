@@ -88,12 +88,6 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
 
   import FileSystemSyncProtocol.*
 
-  override def readRootFolder(): Future[List[SyncTypes.FsElement]] =
-    run(fileSystem.rootID) flatMap (id => readFolderWithID(id, "/", 0))
-
-  override def readFolder(id: String, path: String, level: Int): Future[List[SyncTypes.FsElement]] =
-    readFolderWithID(converter.elementIDFromString(id), path, level)
-
   override def elementSource: Future[Source[SyncTypes.FsElement, NotUsed]] =
     fileSystem.rootID.run(httpSender).map { rootID =>
       val walkConfig = Walk.WalkConfig(

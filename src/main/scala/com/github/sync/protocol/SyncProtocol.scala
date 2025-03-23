@@ -41,29 +41,6 @@ import scala.concurrent.Future
   */
 trait SyncProtocol extends AutoCloseable:
   /**
-    * Reads the content of the root folder and returns it as a list of
-    * [[FsElement]] objects. With this function, the iteration over the folder
-    * structure can get started. From the elements in the result, the IDs of
-    * the folders on the next level can be obtained, which can then be passed
-    * to ''readFolder()''.
-    *
-    * @return a ''Future'' with a list of elements in the root folder
-    */
-  def readRootFolder(): Future[List[FsElement]]
-
-  /**
-    * Reads the content of a folder and returns it as a list of [[FsElement]]
-    * objects.
-    *
-    * @param id    the ID of the folder to read
-    * @param path  the path of the folder (to generate complete paths)
-    * @param level the level of this folder
-    * @return a ''Future'' with a list with the elements contained in this
-    *         folder
-    */
-  def readFolder(id: String, path: String, level: Int): Future[List[FsElement]]
-
-  /**
     * Returns the [[Source]] for iterating over all elements in the structure to
     * be synced. This becomes the source of the sync stream.
     *
