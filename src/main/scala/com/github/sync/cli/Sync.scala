@@ -26,18 +26,17 @@ import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStructureConfig.{DestinationRoleType, SourceRoleType}
 import com.github.sync.cli.SyncParameterManager.SyncConfig
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
-import com.github.sync.log.{ElementSerializer, SerializerStreamHelper}
+import com.github.sync.log.SerializerStreamHelper
 import com.github.sync.stream.*
 import org.apache.logging.log4j.core.config.Configurator
-import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.actor.{ActorSystem, typed}
 import org.apache.pekko.stream.*
 import org.apache.pekko.stream.Supervision.Decider
-import org.apache.pekko.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, RunnableGraph, Sink, Source}
+import org.apache.pekko.stream.scaladsl.{Flow, Keep, RunnableGraph, Sink, Source}
 import org.slf4j.LoggerFactory
 
-import java.nio.file.{Path, StandardOpenOption}
+import java.nio.file.Path
 import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
@@ -144,10 +143,17 @@ object Sync:
     case Some(path) =>
       createMirrorSourceFromLog(config, path)
     case None =>
-      val srcSource = protocolHolder.createSourceElementSource()
-      val dstSource = protocolHolder.createDestinationElementSource()
-      Future.successful(SyncStream.createMirrorSource(srcSource, dstSource,
-        config.streamConfig.ignoreTimeDelta getOrElse IgnoreTimeDelta(1.second)))
+      val futSrcSource = protocolHolder.createSourceElementSource()
+      val futDstSource = protocolHolder.createDestinationElementSource()
+      for
+        srcSource <- futSrcSource
+        dstSource <- futDstSource
+      yield
+        SyncStream.createMirrorSource(
+          srcSource,
+          dstSource,
+          config.streamConfig.ignoreTimeDelta getOrElse IgnoreTimeDelta(1.second)
+        )
 
   /**
     * Creates the source for the sync process if a sync log is provided. The
@@ -266,7 +272,6 @@ object Sync:
     * @param protocolHolder   the ''SyncProtocolHolder''
     * @param ec               the execution context
     * @param system           the actor system
-    * @return a future with the runnable graph
     * @return a ''Future'' with the runnable graph of the sync stream
     */
   private def createSyncStream(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
@@ -275,11 +280,36 @@ object Sync:
                                protocolHolder: SyncProtocolHolder)
                               (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     val baseParams = createBaseStreamParams(flowProc, config, protocolHolder)
-    val syncParams = SyncStream.SyncStreamParams(baseParams, streamName = syncStreamConfig.streamName,
-      stateFolder = syncStreamConfig.statePath, localSource = protocolHolder.createSourceElementSource(),
-      remoteSource = protocolHolder.createDestinationElementSource(),
-      ignoreDelta = config.streamConfig.ignoreTimeDelta getOrElse IgnoreTimeDelta(1.second),
-      dryRun = config.streamConfig.dryRun)
+    val futLocalSource = protocolHolder.createSourceElementSource()
+    val futRemoteSource = protocolHolder.createDestinationElementSource()
+    for
+      localSource <- futLocalSource
+      remoteSource <- futRemoteSource
+      syncParams = SyncStream.SyncStreamParams(
+        baseParams,
+        streamName = syncStreamConfig.streamName,
+        stateFolder = syncStreamConfig.statePath,
+        localSource = localSource,
+        remoteSource = remoteSource,
+        ignoreDelta = config.streamConfig.ignoreTimeDelta getOrElse IgnoreTimeDelta(1.second),
+        dryRun = config.streamConfig.dryRun
+      )
+      syncStream <- createSyncStreamWithParams(syncStreamConfig, syncParams)
+    yield syncStream
+
+  /**
+    * Creates the full sync stream for a sync process from the given 
+    * configuration and parameters.
+    *
+    * @param syncStreamConfig the config for the sync stream
+    * @param syncParams       the parameters for the sync stream
+    * @param ec               the execution context
+    * @param system           the actor system
+    * @return a ''Future'' with the runnable graph of the sync stream
+    */
+  private def createSyncStreamWithParams(syncStreamConfig: SyncCliStreamConfig.SyncStreamConfig,
+                                         syncParams: SyncStream.SyncStreamParams[Int, Int])
+                                        (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     if syncStreamConfig.stateImport then SyncStream.createStateImportStream(syncParams)
     else SyncStream.createSyncStream(syncParams)
 
@@ -407,7 +437,7 @@ object Sync:
   * in the companion object. By extending [[CliActorSystemLifeCycle]], this class
   * has access to an actor system and can therefore initiate the sync process.
   */
-class Sync extends CliActorSystemLifeCycle[SyncConfig] :
+class Sync extends CliActorSystemLifeCycle[SyncConfig]:
   override val name: String = "Sync"
 
   override protected def cliExtractor: ParameterExtractor.CliExtractor[Try[SyncConfig]] =
