@@ -42,50 +42,8 @@ class FileSystemSyncProtocolSpec extends ScalaTestWithActorTestKit with AnyFlatS
     */
   private def fileContent: Source[ByteString, NotUsed] =
     Source(ByteString(FileTestHelper.TestData).grouped(42).toList)
-
-  "FileSystemSyncProtocol" should "read the content of a folder" in {
-    val FolderID = "theFolder"
-    val PathPrefix = "/the/test/path/"
-    val Level = 28
-    val files = (1 to 10).map(FileSystemProtocolConverterTestImpl.testFile(_)).map(f => (f.id, f)).toMap
-    val folders = (20 to 30).map(FileSystemProtocolConverterTestImpl.testFolder).map(f => (f.id, f)).toMap
-    val content = Model.FolderContent(FolderID, files, folders)
-    val expFiles = (1 to 10).map(idx => FileSystemProtocolConverterTestImpl.testFileElement(idx, PathPrefix, Level))
-    val expFolders = (20 to 30)
-      .map(idx => FileSystemProtocolConverterTestImpl.testFolderElement(idx, PathPrefix, Level))
-    val helper = new ProtocolTestHelper
-
-    helper.withFileSystem { fs =>
-      when(fs.folderContent(FileSystemProtocolConverterTestImpl.IDPrefix + FolderID))
-        .thenReturn(helper.stubOperation(content))
-    }
-    val result = futureResult(helper.protocol.readFolder(FolderID, PathPrefix, Level))
-    result should have size (expFiles.size + expFolders.size)
-    result should contain allElementsOf expFiles
-    result should contain allElementsOf expFolders
-  }
-
-  it should "read the content of the root folder" in {
-    val RootID = "TheRootFolder"
-    val files = (1 to 5).map(FileSystemProtocolConverterTestImpl.testFile(_)).map(f => (f.id, f)).toMap
-    val folders = (10 to 16).map(FileSystemProtocolConverterTestImpl.testFolder).map(f => (f.id, f)).toMap
-    val content = Model.FolderContent(RootID, files, folders)
-    val expFiles = (1 to 5).map(idx => FileSystemProtocolConverterTestImpl.testFileElement(idx, "/", 0))
-    val expFolders = (10 to 16)
-      .map(idx => FileSystemProtocolConverterTestImpl.testFolderElement(idx, "/", 0))
-    val helper = new ProtocolTestHelper
-
-    helper.withFileSystem { fs =>
-      when(fs.rootID).thenReturn(helper.stubOperation(RootID))
-      when(fs.folderContent(RootID)).thenReturn(helper.stubOperation(content))
-    }
-    val result = futureResult(helper.protocol.readRootFolder())
-    result should have size (expFiles.size + expFolders.size)
-    result should contain allElementsOf expFiles
-    result should contain allElementsOf expFolders
-  }
-
-  it should "remove a file" in {
+  
+  "FileSystemSyncProtocol" should "remove a file" in {
     val FileID = "theFileToRemove"
     val helper = new ProtocolTestHelper
 

@@ -33,8 +33,8 @@ import org.scalatestplus.mockito.MockitoSugar
 
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
-import scala.concurrent.{ExecutionContext, Future}
 
 object DavSyncSpec:
   /** A test path to be requested from the server. */
@@ -202,11 +202,6 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
   }
 
   it should "do proper cleanup for a Dav source when using a log file source and apply mode NONE" in {
-    def createMockProtocol(): SyncProtocol =
-      val protocol = mock[SyncProtocol]
-      when(protocol.readRootFolder()).thenReturn(Future.successful(Nil))
-      protocol
-
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
     val procLog = createPathInDirectory("processed.log")
     val operations = List(s"CREATE 0 null FILE id1 /syncFile.txt 0 2019-09-04T21:30:23.00Z 42")
@@ -214,8 +209,8 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     val options = IndexedSeq("dav:http://irrelevant.host.org/test", dstFolder.toAbsolutePath.toString,
       "--sync-log", syncLogFile.toAbsolutePath.toString, "--log", procLog.toAbsolutePath.toString,
       "-d", "--src-user", UserId, "--src-password", Password)
-    val srcProtocol = createMockProtocol()
-    val dstProtocol = createMockProtocol()
+    val srcProtocol = mock[SyncProtocol]
+    val dstProtocol = mock[SyncProtocol]
     val protocolFactory = mock[SyncProtocolFactory]
     when(protocolFactory.createProtocol(anyString(), any())).thenAnswer((invocation: InvocationOnMock) => {
       val uri: String = invocation.getArgument(0)
