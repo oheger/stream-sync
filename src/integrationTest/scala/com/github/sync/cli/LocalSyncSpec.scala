@@ -20,6 +20,7 @@ import com.github.cloudfiles.core.http.UriEncodingHelper
 import com.github.sync.cli.LocalSyncSpec.encodePath
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
+import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.util.ByteString
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{verify, when}
@@ -292,7 +293,7 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
   it should "properly close the protocols after a sync process" in {
     def createMockProtocol(): SyncProtocol =
       val protocol = mock[SyncProtocol]
-      when(protocol.readRootFolder()).thenReturn(Future.successful(Nil))
+      when(protocol.elementSource).thenReturn(Future.successful(Source.empty))
       protocol
 
     val srcFolder = Files.createDirectory(createPathInDirectory("source")).toAbsolutePath
@@ -605,24 +606,6 @@ class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
 
     val log = runSyncAndCaptureLogs(options)
     log should not include f.getFileName.toString
-  }
-
-  it should "log the folders currently processed in info level" in {
-    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
-    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
-    createTestFile(srcFolder, "test1.txt")
-    val srcSubFolder1 = Files.createDirectory(srcFolder.resolve("sub"))
-    val srcSubFolder2 = Files.createDirectory(srcSubFolder1.resolve("anotherSub"))
-    val dstSubFolder = Files.createDirectory(dstFolder.resolve("sub"))
-    createTestFile(dstSubFolder, "dest.dat")
-    createTestFile(srcSubFolder1, "src.dat")
-    createTestFile(srcSubFolder2, "moreData.txt")
-    val options = IndexedSeq(srcFolder.toAbsolutePath.toString, dstFolder.toAbsolutePath.toString, "--info")
-
-    val log = runSyncAndCaptureLogs(options)
-    List(srcSubFolder1, srcSubFolder2) foreach { folder =>
-      log should include("/" + folder.getFileName)
-    }
   }
 
   it should "log data about overridden files in debug level" in {

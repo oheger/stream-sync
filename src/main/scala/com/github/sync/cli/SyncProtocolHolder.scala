@@ -23,7 +23,7 @@ import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
 import com.github.sync.oauth.SyncAuthConfig
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.protocol.config.StructureCryptConfig
-import com.github.sync.stream.{ProtocolElementSource, ProtocolOperationHandler, ProtocolOperationHandlerStage}
+import com.github.sync.stream.{ProtocolOperationHandler, ProtocolOperationHandlerStage}
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
 import org.apache.pekko.stream.scaladsl.{Flow, Source}
@@ -124,17 +124,17 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
   /**
     * Creates a source for iterating over the elements of the source structure.
     *
-    * @return the source for the source structure
+    * @return a [[Future]] with the source for the source structure
     */
-  def createSourceElementSource(): Source[FsElement, Any] = createElementSource("source", srcProtocol)
+  def createSourceElementSource(): Future[Source[FsElement, Any]] = srcProtocol.elementSource
 
   /**
     * Creates a source for iterating over the elements of the destination
     * structure.
     *
-    * @return the source for the destination structure
+    * @return a [[Future]] with the source for the destination structure
     */
-  def createDestinationElementSource(): Source[FsElement, Any] = createElementSource("dest", dstProtocol)
+  def createDestinationElementSource(): Future[Source[FsElement, Any]] = dstProtocol.elementSource
 
   /**
     * Creates the flow stage for applying the sync operations against the
@@ -167,17 +167,6 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
         srcProtocol.close()
         dstProtocol.close()
     }
-
-  /**
-    * Creates a source for file system elements that uses the protocol
-    * specified.
-    *
-    * @param name the name of the source
-    * @param protocol the ''SyncProtocol'' for this source
-    * @return the source for iterating the elements of this structure
-    */
-  private def createElementSource(name: String, protocol: SyncProtocol): Source[FsElement, Any] =
-    Source.fromGraph(new ProtocolElementSource(name, protocol))
 
   /**
     * Returns the execution context from the actor system in implicit scope.
