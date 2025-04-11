@@ -25,7 +25,7 @@ import java.time.Instant
 /**
   * Test class for ''NormalizedFolder''.
   */
-class NormalizedFolderSpec extends AnyFlatSpec, Matchers :
+class NormalizedFolderSpec extends AnyFlatSpec, Matchers:
   "NormalizedFolder" should "have a normalized URI" in {
     val path = "/the/folder/path"
     val folder = FsFolder("folderID", path, 3)

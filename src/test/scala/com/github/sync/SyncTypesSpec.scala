@@ -25,7 +25,7 @@ import java.time.Instant
 /**
   * Test class for ''SyncTypes''.
   */
-class SyncTypesSpec extends AnyFlatSpec, Matchers :
+class SyncTypesSpec extends AnyFlatSpec, Matchers:
   "SyncTypes" should "compare two element URIs that are equal" in {
     val elem1 = FsFile("id1", "/path/to/element", 3, null, 1000)
     val elem2 = FsFolder("id2", elem1.relativeUri, 3)

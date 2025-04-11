@@ -56,8 +56,8 @@ object BaseMergeStage:
     * @tparam T the type of the elements emitted by the stream                   
     */
   case class MergeEmitData[+T](elements: scala.collection.immutable.Iterable[T],
-                      pullInlets: Iterable[Input],
-                      complete: Boolean = false)
+                               pullInlets: Iterable[Input],
+                               complete: Boolean = false)
 
 /**
   * A trait defining common logic for ''GraphStage'' implementations that merge
@@ -79,7 +79,7 @@ object BaseMergeStage:
   */
 trait BaseMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT](in1: Inlet[ELEMENT1],
                                                      in2: Inlet[ELEMENT2],
-                                                     out: Outlet[OUTELEMENT]) extends GraphStageLogic :
+                                                     out: Outlet[OUTELEMENT]) extends GraphStageLogic:
   this: StageLogging =>
 
   import BaseMergeStage.*

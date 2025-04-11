@@ -38,7 +38,7 @@ import scala.util.Random
   * to be executed and its specific arguments. Based on this, the corresponding
   * function of this module is called.
   */
-object OAuthCommandsImpl extends OAuthCommands :
+object OAuthCommandsImpl extends OAuthCommands:
 
   import OAuthCommands.*
 
@@ -83,10 +83,10 @@ object OAuthCommandsImpl extends OAuthCommands :
                          (using ec: ExecutionContext, system: ActorSystem): Future[String] =
     storageService.loadIdpConfig(listTokensConfig.storageConfig).map { idpConfig =>
       s"""
-        |Tokens for IDP ${listTokensConfig.storageConfig.baseName}:
-        |Access token:  ${idpConfig.oauthConfig.initTokenData.accessToken}
-        |Refresh token: ${idpConfig.oauthConfig.initTokenData.refreshToken}
-        |""".stripMargin
+         |Tokens for IDP ${listTokensConfig.storageConfig.baseName}:
+         |Access token:  ${idpConfig.oauthConfig.initTokenData.accessToken}
+         |Refresh token: ${idpConfig.oauthConfig.initTokenData.refreshToken}
+         |""".stripMargin
     }
 
   /**

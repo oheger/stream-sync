@@ -91,8 +91,8 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     val storageConfig = createStorageConfig()
 
     val futConfig = for _ <- OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig)
-                         readConfig <- OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
-                         yield readConfig
+                        readConfig <- OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
+    yield readConfig
     val config = futureResult(futConfig)
     config should not be theSameInstanceAs(TestConfig)
     configEquals(TestConfig, config) shouldBe true
@@ -166,8 +166,8 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     val storageConfig = createStorageConfig(optPassword = Some("secure_storage"))
 
     val futSecret = for _ <- OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig)
-                         loadedConfig <- OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
-                         yield loadedConfig
+                        loadedConfig <- OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
+    yield loadedConfig
     val secretConfig = futureResult(futSecret)
     configEquals(secretConfig, TestConfig) shouldBe true
     val bytes = Files.readAllBytes(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixSecretFile))

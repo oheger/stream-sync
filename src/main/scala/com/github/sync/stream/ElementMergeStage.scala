@@ -42,7 +42,7 @@ import org.apache.pekko.stream.{Inlet, Outlet}
 trait ElementMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT](in1: Inlet[ELEMENT1],
                                                         in2: Inlet[ELEMENT2],
                                                         out: Outlet[OUTELEMENT])
-  extends BaseMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT] :
+  extends BaseMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT]:
   this: StageLogging =>
 
   /**
@@ -52,7 +52,7 @@ trait ElementMergeStage[ELEMENT1, ELEMENT2, OUTELEMENT](in1: Inlet[ELEMENT1],
     * The state must manage a current element and also needs some update
     * functionality.
     */
-  trait ElementMergeState extends BaseMergeState :
+  trait ElementMergeState extends BaseMergeState:
     /**
       * Returns a copy of the current state that uses the given merge function.
       *

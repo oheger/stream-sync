@@ -24,7 +24,7 @@ import scala.concurrent.duration.*
 /**
   * Test class for ''IgnoreTimeDelta''.
   */
-class IgnoreTimeDeltaSpec extends AnyFlatSpec, Matchers :
+class IgnoreTimeDeltaSpec extends AnyFlatSpec, Matchers:
   "IgnoreTimeDelta" should "define a constant to ignore no deltas" in {
     IgnoreTimeDelta.Zero.deltaSec should be(0)
   }

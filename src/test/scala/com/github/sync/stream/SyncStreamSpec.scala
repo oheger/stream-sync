@@ -152,7 +152,7 @@ object SyncStreamSpec:
   * Test class for ''SyncStream''.
   */
 class SyncStreamSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlatSpecLike, BeforeAndAfterAll,
-  BeforeAndAfterEach, Matchers, AsyncTestHelper, FileTestHelper :
+  BeforeAndAfterEach, Matchers, AsyncTestHelper, FileTestHelper:
   def this() = this(ActorSystem("SyncStreamSpec"))
 
   override protected def afterAll(): Unit =

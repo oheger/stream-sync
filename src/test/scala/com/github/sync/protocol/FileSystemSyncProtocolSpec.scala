@@ -42,7 +42,7 @@ class FileSystemSyncProtocolSpec extends ScalaTestWithActorTestKit with AnyFlatS
     */
   private def fileContent: Source[ByteString, NotUsed] =
     Source(ByteString(FileTestHelper.TestData).grouped(42).toList)
-  
+
   "FileSystemSyncProtocol" should "remove a file" in {
     val FileID = "theFileToRemove"
     val helper = new ProtocolTestHelper

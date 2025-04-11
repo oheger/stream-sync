@@ -45,7 +45,7 @@ private object DavProtocolConverter:
   * straight-forward for the basic properties, the last modified time has to be
   * loaded from attributes.
   *
-  * @param davConfig the WebDAV configuration
+  * @param davConfig            the WebDAV configuration
   * @param optModifiedAttribute an optional custom property to access the last
   *                             modified time                   
   */

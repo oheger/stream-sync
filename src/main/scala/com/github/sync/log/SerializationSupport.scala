@@ -150,7 +150,7 @@ trait SerializationSupport[T]:
 
   extension (t: T)
 
-  /**
-    * Transforms this instance to its serialized form.
-    */
+    /**
+      * Transforms this instance to its serialized form.
+      */
     def serialize(builder: mutable.ArrayBuilder[String]): Unit

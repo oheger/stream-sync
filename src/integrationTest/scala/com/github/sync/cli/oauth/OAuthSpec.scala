@@ -236,7 +236,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
 
   it should "print a help text for the remove command" in {
     val output = outputOfFailedRun(Array(OAuthParameterManager.CommandRemoveIDP,
-    "-n", "my-idp", "-d", "/my-path", "-h"))
+      "-n", "my-idp", "-d", "/my-path", "-h"))
 
     output should include(OAuthParameterManager.StoragePathOption)
     output should include(OAuthParameterManager.NameOption)

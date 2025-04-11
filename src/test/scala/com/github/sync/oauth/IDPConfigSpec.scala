@@ -42,7 +42,7 @@ object IDPConfigSpec:
 /**
   * Test class for ''IDPConfig''.
   */
-class IDPConfigSpec extends AnyFlatSpec with Matchers :
+class IDPConfigSpec extends AnyFlatSpec with Matchers:
   "IDPConfig" should "detect a valid secret" in {
     val config = createIDPConfig()
 

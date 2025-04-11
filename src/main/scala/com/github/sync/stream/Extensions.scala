@@ -22,22 +22,22 @@ import java.time.Instant
 
 extension (elem: FsElement)
 
-/**
-  * Determines the last modified time from an element, no matter whether it is
-  * a file or a folder. When comparing elements during a sync process it is
-  * often required to compare the times of last modification for these
-  * elements. Rather than checking for the concrete element types, this
-  * function allows direct access to the last modification time. If the element
-  * is a file, its ''lastModified'' property is returned; otherwise, result is
-  * the provided folder time.
-  */
+  /**
+    * Determines the last modified time from an element, no matter whether it is
+    * a file or a folder. When comparing elements during a sync process it is
+    * often required to compare the times of last modification for these
+    * elements. Rather than checking for the concrete element types, this
+    * function allows direct access to the last modification time. If the element
+    * is a file, its ''lastModified'' property is returned; otherwise, result is
+    * the provided folder time.
+    */
   def modifiedTime(folderTime: => Instant): Instant = elem match
     case file: FsFile => file.lastModified
     case _: FsFolder => folderTime
 
 extension (folder: FsFolder)
 
-/**
-  * Returns a ''NormalizedFolder'' initialized with this folder.
-  */
+  /**
+    * Returns a ''NormalizedFolder'' initialized with this folder.
+    */
   def toNormalizedFolder: NormalizedFolder = NormalizedFolder(folder)

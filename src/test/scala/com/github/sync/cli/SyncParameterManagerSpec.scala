@@ -77,7 +77,7 @@ object SyncParameterManagerSpec:
   */
 class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper with MockitoSugar
-  with AsyncTestHelper :
+  with AsyncTestHelper:
   def this() = this(ActorSystem("SyncParameterManagerSpec"))
 
   override protected def afterAll(): Unit =

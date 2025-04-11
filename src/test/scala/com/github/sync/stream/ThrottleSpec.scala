@@ -61,7 +61,7 @@ object ThrottleSpec:
   * Test class for ''Throttle''.
   */
 class ThrottleSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlatSpecLike, BeforeAndAfterAll, Matchers,
-  AsyncTestHelper :
+  AsyncTestHelper:
   def this() = this(ActorSystem("ThrottleSpec"))
 
   override protected def afterAll(): Unit =
