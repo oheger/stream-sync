@@ -70,7 +70,7 @@ object SyncStageSpec:
 /**
   * Test class for ''SyncStage''.
   */
-class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSystem) :
+class SyncStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSystem):
   def this() = this(ActorSystem("SyncStageSpec"))
 
   import AbstractStageSpec.*

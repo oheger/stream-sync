@@ -102,7 +102,7 @@ object Throttle:
     * passed downstream.
     */
   private class ThrottleMergeStage
-    extends GraphStage[FanInShape2[SyncOperationResult, SyncOperationResult, SyncOperationResult]] :
+    extends GraphStage[FanInShape2[SyncOperationResult, SyncOperationResult, SyncOperationResult]]:
     val out: Outlet[SyncOperationResult] = Outlet[SyncOperationResult]("ThrottleMerge.out")
     val inAll: Inlet[SyncOperationResult] = Inlet[SyncOperationResult]("ThrottleMerge.inAll")
     val inThrottled: Inlet[SyncOperationResult] = Inlet[SyncOperationResult]("ThrottleMerge.inThrottle")

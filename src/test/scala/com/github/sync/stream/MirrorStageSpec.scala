@@ -121,7 +121,7 @@ object MirrorStageSpec:
   * Test class for ''SyncStage''.
   */
 class MirrorStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with Matchers :
+  with BeforeAndAfterAll with Matchers:
   def this() = this(ActorSystem("SyncStageSpec"))
 
   override protected def afterAll(): Unit =

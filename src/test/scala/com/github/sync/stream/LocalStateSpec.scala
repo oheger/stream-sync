@@ -33,7 +33,7 @@ import java.nio.file.{Files, Path, Paths}
   * Test class for ''LocalState''.
   */
 class LocalStateSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlatSpecLike, BeforeAndAfterAll,
-  BeforeAndAfterEach, Matchers, FileTestHelper, AsyncTestHelper :
+  BeforeAndAfterEach, Matchers, FileTestHelper, AsyncTestHelper:
   def this() = this(ActorSystem("LocalStateSpec"))
 
   override protected def afterAll(): Unit =

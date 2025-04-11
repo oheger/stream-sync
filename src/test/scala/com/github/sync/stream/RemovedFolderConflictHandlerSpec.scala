@@ -102,11 +102,11 @@ object RemovedFolderConflictHandlerSpec:
 
   extension (h: RemovedFolderConflictHandler[TestSyncState])
 
-  /**
-    * Convenience function to invoke a conflict handler with an element
-    * affected by a remove folder operation. In this case, there should be no
-    * invocation of the handler function.
-    */
+    /**
+      * Convenience function to invoke a conflict handler with an element
+      * affected by a remove folder operation. In this case, there should be no
+      * invocation of the handler function.
+      */
     private def handleRemovedElement(state: TestSyncState, element: FsElement, conflict: => List[SyncOperation]):
     RemovedFolderConflictHandler.HandlerResult[TestSyncState] =
       h.handleElement(state, element, resultFunc, conflict) {
@@ -115,15 +115,15 @@ object RemovedFolderConflictHandlerSpec:
 
   extension (op: SyncOperation)
 
-  /**
-    * Converts a ''SyncOperation'' to a deferred one.
-    */
+    /**
+      * Converts a ''SyncOperation'' to a deferred one.
+      */
     def toDeferred: SyncOperation = op.copy(deferred = true)
 
 /**
   * Test class for ''RemovedFolderConflictHandler''.
   */
-class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers :
+class RemovedFolderConflictHandlerSpec extends AnyFlatSpec, Matchers:
 
   import RemovedFolderConflictHandlerSpec.*
 

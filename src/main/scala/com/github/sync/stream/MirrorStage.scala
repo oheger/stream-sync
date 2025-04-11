@@ -51,7 +51,7 @@ private object MirrorStage:
     extends GraphStageLogic(shape),
       BaseMergeStage[FsElement, FsElement, SyncOperation](in1, in2, out),
       ElementMergeStage[FsElement, FsElement, SyncOperation](in1, in2, out),
-      StageLogging :
+      StageLogging:
     /**
       * The state of the [[MirrorStage]].
       *
@@ -64,7 +64,7 @@ private object MirrorStage:
       */
     case class MirrorState(override val mergeFunc: MergeFunc,
                            override val currentElement: Option[FsElement],
-                           removedFolderState: RemovedFolderState) extends ElementMergeState :
+                           removedFolderState: RemovedFolderState) extends ElementMergeState:
       override def updateCurrentElement(element: Option[FsElement]): MirrorState = copy(currentElement = element)
 
       override def withMergeFunc(f: MergeFunc): MirrorState = copy(mergeFunc = f)
@@ -292,7 +292,7 @@ private object MirrorStage:
   *                        comparing two files
   */
 private class MirrorStage(val ignoreTimeDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero)
-  extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]] :
+  extends GraphStage[FanInShape2[FsElement, FsElement, SyncOperation]]:
 
   import MirrorStage.*
 

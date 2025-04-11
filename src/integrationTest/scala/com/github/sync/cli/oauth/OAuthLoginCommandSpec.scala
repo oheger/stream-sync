@@ -120,7 +120,7 @@ object OAuthLoginCommandSpec:
   * Test class for OAuth login functionality.
   */
 class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
-  with BeforeAndAfterAll with Matchers with MockitoSugar with WireMockSupport with AsyncTestHelper :
+  with BeforeAndAfterAll with Matchers with MockitoSugar with WireMockSupport with AsyncTestHelper:
   def this() = this(ActorSystem("OAuthLoginCommandSpec"))
 
   override protected def afterAll(): Unit =
@@ -237,7 +237,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
 
     val exception = expectFailedFuture[IllegalStateException] {
       helper.prepareBrowserHandlerToCallRedirectUri(config.oauthConfig.redirectUri + uriQuery,
-        StatusCodes.BadRequest, includeState = false)
+          StatusCodes.BadRequest, includeState = false)
         .runCommand()
     }
     exception.getMessage should include("state value")

@@ -28,7 +28,7 @@ import scala.util.{Failure, Success}
 /**
   * Test class for ''ElementSerializer''.
   */
-class ElementSerializerSpec extends AnyFlatSpec with Matchers :
+class ElementSerializerSpec extends AnyFlatSpec with Matchers:
   /**
     * Returns the line-ending character.
     *

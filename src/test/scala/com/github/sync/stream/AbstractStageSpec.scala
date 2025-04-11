@@ -118,7 +118,7 @@ object AbstractStageSpec:
   * @param testSystem the test actor system
   */
 class AbstractStageSpec(testSystem: ActorSystem) extends TestKit(testSystem), AnyFlatSpecLike, BeforeAndAfterAll,
-  Matchers, AsyncTestHelper :
+  Matchers, AsyncTestHelper:
 
   override protected def afterAll(): Unit =
     TestKit shutdownActorSystem system

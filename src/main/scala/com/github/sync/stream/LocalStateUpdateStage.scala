@@ -130,7 +130,7 @@ private object LocalStateUpdateStage:
     * @param operation       the associated operation
     */
   private case class LocalAffectingUpdate(optLocalElement: Option[ElementWithDelta],
-                                          operation: SyncOperation) extends StateUpdate :
+                                          operation: SyncOperation) extends StateUpdate:
     override def canUpdate(opFunc: SyncOperation => Option[SyncOperationResult]): Boolean =
       opFunc(operation).isDefined
 
@@ -151,7 +151,7 @@ private object LocalStateUpdateStage:
     *
     * @param optLocalElement the local element if available
     */
-  private case class NonLocalAffectingUpdate(optLocalElement: Option[ElementWithDelta]) extends StateUpdate :
+  private case class NonLocalAffectingUpdate(optLocalElement: Option[ElementWithDelta]) extends StateUpdate:
     override def canUpdate(opFunc: SyncOperation => Option[SyncOperationResult]): Boolean = true
 
     override def updateData(opFunc: SyncOperation => SyncOperationResult):
@@ -176,7 +176,7 @@ end LocalStateUpdateStage
   * order.
   */
 private class LocalStateUpdateStage
-  extends GraphStage[FanInShape2[SyncStage.SyncStageResult, SyncOperationResult, LocalState.LocalElementState]] :
+  extends GraphStage[FanInShape2[SyncStage.SyncStageResult, SyncOperationResult, LocalState.LocalElementState]]:
   val out: Outlet[LocalState.LocalElementState] = Outlet[LocalState.LocalElementState]("LocalStateUpdateStage.out")
   val inSync: Inlet[SyncStage.SyncStageResult] = Inlet[SyncStage.SyncStageResult]("LocalStateUpdateStage.inSync")
   val inOps: Inlet[SyncOperationResult] = Inlet[SyncOperationResult]("LocalStateUpdateStage.inOps")

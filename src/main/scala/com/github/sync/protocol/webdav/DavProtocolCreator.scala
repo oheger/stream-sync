@@ -34,7 +34,7 @@ import org.apache.pekko.util.Timeout
   * It creates a ''DavFileSystem'' and compatible components.
   */
 private object DavProtocolCreator
-  extends FileSystemProtocolCreator[Uri, DavModel.DavFile, DavModel.DavFolder, DavStructureConfig] :
+  extends FileSystemProtocolCreator[Uri, DavModel.DavFile, DavModel.DavFolder, DavStructureConfig]:
   /**
     * The prefix of URIs indicating the DAV protocol. This prefix needs to be
     * removed when passing the URI to the file system.

@@ -36,7 +36,7 @@ object LocalStateStageSpec:
 /**
   * Test class for ''LocalStageStage''.
   */
-class LocalStateStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSystem) :
+class LocalStateStageSpec(testSystem: ActorSystem) extends AbstractStageSpec(testSystem):
   def this() = this(ActorSystem("LocalStateStageSpec"))
 
   import AbstractStageSpec.*

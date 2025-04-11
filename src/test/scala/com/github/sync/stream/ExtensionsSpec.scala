@@ -25,7 +25,7 @@ import java.time.Instant
 /**
   * Test class for the extension functions of the stream package.
   */
-class ExtensionsSpec extends AnyFlatSpec, Matchers :
+class ExtensionsSpec extends AnyFlatSpec, Matchers:
   "modifiedTime" should "return the time of a file" in {
     val FileModifiedTime = Instant.parse("2021-12-03T20:03:37Z")
     val file = FsFile("fid", "/some/file.txt", 2, FileModifiedTime, 1000)

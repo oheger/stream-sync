@@ -77,7 +77,7 @@ object SyncCliStreamConfigSpec:
 /**
   * Test class for ''SyncCliStreamConfig''.
   */
-class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers :
+class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers:
 
   import SyncCliStreamConfigSpec.*
 

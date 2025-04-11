@@ -231,9 +231,9 @@ trait CliActorSystemLifeCycle[C]:
     } // this is guaranteed to succeed
 
     for msg <- fallback
-         _ <- Http().shutdownAllConnectionPools()
-         _ <- system.terminate()
-         yield msg
+        _ <- Http().shutdownAllConnectionPools()
+        _ <- system.terminate()
+    yield msg
 
   /**
     * Returns an error message from the given exception.

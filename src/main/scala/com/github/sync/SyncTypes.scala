@@ -201,7 +201,7 @@ object SyncTypes:
     *
     * @param folder the associated ''FsFolder'' object
     */
-  case class SyncFolderData(folder: FsFolder) extends Ordered[SyncFolderData] :
+  case class SyncFolderData(folder: FsFolder) extends Ordered[SyncFolderData]:
     override def compare(that: SyncFolderData): Int =
       val deltaLevel = that.folder.level - folder.level
       if deltaLevel != 0 then deltaLevel

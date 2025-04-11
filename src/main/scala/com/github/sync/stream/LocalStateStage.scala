@@ -69,7 +69,7 @@ private object LocalStateStage:
     extends GraphStageLogic(shape),
       BaseMergeStage[FsElement, FsElement, ElementWithDelta](in1, in2, out),
       ElementMergeStage[FsElement, FsElement, ElementWithDelta](in1, in2, out),
-      StageLogging :
+      StageLogging:
     /**
       * A data class representing the state of this stage class.
       *
@@ -77,7 +77,7 @@ private object LocalStateStage:
       * @param currentElement the current element
       */
     case class StageState(override val mergeFunc: MergeFunc,
-                          override val currentElement: Option[FsElement]) extends ElementMergeState :
+                          override val currentElement: Option[FsElement]) extends ElementMergeState:
       override def withMergeFunc(f: MergeFunc): StageState = copy(mergeFunc = f)
 
       protected override def updateCurrentElement(e: Option[MergeElement]): MergeState = copy(currentElement = e)
@@ -210,7 +210,7 @@ private object LocalStateStage:
   *                 last local time for newly created elements
   */
 private class LocalStateStage(syncTime: Instant)
-  extends GraphStage[FanInShape2[FsElement, FsElement, ElementWithDelta]] :
+  extends GraphStage[FanInShape2[FsElement, FsElement, ElementWithDelta]]:
   val out: Outlet[ElementWithDelta] = Outlet[ElementWithDelta]("LocalStateStage.out")
   val inElements: Inlet[FsElement] = Inlet[FsElement]("LocalStateStage.inElements")
   val inState: Inlet[FsElement] = Inlet[FsElement]("LocalStateStage.inState")

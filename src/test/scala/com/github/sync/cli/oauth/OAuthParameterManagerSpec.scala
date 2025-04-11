@@ -181,8 +181,8 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
       OAuthParameterManager.PasswordOption, OAuthParameterManager.NameOption,
       OAuthParameterManager.EncryptOption, ParameterParser.InputParameter.key, CliActorSystemLifeCycle.FileOption)
   }
-  
-  it should "extract a valid list tokens command config" in:
+
+  it should "extract a valid list tokens command config" in :
     val params = createBasicParametersMap(OAuthParameterManager.CommandListTokens)
     val (config, nextCtx) = futureResult(extractCommandConfig(params))
 

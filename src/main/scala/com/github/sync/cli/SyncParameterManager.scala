@@ -200,7 +200,7 @@ object SyncParameterManager:
     * With a value of this enumeration it is determined if and which parts of
     * a structure are encrypted.
     */
-  object CryptMode extends Enumeration :
+  object CryptMode extends Enumeration:
 
     protected case class CryptModeVal(requiresPassword: Boolean = true) extends super.Val
 
@@ -348,7 +348,7 @@ object SyncParameterManager:
     * @return the default name for this sync stream
     */
   private def generateDefaultSyncStreamName(localUri: Try[String], remoteUri: Try[String]): String =
-  // The Tries should actually be successful when the default value is accessed.
+    // The Tries should actually be successful when the default value is accessed.
     SyncCliStreamConfig.streamNameForUris(localUri.getOrElse("local"), remoteUri.getOrElse("remote"))
 
   /**

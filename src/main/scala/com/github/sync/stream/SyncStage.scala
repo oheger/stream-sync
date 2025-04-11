@@ -61,7 +61,7 @@ private object SyncStage:
                                ignoreTimeDelta: IgnoreTimeDelta)
     extends GraphStageLogic(shape),
       BaseMergeStage[ElementWithDelta, FsElement, SyncStageResult](in1, in2, out),
-      StageLogging :
+      StageLogging:
 
     /**
       * A data class representing the state of this stage.
@@ -79,7 +79,7 @@ private object SyncStage:
                          currentRemoteElement: Option[FsElement],
                          remoteConflictHandler: RemovedFolderConflictHandler[SyncState],
                          localConflictHandler: RemovedFolderConflictHandler[SyncState])
-      extends BaseMergeState :
+      extends BaseMergeState:
       /**
         * Obtains the current element stored in this state for the given input
         * source.
@@ -484,7 +484,7 @@ private object SyncStage:
   *                        comparing two files
   */
 private class SyncStage(ignoreTimeDelta: IgnoreTimeDelta = IgnoreTimeDelta.Zero)
-  extends GraphStage[FanInShape2[ElementWithDelta, FsElement, SyncStageResult]] :
+  extends GraphStage[FanInShape2[ElementWithDelta, FsElement, SyncStageResult]]:
   val out: Outlet[SyncStageResult] = Outlet[SyncStageResult]("SyncStage.out")
   val inLocal: Inlet[ElementWithDelta] = Inlet[ElementWithDelta]("SyncStage.inLocal")
   val inRemote: Inlet[FsElement] = Inlet[FsElement]("SyncStage.inRemote")

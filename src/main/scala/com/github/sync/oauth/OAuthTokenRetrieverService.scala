@@ -39,9 +39,9 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS]:
     * configuration. Optionally, a state parameter can be provided, which is
     * added to the URL.
     *
-    * @param config the OAuth configuration
+    * @param config   the OAuth configuration
     * @param optState an optional state to be added to the URL               
-    * @param system the actor system
+    * @param system   the actor system
     * @return a ''Future'' with the authorization URI
     */
   def authorizeUrl(config: CONFIG, optState: Option[String] = None)(implicit system: ActorSystem[_]): Future[Uri]

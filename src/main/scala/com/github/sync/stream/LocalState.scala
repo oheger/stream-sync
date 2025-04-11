@@ -214,10 +214,10 @@ private object LocalState:
 
   extension (operation: SyncOperation)
 
-  /**
-    * Returns a flag whether this ''SyncOperation'' affects the local
-    * element state.
-    */
+    /**
+      * Returns a flag whether this ''SyncOperation'' affects the local
+      * element state.
+      */
     def affectsLocalState: Boolean = ActionsAffectingLocalState(operation.action)
 
   /**

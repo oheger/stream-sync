@@ -48,7 +48,7 @@ object LocalSyncSpec:
   * Integration test class for sync processes that mainly deals with operations
   * on the local file system.
   */
-class LocalSyncSpec extends BaseSyncSpec with MockitoSugar :
+class LocalSyncSpec extends BaseSyncSpec with MockitoSugar:
   "Sync" should "synchronize two directory structures" in {
     val srcFolder = Files.createDirectory(createPathInDirectory("source"))
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))

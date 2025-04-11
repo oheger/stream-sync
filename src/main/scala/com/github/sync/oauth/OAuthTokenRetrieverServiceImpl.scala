@@ -31,7 +31,7 @@ import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
 
-object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData] :
+object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]:
   /** Parameter for the client ID. */
   private val ParamClientId = "client_id"
 

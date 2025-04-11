@@ -22,7 +22,7 @@ import org.scalatest.matchers.should.Matchers
 
 import java.time.Instant
 
-class RemovedFolderStateSpec extends AnyFlatSpec, Matchers :
+class RemovedFolderStateSpec extends AnyFlatSpec, Matchers:
   "RemovedFolderState" should "return None if no root folder is found for an element" in {
     val element = FsFolder("someID", "/someUri", 11)
 

@@ -42,7 +42,7 @@ object BidirectionalSyncSpec:
   * Integration test class for bidirectional sync processes. The tests operate
   * on local folders.
   */
-class BidirectionalSyncSpec extends BaseSyncSpec :
+class BidirectionalSyncSpec extends BaseSyncSpec:
 
   import BidirectionalSyncSpec.*
 

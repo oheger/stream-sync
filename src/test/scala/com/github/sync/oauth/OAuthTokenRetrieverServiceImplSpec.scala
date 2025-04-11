@@ -143,8 +143,8 @@ object OAuthTokenRetrieverServiceImplSpec:
   private def validateRequest(req: HttpRequestSender.SendRequest, expPath: String, expParams: Map[String, String])
                              (implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Done] =
     for _ <- validateRequestProperties(req, expPath)
-         res <- validateFormParameters(req.request, expParams)
-         yield res
+        res <- validateFormParameters(req.request, expParams)
+    yield res
 
   /**
     * Generates a result for the given request with the content specified.
@@ -174,9 +174,9 @@ object OAuthTokenRetrieverServiceImplSpec:
       implicit val system: ActorSystem[Nothing] = ctx.system
       implicit val ec: ExecutionContextExecutor = system.executionContext
       (for _ <- validateRequest(req, expPath, expParams)
-            respStr <- Future.fromTry(response)
-            resp <- createResponse(req, respStr)
-            yield resp) onComplete {
+           respStr <- Future.fromTry(response)
+           resp <- createResponse(req, respStr)
+      yield resp) onComplete {
         case Success(result) => req.replyTo ! result
         case Failure(exception) =>
           req.replyTo ! HttpRequestSender.FailedResult(req, exception)
