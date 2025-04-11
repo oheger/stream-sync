@@ -21,7 +21,7 @@ import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, P
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStreamConfig.{MirrorStreamConfig, StreamConfig}
-import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
+import com.github.sync.cli.SyncCliStructureConfig.StructureSyncConfig
 import com.github.sync.cli.SyncParameterManager.*
 import com.github.sync.oauth.SyncNoAuth
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig}
@@ -156,7 +156,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (role.configPropertyName(SyncCliStructureConfig.PropDavModifiedProperty) -> List(ModifiedProp)) +
       (role.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace) -> List(ModifiedNs)) +
       (ParameterParser.InputParameter.key -> List(SourceUri, DavDestUri))
-    val ExpDavConfig = StructureAuthConfig(DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
+    val ExpDavConfig = StructureSyncConfig(DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
       deleteBeforeOverride = false), SyncNoAuth)
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
@@ -364,8 +364,8 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       ignoreTimeDelta = Some(IgnoreTimeDelta(100.seconds)),
       opsPerUnit = Some(100), throttleUnit = Throttle.TimeUnit.Minute, orgMirrorStreamConfig)
     val expStreamConfig = streamConfig.copy(modeConfig = orgMirrorStreamConfig.copy(switched = false))
-    val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureAuthConfig],
-      dstConfig = mock[StructureAuthConfig], logConfig = logConfig, cryptConfig = orgCryptConfig,
+    val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureSyncConfig],
+      dstConfig = mock[StructureSyncConfig], logConfig = logConfig, cryptConfig = orgCryptConfig,
       streamConfig = streamConfig, filterData = mock[SyncFilterData])
     val expNormalized = orgConfig.copy(srcUri = orgConfig.dstUri, dstUri = orgConfig.srcUri,
       srcConfig = orgConfig.dstConfig, dstConfig = orgConfig.srcConfig, cryptConfig = expCryptConfig,

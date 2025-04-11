@@ -94,7 +94,7 @@ object SyncCliStructureConfigSpec:
     */
   private def runConfigExtractor(args: Map[String, String], structureUrl: String, roleType: RoleType,
                                  optReader: Option[ConsoleReader] = None):
-  (Try[StructureAuthConfig], ExtractionContext) =
+  (Try[StructureSyncConfig], ExtractionContext) =
     val reader = optReader getOrElse DummyConsoleReader
     val paramCtx = toExtractionContext(toParameters(args, createUrlParameter(structureUrl, roleType)),
       reader = reader)
@@ -113,7 +113,7 @@ object SyncCliStructureConfigSpec:
     * @return the success result returned by the extractor
     */
   private def extractConfig(args: Map[String, String], structureUrl: String, roleType: RoleType,
-                            optReader: Option[ConsoleReader] = None): (StructureAuthConfig, ExtractionContext) =
+                            optReader: Option[ConsoleReader] = None): (StructureSyncConfig, ExtractionContext) =
     val (triedConfig, nextContext) = runConfigExtractor(args, structureUrl, roleType, optReader)
     triedConfig match
       case Success(config) => (config, nextContext)
