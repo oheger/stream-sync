@@ -19,7 +19,7 @@ package com.github.sync.cli
 import com.github.scli.ParameterExtractor.*
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStreamConfig.{StreamConfig, streamConfigExtractor}
-import com.github.sync.cli.SyncCliStructureConfig.StructureAuthConfig
+import com.github.sync.cli.SyncCliStructureConfig.StructureSyncConfig
 import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 import org.apache.logging.log4j.Level
 import org.apache.pekko.util.Timeout
@@ -271,8 +271,8 @@ object SyncParameterManager:
     */
   case class SyncConfig(srcUri: String,
                         dstUri: String,
-                        srcConfig: StructureAuthConfig,
-                        dstConfig: StructureAuthConfig,
+                        srcConfig: StructureSyncConfig,
+                        dstConfig: StructureSyncConfig,
                         logConfig: LogConfig,
                         cryptConfig: CryptConfig,
                         streamConfig: StreamConfig,
@@ -330,8 +330,8 @@ object SyncParameterManager:
     */
   private def createSyncConfig(triedSrcUri: Try[String],
                                triedDstUri: Try[String],
-                               triedSrcConfig: Try[StructureAuthConfig],
-                               triedDstConfig: Try[StructureAuthConfig],
+                               triedSrcConfig: Try[StructureSyncConfig],
+                               triedDstConfig: Try[StructureSyncConfig],
                                triedLogConfig: Try[LogConfig],
                                triedCryptConfig: Try[CryptConfig],
                                triedStreamConfig: Try[StreamConfig],

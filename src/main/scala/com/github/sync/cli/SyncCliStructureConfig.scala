@@ -257,14 +257,13 @@ object SyncCliStructureConfig:
     override val parameterIndex: Int = 1
 
   /**
-    * A class that combines a configuration for a sync structure with the
-    * configuration for the authentication mechanism to be used for this
-    * structure.
+    * A class that combines a configuration for a sync structure with other
+    * configurations required to use this structure in a sync process.
     *
-    * @param structureConfig the configuration of the sync structure
+    * @param structureConfig the configuration of the sync structure itself
     * @param authConfig      the configuration of the auth mechanism
     */
-  case class StructureAuthConfig(structureConfig: StructureConfig,
+  case class StructureSyncConfig(structureConfig: StructureConfig,
                                  authConfig: SyncAuthConfig)
 
   /**
@@ -287,7 +286,7 @@ object SyncCliStructureConfig:
     * @param uriOptionName the name of the option for the structure URI
     * @return the ''CliExtractor'' to extract the config of this role
     */
-  def structureConfigExtractor(roleType: RoleType, uriOptionName: String): CliExtractor[Try[StructureAuthConfig]] =
+  def structureConfigExtractor(roleType: RoleType, uriOptionName: String): CliExtractor[Try[StructureSyncConfig]] =
     val extMap = Map(structureGroup(GroupLocalFs, roleType) -> localFsConfigExtractor(roleType),
       structureGroup(GroupDav, roleType) -> davConfigExtractor(roleType),
       structureGroup(GroupOneDrive, roleType) -> oneDriveConfigExtractor(roleType),
@@ -320,11 +319,11 @@ object SyncCliStructureConfig:
     * @param roleType the role type
     * @return the ''CliExtractor'' for the file system configuration
     */
-  private def localFsConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] =
+  private def localFsConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureSyncConfig]] =
     optionValue(roleType.configPropertyName(PropLocalFsTimeZone), help = Some(HelpLocalFsTimeZone))
       .mapTo(ZoneId.of)
       .map(_.map(optZone => FsStructureConfig(optZone)))
-      .map(_.map(StructureAuthConfig(_, SyncNoAuth)))
+      .map(_.map(StructureSyncConfig(_, SyncNoAuth)))
 
   /**
     * Returns a ''CliExtractor'' that extracts the configuration for a WebDav
@@ -333,7 +332,7 @@ object SyncCliStructureConfig:
     * @param roleType the role type
     * @return the ''CliExtractor'' for the WebDav configuration
     */
-  private def davConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] =
+  private def davConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureSyncConfig]] =
     val extModProp = optionValue(roleType.configPropertyName(PropDavModifiedProperty),
       help = Some(HelpDavModifiedProperty))
     val extModNs = optionValue(roleType.configPropertyName(PropDavModifiedNamespace),
@@ -357,7 +356,7 @@ object SyncCliStructureConfig:
     * @param roleType the structure type
     * @return the ''CliExtractor'' for the OneDrive configuration
     */
-  private def oneDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] =
+  private def oneDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureSyncConfig]] =
     val extPath = optionValue(roleType.configPropertyName(PropOneDrivePath), help = Some(HelpOneDrivePath))
       .mandatory
     val extChunkSize = optionValue(roleType.configPropertyName(PropOneDriveUploadChunkSize),
@@ -379,7 +378,7 @@ object SyncCliStructureConfig:
     * @param roleType the structure type
     * @return the ''CliExtractor'' for the GoogleDrive configuration
     */
-  private def googleDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureAuthConfig]] =
+  private def googleDriveConfigExtractor(roleType: RoleType): CliExtractor[Try[StructureSyncConfig]] =
     val extServer = optionValue(roleType.configPropertyName(PropGoogleDriveServer),
       help = Some(HelpGoogleDriveServer))
     for
@@ -480,10 +479,10 @@ object SyncCliStructureConfig:
   private def createDavConfig(triedOptModifiedProp: Try[Option[String]],
                               triedOptModifiedNamespace: Try[Option[String]],
                               triedDelBeforeOverride: Try[Boolean],
-                              triedAuthConfig: Try[SyncAuthConfig]): Try[StructureAuthConfig] =
+                              triedAuthConfig: Try[SyncAuthConfig]): Try[StructureSyncConfig] =
     createRepresentation(triedOptModifiedProp, triedOptModifiedNamespace,
       triedDelBeforeOverride, triedAuthConfig) { (modProp, modNs, fDel, auth) =>
-      StructureAuthConfig(DavStructureConfig(modProp, modNs, fDel), auth)
+      StructureSyncConfig(DavStructureConfig(modProp, modNs, fDel), auth)
     }
 
   /**
@@ -500,9 +499,9 @@ object SyncCliStructureConfig:
   private def createOneDriveConfig(triedPath: Try[String],
                                    triedChunkSize: Try[Option[Int]],
                                    triedServer: Try[Option[String]],
-                                   triedAuth: Try[SyncAuthConfig]): Try[StructureAuthConfig] =
+                                   triedAuth: Try[SyncAuthConfig]): Try[StructureSyncConfig] =
     createRepresentation(triedPath, triedChunkSize, triedServer, triedAuth) { (path, chunk, server, auth) =>
-      StructureAuthConfig(OneDriveStructureConfig(path, chunk, server), auth)
+      StructureSyncConfig(OneDriveStructureConfig(path, chunk, server), auth)
     }
 
   /**
@@ -514,7 +513,7 @@ object SyncCliStructureConfig:
     * @return a ''Try'' with the resulting configuration
     */
   private def createGoogleDriveConfig(triedServer: Try[Option[String]],
-                                      triedAuth: Try[SyncAuthConfig]): Try[StructureAuthConfig] =
+                                      triedAuth: Try[SyncAuthConfig]): Try[StructureSyncConfig] =
     createRepresentation(triedServer, triedAuth) { (server, auth) =>
-      StructureAuthConfig(GoogleDriveStructureConfig(server), auth)
+      StructureSyncConfig(GoogleDriveStructureConfig(server), auth)
     }
