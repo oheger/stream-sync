@@ -157,7 +157,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       (role.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace) -> List(ModifiedNs)) +
       (ParameterParser.InputParameter.key -> List(SourceUri, DavDestUri))
     val ExpDavConfig = StructureSyncConfig(DavStructureConfig(Some(ModifiedProp), Some(ModifiedNs),
-      deleteBeforeOverride = false), SyncNoAuth)
+      deleteBeforeOverride = false), SyncNoAuth, None)
 
     val (config, _) = futureResult(extractSyncConfig(argsMap))
     config.dstConfig should be(ExpDavConfig)

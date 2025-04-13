@@ -17,12 +17,13 @@
 package com.github.sync.cli
 
 import com.github.cloudfiles.core.http.Secret
-import com.github.scli.ParameterExtractor._
+import com.github.scli.ParameterExtractor.*
 import com.github.sync.cli.oauth.OAuthParameterManager
 import com.github.sync.oauth.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig, StructureConfig}
 
 import java.time.ZoneId
+import scala.concurrent.duration.*
 import scala.util.{Success, Try}
 
 /**
@@ -68,7 +69,7 @@ object SyncCliStructureConfig:
       |time starts or ends) can cause changes in the files to be reported. The value must be a \
       |time zone ID that is accepted by the ZoneId class, such as "UTC+02".""".stripMargin
 
-  /** Property for the user name if Basic Auth is used. */
+  /** Property for the username if Basic Auth is used. */
   final val PropAuthUser = "user"
 
   /** Help text for the basic auth user. */
@@ -82,6 +83,61 @@ object SyncCliStructureConfig:
   final val HelpAuthPassword =
     """Sets the password for basic authentication for this structure. This option is required if a \
       |user name is set. If it is not specified, it is read from the console.""".stripMargin
+
+  /** Property for the minimum delay before attempting a retry. */
+  final val PropRetryMinDelay = "retry-min-delay"
+
+  /** Help text for the minimum retry delay. */
+  final val HelpRetryMinDelay =
+    """If retry of failed HTTP requests is enabled, this property sets the minimum delay before the next attempt. \
+      |It is a numeric value followed by an optional time unit, which can be one of:
+      |  s:  seconds (this is also the default if no unit is provided)
+      |  ms: milliseconds
+      |  M:  minutes""".stripMargin
+
+  /** The default value for the minimum retry delay. */
+  final val DefaultRetryMinDelay = 500.millis
+
+  /** Property for the maximum delay before attempting a retry. */
+  final val PropRetryMaxDelay = "retry-max-delay"
+
+  /** Help text for the maximum retry delay. */
+  final val HelpRetryMaxDelay =
+    """If retry of failed HTTP requests is enabled, this property sets the maximum delay before the next attempt. \
+      |After each failed request, the delay is increased, until this value is reached. It is a numeric value \
+      |followed by an optional time unit, which can be one of:
+      |  s:  seconds (this is also the default if no unit is provided)
+      |  ms: milliseconds
+      |  M:  minutes""".stripMargin
+
+  /** The default value for the maximum retry delay. */
+  final val DefaultRetryMaxDelay = 30.seconds
+
+  /** Property for the maximum number of retries for a failed request. */
+  final val PropRetryMaxTimes = "retry-max-times"
+
+  /** Help text for the maximum number of retries for a failed request. */
+  final val HelpRetryMaxTimes =
+    """If retry of failed HTTP requests is enabled, this property defines a limit for the number of retries \
+      |to be attempted for a single request. After reaching this number, the request is considered to be failed, \
+      |which typically causes the whole sync process to fail.""".stripMargin
+
+  /** The default value for the maximum number of retries. */
+  final val DefaultRetryMaxTimes = 3
+
+  /**
+    * Property that controls whether retries for failed HTTP requests are 
+    * enabled.
+    */
+  final val PropRetryEnabled = "retry-enabled"
+
+  /** Help text for the retry enabled property. */
+  final val HelpRetryEnabled =
+    """This property controls whether retries for failed HTTP requests are enabled or disabled. \
+      |Per default, this flag is set to *true* automatically if at least one of the properties related to retries \
+      |is set. Missing properties are then set to their default values. Setting only this property to *true* \
+      |means that retries are enabled with default values. If the property is set to *false*, all other options \
+      |related to retries are ignored.""".stripMargin
 
   /**
     * Property for the name of the WebDav property defining the last modified
@@ -257,14 +313,34 @@ object SyncCliStructureConfig:
     override val parameterIndex: Int = 1
 
   /**
+    * A data class that collects options for retrying failed HTTP requests during
+    * a sync process.
+    *
+    * If an instance of this class is provided in the configuration of a sync
+    * process, actors for executing HTTP requests are decorated accordingly, so
+    * that failed requests are retried. This happens based on an exponential
+    * backoff strategy which can be configured with a minimum and a maximum delay
+    * between retries. Also, the maximum number of retries is configurable.
+    *
+    * @param minDelay   the minimum delay for retrying a request
+    * @param maxDelay   the maximum delay for retrying a request
+    * @param maxRetries the maximum number of retries for a single request
+    */
+  case class SyncRetryConfig(minDelay: FiniteDuration,
+                             maxDelay: FiniteDuration,
+                             maxRetries: Int)
+
+  /**
     * A class that combines a configuration for a sync structure with other
     * configurations required to use this structure in a sync process.
     *
     * @param structureConfig the configuration of the sync structure itself
     * @param authConfig      the configuration of the auth mechanism
+    * @param optRetryConfig  the optional configuration for retry operations
     */
   case class StructureSyncConfig(structureConfig: StructureConfig,
-                                 authConfig: SyncAuthConfig)
+                                 authConfig: SyncAuthConfig,
+                                 optRetryConfig: Option[SyncRetryConfig])
 
   /**
     * Returns the name of the structure group with the given role type.
@@ -313,6 +389,30 @@ object SyncCliStructureConfig:
       }.mandatory
 
   /**
+    * Parses a duration string with an optional unit to a [[FiniteDuration]]
+    * object. Throws an exception in case of failures.
+    *
+    * @param durationStr the string to be parsed
+    * @return the resulting duration
+    */
+  private[cli] def parseDuration(durationStr: String): FiniteDuration =
+    val unitIndex = durationStr.indexWhere(!_.isDigit)
+    if unitIndex == 0 then
+      throw new IllegalArgumentException(s"'$durationStr' is not a valid duration.")
+
+    val (value, unit) = if unitIndex < 0 then
+      (durationStr, "s")
+    else
+      durationStr.splitAt(unitIndex)
+
+    val numValue = value.toInt
+    unit match
+      case "s" => numValue.seconds
+      case "ms" => numValue.millis
+      case "M" => numValue.minutes
+      case u => throw new IllegalArgumentException("Unknown time unit: " + u)
+
+  /**
     * Returns a ''CliExtractor'' that extracts the configuration for the local
     * file system from the current command line arguments.
     *
@@ -323,7 +423,7 @@ object SyncCliStructureConfig:
     optionValue(roleType.configPropertyName(PropLocalFsTimeZone), help = Some(HelpLocalFsTimeZone))
       .mapTo(ZoneId.of)
       .map(_.map(optZone => FsStructureConfig(optZone)))
-      .map(_.map(StructureSyncConfig(_, SyncNoAuth)))
+      .map(_.map(StructureSyncConfig(_, SyncNoAuth, None)))
 
   /**
     * Returns a ''CliExtractor'' that extracts the configuration for a WebDav
@@ -347,7 +447,8 @@ object SyncCliStructureConfig:
       triedModNs <- extModNs
       triedDel <- extDel
       triedAuth <- authConfigExtractor(roleType)
-    yield createDavConfig(triedModProp, triedModNs, triedDel, triedAuth)
+      triedRetry <- retryConfigExtractor(roleType)
+    yield createDavConfig(triedModProp, triedModNs, triedDel, triedAuth, triedRetry)
 
   /**
     * Returns a ''CliExtractor'' that extracts the configuration for a OneDrive
@@ -369,7 +470,8 @@ object SyncCliStructureConfig:
       triedChunkSize <- extChunkSize
       triedServer <- extServer
       triedAuth <- authConfigExtractor(roleType)
-    yield createOneDriveConfig(triedPath, triedChunkSize, triedServer, triedAuth)
+      triedRetry <- retryConfigExtractor(roleType)
+    yield createOneDriveConfig(triedPath, triedChunkSize, triedServer, triedAuth, triedRetry)
 
   /**
     * Returns a ''CliExtractor'' that extracts the configuration for a
@@ -384,7 +486,8 @@ object SyncCliStructureConfig:
     for
       triedServer <- extServer
       triedAuth <- authConfigExtractor(roleType)
-    yield createGoogleDriveConfig(triedServer, triedAuth)
+      triedRetry <- retryConfigExtractor(roleType)
+    yield createGoogleDriveConfig(triedServer, triedAuth, triedRetry)
 
   /**
     * Returns a ''CliExtractor'' for obtaining the authentication
@@ -424,6 +527,66 @@ object SyncCliStructureConfig:
       triedUser <- extUser
       triedPassword <- davPasswordOption(roleType)
     yield createBasicAuthConfig(triedUser, triedPassword)
+
+  /**
+    * Returns a [[CliExtractor]] for obtaining the optional retry
+    * configuration. This is a rather complex one. The configuration is defined
+    * if at least one of its properties is defined or if retry is generally
+    * enabled. However, retry can also be explicitly disabled, then all
+    * properties related to retry are ignored.
+    *
+    * @param roleType the role type
+    * @return the [[CliExtractor]] for the retry configuration
+    */
+  private def retryConfigExtractor(roleType: RoleType): CliExtractor[Try[Option[SyncRetryConfig]]] =
+    val extRetryEnabled = optionValue(roleType.configPropertyName(PropRetryEnabled), Some(HelpRetryEnabled)).toBoolean
+    val extRetryMin = optionValue(roleType.configPropertyName(PropRetryMinDelay), Some(HelpRetryMinDelay))
+      .mapTo(parseDuration)
+      .fallbackValue(DefaultRetryMinDelay)
+      .mandatory
+    val extRetryMax = optionValue(roleType.configPropertyName(PropRetryMaxDelay), Some(HelpRetryMaxDelay))
+      .mapTo(parseDuration)
+      .fallbackValue(DefaultRetryMaxDelay)
+      .mandatory
+    val extRetryTimes = optionValue(roleType.configPropertyName(PropRetryMaxTimes), Some(HelpRetryMaxTimes))
+      .toInt
+      .fallbackValue(DefaultRetryMaxTimes)
+      .mandatory
+
+    val condRetryDisabled = extRetryEnabled.mapTo(_ == false)
+      .fallbackValue(false)
+      .mandatory
+    val condRetryPresent = for
+      minDelayDefined <- isDefinedExtractor(roleType.configPropertyName(PropRetryMinDelay))
+      maxDelayDefined <- isDefinedExtractor(roleType.configPropertyName(PropRetryMaxDelay))
+      maxTimesDefined <- isDefinedExtractor(roleType.configPropertyName(PropRetryMaxTimes))
+      retryEnabled <- extRetryEnabled
+    yield
+      for
+        def1 <- minDelayDefined
+        def2 <- maxDelayDefined
+        def3 <- maxTimesDefined
+        enabled <- retryEnabled
+      yield
+        def1 || def2 || def3 || enabled.contains(true)
+
+    val extUndefined = constantExtractor[SingleOptionValue[SyncRetryConfig]](Success(None))
+    val extractor = for
+      minDelay <- extRetryMin
+      maxDelay <- extRetryMax
+      maxTimes <- extRetryTimes
+    yield
+      createRetryConfig(minDelay, maxDelay, maxTimes)
+    val condIfPresent = conditionalValue(
+      condExt = condRetryPresent,
+      ifExt = extractor.map { t => t.map(Some(_)) },
+      elseExt = extUndefined
+    )
+    conditionalValue(
+      condExt = condRetryDisabled,
+      ifExt = extUndefined,
+      elseExt = condIfPresent
+    )
 
   /**
     * Returns a ''CliExtractor'' for obtaining the password for Basic Auth.
@@ -466,6 +629,19 @@ object SyncCliStructureConfig:
     }
 
   /**
+    * Creates a [[SyncRetryConfig]] based on the given components.
+    *
+    * @param triedMinDelay the min-delay component
+    * @param triedMaxDelay the max-delay component
+    * @param triedMaxTimes the max-times component
+    * @return the resulting [[SyncRetryConfig]]
+    */
+  private def createRetryConfig(triedMinDelay: Try[FiniteDuration],
+                                triedMaxDelay: Try[FiniteDuration],
+                                triedMaxTimes: Try[Int]): Try[SyncRetryConfig] =
+    createRepresentation(triedMinDelay, triedMaxDelay, triedMaxTimes)(SyncRetryConfig.apply)
+
+  /**
     * Creates a ''StructureAuthConfig'' with a [[DavStructureConfig]] from the
     * given components. Errors are aggregated in the resulting ''Try''.
     *
@@ -474,15 +650,17 @@ object SyncCliStructureConfig:
     * @param triedDelBeforeOverride    the component for the delete before
     *                                  override flag
     * @param triedAuthConfig           the component for the auth config
+    * @param triedRetryConfig          the component for the retry config
     * @return a ''Try'' with the configuration for a Dav server
     */
   private def createDavConfig(triedOptModifiedProp: Try[Option[String]],
                               triedOptModifiedNamespace: Try[Option[String]],
                               triedDelBeforeOverride: Try[Boolean],
-                              triedAuthConfig: Try[SyncAuthConfig]): Try[StructureSyncConfig] =
+                              triedAuthConfig: Try[SyncAuthConfig],
+                              triedRetryConfig: Try[Option[SyncRetryConfig]]): Try[StructureSyncConfig] =
     createRepresentation(triedOptModifiedProp, triedOptModifiedNamespace,
-      triedDelBeforeOverride, triedAuthConfig) { (modProp, modNs, fDel, auth) =>
-      StructureSyncConfig(DavStructureConfig(modProp, modNs, fDel), auth)
+      triedDelBeforeOverride, triedAuthConfig, triedRetryConfig) { (modProp, modNs, fDel, auth, retry) =>
+      StructureSyncConfig(DavStructureConfig(modProp, modNs, fDel), auth, retry)
     }
 
   /**
@@ -490,30 +668,35 @@ object SyncCliStructureConfig:
     * from the given components. Errors are aggregated in the resulting
     * ''Try''.
     *
-    * @param triedPath      the component for the sync path
-    * @param triedChunkSize the component for the upload chung size
-    * @param triedServer    the component for the optional server URI
-    * @param triedAuth      the component for the auth config
+    * @param triedPath        the component for the sync path
+    * @param triedChunkSize   the component for the upload chung size
+    * @param triedServer      the component for the optional server URI
+    * @param triedAuth        the component for the auth config
+    * @param triedRetryConfig the component for the retry config
     * @return a ''Try'' with the resulting configuration
     */
   private def createOneDriveConfig(triedPath: Try[String],
                                    triedChunkSize: Try[Option[Int]],
                                    triedServer: Try[Option[String]],
-                                   triedAuth: Try[SyncAuthConfig]): Try[StructureSyncConfig] =
-    createRepresentation(triedPath, triedChunkSize, triedServer, triedAuth) { (path, chunk, server, auth) =>
-      StructureSyncConfig(OneDriveStructureConfig(path, chunk, server), auth)
+                                   triedAuth: Try[SyncAuthConfig],
+                                   triedRetryConfig: Try[Option[SyncRetryConfig]]): Try[StructureSyncConfig] =
+    createRepresentation(triedPath, triedChunkSize, triedServer, triedAuth, triedRetryConfig) {
+      (path, chunk, server, auth, retry) =>
+        StructureSyncConfig(OneDriveStructureConfig(path, chunk, server), auth, retry)
     }
 
   /**
     * Creates a ''StructureAuthConfig'' with a [[GoogleDriveStructureConfig]]
     * from the given components.
     *
-    * @param triedServer the component for the optional server URI
-    * @param triedAuth   the component for the auth config
+    * @param triedServer      the component for the optional server URI
+    * @param triedAuth        the component for the auth config
+    * @param triedRetryConfig the component for the retry config
     * @return a ''Try'' with the resulting configuration
     */
   private def createGoogleDriveConfig(triedServer: Try[Option[String]],
-                                      triedAuth: Try[SyncAuthConfig]): Try[StructureSyncConfig] =
-    createRepresentation(triedServer, triedAuth) { (server, auth) =>
-      StructureSyncConfig(GoogleDriveStructureConfig(server), auth)
+                                      triedAuth: Try[SyncAuthConfig],
+                                      triedRetryConfig: Try[Option[SyncRetryConfig]]): Try[StructureSyncConfig] =
+    createRepresentation(triedServer, triedAuth, triedRetryConfig) { (server, auth, retry) =>
+      StructureSyncConfig(GoogleDriveStructureConfig(server), auth, retry)
     }

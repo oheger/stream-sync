@@ -29,10 +29,11 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
 import java.time.ZoneId
+import scala.concurrent.duration.*
 import scala.util.{Failure, Success, Try}
 
 object SyncCliStructureConfigSpec:
-  /** Test user name. */
+  /** Test username. */
   private val User = "scott"
 
   /** Test password. */
@@ -52,6 +53,24 @@ object SyncCliStructureConfigSpec:
 
   /** A test URI. */
   private val TestUri = "https://test.server.svr"
+
+  /** A set with the names of the properties related to the retry config. */
+  private val RetryProperties = Set(
+    SyncCliStructureConfig.PropRetryEnabled,
+    SyncCliStructureConfig.PropRetryMinDelay,
+    SyncCliStructureConfig.PropRetryMaxDelay,
+    SyncCliStructureConfig.PropRetryMaxTimes
+  )
+
+  /**
+    * Returns the set of properties related to the retry config for the given
+    * role type.
+    *
+    * @param roleType the role type
+    * @return the names of the retry properties for this role type
+    */
+  private def retryProperties(roleType: RoleType): Set[String] =
+    RetryProperties.map(roleType.configPropertyName)
 
   /**
     * Converts the given simple key-value map to a ''Parameters'' object. The
@@ -189,6 +208,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     checkAccessedParameters(processedArgs, SourceRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     config.structureConfig should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
     config.authConfig should be(SyncNoAuth)
+    config.optRetryConfig shouldBe empty
   }
 
   it should "create a correct file system config for the source structure with defaults" in {
@@ -198,6 +218,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     checkAccessedParameters(processedArgs, SourceRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     config.structureConfig should be(FsStructureConfig(None))
     config.authConfig should be(SyncNoAuth)
+    config.optRetryConfig shouldBe empty
   }
 
   it should "generate a failure for invalid parameters of a local FS config" in {
@@ -220,6 +241,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     checkAccessedParameters(processedArgs, DestinationRoleType, SyncCliStructureConfig.PropLocalFsTimeZone)
     config.structureConfig should be(FsStructureConfig(Some(ZoneId.of(TimeZoneId))))
     config.authConfig should be(SyncNoAuth)
+    config.optRetryConfig shouldBe empty
   }
 
   it should "create a correct DavConfig for the source structure if all basic auth properties are defined" in {
@@ -231,7 +253,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
 
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
-    checkAccessedParameters(processedArgs, args.keySet)
+    checkAccessedParameters(processedArgs, args.keySet ++ retryProperties(SourceRoleType))
     config.structureConfig match
       case davConfig: DavStructureConfig =>
         davConfig.optLastModifiedProperty should be(Some(LastModifiedProperty))
@@ -275,7 +297,8 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     )
     val expAccessedKeys = args.keySet + ParameterParser.InputParameter.key +
       SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption) +
-      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser)
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) ++
+      retryProperties(SourceRoleType)
 
     val (config, processedArgs) = extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
     ExtractorTestHelper.accessedKeys(processedArgs) should be(expAccessedKeys)
@@ -315,7 +338,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
 
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, DestinationRoleType)
-    checkAccessedParameters(processedArgs, args.keySet)
+    checkAccessedParameters(processedArgs, args.keySet ++ retryProperties(DestinationRoleType))
     config.structureConfig match
       case davConfig: DavStructureConfig =>
         checkBasicAuthConfig(config.authConfig)
@@ -339,6 +362,56 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     authConfig.password.secret should be(Password)
   }
 
+  it should "create a correct DavConfig with a retry configuration if all properties are defined" in {
+    val args = Map(
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryMinDelay) -> "250ms",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryMaxDelay) -> "10s",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryMaxTimes) -> "8"
+    )
+    val expAccessedKeys = Set(
+      ParameterParser.InputParameter.key,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedProperty),
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavModifiedNamespace),
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropDavDeleteBeforeOverride),
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser),
+      SourceRoleType.configPropertyName(OAuthParameterManager.NameOption)
+    ) ++ retryProperties(SourceRoleType)
+    val expectedRetryConfig = SyncCliStructureConfig.SyncRetryConfig(250.millis, 10.seconds, 8)
+
+    val (config, processedArgs) =
+      extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
+    config.optRetryConfig should be(Some(expectedRetryConfig))
+    checkAccessedParameters(processedArgs, expAccessedKeys)
+  }
+
+  it should "create a correct DavConfig with retries enabled and default values for all properties" in {
+    val args = Map(
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryEnabled) -> "true"
+    )
+    val expectedRetryConfig = SyncCliStructureConfig.SyncRetryConfig(
+      minDelay = SyncCliStructureConfig.DefaultRetryMinDelay,
+      maxDelay = SyncCliStructureConfig.DefaultRetryMaxDelay,
+      maxRetries = SyncCliStructureConfig.DefaultRetryMaxTimes
+    )
+
+    val (config, processedArgs) =
+      extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
+    config.optRetryConfig should be(Some(expectedRetryConfig))
+  }
+
+  it should "create a correct DavConfig with retries disabled if properties are defined" in {
+    val args = Map(
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryMinDelay) -> "1",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryMaxDelay) -> "1M",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryMaxTimes) -> "8",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryEnabled) -> "false"
+    )
+
+    val (config, processedArgs) =
+      extractConfig(args, SyncCliStructureConfig.PrefixWebDav + TestUri, SourceRoleType)
+    config.optRetryConfig shouldBe empty
+  }
+
   it should "create a correct OneDriveConfig for the source structure with basic auth properties" in {
     val ChunkSize = 42
     val args = Map(SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
@@ -348,7 +421,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
       SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveUploadChunkSize) -> ChunkSize.toString)
 
     val (config, processedArgs) = extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
-    checkAccessedParameters(processedArgs, args.keySet)
+    checkAccessedParameters(processedArgs, args.keySet ++ retryProperties(SourceRoleType))
     config.structureConfig match
       case oneConfig: OneDriveStructureConfig =>
         oneConfig.optUploadChunkSizeMB should be(Some(ChunkSize))
@@ -366,6 +439,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, _) = extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
     config.structureConfig should be(ExpConfig)
     config.authConfig should be(SyncNoAuth)
+    config.optRetryConfig shouldBe empty
   }
 
   it should "generate a failure for invalid properties of a OneDrive configuration" in {
@@ -386,7 +460,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
       SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
       SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password
     )
-    val expAccessedKeys = args.keySet ++
+    val expAccessedKeys = args.keySet ++ retryProperties(SourceRoleType) ++
       Set(SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption),
         SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveServer),
         SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser),
@@ -399,18 +473,33 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     oauthConfig.rootDir.toString should be(StoragePath)
   }
 
+  it should "create a correct OneDriveConfig for the source structure with retry properties" in {
+    val args = Map(
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropOneDrivePath) -> StoragePath,
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryMinDelay) -> "100ms",
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryMaxTimes) -> "5"
+    )
+    val expRetryConfig = SyncRetryConfig(100.millis, SyncCliStructureConfig.DefaultRetryMaxDelay, 5)
+
+    val (config, _) = extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, SourceRoleType)
+    config.optRetryConfig should be(Some(expRetryConfig))
+  }
+
   it should "create a correct OneDriveConfig for the destination structure" in {
     val ChunkSize = 11
-    val args = Map(DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+    val args = Map(
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
       DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password,
       DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveServer) -> TestUri,
       DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropOneDrivePath) -> StoragePath,
       DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropOneDriveUploadChunkSize) ->
-        ChunkSize.toString)
+        ChunkSize.toString,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropRetryEnabled) -> "true"
+    )
 
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixOneDrive + TestUri, DestinationRoleType)
-    checkAccessedParameters(processedArgs, args.keySet)
+    checkAccessedParameters(processedArgs, args.keySet ++ retryProperties(DestinationRoleType))
     config.structureConfig match
       case oneConfig: OneDriveStructureConfig =>
         oneConfig.optUploadChunkSizeMB should be(Some(ChunkSize))
@@ -418,6 +507,12 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
         oneConfig.optServerUri should be(Some(TestUri))
         checkBasicAuthConfig(config.authConfig)
       case r => fail("Unexpected config " + r)
+    val expRetryConfig = SyncRetryConfig(
+      SyncCliStructureConfig.DefaultRetryMinDelay,
+      SyncCliStructureConfig.DefaultRetryMaxDelay,
+      SyncCliStructureConfig.DefaultRetryMaxTimes
+    )
+    config.optRetryConfig should be(Some(expRetryConfig))
   }
 
   it should "create a correct GoogleDriveConfig for the source structure with basic auth properties" in {
@@ -427,7 +522,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
 
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, SourceRoleType)
-    checkAccessedParameters(processedArgs, args.keySet)
+    checkAccessedParameters(processedArgs, args.keySet ++ retryProperties(SourceRoleType))
     config.structureConfig match
       case googleConfig: GoogleDriveStructureConfig =>
         googleConfig.optServerUri should be(Some(TestUri))
@@ -441,6 +536,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     val (config, _) = extractConfig(Map.empty, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, SourceRoleType)
     config.structureConfig should be(ExpConfig)
     config.authConfig should be(SyncNoAuth)
+    config.optRetryConfig shouldBe empty
   }
 
   it should "create a correct GoogleDriveConfig for the source structure if OAuth properties are defined" in {
@@ -450,7 +546,7 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
       SourceRoleType.configPropertyName(OAuthParameterManager.NameOption) -> IdpName,
       SourceRoleType.configPropertyName(OAuthParameterManager.PasswordOption) -> Password
     )
-    val expAccessedKeys = args.keySet ++
+    val expAccessedKeys = args.keySet ++ retryProperties(SourceRoleType) ++
       Set(SourceRoleType.configPropertyName(OAuthParameterManager.EncryptOption),
         SourceRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser))
     val (config, processedArgs) =
@@ -462,17 +558,65 @@ class SyncCliStructureConfigSpec extends AnyFlatSpec with Matchers with MockitoS
     oauthConfig.rootDir.toString should be(StoragePath)
   }
 
+  it should "create a correct GoogleDriveConfig for the source structure with retry properties" in {
+    val args = Map(
+      SourceRoleType.configPropertyName(SyncCliStructureConfig.PropRetryMaxDelay) -> "2"
+    )
+    val expRetryConfig = SyncRetryConfig(
+      SyncCliStructureConfig.DefaultRetryMinDelay,
+      2.seconds,
+      SyncCliStructureConfig.DefaultRetryMaxTimes
+    )
+
+    val (config, _) =
+      extractConfig(args, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, SourceRoleType)
+    config.optRetryConfig should be(Some(expRetryConfig))
+  }
+
   it should "create a correct GoogleDriveConfig for the destination structure" in {
-    val args = Map(DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
+    val args = Map(
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthUser) -> User,
       DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropAuthPassword) -> Password,
-      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropGoogleDriveServer) -> TestUri)
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropGoogleDriveServer) -> TestUri,
+      DestinationRoleType.configPropertyName(SyncCliStructureConfig.PropRetryEnabled) -> "true"
+    )
 
     val (config, processedArgs) =
       extractConfig(args, SyncCliStructureConfig.PrefixGoogleDrive + TestUri, DestinationRoleType)
-    checkAccessedParameters(processedArgs, args.keySet)
+    checkAccessedParameters(processedArgs, args.keySet ++ retryProperties(DestinationRoleType))
     config.structureConfig match
       case googleConfig: GoogleDriveStructureConfig =>
         googleConfig.optServerUri should be(Some(TestUri))
         checkBasicAuthConfig(config.authConfig)
       case r => fail("Unexpected config " + r)
+    val expRetryConfig = SyncRetryConfig(
+      SyncCliStructureConfig.DefaultRetryMinDelay,
+      SyncCliStructureConfig.DefaultRetryMaxDelay,
+      SyncCliStructureConfig.DefaultRetryMaxTimes
+    )
+    config.optRetryConfig should be(Some(expRetryConfig))
   }
+
+  "parseDuration" should "parse a duration without a unit" in :
+    SyncCliStructureConfig.parseDuration("20") should be(20.seconds)
+
+  it should "parse a duration in seconds" in :
+    SyncCliStructureConfig.parseDuration("10s") should be(10.seconds)
+
+  it should "parse a duration in milliseconds" in :
+    SyncCliStructureConfig.parseDuration("500ms") should be(500.millis)
+
+  it should "parse a duration in minutes" in :
+    SyncCliStructureConfig.parseDuration("2M") should be(2.minutes)
+
+  it should "throw an exception for an unsupported unit" in :
+    val exception = intercept[IllegalArgumentException] {
+      SyncCliStructureConfig.parseDuration("10days")
+    }
+    exception.getMessage should include("days")
+
+  it should "throw an exception for a non-numeric value" in :
+    val exception = intercept[IllegalArgumentException] {
+      SyncCliStructureConfig.parseDuration("long")
+    }
+    exception.getMessage should include("long")
