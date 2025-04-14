@@ -16,11 +16,12 @@
 
 package com.github.sync.cli
 
+import com.github.cloudfiles.core.http.RetryAfterExtension
+import com.github.cloudfiles.core.http.RetryExtension
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.sync.SyncTypes.{FsElement, SyncOperation, SyncOperationResult}
 import com.github.sync.cli.SyncParameterManager.{CryptConfig, CryptMode, SyncConfig}
 import com.github.sync.cli.SyncSetup.{AuthSetupFunc, ProtocolFactorySetupFunc}
-import com.github.sync.oauth.SyncAuthConfig
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.protocol.config.StructureCryptConfig
 import com.github.sync.stream.{ProtocolOperationHandler, ProtocolOperationHandlerStage}
@@ -41,8 +42,8 @@ object SyncProtocolHolder:
     *
     * @param syncConfig        the config for the sync process
     * @param spawner           the spawner
-    * @param authSetupFunc     the function to setup authentication
-    * @param protocolSetupFunc the function to setup the protocol factory
+    * @param authSetupFunc     the function to set up authentication
+    * @param protocolSetupFunc the function to set up the protocol factory
     * @param system            the actor system
     * @return a ''Future'' with the resulting ''SyncProtocolHolder''
     */
@@ -51,8 +52,8 @@ object SyncProtocolHolder:
            (implicit system: ActorSystem[_]): Future[SyncProtocolHolder] =
     implicit val ec: ExecutionContext = system.executionContext
     val killSwitch = KillSwitches.shared("oauth-token-refresh")
-    val futSenderConfigSrc = createHttpSenderConfig(authSetupFunc, syncConfig.srcConfig.authConfig, killSwitch)
-    val futSenderConfigDst = createHttpSenderConfig(authSetupFunc, syncConfig.dstConfig.authConfig, killSwitch)
+    val futSenderConfigSrc = createHttpSenderConfig(authSetupFunc, syncConfig.srcConfig, killSwitch)
+    val futSenderConfigDst = createHttpSenderConfig(authSetupFunc, syncConfig.dstConfig, killSwitch)
 
     for
       senderConfigSrc <- futSenderConfigSrc
@@ -74,16 +75,31 @@ object SyncProtocolHolder:
     * Creates the configuration for the HTTP request sender actor to be used
     * for a structure based on the authentication config for this structure.
     *
-    * @param authSetupFunc  the function to setup authentication
-    * @param syncAuthConfig the ''SyncAuthConfig'' for this structure
-    * @param killSwitch     the kill switch for a failed token refresh
-    * @param ec             the execution context
+    * @param authSetupFunc   the function to set up authentication
+    * @param structureConfig the configuration for this structure
+    * @param killSwitch      the kill switch for a failed token refresh
+    * @param ec              the execution context
     * @return a ''Future'' with the HTTP actor configuration
     */
-  private def createHttpSenderConfig(authSetupFunc: AuthSetupFunc, syncAuthConfig: SyncAuthConfig,
-                                     killSwitch: KillSwitch)(implicit ec: ExecutionContext):
-  Future[HttpRequestSenderConfig] =
-    authSetupFunc(syncAuthConfig, killSwitch) map { authConfig => HttpRequestSenderConfig(authConfig = authConfig) }
+  private[cli] def createHttpSenderConfig(authSetupFunc: AuthSetupFunc,
+                                          structureConfig: SyncCliStructureConfig.StructureSyncConfig,
+                                          killSwitch: KillSwitch)
+                                         (implicit ec: ExecutionContext): Future[HttpRequestSenderConfig] =
+    authSetupFunc(structureConfig.authConfig, killSwitch) map { authConfig =>
+      val optRetryAfterConfig = structureConfig.optRetryConfig.map { retry =>
+        RetryAfterExtension.RetryAfterConfig(retry.minDelay)
+      }
+      val optRetryConfig = structureConfig.optRetryConfig.map { retry =>
+        val backoffConfig = RetryExtension.BackoffConfig(retry.minDelay, retry.maxDelay)
+        RetryExtension.RetryConfig(optMaxTimes = Some(retry.maxRetries), optBackoff = Some(backoffConfig))
+      }
+
+      HttpRequestSenderConfig(
+        authConfig = authConfig,
+        retryAfterConfig = optRetryAfterConfig,
+        retryConfig = optRetryConfig
+      )
+    }
 
   /**
     * Create a ''StructureCryptConfig'' from the passed in parameters.

@@ -16,16 +16,24 @@
 
 package com.github.sync.cli
 
+import com.github.cloudfiles.core.http.RetryAfterExtension
+import com.github.cloudfiles.core.http.RetryExtension
+import com.github.cloudfiles.core.http.auth.NoAuthConfig
+import com.github.cloudfiles.core.http.factory.HttpRequestSenderConfig
 import com.github.sync.AsyncTestHelper
+import com.github.sync.cli.SyncSetup.AuthSetupFunc
+import com.github.sync.oauth.SyncNoAuth
 import com.github.sync.protocol.SyncProtocol
+import com.github.sync.protocol.config.FsStructureConfig
 import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import org.apache.pekko.stream.KillSwitches
+import org.apache.pekko.stream.{KillSwitch, KillSwitches}
 import org.mockito.Mockito.verify
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.Promise
+import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.duration.*
 
 /**
   * Test class for ''SyncProtocolHolder''. Note that the major part of the
@@ -60,4 +68,50 @@ class SyncProtocolHolderSpec extends ScalaTestWithActorTestKit with AnyFlatSpecL
     expectFailedFuture[IllegalStateException](futClose) should be(exception)
     verify(srcProtocol).close()
     verify(dstProtocol).close()
+  }
+
+  /**
+    * Creates a [[HttpRequestSenderConfig]] with default settings and the given
+    * retry configuration.
+    *
+    * @param optRetryConfig the optional retry configuration
+    * @return the resulting [[HttpRequestSenderConfig]]
+    */
+  private def createHttpSenderConfigForRetryConfig(optRetryConfig: Option[SyncCliStructureConfig.SyncRetryConfig]):
+  HttpRequestSenderConfig =
+    val authSetupFunc: AuthSetupFunc = (_, _) => Future.successful(NoAuthConfig)
+    val structureConfig = SyncCliStructureConfig.StructureSyncConfig(
+      structureConfig = FsStructureConfig(None),
+      authConfig = SyncNoAuth,
+      optRetryConfig = optRetryConfig
+    )
+    val ks = mock[KillSwitch]
+
+    given ec: ExecutionContext = testKit.internalSystem.executionContext
+
+    futureResult(SyncProtocolHolder.createHttpSenderConfig(authSetupFunc, structureConfig, ks))
+
+  it should "create a correct HttpRequestSenderConfig if no retry configuration is provided" in {
+    val httpSenderConfig = createHttpSenderConfigForRetryConfig(None)
+
+    httpSenderConfig.retryConfig shouldBe empty
+    httpSenderConfig.retryAfterConfig shouldBe empty
+  }
+
+  it should "create a correct HttpRequestSenderConfig with retry configuration options" in {
+    val retryConfig = SyncCliStructureConfig.SyncRetryConfig(
+      minDelay = 800.millis,
+      maxDelay = 17.seconds,
+      maxRetries = 11
+    )
+    val httpSenderConfig = createHttpSenderConfigForRetryConfig(Some(retryConfig))
+
+    val expRetryAfterConfig = RetryAfterExtension.RetryAfterConfig(retryConfig.minDelay)
+    val expBackoffConfig = RetryExtension.BackoffConfig(
+      minBackoff = retryConfig.minDelay,
+      maxBackoff = retryConfig.maxDelay
+    )
+    httpSenderConfig.retryAfterConfig should be(Some(expRetryAfterConfig))
+    httpSenderConfig.retryConfig.get.optMaxTimes should be(Some(retryConfig.maxRetries))
+    httpSenderConfig.retryConfig.get.optBackoff should be(Some(expBackoffConfig))
   }
