@@ -894,6 +894,61 @@ As you can see in this example, the name of the system properties is derived
 from the hierarchical structure of the configuration options for Apache Pekko HTTP as
 described in the referenced documentation.
 
+=== Retries
+As described in the previous section, throttling can be a means to prevent failures from target systems caused by too much load during a sync process. Another approach is dealing with failures by retrying failed requests. Of course, both approaches can be combined.
+
+StreamSync allows a rather fine-grained configuration of a retry mechanism independently for the source and the destination structure. Retries are possible for all supported structures accessed via HTTP; this excludes the local file system for which retries hardly make sense. There is a number of command line options related to retries as described in the following table. These options must be prefixed either with `src-` if they apply to the source structure or with `dst-` if they apply to the destination structure.
+
+.Command line options for configuring retries
+[cols="1,3,1",options="header"]
+|====
+| Option | Description | Default
+| retry-min-delay
+| Defines the minimum delay after a failed request before a retry is attempted. The value is a duration (see below).
+| 500 ms
+| retry-max-delay
+| Defines the maximum delay after a failed request before a retry is attempted. If multiple requests fail in a row, StreamSync applies an exponential backoff strategy, i.e. the delays between retried requests become larger and larger. With this property an upper limit for the delays can be specified. The value is a duration (see below).
+| 30 seconds
+| retry-max-times
+| Defines the maximum number of attempts to retry a failed request. If the requests continue to fail, StreamSync eventually gives up and fails the whole sync process. The value is a positive integer number.
+| 3
+| retry-enabled
+a| A flag value (*true* or *false*) that allows to enable or disable the retry mechanism. Per default, this flag is not needed, since retries are enabled automatically as soon as one of the other retry-related options is specified. (Undefined options are then assigned their default values.) Explicitly setting this flag has the following use cases:
+
+* Setting this flag explicitly to *true* enables retries, even if no other retry-related options are given. Here, again default values apply to undefined options. This is the easiest way to enable retries with the default configuration.
+* Setting this flag explicitly to *false* disables retries, even if there are other options configuring the retry mechanism. This is useful for instance to override the retry settings for a single sync execution.
+| undefined
+|====
+
+Some of the options listed above are durations. They can be defined using different time units. The expected format consists of an integer number followed by a unit identifier, which can be one of the following:
+
+.Supported time units
+[cols="1,2",options="header"]
+|====
+|Identifier | Time unit
+|ms|Milliseconds
+|s|Seconds
+|M|Minutes
+|====
+
+The unit identifier is optional; if it is missing, the unit _Seconds_ is assumed.
+
+As soon as retries are enabled for a structure, StreamSync also applies logic to deal with 429 _To many requests_ responses from this structure. Such a failure response typically contains a header that defines a time span the application should wait before retrying the request. StreamSync applies to this protocol. If the response does not include this header, the delay configured by the `retry-min-delay` option (or its default value) is used.
+
+As an example, the following command line enables retries with default values for both the source and the destination structure:
+
+ Sync --src-retry-enabled true --dst-retry-enabled true ...
+
+Specifying a custom retry configuration for the source structure could look as follows:
+
+[source,shell]
+----
+Sync --src-retry-min-delay 750ms \
+     --src-retry-max-delay 4s \
+     --src-retry-max-times 8 \
+     ...
+----
+
 === Timeouts
 To prevent that sync processes hang when servers involved respond very slowly,
 a timeout is applied to all operations. The timeout in seconds can be
