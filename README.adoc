@@ -878,9 +878,9 @@ would limit the throughput of the sync stream to 45 operations per minute.
 
 Another option to influence the speed of sync processes that have an HTTP
 server as source or destination is to override certain configuration settings.
-StreamSync uses the https://doc.akka.io/docs/akka-http/current/introduction.html[Akka HTTP]
+StreamSync uses the https://pekko.apache.org/docs/pekko-http/current/[Apache Pekko HTTP]
 library for the communication via the HTTP protocol. The library can be
-https://doc.akka.io/docs/akka-http/current/configuration.html[configured]
+https://pekko.apache.org/docs/pekko-http/current/client-side/configuration.html[configured]
 in many ways, and system properties can be used to override its default
 settings. Options you may want to modify in order to customize sync streams are
 the size of the pool for HTTP connections (which determines the parallelism
@@ -888,10 +888,10 @@ possible and is set to 4 per default) or the number of requests that can be
 open concurrently (32 by default). To achieve this, pass the following
 arguments to the Java VM that executes StreamSync:
 
- -Dakka.http.host-connection-pool.max-connections=1 -Dakka.http.host-connection-pool.max-open-requests=2
+ -pekko.http.host-connection-pool.max-connections=1 -pekko.http.host-connection-pool.max-open-requests=2
 
 As you can see in this example, the name of the system properties is derived
-from the hierarchical structure of the configuration options for Akka HTTP as
+from the hierarchical structure of the configuration options for Apache Pekko HTTP as
 described in the referenced documentation.
 
 === Timeouts
@@ -1557,7 +1557,7 @@ both devices or issue warnings if it detects conflicting changes.
 == Architecture
 
 The Stream Sync tool makes use of http://www.reactive-streams.org/[Reactive streams]
-in the implementation of [Akka](https://akka.io/) to perform sync operations.
+in the implementation of [Apache Pekko](https://pekko.apache.org/) to perform sync operations.
 Both the source and the destination structure are represented by a stream source
 emitting objects that represent the contents of the structure (files and
 folders). A special graph stage implementation contains the actual sync
