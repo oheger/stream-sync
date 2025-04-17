@@ -15,7 +15,7 @@
  */
 
 /** The version of this project. */
-lazy val VersionStreamSync = "0.18"
+lazy val VersionStreamSync = "0.19-SNAPSHOT"
 
 /** Definition of versions for compile-time dependencies. */
 lazy val VersionCloudFiles = "0.10"
