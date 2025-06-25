@@ -191,14 +191,14 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
       storageConfig.rootDir.toString, cmdOpt(OAuthParameterManager.NameOption), storageConfig.baseName,
       cmdOpt(OAuthParameterManager.PasswordOption), "password")
     val commands = mock[OAuthCommands]
-    when(commands.login(any(), any(), any(), any(), any(), any())(any(), any()))
+    when(commands.login(any(), any(), any(), any(), any(), any())(using any(), any()))
       .thenReturn(Future.successful(ResultText))
 
     val oauth = new OAuth(commands)
     oauth.run(args)
     val captor = ArgumentCaptor.forClass(classOf[LoginCommandConfig])
     verify(commands).login(captor.capture(), argEq(OAuthStorageServiceImpl),
-      argEq(OAuthTokenRetrieverServiceImpl), any(), argEq(DefaultConsoleReader), any())(any(), any())
+      argEq(OAuthTokenRetrieverServiceImpl), any(), argEq(DefaultConsoleReader), any())(using any(), any())
     captor.getValue.storageConfig.baseName should be(storageConfig.baseName)
   }
 

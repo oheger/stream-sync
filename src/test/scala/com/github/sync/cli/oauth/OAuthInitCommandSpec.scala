@@ -99,7 +99,7 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       * @return this test helper
       */
     def prepareStorageService(saveConfigResult: Future[Done] = Future.successful(Done)): CommandTestHelper =
-      when(storageService.saveIdpConfig(eqArg(StorageConfig), any())(eqArg(implicitly[ExecutionContext]),
+      when(storageService.saveIdpConfig(eqArg(StorageConfig), any())(using eqArg(implicitly[ExecutionContext]),
         eqArg(actorSystem))).thenReturn(saveConfigResult)
       this
 
@@ -111,7 +111,7 @@ class OAuthInitCommandSpec extends AnyFlatSpec with Matchers with MockitoSugar w
       */
     def verifyStorageService(): CommandTestHelper =
       val capt = ArgumentCaptor.forClass(classOf[IDPConfig])
-      verify(storageService).saveIdpConfig(eqArg(StorageConfig), capt.capture())(any(), any())
+      verify(storageService).saveIdpConfig(eqArg(StorageConfig), capt.capture())(using any(), any())
       val idpConfig = capt.getValue
       idpConfig.copy(oauthConfig = null) should be(TestConfig.copy(oauthConfig = null))
       idpConfig.oauthConfig.copy(clientSecret = null) should be(TestConfig.oauthConfig.copy(clientSecret = null))

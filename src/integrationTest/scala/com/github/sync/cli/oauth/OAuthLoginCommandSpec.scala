@@ -423,7 +423,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       */
     def fetchState(): String =
       val captor = ArgumentCaptor.forClass(classOf[Option[String]])
-      Mockito.verify(tokenService).authorizeUrl(any(), captor.capture())(any())
+      Mockito.verify(tokenService).authorizeUrl(any(), captor.capture())(using any())
       captor.getValue.get
 
     /**
@@ -456,7 +456,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
       */
     private def initTokenServiceAuthorizationUri(service: OAuthTokenRetrieverService[IDPConfig, Secret,
       OAuthTokenData], uriFuture: Future[Uri]): Unit =
-      when(service.authorizeUrl(argEq(testOAutConfig), any())(any())).thenReturn(uriFuture)
+      when(service.authorizeUrl(argEq(testOAutConfig), any())(using any())).thenReturn(uriFuture)
 
     /**
       * Creates the mock for the token service and initializes it to return the
@@ -468,12 +468,12 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     private def createTokenService(): OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData] =
       val service = mock[OAuthTokenRetrieverService[IDPConfig, Secret, OAuthTokenData]]
       initTokenServiceAuthorizationUri(service, Future.successful(AuthorizationUri))
-      when(service.fetchTokens(any(), any(), any(), any())(any()))
+      when(service.fetchTokens(any(), any(), any(), any())(using any()))
         .thenAnswer((invocation: InvocationOnMock) => {
           val args = invocation.getArguments
           OAuthTokenRetrieverServiceImpl.fetchTokens(args.head.asInstanceOf[ActorRef[HttpRequestSender.HttpCommand]],
             args(1).asInstanceOf[IDPConfig], args(2).asInstanceOf[Secret],
-            args(3).asInstanceOf[String])(args(4).asInstanceOf[org.apache.pekko.actor.typed.ActorSystem[?]])
+            args(3).asInstanceOf[String])(using args(4).asInstanceOf[org.apache.pekko.actor.typed.ActorSystem[?]])
         })
       service
 
