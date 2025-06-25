@@ -264,7 +264,7 @@ private case class RemovedFolderConflictHandler[S](folderState: RemovedFolderSta
     * @return the map with remove operations and the list with other operations
     */
   @tailrec
-  private def findNewRemovedFolders(operations: List[_],
+  private def findNewRemovedFolders(operations: List[?],
                                     removeOps: Map[NormalizedFolder, RemoveOperationState],
                                     otherOps: List[SyncOperation]):
   (Map[NormalizedFolder, RemoveOperationState], List[SyncOperation]) =

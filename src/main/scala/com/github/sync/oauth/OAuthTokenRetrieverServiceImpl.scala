@@ -79,7 +79,7 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  override def authorizeUrl(config: IDPConfig, optState: Option[String] = None)(implicit system: ActorSystem[_]):
+  override def authorizeUrl(config: IDPConfig, optState: Option[String] = None)(implicit system: ActorSystem[?]):
   Future[Uri] = Future {
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamScope -> config.scope,
       ParamRedirectUri -> config.oauthConfig.redirectUri, ParamResponseType -> ResponseTypeCode)
@@ -89,14 +89,14 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
 
   override def fetchTokens(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
                            secret: Secret, code: String)
-                          (implicit system: ActorSystem[_]): Future[OAuthTokenData] =
+                          (implicit system: ActorSystem[?]): Future[OAuthTokenData] =
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamRedirectUri -> config.oauthConfig.redirectUri,
       ParamClientSecret -> secret.secret, ParamCode -> code, ParamGrantType -> GrantTypeAuthorizationCode)
     sendTokenRequest(httpActor, config, params)
 
   override def refreshToken(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
                             secret: Secret, refreshToken: String)
-                           (implicit system: ActorSystem[_]): Future[OAuthTokenData] =
+                           (implicit system: ActorSystem[?]): Future[OAuthTokenData] =
     val params = Map(ParamClientId -> config.oauthConfig.clientID, ParamRedirectUri -> config.oauthConfig.redirectUri,
       ParamClientSecret -> secret.secret, ParamRefreshToken -> refreshToken, ParamGrantType -> GrantTypeRefreshToken)
     sendTokenRequest(httpActor, config, params)
@@ -114,7 +114,7 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     */
   private def sendTokenRequest(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: IDPConfig,
                                params: Map[String, String])
-                              (implicit system: ActorSystem[_]): Future[OAuthTokenData] =
+                              (implicit system: ActorSystem[?]): Future[OAuthTokenData] =
     checkConfig(config)
 
     val futResult = HttpRequestSender.sendRequestSuccess(request = HttpRequest(uri = config.oauthConfig.tokenEndpoint,
@@ -132,7 +132,7 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     * @return the text content of the response
     */
   private def responseBody(result: HttpRequestSender.SuccessResult)
-                          (implicit system: ActorSystem[_]): Future[String] =
+                          (implicit system: ActorSystem[?]): Future[String] =
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     result.response.entity.dataBytes.runWith(sink).map(_.utf8String)
 
@@ -177,5 +177,5 @@ object OAuthTokenRetrieverServiceImpl extends OAuthTokenRetrieverService[IDPConf
     * @param system the actor system
     * @return the ''ExecutionContext''
     */
-  private implicit def executionContext(implicit system: ActorSystem[_]): ExecutionContext =
+  private implicit def executionContext(implicit system: ActorSystem[?]): ExecutionContext =
     system.executionContext

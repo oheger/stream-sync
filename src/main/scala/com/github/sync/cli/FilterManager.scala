@@ -290,7 +290,7 @@ object FilterManager:
   private def dateFilter(expr: String, date: String, time: String)(comp: Int => Boolean):
   SyncOperationFilter =
     val dtStr = date + "T" + (if time == null then "00:00:00" else time)
-    val query: TemporalQuery[LocalDateTime] = LocalDateTime.from _
+    val query: TemporalQuery[LocalDateTime] = LocalDateTime.from
     try
       val localDate = DateTimeFormatter.ISO_DATE_TIME.parse(dtStr, query)
       val instant = localDate.atZone(ZoneId.systemDefault()).toInstant

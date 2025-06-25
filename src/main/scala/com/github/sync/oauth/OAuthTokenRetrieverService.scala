@@ -44,7 +44,7 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS]:
     * @param system   the actor system
     * @return a ''Future'' with the authorization URI
     */
-  def authorizeUrl(config: CONFIG, optState: Option[String] = None)(implicit system: ActorSystem[_]): Future[Uri]
+  def authorizeUrl(config: CONFIG, optState: Option[String] = None)(implicit system: ActorSystem[?]): Future[Uri]
 
   /**
     * Sends a request to the token endpoint of the referenced IDP to exchange
@@ -58,7 +58,7 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS]:
     * @return a ''Future'' with the tokens retrieved from the IDP
     */
   def fetchTokens(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: CONFIG, secret: CLIENT_SECRET,
-                  code: String)(implicit system: ActorSystem[_]): Future[TOKENS]
+                  code: String)(implicit system: ActorSystem[?]): Future[TOKENS]
 
   /**
     * Sends a request to the token endpoint of the referenced IDP to obtain
@@ -72,4 +72,4 @@ trait OAuthTokenRetrieverService[CONFIG, CLIENT_SECRET, TOKENS]:
     * @return a ''Future'' with the tokens retrieved from the IDP
     */
   def refreshToken(httpActor: ActorRef[HttpRequestSender.HttpCommand], config: CONFIG, secret: CLIENT_SECRET,
-                   refreshToken: String)(implicit system: ActorSystem[_]): Future[TOKENS]
+                   refreshToken: String)(implicit system: ActorSystem[?]): Future[TOKENS]

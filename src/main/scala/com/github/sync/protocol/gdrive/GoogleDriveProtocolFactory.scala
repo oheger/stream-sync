@@ -37,7 +37,7 @@ class GoogleDriveProtocolFactory(config: GoogleDriveStructureConfig,
                                  httpSenderConfig: HttpRequestSenderConfig,
                                  timeout: Timeout,
                                  spawner: Spawner)
-                                (implicit system: ActorSystem[_])
+                                (implicit system: ActorSystem[?])
   extends FileSystemSyncProtocolFactory[String, GoogleDriveModel.GoogleDriveFile, GoogleDriveModel.GoogleDriveFolder,
     GoogleDriveStructureConfig](GoogleDriveProtocolCreator, config, httpSenderConfig, timeout, spawner)
 

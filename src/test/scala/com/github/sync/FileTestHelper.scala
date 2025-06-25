@@ -138,7 +138,7 @@ trait FileTestHelper:
     * @return the newly created path
     */
   def createPathInDirectory(name: String): Path =
-    ensureTempDirectory() resolve name
+    ensureTempDirectory().resolve(name)
 
   /**
     * Reads the content of the specified data file and returns it as a string.
@@ -184,13 +184,13 @@ trait FileTestHelper:
   def deleteDirectory(path: Path): Unit =
     Files.walkFileTree(path, new SimpleFileVisitor[Path] {
       override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
-        Files delete file
+        Files.delete(file)
         FileVisitResult.CONTINUE
       }
 
       override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
         if exc == null then {
-          Files delete dir
+          Files.delete(dir)
           FileVisitResult.CONTINUE
         } else throw exc
       }
@@ -204,10 +204,10 @@ trait FileTestHelper:
     * @param path the path in question
     */
   def deleteTree(path: Path): Unit =
-    if Files exists path then
+    if Files.exists(path) then
       if Files.isDirectory(path) then
         deleteDirectory(path)
-      else Files delete path
+      else Files.delete(path)
 
   /**
     * Checks whether the temporary directory has been created. If not, it is
@@ -226,4 +226,4 @@ trait FileTestHelper:
     * @return the temporary directory
     */
   private def createTempDirectory(): Path =
-    Files createTempDirectory TempFilePrefix
+    Files.createTempDirectory(TempFilePrefix)

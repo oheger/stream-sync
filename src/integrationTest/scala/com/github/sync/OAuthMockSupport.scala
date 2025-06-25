@@ -51,7 +51,7 @@ object OAuthMockSupport:
   * OAuth as authentication mechanism.
   */
 trait OAuthMockSupport:
-  this: Suite with AsyncTestHelper with FileTestHelper with WireMockSupport =>
+  this: Suite & AsyncTestHelper & FileTestHelper & WireMockSupport =>
 
   import OAuthMockSupport.*
 

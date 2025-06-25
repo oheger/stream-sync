@@ -148,7 +148,7 @@ object ProtocolOperationHandlerStage:
     * @return the flow stage
     */
   def apply(handler: ProtocolOperationHandler, spawner: Spawner, optHandlerActorName: Option[String] = None)
-           (implicit system: ActorSystem[_], timeout: Timeout): Flow[SyncOperation, SyncOperationResult, NotUsed] =
+           (implicit system: ActorSystem[?], timeout: Timeout): Flow[SyncOperation, SyncOperationResult, NotUsed] =
     implicit val ec: ExecutionContext = system.executionContext
     val parallelism = system.settings.config.getInt(PropMaxConnections)
     val handlerActor = spawner.spawn(operationHandlerActor(ExecutionState(handler, Set.empty, Nil)),

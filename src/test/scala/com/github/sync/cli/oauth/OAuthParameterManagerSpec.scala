@@ -132,7 +132,7 @@ class OAuthParameterManagerSpec extends AnyFlatSpec with Matchers with AsyncTest
     * @param msgParts text parts to be expected in the exception message
     * @return the error message from the exception
     */
-  private def expectFailedFuture(future: Future[_], msgParts: String*): String =
+  private def expectFailedFuture(future: Future[?], msgParts: String*): String =
     val exception = expectFailedFuture[ParameterExtractionException](future)
     val message = exception.failures.mkString(" ")
     msgParts foreach (part => message should include(part))

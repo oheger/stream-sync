@@ -42,6 +42,6 @@ class LocalProtocolFactory(config: FsStructureConfig,
                            timeout: Timeout,
                            spawner: Spawner,
                            ec: ExecutionContext)
-                          (implicit system: ActorSystem[_])
+                          (implicit system: ActorSystem[?])
   extends FileSystemSyncProtocolFactory[Path, LocalFsModel.LocalFile, LocalFsModel.LocalFolder,
     FsStructureConfig](new LocalProtocolCreator(ec), config, httpSenderConfig, timeout, spawner)

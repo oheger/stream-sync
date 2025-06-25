@@ -32,7 +32,7 @@ class GoogleDriveProtocolFactorySpec extends AnyFlatSpec with Matchers with Mock
     val senderConfig = mock[HttpRequestSenderConfig]
     val timeout = Timeout(100.seconds)
     val spawner = mock[Spawner]
-    implicit val system: ActorSystem[_] = mock[ActorSystem[_]]
+    implicit val system: ActorSystem[?] = mock[ActorSystem[?]]
 
     val factory = new GoogleDriveProtocolFactory(config, senderConfig, timeout, spawner)
     factory.config should be(config)

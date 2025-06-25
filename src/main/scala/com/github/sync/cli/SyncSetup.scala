@@ -75,7 +75,7 @@ object SyncSetup:
     * @return the function to setup authentication
     */
   def defaultAuthSetupFunc(storageService: SyncOAuthStorageService = OAuthStorageServiceImpl)
-                          (implicit system: ActorSystem[_]): AuthSetupFunc =
+                          (implicit system: ActorSystem[?]): AuthSetupFunc =
     implicit val classicSystem: classic.ActorSystem = system.toClassic
     implicit val executionContext: ExecutionContext = system.executionContext
 
@@ -125,7 +125,7 @@ object SyncSetup:
     * @param ec     the execution context
     * @return the function to setup a protocol factory
     */
-  def defaultProtocolFactorySetupFunc(implicit system: ActorSystem[_], ec: ExecutionContext):
+  def defaultProtocolFactorySetupFunc(implicit system: ActorSystem[?], ec: ExecutionContext):
   ProtocolFactorySetupFunc = (structConfig, syncConfig, senderConfig, spawner) => {
     val syncTimeout = syncConfig.streamConfig.timeout
     structConfig match

@@ -49,7 +49,7 @@ object SyncProtocolHolder:
     */
   def apply(syncConfig: SyncConfig, spawner: Spawner)(authSetupFunc: AuthSetupFunc)
            (protocolSetupFunc: ProtocolFactorySetupFunc)
-           (implicit system: ActorSystem[_]): Future[SyncProtocolHolder] =
+           (implicit system: ActorSystem[?]): Future[SyncProtocolHolder] =
     implicit val ec: ExecutionContext = system.executionContext
     val killSwitch = KillSwitches.shared("oauth-token-refresh")
     val futSenderConfigSrc = createHttpSenderConfig(authSetupFunc, syncConfig.srcConfig, killSwitch)
@@ -136,7 +136,7 @@ object SyncProtocolHolder:
   * @param system                 the actor system
   */
 class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
-                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[_]):
+                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[?]):
   /**
     * Creates a source for iterating over the elements of the source structure.
     *

@@ -166,7 +166,7 @@ class ElementSerializerSpec extends AnyFlatSpec with Matchers:
     val file = FsFile("the ID", "my/test/data file.txt", 2, Instant.parse("2018-09-06T19:31:33.529Z"),
       20180906193152L)
     val operation = SyncOperation(file, action, 22, dstID = "the destination ID")
-    val opRaw = ElementSerializer serialize operation
+    val opRaw = ElementSerializer.serialize(operation)
 
     ElementSerializer.deserialize[SyncOperation](opRaw.utf8String) match
       case Success(op) =>

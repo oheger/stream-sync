@@ -37,6 +37,6 @@ class OneDriveProtocolFactory(config: OneDriveStructureConfig,
                               httpSenderConfig: HttpRequestSenderConfig,
                               timeout: Timeout,
                               spawner: Spawner)
-                             (implicit system: ActorSystem[_])
+                             (implicit system: ActorSystem[?])
   extends FileSystemSyncProtocolFactory[String, OneDriveModel.OneDriveFile, OneDriveModel.OneDriveFolder,
     OneDriveStructureConfig](OneDriveProtocolCreator, config, httpSenderConfig, timeout, spawner)

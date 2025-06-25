@@ -96,6 +96,6 @@ private class DavProtocolConverter(val davConfig: DavStructureConfig,
     * @return the resulting ''Instant''
     */
   private def parseTimeAttribute(strDate: String): Instant = Try {
-    val query: TemporalQuery[Instant] = Instant.from _
+    val query: TemporalQuery[Instant] = Instant.from
     DateTimeFormatter.RFC_1123_DATE_TIME.parse(strDate, query)
   } orElse Try(Instant.parse(strDate)) getOrElse DavParser.UndefinedDate

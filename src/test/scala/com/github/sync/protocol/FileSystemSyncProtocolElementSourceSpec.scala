@@ -59,7 +59,7 @@ class FileSystemSyncProtocolElementSourceSpec(testSystem: classic.ActorSystem) e
   with AsyncFlatSpecLike with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper:
   def this() = this(classic.ActorSystem("FileSystemSyncProtocolElementSourceSpec"))
 
-  given ActorSystem[_] = system.toTyped
+  given ActorSystem[?] = system.toTyped
 
   override protected def afterAll(): Unit =
     TestKit.shutdownActorSystem(system)
