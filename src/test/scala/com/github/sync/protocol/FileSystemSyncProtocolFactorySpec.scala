@@ -152,7 +152,7 @@ class FileSystemSyncProtocolFactorySpec extends ScalaTestWithActorTestKit with A
       * @return the validated protocol
       */
     def createAndCheckProtocol(cryptConfig: StructureCryptConfig):
-    FileSystemSyncProtocol[_, _, _] =
+    FileSystemSyncProtocol[?, ?, ?] =
       factory.createProtocol(ProtocolUri, cryptConfig) match
         case p: FileSystemSyncProtocol[_, _, _] =>
           p.converter should be(converter)
@@ -166,7 +166,7 @@ class FileSystemSyncProtocolFactorySpec extends ScalaTestWithActorTestKit with A
       *
       * @param fs the actual file system to be tested
       */
-    def checkFileSystem(fs: FileSystem[_, _, _, _]): Unit =
+    def checkFileSystem(fs: FileSystem[?, ?, ?, ?]): Unit =
       fs should be(fileSystem)
 
     /**

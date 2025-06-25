@@ -38,6 +38,6 @@ class DavProtocolFactory(config: DavStructureConfig,
                          httpSenderConfig: HttpRequestSenderConfig,
                          timeout: Timeout,
                          spawner: Spawner)
-                        (implicit system: ActorSystem[_])
+                        (implicit system: ActorSystem[?])
   extends FileSystemSyncProtocolFactory[Uri, DavModel.DavFile, DavModel.DavFolder,
     DavStructureConfig](DavProtocolCreator, config, httpSenderConfig, timeout, spawner)

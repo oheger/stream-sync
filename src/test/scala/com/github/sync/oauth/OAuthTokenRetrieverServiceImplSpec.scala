@@ -120,7 +120,7 @@ object OAuthTokenRetrieverServiceImplSpec:
     * @return the validation result
     */
   private def validateFormParameters(req: HttpRequest, expParams: Map[String, String])
-                                    (implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Done] =
+                                    (implicit ec: ExecutionContext, system: ActorSystem[?]): Future[Done] =
     val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
     req.entity.dataBytes.runWith(sink)
       .map(bs => Query(bs.utf8String))
@@ -141,7 +141,7 @@ object OAuthTokenRetrieverServiceImplSpec:
     * @return the validation result
     */
   private def validateRequest(req: HttpRequestSender.SendRequest, expPath: String, expParams: Map[String, String])
-                             (implicit ec: ExecutionContext, system: ActorSystem[_]): Future[Done] =
+                             (implicit ec: ExecutionContext, system: ActorSystem[?]): Future[Done] =
     for _ <- validateRequestProperties(req, expPath)
         res <- validateFormParameters(req.request, expParams)
     yield res

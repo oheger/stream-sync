@@ -84,7 +84,7 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
   FOLDER <: Model.Folder[ID]](val fileSystem: FileSystem[ID, FILE, FOLDER, Model.FolderContent[ID, FILE, FOLDER]],
                               val httpSender: ActorRef[HttpRequestSender.HttpCommand],
                               val converter: FileSystemProtocolConverter[ID, FILE, FOLDER])
-                             (implicit system: ActorSystem[_]) extends SyncProtocol:
+                             (implicit system: ActorSystem[?]) extends SyncProtocol:
 
   import FileSystemSyncProtocol.*
 
@@ -168,4 +168,4 @@ class FileSystemSyncProtocol[ID, FILE <: Model.File[ID],
     * @param system the actor system
     * @return the ''ExecutionContext''
     */
-  private implicit def executionContext(implicit system: ActorSystem[_]): ExecutionContext = system.executionContext
+  private implicit def executionContext(implicit system: ActorSystem[?]): ExecutionContext = system.executionContext

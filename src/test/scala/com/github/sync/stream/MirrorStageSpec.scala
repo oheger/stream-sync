@@ -180,7 +180,7 @@ class MirrorStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with 
   it should "handle an empty target directory with a delay" in {
     val sourceTarget = Source.single(createFile("song0.mp3"))
       .delay(200.millis)
-      .filterNot(_.relativeUri endsWith ".mp3")
+      .filterNot(_.relativeUri.endsWith(".mp3"))
     val files = List(createFile("song1.mp3"), createFile("song2.mp3"))
     val expOps = files map (e => createOp(element = e, action = ActionCreate))
 

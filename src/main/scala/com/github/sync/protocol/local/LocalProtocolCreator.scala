@@ -40,7 +40,7 @@ import scala.concurrent.ExecutionContext
 private class LocalProtocolCreator(val executionContext: ExecutionContext)
   extends FileSystemProtocolCreator[Path, LocalFsModel.LocalFile, LocalFsModel.LocalFolder, FsStructureConfig]:
   override def createFileSystem(uri: String, config: FsStructureConfig, timeout: Timeout): LocalFileSystem =
-    val config = LocalFsConfig(basePath = Paths get uri, sanitizePaths = true,
+    val config = LocalFsConfig(basePath = Paths.get(uri), sanitizePaths = true,
       executionContext = executionContext)
     new LocalFileSystem(config)
 

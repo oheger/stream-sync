@@ -78,7 +78,7 @@ class FileSystemSyncProtocolFactory[ID, FILE <: Model.File[ID], FOLDER <: Model.
                         val timeout: Timeout,
                         spawner: Spawner,
                         httpSenderFactory: HttpRequestSenderFactory = HttpRequestSenderFactoryImpl)
-                       (implicit system: ActorSystem[_]) extends SyncProtocolFactory:
+                       (implicit system: ActorSystem[?]) extends SyncProtocolFactory:
   override def createProtocol(uri: String, cryptConfig: StructureCryptConfig): SyncProtocol =
     val fileSystem = decorateFileSystem(creator.createFileSystem(uri, config, timeout), cryptConfig)
     val httpSender = creator.createHttpSender(spawner, httpSenderFactory, uri, config, httpSenderConfig)

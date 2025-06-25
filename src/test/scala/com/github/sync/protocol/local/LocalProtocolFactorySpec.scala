@@ -37,7 +37,7 @@ class LocalProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSug
     val timeout = Timeout(100.seconds)
     val spawner = mock[Spawner]
     val ec = mock[ExecutionContext]
-    implicit val system: ActorSystem[_] = mock[ActorSystem[_]]
+    implicit val system: ActorSystem[?] = mock[ActorSystem[?]]
 
     val factory = new LocalProtocolFactory(config, senderConfig, timeout, spawner, ec)
     factory.config should be(config)

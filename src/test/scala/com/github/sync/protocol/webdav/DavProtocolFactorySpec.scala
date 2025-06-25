@@ -35,7 +35,7 @@ class DavProtocolFactorySpec extends AnyFlatSpec with Matchers with MockitoSugar
     val senderConfig = mock[HttpRequestSenderConfig]
     val timeout = Timeout(100.seconds)
     val spawner = mock[Spawner]
-    implicit val system: ActorSystem[_] = mock[ActorSystem[_]]
+    implicit val system: ActorSystem[?] = mock[ActorSystem[?]]
 
     val factory = new DavProtocolFactory(config, senderConfig, timeout, spawner)
     factory.config should be(config)

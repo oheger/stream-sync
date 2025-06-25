@@ -110,7 +110,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper:
     * @param result the result to be checked
     * @return the extracted exception
     */
-  private def expectParsingFailure(result: Try[_]): ParameterExtractionException =
+  private def expectParsingFailure(result: Try[?]): ParameterExtractionException =
     result match
       case Failure(exception: ParameterExtractionException) =>
         exception
@@ -126,7 +126,7 @@ class FilterManagerSpec extends AnyFlatSpec with Matchers with AsyncTestHelper:
     * @param msg    texts to be expected in the exception message
     * @return the extracted exception
     */
-  private def expectAndCheckParsingFailure(result: Try[_], msg: String*): ParameterExtractionException =
+  private def expectAndCheckParsingFailure(result: Try[?], msg: String*): ParameterExtractionException =
     val exception = expectParsingFailure(result)
     exception.failures should have size 1
     msg foreach { m =>

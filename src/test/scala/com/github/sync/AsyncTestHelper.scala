@@ -53,7 +53,7 @@ trait AsyncTestHelper:
     * @tparam E the type of the expected exception
     * @return the exception
     */
-  def expectFailedFuture[E](future: Future[_])(implicit ct: ClassTag[E]): E =
+  def expectFailedFuture[E](future: Future[?])(implicit ct: ClassTag[E]): E =
     Await.ready(future, asyncTimeout)
     future.value match
       case Some(Failure(exception)) if ct.runtimeClass.isInstance(exception) =>

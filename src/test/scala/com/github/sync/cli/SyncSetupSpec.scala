@@ -77,7 +77,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     * @param system the typed actor system
     * @return the classic actor system
     */
-  private implicit def classicActorSystem(implicit system: ActorSystem[_]): classic.ActorSystem =
+  private implicit def classicActorSystem(implicit system: ActorSystem[?]): classic.ActorSystem =
     system.toClassic
 
   /**
@@ -86,7 +86,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     * @param system the actor system
     * @return the execution context
     */
-  private implicit def executionContext(implicit system: ActorSystem[_]): ExecutionContext =
+  private implicit def executionContext(implicit system: ActorSystem[?]): ExecutionContext =
     system.executionContext
 
   /**

@@ -98,7 +98,7 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     * @param msgParts text parts to be expected in the exception message
     * @return the error message from the exception
     */
-  private def expectFailedFuture(future: Future[_], msgParts: String*): String =
+  private def expectFailedFuture(future: Future[?], msgParts: String*): String =
     val exception = expectFailedFuture[ParameterExtractionException](future)
     msgParts foreach (part => exception.getMessage should include(part))
     exception.getMessage
@@ -357,9 +357,9 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       dstPassword = Some("pwd-dst"), dstCryptMode = CryptMode.Files, cryptCacheSize = 55)
     val expCryptConfig = CryptConfig(dstPassword = Some("pwd-src"), dstCryptMode = CryptMode.FilesAndNames,
       srcPassword = Some("pwd-dst"), srcCryptMode = CryptMode.Files, cryptCacheSize = 55)
-    val logConfig = LogConfig(logFilePath = Some(Paths get "log"), errorLogFilePath = Some(Paths get "err"),
+    val logConfig = LogConfig(logFilePath = Some(Paths.get("log")), errorLogFilePath = Some(Paths.get("err")),
       logLevel = Level.INFO)
-    val orgMirrorStreamConfig = MirrorStreamConfig(Some(Paths get "syncLog"), switched = true)
+    val orgMirrorStreamConfig = MirrorStreamConfig(Some(Paths.get("syncLog")), switched = true)
     val streamConfig = StreamConfig(dryRun = false, timeout = 1.minute,
       ignoreTimeDelta = Some(IgnoreTimeDelta(100.seconds)),
       opsPerUnit = Some(100), throttleUnit = Throttle.TimeUnit.Minute, orgMirrorStreamConfig)

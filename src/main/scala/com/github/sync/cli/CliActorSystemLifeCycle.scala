@@ -25,6 +25,7 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
 
 import java.util.Locale
+import scala.compiletime.uninitialized
 import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
@@ -110,7 +111,7 @@ trait CliActorSystemLifeCycle[C]:
   val name: String
 
   /** The field that stores the managed actor system. */
-  private var system: ActorSystem = _
+  private var system: ActorSystem = uninitialized
 
   /**
     * Returns the actor system managed by this trait.

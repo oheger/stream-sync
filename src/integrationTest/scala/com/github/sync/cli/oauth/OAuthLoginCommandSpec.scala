@@ -473,7 +473,7 @@ class OAuthLoginCommandSpec(testSystem: ActorSystem) extends TestKit(testSystem)
           val args = invocation.getArguments
           OAuthTokenRetrieverServiceImpl.fetchTokens(args.head.asInstanceOf[ActorRef[HttpRequestSender.HttpCommand]],
             args(1).asInstanceOf[IDPConfig], args(2).asInstanceOf[Secret],
-            args(3).asInstanceOf[String])(args(4).asInstanceOf[org.apache.pekko.actor.typed.ActorSystem[_]])
+            args(3).asInstanceOf[String])(args(4).asInstanceOf[org.apache.pekko.actor.typed.ActorSystem[?]])
         })
       service
 
