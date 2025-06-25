@@ -104,7 +104,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[SyncOAuthStorageConfi
                          (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
     val tokenData = tokens.accessToken + TokenSeparator + tokens.refreshToken
     val source = cryptSource(Source.single(ByteString(tokenData)), storageConfig.optPassword) { (alg, key, rnd, src) =>
-      CryptService.encryptSource(alg, key, src)(rnd)
+      CryptService.encryptSource(alg, key, src)(using rnd)
     }
     saveFile(storageConfig, SuffixTokenFile, source)
 
@@ -187,7 +187,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[SyncOAuthStorageConfi
   private def saveClientSecret(storageConfig: SyncOAuthStorageConfig, secret: Secret)
                               (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
     val source = cryptSource(Source.single(ByteString(secret.secret)), storageConfig.optPassword) { (a, k, rnd, src) =>
-      CryptService.encryptSource(a, k, src)(rnd)
+      CryptService.encryptSource(a, k, src)(using rnd)
     }
     saveFile(storageConfig, SuffixSecretFile, source)
 
@@ -290,7 +290,7 @@ object OAuthStorageServiceImpl extends OAuthStorageService[SyncOAuthStorageConfi
       Future.successful(optDefault.get)
     else
       val source = cryptSource(fileSource(path), optPwd) { (alg, key, rnd, src) =>
-        CryptService.decryptSource(alg, key, src)(rnd)
+        CryptService.decryptSource(alg, key, src)(using rnd)
       }
       val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
       source.runWith(sink).map(f)

@@ -176,7 +176,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
 
     val authConfig = expectOAuthConfig(authFunc(storageConfig, killSwitch))
     authConfig.refreshNotificationFunc(Failure(exception))
-    verify(storageService, never()).saveTokens(any(), any())(any(), any())
+    verify(storageService, never()).saveTokens(any(), any())(using any(), any())
     verify(killSwitch).abort(exception)
   }
 
