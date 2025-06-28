@@ -24,7 +24,6 @@ lazy val VersionLog4j = "2.25.0"
 lazy val VersionPekko = "1.1.4"
 lazy val VersionPekkoHttp = "1.2.0"
 lazy val VersionScala = "3.7.1"
-lazy val VersionScalaXml = "2.4.0"
 lazy val VersionScli = "1.1.0"
 lazy val VersionSprayJson = "1.3.6"
 
@@ -71,8 +70,8 @@ lazy val loggingDependencies = Seq(
 )
 
 lazy val testDependencies = Seq(
-  "org.scalatest" %% "scalatest" % VersionScalaTest % Test exclude("org.scala-lang.modules", "scala-xml_3"),
-  "org.scalatestplus" %% "mockito-5-12" % VersionScalaTestMockito % Test exclude("org.scala-lang.modules", "scala-xml_3"),
+  "org.scalatest" %% "scalatest" % VersionScalaTest % Test,
+  "org.scalatestplus" %% "mockito-5-12" % VersionScalaTestMockito % Test,
   "org.apache.pekko" %% "pekko-testkit" % VersionPekko % Test,
   "org.apache.pekko" %% "pekko-actor-testkit-typed" % VersionPekko % Test,
   "org.wiremock" % "wiremock" % VersionWireMock % Test
@@ -86,7 +85,6 @@ lazy val StreamSync = (project in file("."))
     scalaVersion := VersionScala,
     libraryDependencies ++= akkaDependencies,
     libraryDependencies += ("com.github.oheger" %% "scli" % VersionScli).cross(CrossVersion.for3Use2_13),
-    libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
     libraryDependencies += "io.spray" %%  "spray-json" % VersionSprayJson,
     libraryDependencies ++= cloudFilesDependencies,
     libraryDependencies ++= loggingDependencies,
