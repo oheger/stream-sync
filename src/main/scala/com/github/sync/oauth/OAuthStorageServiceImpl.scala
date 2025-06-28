@@ -26,11 +26,11 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.stream.IOResult
 import org.apache.pekko.stream.scaladsl.{FileIO, Sink, Source}
 import org.apache.pekko.util.ByteString
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import java.nio.file.{Files, Path}
 import java.security.{Key, SecureRandom}
 import scala.concurrent.{ExecutionContext, Future}
-import scala.xml.{Elem, XML}
 
 /**
   * A default implementation of the [[OAuthStorageService]] trait.
@@ -39,36 +39,16 @@ import scala.xml.{Elem, XML}
   * in files with the same base name, but different suffixes. Sensitive
   * information can be encrypted if a password is provided.
   */
-object OAuthStorageServiceImpl extends OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]:
+object OAuthStorageServiceImpl extends DefaultJsonProtocol
+  with OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]:
   /** Constant for the suffix used for the file with the OAuth config. */
-  final val SuffixConfigFile = ".xml"
+  final val SuffixConfigFile = ".json"
 
   /** Constant for the suffix used for the file with the client secret. */
   final val SuffixSecretFile = ".sec"
 
   /** Constant for the suffix of the file with token information. */
   final val SuffixTokenFile = ".toc"
-
-  /** Property for the client ID in the persistent config representation. */
-  final val PropClientId = "client-id"
-
-  /**
-    * Property for the authorization endpoint in the persistent config
-    * representation.
-    */
-  final val PropAuthorizationEndpoint = "authorization-endpoint"
-
-  /**
-    * Property for the token endpoint in the persistent config
-    * representation.
-    */
-  final val PropTokenEndpoint = "token-endpoint"
-
-  /** Property for the scope in the persistent config representation. */
-  final val PropScope = "scope"
-
-  /** Property for the redirect URI in the persistent config representation. */
-  final val PropRedirectUri = "redirect-uri"
 
   /**
     * Constant for a secret with an empty value. This is set as the client
@@ -84,6 +64,28 @@ object OAuthStorageServiceImpl extends OAuthStorageService[SyncOAuthStorageConfi
 
   /** The separator character used within the token file. */
   private val TokenSeparator = "\t"
+
+  import spray.json.*
+
+  /**
+    * An internally used data class to represent the non-sensitive information
+    * to be stored for an OAuth configuration. This service implementation
+    * writes an instance of this class to a JSON file.
+    *
+    * @param clientId              the ID of the OAuth client
+    * @param authorizationEndpoint the endpoint URL for authorization
+    * @param tokenEndpoint         the endpoint URL for getting tokens
+    * @param scope                 the scope to request
+    * @param redirectUri           the redirect URI
+    */
+  private case class OAuthConfigModel(clientId: String,
+                                      authorizationEndpoint: String,
+                                      tokenEndpoint: String,
+                                      scope: String,
+                                      redirectUri: String)
+
+  /** The JSON format to serialize the OAuth config model. */
+  private given configProtocol: RootJsonFormat[OAuthConfigModel] = jsonFormat5(OAuthConfigModel.apply)
 
   override def saveIdpConfig(storageConfig: SyncOAuthStorageConfig, config: IDPConfig)
                             (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
@@ -131,25 +133,15 @@ object OAuthStorageServiceImpl extends OAuthStorageService[SyncOAuthStorageConfi
     */
   private def saveConfig(storageConfig: SyncOAuthStorageConfig, config: IDPConfig)
                         (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
-    val xml = <oauth-config>
-      <client-id>
-        {config.oauthConfig.clientID}
-      </client-id>
-      <authorization-endpoint>
-        {config.authorizationEndpoint}
-      </authorization-endpoint>
-      <token-endpoint>
-        {config.oauthConfig.tokenEndpoint}
-      </token-endpoint>
-      <scope>
-        {config.scope}
-      </scope>
-      <redirect-uri>
-        {config.oauthConfig.redirectUri}
-      </redirect-uri>
-    </oauth-config>
+    val configModel = OAuthConfigModel(
+      clientId = config.oauthConfig.clientID,
+      authorizationEndpoint = config.authorizationEndpoint,
+      tokenEndpoint = config.oauthConfig.tokenEndpoint,
+      scope = config.scope,
+      redirectUri = config.oauthConfig.redirectUri
+    )
 
-    val source = Source.single(ByteString(xml.toString()))
+    val source = Source.single(ByteString(configModel.toJson.prettyPrint))
     saveFile(storageConfig, SuffixConfigFile, source)
 
   /**
@@ -164,14 +156,21 @@ object OAuthStorageServiceImpl extends OAuthStorageService[SyncOAuthStorageConfi
   private def loadConfig(storageConfig: SyncOAuthStorageConfig)
                         (implicit ec: ExecutionContext, system: ActorSystem): Future[IDPConfig] =
     loadAndMapFile(storageConfig, SuffixConfigFile) { buf =>
-      val nodeSeq = XML.loadString(buf.utf8String)
-      val oauthConfig = OAuthConfig(clientID = extractElem(nodeSeq, PropClientId),
-        tokenEndpoint = extractElem(nodeSeq, PropTokenEndpoint),
-        redirectUri = extractElem(nodeSeq, PropRedirectUri), clientSecret = null,
-        initTokenData = OAuthTokenData(null, null))
+      val jsonAst = buf.utf8String.parseJson
+      val configModel = jsonAst.convertTo[OAuthConfigModel]
+
+      val oauthConfig = OAuthConfig(
+        clientID = configModel.clientId,
+        tokenEndpoint = configModel.tokenEndpoint,
+        redirectUri = configModel.redirectUri,
+        clientSecret = null,
+        initTokenData = OAuthTokenData(null, null)
+      )
       IDPConfig(
-        authorizationEndpoint = extractElem(nodeSeq, PropAuthorizationEndpoint),
-        scope = extractElem(nodeSeq, PropScope), oauthConfig = oauthConfig)
+        authorizationEndpoint = configModel.authorizationEndpoint,
+        scope = configModel.scope,
+        oauthConfig = oauthConfig
+      )
     }
 
   /**
@@ -225,22 +224,6 @@ object OAuthStorageServiceImpl extends OAuthStorageService[SyncOAuthStorageConfi
         throw new IllegalArgumentException(s"Token file for ${storageConfig.baseName} has unexpected content.")
       OAuthTokenData(accessToken = parts(0), refreshToken = parts(1))
     }
-
-  /**
-    * Extracts the text content of the given child from an XML document. If the
-    * child cannot be resolved, an ''IllegalArgumentException'' is thrown; this
-    * indicates an invalid configuration file.
-    *
-    * @param elem  the parent XML element
-    * @param child the name of the desired child
-    * @return the text content of this child element
-    * @throws IllegalArgumentException if the child cannot be found
-    */
-  private def extractElem(elem: Elem, child: String): String =
-    val text = (elem \ child).text.trim
-    if text.isEmpty then
-      throw new IllegalArgumentException(s"Missing mandatory property '$child' in OAuth configuration.")
-    text
 
   /**
     * Returns a source for loading the specified file.

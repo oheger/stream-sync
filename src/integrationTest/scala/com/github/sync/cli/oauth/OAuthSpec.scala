@@ -16,22 +16,23 @@
 
 package com.github.sync.cli.oauth
 
-import java.io.ByteArrayOutputStream
-import java.nio.file.Files
-import java.util.Locale
 import com.github.scli.DefaultConsoleReader
+import com.github.sync.FileTestHelper
 import com.github.sync.cli.CliActorSystemLifeCycle
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
 import com.github.sync.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, SyncOAuthStorageConfig}
-import com.github.sync.{AsyncTestHelper, FileTestHelper}
 import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.{any, eq => argEq}
-import org.mockito.Mockito._
+import org.mockito.ArgumentMatchers.{any, eq as argEq}
+import org.mockito.Mockito.*
 import org.scalatest.BeforeAndAfterEach
+import org.scalatest.Inspectors.forEvery
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
+import java.io.ByteArrayOutputStream
+import java.nio.file.Files
+import java.util.Locale
 import scala.concurrent.Future
 
 /**
@@ -41,8 +42,7 @@ import scala.concurrent.Future
   * unknown commands. This is achieved by directly invoking the ''main()''
   * function. Thus, only black-box testing is possible.
   */
-class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with FileTestHelper with MockitoSugar
-  with AsyncTestHelper:
+class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with FileTestHelper with MockitoSugar:
   override protected def afterEach(): Unit =
     tearDownTestFile()
     super.afterEach()
@@ -102,7 +102,7 @@ class OAuthSpec extends AnyFlatSpec with BeforeAndAfterEach with Matchers with F
 
     val output = runAndCaptureOut(args)
     output should include("success")
-    List(".xml", ".sec") foreach { ext =>
+    forEvery(List(".json", ".sec")) { ext =>
       val idpFile = testDirectory.resolve(IdpName + ext)
       Files.exists(idpFile) shouldBe true
     }

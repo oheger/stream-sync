@@ -25,9 +25,9 @@ import org.scalatest.Inspectors.forEvery
 import org.scalatest.flatspec.AsyncFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
+import spray.json.JsonParser
 
 import java.nio.file.Files
-import scala.xml.SAXParseException
 
 object OAuthStorageServiceImplSpec:
   /** Constant for the base name of a provider configuration. */
@@ -97,7 +97,7 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     futConfig map { config =>
       config should not be theSameInstanceAs(TestConfig)
       configEquals(TestConfig, config) shouldBe true
-      forEvery(List("xml", "sec", "toc")) { suffix =>
+      forEvery(List("json", "sec", "toc")) { suffix =>
         Files.exists(storageConfig.resolveFileName("." + suffix)) shouldBe true
       }
     }
@@ -125,51 +125,24 @@ class OAuthStorageServiceImplSpec(testSystem: ActorSystem) extends TestKit(testS
     writeFileContent(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile),
       FileTestHelper.TestData)
 
-    recoverToSucceededIf[SAXParseException] {
+    recoverToSucceededIf[JsonParser.ParsingException] {
       OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
     }
   }
 
   it should "handle loading an OAuth configuration with missing properties" in {
-    val xml = <oauth-config>
-      <foo>test</foo>
-      <invalid>true</invalid>
-    </oauth-config>
+    val json =
+      """
+        |{
+        |  "foo": "test",
+        |  "invalid: true
+        |}
+        |""".stripMargin
     val storageConfig = createStorageConfig("noProperties")
-    writeFileContent(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile),
-      xml.toString())
+    writeFileContent(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile), json)
 
-    recoverToSucceededIf[IllegalArgumentException] {
+    recoverToSucceededIf[JsonParser.ParsingException] {
       OAuthStorageServiceImpl.loadIdpConfig(storageConfig)
-    }
-  }
-
-  it should "handle whitespace in XML correctly" in {
-    val xml = <oauth-config>
-      <client-id>
-        {TestConfig.oauthConfig.clientID}
-      </client-id>
-      <authorization-endpoint>
-        {TestConfig.authorizationEndpoint}
-      </authorization-endpoint>
-      <token-endpoint>
-        {TestConfig.oauthConfig.tokenEndpoint}
-      </token-endpoint>
-      <scope>
-        {TestConfig.scope}
-      </scope>
-      <redirect-uri>
-        {TestConfig.oauthConfig.redirectUri}
-      </redirect-uri>
-    </oauth-config>
-    val storageConfig = createStorageConfig("formatted")
-    OAuthStorageServiceImpl.saveIdpConfig(storageConfig, TestConfig) flatMap { _ =>
-      writeFileContent(storageConfig.resolveFileName(OAuthStorageServiceImpl.SuffixConfigFile),
-        xml.toString())
-
-      OAuthStorageServiceImpl.loadIdpConfig(storageConfig) map { readConfig =>
-        configEquals(TestConfig, readConfig) shouldBe true
-      }
     }
   }
 

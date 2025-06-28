@@ -26,6 +26,7 @@ lazy val VersionPekkoHttp = "1.2.0"
 lazy val VersionScala = "3.7.1"
 lazy val VersionScalaXml = "2.4.0"
 lazy val VersionScli = "1.1.0"
+lazy val VersionSprayJson = "1.3.6"
 
 /** Definition of versions for test dependencies. */
 lazy val VersionScalaTest = "3.2.19"
@@ -86,6 +87,7 @@ lazy val StreamSync = (project in file("."))
     libraryDependencies ++= akkaDependencies,
     libraryDependencies += ("com.github.oheger" %% "scli" % VersionScli).cross(CrossVersion.for3Use2_13),
     libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % VersionScalaXml,
+    libraryDependencies += "io.spray" %%  "spray-json" % VersionSprayJson,
     libraryDependencies ++= cloudFilesDependencies,
     libraryDependencies ++= loggingDependencies,
     libraryDependencies ++= testDependencies,
