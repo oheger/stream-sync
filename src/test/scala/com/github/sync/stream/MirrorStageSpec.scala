@@ -59,8 +59,7 @@ object MirrorStageSpec:
     FsFile(elementID(uri), relativeUri = uri, size = uri.length, level = level, lastModified = lastModified)
 
   /**
-    * Generates a test folder element with the specified URI. (Levels are
-    * irrelevant for the sync stage; therefore an arbitrary value can be used.)
+    * Generates a test folder element with the specified URI.
     *
     * @param uri       the URI of the folder
     * @param level     the level of the folder
@@ -390,11 +389,43 @@ class MirrorStageSpec(testSystem: ActorSystem) extends TestKit(testSystem) with 
     val file1 = createFile(subFolder.relativeUri + "/file1.txt", level = 2)
     val fileNew = createFile(subFolder.relativeUri + "/new.txt", level = 2)
     val file2 = createFile(folder2.relativeUri + "/file2.txt", level = 1)
-    val sourceOrg = Source(List(folder1, folder2, subFolder, file1, fileNew, file2))
-    val sourceTarget = Source(destinationElems(List(folder1, folder2, subFolder, file1, file2)))
+    val sourceOrg = Source(List(folder1, folder2, subFolder, file2, file1, fileNew))
+    val sourceTarget = Source(destinationElems(List(folder1, folder2, subFolder, file2, file1)))
     val expOps = List(createOp(folder1, ActionNoop), createOp(folder2, ActionNoop),
       createOp(subFolder, ActionNoop, level = 1), createOp(file1, ActionNoop, level = 2),
       createOp(fileNew, ActionCreate, level = 2), createOp(file2, ActionNoop, level = 1))
 
     runStage(sourceOrg, sourceTarget) should contain theSameElementsAs expOps
   }
+
+  it should "correctly handle the removal of the last element on a level" in:
+    val folder1 = createFolder("/a")
+    val folder2 = createFolder("/b")
+    val folder3 = createFolder("/c")
+    val fileA = createFile("/a/testA.txt", level = 1)
+    val fileB = createFile("/b/testB.txt", level = 1)
+    val fileC1 = createFile("/c/testC1.txt", level = 1)
+    val fileC2 = createFile("/c/testC2.txt", level = 1)
+    val folderASub = createFolder("/a/testSubA", 1)
+    val fileASub1 = createFile("/a/testSubA/sub1.txt", level = 2)
+    val fileASub2 = createFile("/a/testSubA/sub2.txt", level = 2)
+    val sourceOrg = Source(List(folder1, folder2, folder3, fileA, folderASub, fileB, fileC1, fileASub1, fileASub2))
+    val sourceTarget = Source(
+      destinationElems(
+        List(folder1, folder2, folder3, fileA, folderASub, fileB, fileC1, fileC2, fileASub1, fileASub2)
+      )
+    )
+    val expOps = List(
+      createOp(folder1, ActionNoop),
+      createOp(folder2, ActionNoop),
+      createOp(folder3, ActionNoop),
+      createOp(fileA, ActionNoop, level = 1),
+      createOp(folderASub, ActionNoop, level = 1),
+      createOp(fileB, ActionNoop, level = 1),
+      createOp(fileC1, ActionNoop, level = 1),
+      createOp(destinationElem(fileC2), ActionRemove, level = 1, optDstID = destinationID(fileC2)),
+      createOp(fileASub1, ActionNoop, level = 2),
+      createOp(fileASub2, ActionNoop, level = 2)
+    )
+
+    runStage(sourceOrg, sourceTarget) should contain theSameElementsAs expOps
