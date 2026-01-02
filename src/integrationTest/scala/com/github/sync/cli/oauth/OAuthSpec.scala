@@ -18,9 +18,9 @@ package com.github.sync.cli.oauth
 
 import com.github.scli.DefaultConsoleReader
 import com.github.sync.FileTestHelper
+import com.github.sync.auth.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, SyncOAuthStorageConfig}
 import com.github.sync.cli.CliActorSystemLifeCycle
 import com.github.sync.cli.oauth.OAuthParameterManager.LoginCommandConfig
-import com.github.sync.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl, SyncOAuthStorageConfig}
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, eq as argEq}
 import org.mockito.Mockito.*

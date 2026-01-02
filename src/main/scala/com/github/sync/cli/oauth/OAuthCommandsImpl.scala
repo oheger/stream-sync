@@ -19,8 +19,8 @@ package com.github.sync.cli.oauth
 import com.github.cloudfiles.core.http.HttpRequestSender
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
+import com.github.sync.auth.oauth.IDPConfig
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, ListTokensCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.oauth.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import org.apache.pekko.actor.{ActorSystem, typed}
 import org.apache.pekko.http.scaladsl.Http

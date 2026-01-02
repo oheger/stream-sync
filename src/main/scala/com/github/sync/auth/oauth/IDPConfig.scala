@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package com.github.sync.oauth
+package com.github.sync.auth.oauth
 
 import com.github.cloudfiles.core.http.auth.OAuthConfig
-import com.github.sync.oauth.IDPConfig.hasMostlyNonPrintableChars
+import IDPConfig.hasMostlyNonPrintableChars
 
 object IDPConfig:
   /** Regular expression to detect non-printable characters. */

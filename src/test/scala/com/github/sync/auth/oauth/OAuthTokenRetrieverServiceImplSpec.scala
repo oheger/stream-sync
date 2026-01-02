@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package com.github.sync.oauth
+package com.github.sync.auth.oauth
 
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.core.http.{HttpRequestSender, Secret}
 import com.github.sync.AsyncTestHelper
+import com.github.sync.auth.oauth.{IDPConfig, OAuthTokenRetrieverServiceImpl}
 import org.apache.pekko.Done
 import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.apache.pekko.actor.typed.scaladsl.Behaviors

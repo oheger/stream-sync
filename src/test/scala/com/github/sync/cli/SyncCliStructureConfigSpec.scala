@@ -18,10 +18,10 @@ package com.github.sync.cli
 
 import com.github.scli.ParameterExtractor.{ExtractionContext, Parameters}
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
+import com.github.sync.auth.oauth.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.cli.ExtractorTestHelper.toExtractionContext
 import com.github.sync.cli.SyncCliStructureConfig._
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.oauth.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec

@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package com.github.sync.oauth
+package com.github.sync.auth.oauth
 
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
-import com.github.sync.oauth.IDPConfigSpec.createIDPConfig
+import com.github.sync.auth.oauth.IDPConfig
+import IDPConfigSpec.createIDPConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

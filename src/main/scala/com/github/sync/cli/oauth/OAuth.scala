@@ -19,9 +19,9 @@ package com.github.sync.cli.oauth
 import com.github.scli.HelpGenerator.ParameterFilter
 import com.github.scli.ParameterManager.ProcessingContext
 import com.github.scli.{ConsoleReader, DefaultConsoleReader, HelpGenerator, ParameterExtractor}
+import com.github.sync.auth.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
 import com.github.sync.cli.*
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, ListTokensCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.oauth.{OAuthStorageServiceImpl, OAuthTokenRetrieverServiceImpl}
 
 import scala.concurrent.Future
 import scala.util.Try

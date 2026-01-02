@@ -20,9 +20,9 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.*
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
 import com.github.sync.AsyncTestHelper
+import com.github.sync.auth.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.cli.SyncCliStreamConfig.{MirrorStreamConfig, StreamConfig}
 import com.github.sync.cli.SyncParameterManager.{LogConfig, SyncConfig}
-import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig}
 import com.github.sync.protocol.gdrive.GoogleDriveProtocolFactory
 import com.github.sync.protocol.local.LocalProtocolFactory

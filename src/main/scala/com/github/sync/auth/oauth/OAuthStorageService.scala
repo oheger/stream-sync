@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.github.sync.oauth
+package com.github.sync.auth.oauth
 
 import org.apache.pekko.Done
 import org.apache.pekko.actor.ActorSystem
