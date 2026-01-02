@@ -18,11 +18,11 @@
 lazy val VersionStreamSync = "0.20-SNAPSHOT"
 
 /** Definition of versions for compile-time dependencies. */
-lazy val VersionCloudFiles = "0.10"
+lazy val VersionCloudFiles = "0.10.1"
 lazy val VersionDisruptor = "4.0.0"
-lazy val VersionLog4j = "2.25.0"
-lazy val VersionPekko = "1.1.4"
-lazy val VersionPekkoHttp = "1.2.0"
+lazy val VersionLog4j = "2.25.3"
+lazy val VersionPekko = "1.4.0"
+lazy val VersionPekkoHttp = "1.3.0"
 lazy val VersionScala = "3.7.1"
 lazy val VersionScli = "1.1.0"
 lazy val VersionSprayJson = "1.3.6"
@@ -30,7 +30,7 @@ lazy val VersionSprayJson = "1.3.6"
 /** Definition of versions for test dependencies. */
 lazy val VersionScalaTest = "3.2.19"
 lazy val VersionScalaTestMockito = "3.2.19.0"
-lazy val VersionWireMock = "3.13.1"
+lazy val VersionWireMock = "3.13.2"
 
 scalacOptions ++=
   Seq(
