@@ -19,8 +19,8 @@ package com.github.sync.cli.oauth
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.sync.AsyncTestHelper
+import com.github.sync.auth.oauth.{IDPConfig, OAuthStorageService, SyncOAuthStorageConfig}
 import com.github.sync.cli.oauth.OAuthParameterManager.InitCommandConfig
-import com.github.sync.oauth.{IDPConfig, OAuthStorageService, SyncOAuthStorageConfig}
 import org.apache.pekko.Done
 import org.apache.pekko.actor.ActorSystem
 import org.mockito.ArgumentCaptor

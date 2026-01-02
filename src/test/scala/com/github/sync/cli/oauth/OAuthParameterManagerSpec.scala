@@ -20,9 +20,9 @@ import java.nio.file.Paths
 import com.github.scli.ParameterExtractor.{ExtractionContext, Parameters, tryExtractor}
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterParser}
 import com.github.sync.AsyncTestHelper
+import com.github.sync.auth.oauth.SyncOAuthStorageConfig
 import com.github.sync.cli.oauth.OAuthParameterManager.{CommandConfig, InitCommandConfig, ListTokensCommandConfig, LoginCommandConfig, RemoveCommandConfig}
 import com.github.sync.cli.{CliActorSystemLifeCycle, ExtractorTestHelper}
-import com.github.sync.oauth.SyncOAuthStorageConfig
 import org.mockito.Mockito.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

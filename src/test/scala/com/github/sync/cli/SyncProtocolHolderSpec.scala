@@ -21,8 +21,8 @@ import com.github.cloudfiles.core.http.RetryExtension
 import com.github.cloudfiles.core.http.auth.NoAuthConfig
 import com.github.cloudfiles.core.http.factory.HttpRequestSenderConfig
 import com.github.sync.AsyncTestHelper
+import com.github.sync.auth.oauth.SyncNoAuth
 import com.github.sync.cli.SyncSetup.AuthSetupFunc
-import com.github.sync.oauth.SyncNoAuth
 import com.github.sync.protocol.SyncProtocol
 import com.github.sync.protocol.config.FsStructureConfig
 import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit

@@ -19,8 +19,8 @@ package com.github.sync.cli.oauth
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
 import com.github.scli.ParameterExtractor._
+import com.github.sync.auth.oauth.{IDPConfig, SyncOAuthStorageConfig}
 import com.github.sync.cli.CliActorSystemLifeCycle
-import com.github.sync.oauth.{IDPConfig, SyncOAuthStorageConfig}
 
 import java.nio.file.Path
 import scala.util.Try

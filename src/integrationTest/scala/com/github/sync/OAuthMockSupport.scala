@@ -18,7 +18,7 @@ package com.github.sync
 
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
-import com.github.sync.oauth.{IDPConfig, OAuthStorageServiceImpl, SyncOAuthStorageConfig}
+import com.github.sync.auth.oauth.{IDPConfig, OAuthStorageServiceImpl, SyncOAuthStorageConfig}
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, post, stubFor, urlPathEqualTo}
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.model.headers.`Content-Type`

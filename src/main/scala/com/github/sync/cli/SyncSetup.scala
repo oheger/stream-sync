@@ -20,8 +20,8 @@ import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthConfig.TokenRefreshNotificationFunc
 import com.github.cloudfiles.core.http.auth.{AuthConfig, BasicAuthConfig, NoAuthConfig, OAuthTokenData}
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
+import com.github.sync.auth.oauth.{IDPConfig, OAuthStorageService, OAuthStorageServiceImpl, SyncAuthConfig, SyncBasicAuthConfig, SyncOAuthStorageConfig}
 import com.github.sync.cli.SyncParameterManager.SyncConfig
-import com.github.sync.oauth.{IDPConfig, OAuthStorageService, OAuthStorageServiceImpl, SyncAuthConfig, SyncBasicAuthConfig, SyncOAuthStorageConfig}
 import com.github.sync.protocol.SyncProtocolFactory
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig, StructureConfig}
 import com.github.sync.protocol.gdrive.GoogleDriveProtocolFactory

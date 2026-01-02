@@ -18,12 +18,12 @@ package com.github.sync.cli
 
 import com.github.scli.ParameterExtractor.{ExtractionContext, ParameterExtractionException}
 import com.github.scli.{ConsoleReader, DummyConsoleReader, ParameterExtractor, ParameterParser}
+import com.github.sync.auth.oauth.SyncNoAuth
 import com.github.sync.cli.ExtractorTestHelper.{accessedKeys, toExtractionContext, toParameters}
 import com.github.sync.cli.FilterManager.SyncFilterData
 import com.github.sync.cli.SyncCliStreamConfig.{MirrorStreamConfig, StreamConfig}
 import com.github.sync.cli.SyncCliStructureConfig.StructureSyncConfig
 import com.github.sync.cli.SyncParameterManager.*
-import com.github.sync.oauth.SyncNoAuth
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig}
 import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 import com.github.sync.{AsyncTestHelper, FileTestHelper}

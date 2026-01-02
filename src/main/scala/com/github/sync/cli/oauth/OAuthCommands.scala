@@ -19,8 +19,8 @@ package com.github.sync.cli.oauth
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.OAuthTokenData
 import com.github.scli.ConsoleReader
+import com.github.sync.auth.oauth.{IDPConfig, OAuthStorageService, OAuthTokenRetrieverService, SyncOAuthStorageConfig}
 import com.github.sync.cli.oauth.OAuthParameterManager.{InitCommandConfig, ListTokensCommandConfig, LoginCommandConfig, RemoveCommandConfig}
-import com.github.sync.oauth.{IDPConfig, OAuthStorageService, OAuthTokenRetrieverService, SyncOAuthStorageConfig}
 import org.apache.pekko.actor.ActorSystem
 
 import scala.concurrent.{ExecutionContext, Future}

@@ -18,8 +18,8 @@ package com.github.sync.cli
 
 import com.github.cloudfiles.core.http.Secret
 import com.github.scli.ParameterExtractor.*
+import com.github.sync.auth.oauth.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth}
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.oauth.{SyncAuthConfig, SyncBasicAuthConfig, SyncNoAuth}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig, StructureConfig}
 
 import java.time.ZoneId
