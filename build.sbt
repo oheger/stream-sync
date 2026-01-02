@@ -23,7 +23,7 @@ lazy val VersionDisruptor = "4.0.0"
 lazy val VersionLog4j = "2.25.3"
 lazy val VersionPekko = "1.4.0"
 lazy val VersionPekkoHttp = "1.3.0"
-lazy val VersionScala = "3.7.1"
+lazy val VersionScala = "3.7.4"
 lazy val VersionScli = "1.1.0"
 lazy val VersionSprayJson = "1.3.6"
 
