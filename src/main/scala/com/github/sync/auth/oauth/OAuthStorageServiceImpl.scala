@@ -18,9 +18,7 @@ package com.github.sync.auth.oauth
 
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.{OAuthConfig, OAuthTokenData}
-import com.github.cloudfiles.crypt.alg.CryptAlgorithm
-import com.github.cloudfiles.crypt.alg.aes.Aes
-import com.github.cloudfiles.crypt.service.CryptService
+import com.github.sync.auth.SecureStorageService
 import org.apache.pekko.Done
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.stream.IOResult
@@ -29,7 +27,6 @@ import org.apache.pekko.util.ByteString
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import java.nio.file.{Files, Path}
-import java.security.{Key, SecureRandom}
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -88,14 +85,14 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
   private given configProtocol: RootJsonFormat[OAuthConfigModel] = jsonFormat5(OAuthConfigModel.apply)
 
   override def saveIdpConfig(storageConfig: SyncOAuthStorageConfig, config: IDPConfig)
-                            (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
+                            (using ec: ExecutionContext, system: ActorSystem): Future[Done] =
     for
       _ <- saveConfig(storageConfig, config)
       _ <- saveClientSecret(storageConfig, config.oauthConfig.clientSecret)
       _ <- saveTokens(storageConfig, config.oauthConfig.initTokenData)
     yield Done
 
-  override def loadIdpConfig(storageConfig: SyncOAuthStorageConfig)(implicit ec: ExecutionContext, system: ActorSystem):
+  override def loadIdpConfig(storageConfig: SyncOAuthStorageConfig)(using ec: ExecutionContext, system: ActorSystem):
   Future[IDPConfig] = for
     config <- loadConfig(storageConfig)
     secret <- loadClientSecret(storageConfig)
@@ -103,14 +100,12 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
   yield config.copy(oauthConfig = config.oauthConfig.copy(clientSecret = secret, initTokenData = tokens))
 
   override def saveTokens(storageConfig: SyncOAuthStorageConfig, tokens: OAuthTokenData)
-                         (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
+                         (using ec: ExecutionContext, system: ActorSystem): Future[Done] =
     val tokenData = tokens.accessToken + TokenSeparator + tokens.refreshToken
-    val source = cryptSource(Source.single(ByteString(tokenData)), storageConfig.optPassword) { (alg, key, rnd, src) =>
-      CryptService.encryptSource(alg, key, src)(using rnd)
-    }
+    val source = encryptSource(Source.single(ByteString(tokenData)), storageConfig.optPassword)
     saveFile(storageConfig, SuffixTokenFile, source)
 
-  override def removeStorage(storageConfig: SyncOAuthStorageConfig)(implicit ec: ExecutionContext): Future[List[Path]] =
+  override def removeStorage(storageConfig: SyncOAuthStorageConfig)(using ec: ExecutionContext): Future[List[Path]] =
     Future {
       List(SuffixConfigFile, SuffixSecretFile, SuffixTokenFile)
         .map(storageConfig.resolveFileName)
@@ -132,7 +127,7 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
     * @return a ''Future'' with the result of the operation
     */
   private def saveConfig(storageConfig: SyncOAuthStorageConfig, config: IDPConfig)
-                        (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
+                        (using ec: ExecutionContext, system: ActorSystem): Future[Done] =
     val configModel = OAuthConfigModel(
       clientId = config.oauthConfig.clientID,
       authorizationEndpoint = config.authorizationEndpoint,
@@ -154,7 +149,7 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
     * @return a ''Future'' with the (incomplete) ''IDPConfig''
     */
   private def loadConfig(storageConfig: SyncOAuthStorageConfig)
-                        (implicit ec: ExecutionContext, system: ActorSystem): Future[IDPConfig] =
+                        (using ec: ExecutionContext, system: ActorSystem): Future[IDPConfig] =
     loadAndMapFile(storageConfig, SuffixConfigFile) { buf =>
       val jsonAst = buf.utf8String.parseJson
       val configModel = jsonAst.convertTo[OAuthConfigModel]
@@ -184,10 +179,8 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
     * @return a ''Future'' with the result of the operation
     */
   private def saveClientSecret(storageConfig: SyncOAuthStorageConfig, secret: Secret)
-                              (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
-    val source = cryptSource(Source.single(ByteString(secret.secret)), storageConfig.optPassword) { (a, k, rnd, src) =>
-      CryptService.encryptSource(a, k, src)(using rnd)
-    }
+                              (using ec: ExecutionContext, system: ActorSystem): Future[Done] =
+    val source = encryptSource(Source.single(ByteString(secret.secret)), storageConfig.optPassword)
     saveFile(storageConfig, SuffixSecretFile, source)
 
   /**
@@ -200,7 +193,7 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
     * @return a ''Future'' with the client secret
     */
   private def loadClientSecret(storageConfig: SyncOAuthStorageConfig)
-                              (implicit ec: ExecutionContext, system: ActorSystem): Future[Secret] =
+                              (using ec: ExecutionContext, system: ActorSystem): Future[Secret] =
     loadAndMapFile(storageConfig, SuffixSecretFile, storageConfig.optPassword,
       optDefault = Some(UndefinedSecret))(buf => Secret(buf.utf8String))
 
@@ -214,7 +207,7 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
     * @return a ''Future'' with the token information
     */
   private def loadTokens(storageConfig: SyncOAuthStorageConfig)
-                        (implicit ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] =
+                        (using ec: ExecutionContext, system: ActorSystem): Future[OAuthTokenData] =
     loadAndMapFile(storageConfig, SuffixTokenFile, optPwd = storageConfig.optPassword,
       optDefault = Some(UndefinedTokens)) { buf =>
       val parts = buf.utf8String.split(TokenSeparator)
@@ -245,7 +238,7 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
     * @return a ''Future'' indicating the success of this operation
     */
   private def saveFile(storageConfig: SyncOAuthStorageConfig, suffix: String, source: Source[ByteString, Any])
-                      (implicit ec: ExecutionContext, system: ActorSystem): Future[Done] =
+                      (using ec: ExecutionContext, system: ActorSystem): Future[Done] =
     val sink = FileIO.toPath(storageConfig.resolveFileName(suffix))
     source.runWith(sink).map(_ => Done)
 
@@ -267,20 +260,44 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
     */
   private def loadAndMapFile[T](storageConfig: SyncOAuthStorageConfig, suffix: String, optPwd: Option[Secret] = None,
                                 optDefault: Option[T] = None)(f: ByteString => T)
-                               (implicit ec: ExecutionContext, system: ActorSystem): Future[T] =
+                               (using ec: ExecutionContext, system: ActorSystem): Future[T] =
     val path = storageConfig.resolveFileName(suffix)
     if optDefault.isDefined && !Files.isRegularFile(path) then
       Future.successful(optDefault.get)
     else
-      val source = cryptSource(fileSource(path), optPwd) { (alg, key, rnd, src) =>
-        CryptService.decryptSource(alg, key, src)(using rnd)
-      }
+      val source = decryptSource(fileSource(path), optPwd)
       val sink = Sink.fold[ByteString, ByteString](ByteString.empty)(_ ++ _)
       source.runWith(sink).map(f)
 
   /**
+    * Decorates the given source with a transparent encryption based on the
+    * provided secret. If no secret is available, the source is returned as is.
+    *
+    * @param source    the original source
+    * @param optSecret an optional secret for cryptographic operations
+    * @tparam MAT the type of the materialized result of the source
+    * @return the decorated source
+    */
+  private def encryptSource[MAT](source: Source[ByteString, MAT], optSecret: Option[Secret]): Source[ByteString, MAT] =
+    cryptSource(source, optSecret): secret =>
+      SecureStorageService.encryptSource(source, secret)
+
+  /**
+    * Decorates the given source with a transparent decryption based on the
+    * provided secret. If no secret is available, the source is returned as is.
+    *
+    * @param source    the original source
+    * @param optSecret an optional secret for cryptographic operations
+    * @tparam MAT the type of the materialized result of the source
+    * @return the decorated source
+    */
+  private def decryptSource[MAT](source: Source[ByteString, MAT], optSecret: Option[Secret]): Source[ByteString, MAT] =
+    cryptSource(source, optSecret): secret =>
+      SecureStorageService.decryptSource(source, secret)
+
+  /**
     * Applies a cryptographic operation to the given source. Some information
-    * managed by this service is sensitive and hence supports encryption. If a
+    * managed by this service is sensitive; hence, it supports encryption. If a
     * secret for encryption is provided, the original source is decorated with
     * encryption or decryption, depending on the ''cryptFunc'' provided.
     *
@@ -292,8 +309,7 @@ object OAuthStorageServiceImpl extends DefaultJsonProtocol
     * @return the decorated source
     */
   private def cryptSource[Mat](source: Source[ByteString, Mat], optSecret: Option[Secret])
-                              (cryptFunc: (CryptAlgorithm, Key, SecureRandom, Source[ByteString, Mat]) =>
-                                Source[ByteString, Mat]): Source[ByteString, Mat] =
-    optSecret.map { secret =>
-      cryptFunc(Aes, Aes.keyFromString(secret.secret), new SecureRandom, source)
-    } getOrElse source
+                              (cryptFunc: Secret => Source[ByteString, Mat]):
+  Source[ByteString, Mat] =
+    optSecret.fold(source): secret =>
+      cryptFunc(secret)

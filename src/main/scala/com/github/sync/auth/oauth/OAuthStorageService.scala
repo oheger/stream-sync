@@ -49,7 +49,7 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS]:
     * @return a future indicating the success of this operation
     */
   def saveIdpConfig(storageConfig: STORAGE_CONFIG, config: CONFIG)
-                   (implicit ec: ExecutionContext, system: ActorSystem): Future[Done]
+                   (using ec: ExecutionContext, system: ActorSystem): Future[Done]
 
   /**
     * Loads the OAuth configuration defined by the given storage configuration.
@@ -62,7 +62,7 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS]:
     * @return a ''Future'' with the OAuth configuration
     */
   def loadIdpConfig(storageConfig: STORAGE_CONFIG)
-                   (implicit ec: ExecutionContext, system: ActorSystem): Future[CONFIG]
+                   (using ec: ExecutionContext, system: ActorSystem): Future[CONFIG]
 
   /**
     * Saves the given OAuth token data according to the given storage
@@ -76,7 +76,7 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS]:
     * @return a ''Future'' indicating the success of this operation
     */
   def saveTokens(storageConfig: STORAGE_CONFIG, tokens: TOKENS)
-                (implicit ec: ExecutionContext, system: ActorSystem): Future[Done]
+                (using ec: ExecutionContext, system: ActorSystem): Future[Done]
 
   /**
     * Removes all files related to a specific identity provider defined by the
@@ -85,7 +85,7 @@ trait OAuthStorageService[STORAGE_CONFIG, CONFIG, CLIENT_SECRET, TOKENS]:
     * list with the paths that have been removed.
     *
     * @param storageConfig the storage configuration
-    * @param ec            the eecution context
+    * @param ec            the execution context
     * @return a ''Future'' with the paths that have been removed
     */
-  def removeStorage(storageConfig: STORAGE_CONFIG)(implicit ec: ExecutionContext): Future[List[Path]]
+  def removeStorage(storageConfig: STORAGE_CONFIG)(using ec: ExecutionContext): Future[List[Path]]
