@@ -109,7 +109,7 @@ class CredentialsParameterManagerSpec extends AsyncFlatSpec with Matchers with M
         case c: CredentialsParameterManager.ListCommandConfig =>
           c.credentialsFilePath.toString should be(CredentialsFilePath)
           c.secret.secret should be(TestSecret)
-  //case c => fail("Unexpected configuration: " + c)
+        case c => fail("Unexpected configuration: " + c)
 
   it should "report missing mandatory basic options" in :
     val args = Map(ParameterParser.InputParameter.key -> CredentialsParameterManager.CommandListCredentials)
@@ -131,3 +131,34 @@ class CredentialsParameterManagerSpec extends AsyncFlatSpec with Matchers with M
 
     extractCommandConfig(args, reader) map : (config, _) =>
       config.secret.secret should be(TestSecret)
+
+  it should "extract a valid configuration for the add command" in :
+    val CredentialsKey = "my-new-credential"
+    val CredentialsValue = "s3cretVa!lue"
+    val params = createBasicParametersMap(CredentialsParameterManager.CommandAddCredential) +
+      (CredentialsParameterManager.KeyOption -> CredentialsKey) +
+      (CredentialsParameterManager.ValueOption -> CredentialsValue)
+
+    extractCommandConfig(params) map : (config, _) =>
+      config match
+        case c: CredentialsParameterManager.AddCommandConfig =>
+          c.credentialsFilePath.toString should be(CredentialsFilePath)
+          c.secret.secret should be(TestSecret)
+          c.key should be(CredentialsKey)
+          c.value.secret should be(CredentialsValue)
+        case c => fail("Unexpected configuration: " + c)
+
+  it should "read the secret value of a credential from the console if required" in :
+    val CredentialsKey = "my-new-credential"
+    val CredentialsValue = "s3cretVa!lueFromCons0le"
+    val reader = mock[ConsoleReader]
+    when(reader.readOption(CredentialsParameterManager.ValueOption, password = true))
+      .thenReturn(CredentialsValue)
+    val params = createBasicParametersMap(CredentialsParameterManager.CommandAddCredential) +
+      (CredentialsParameterManager.KeyOption -> CredentialsKey)
+
+    extractCommandConfig(params, reader = reader) map : (config, _) =>
+      config match
+        case c: CredentialsParameterManager.AddCommandConfig =>
+          c.value.secret should be(CredentialsValue)
+        case c => fail("Unexpected configuration: " + c)
