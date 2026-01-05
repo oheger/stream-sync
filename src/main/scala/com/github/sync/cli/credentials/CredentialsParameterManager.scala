@@ -33,6 +33,9 @@ object CredentialsParameterManager:
   /** The command to list the credentials in a file. */
   final val CommandListCredentials = "list"
 
+  /** The command to add a credential to a file. */
+  final val CommandAddCredential = "add"
+
   /** The option that defines the location of the credentials file. */
   final val CredentialsFileOption = "credentials-file"
 
@@ -53,6 +56,25 @@ object CredentialsParameterManager:
       |protects the persisted credentials.""".stripMargin
 
   /**
+    * The name of the option that contains the key of a credential which is 
+    * affected by the current command.
+    */
+  final val KeyOption = "key"
+
+  /** Help text for the key option. */
+  final val HelpKeyOption = "The key of the credential affected by this command."
+
+  /**
+    * The name of the option that contains the value of a credential to be
+    * added.
+    */
+  final val ValueOption = "value"
+
+  /** Help text for the value option. */
+  final val HelpValueOption =
+    """The (secret) value of the credential to be added or the new value if a credential is overridden."""
+
+  /**
     * A name to be displayed if there is something wrong with the command.
     * Here a different name is used than for the underlying input option of
     * ''ParameterManager''.
@@ -63,7 +85,11 @@ object CredentialsParameterManager:
   final val HelpCommandOption =
     s"""The command to be executed. This defines the operation to be performed by this \\
        |application. Supported commands are the following (case does not matter):
-       |$CommandListCredentials: Lists the keys of credentials contained in the credentials file.
+       |$CommandListCredentials: 
+       |  Lists the keys of credentials contained in the credentials file.
+       |$CommandAddCredential:
+       |  Adds (or overrides) a credential, specified by its key and value, to the credentials
+       |  file. This command can also be used to create a new file.
        |Pass in a command name without any further options to see the parameters that are \\
        |supported by this specific command.""".stripMargin
 
@@ -101,6 +127,20 @@ object CredentialsParameterManager:
                                      override val secret: Secret) extends CommandConfig
 
   /**
+    * A data class collecting the options supported by the command to add a new
+    * credential to a file.
+    *
+    * @param credentialsFilePath the path to the credentials file
+    * @param secret              the secret to encrypt the file
+    * @param key                 the key of the credential to add
+    * @param value               the value of the new credential
+    */
+  final case class AddCommandConfig(override val credentialsFilePath: Path,
+                                    override val secret: Secret,
+                                    key: String,
+                                    value: Secret) extends CommandConfig
+
+  /**
     * A [[CliExtractor]] for extracting the command passed in the
     * command line. The command determines the actions to be executed. There
     * must be exactly one command.
@@ -120,6 +160,7 @@ object CredentialsParameterManager:
     */
   def commandConfigExtractor: CliExtractor[Try[CommandConfig]] =
     val groupMap = Map(
+      CommandAddCredential -> addConfigExtractor,
       CommandListCredentials -> listConfigExtractor
     )
     val cmdConfExt = conditionalGroupValue(commandExtractor, groupMap)
@@ -153,6 +194,36 @@ object CredentialsParameterManager:
     createRepresentation(triedCredentialsFile, triedSecret)(ListCommandConfig.apply)
 
   /**
+    * Returns the [[CliExtractor]] for the configuration of the "add
+    * credential" command.
+    *
+    * @return the extractor for the config of the add command
+    */
+  private def addConfigExtractor: CliExtractor[Try[AddCommandConfig]] =
+    for
+      path <- credentialsFileExtractor
+      secret <- secretExtractor
+      key <- keyExtractor
+      value <- secretWithConsoleSupportExtractor(ValueOption, HelpValueOption)
+    yield createAddConfig(path, secret, key, value)
+
+  /**
+    * Creates the configuration for the add credential command based on the
+    * given components.
+    *
+    * @param triedCredentialsFile the credentials file component
+    * @param triedSecret          the secret component
+    * @param triedKey             the credential key component
+    * @param triedValue           the credential value component
+    * @return a [[Try]] with the constructed configuration
+    */
+  private def createAddConfig(triedCredentialsFile: Try[Path],
+                              triedSecret: Try[Secret],
+                              triedKey: Try[String],
+                              triedValue: Try[Secret]): Try[AddCommandConfig] =
+    createRepresentation(triedCredentialsFile, triedSecret, triedKey, triedValue)(AddCommandConfig.apply)
+
+  /**
     * Returns the [[CliExtractor]] for the path to the credentials file.
     *
     * @return the extractor for the credentials file path
@@ -169,7 +240,29 @@ object CredentialsParameterManager:
     * @return the extractor for the encryption secret
     */
   private def secretExtractor: CliExtractor[Try[Secret]] =
-    optionValue(SecretOption, help = Some(HelpSecretOption))
-      .fallback(consoleReaderValue(SecretOption, password = true))
+    secretWithConsoleSupportExtractor(SecretOption, HelpSecretOption)
+
+  /**
+    * Returns a [[CliExtractor]] for an option of type [[Secret]] that supports
+    * specifying the secret value either directly or reading it from the
+    * console as fallback.
+    *
+    * @param option the name of the option
+    * @param help   the help text of the option
+    * @return the extractor to obtain the secret value
+    */
+  private def secretWithConsoleSupportExtractor(option: String, help: String): CliExtractor[Try[Secret]] =
+    optionValue(option, help = Some(help))
+      .fallback(consoleReaderValue(option, password = true))
       .map(_.map(optSec => optSec.map(Secret.apply)))
+      .mandatory
+
+  /**
+    * Returns the [[CliExtractor]] for the key of the secret to be manipulated
+    * by the current command.
+    *
+    * @return the extractor for the credential key
+    */
+  private def keyExtractor: CliExtractor[Try[String]] =
+    optionValue(KeyOption, help = Some(HelpKeyOption))
       .mandatory
