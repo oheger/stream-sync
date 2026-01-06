@@ -39,6 +39,9 @@ object CredentialsParameterManager:
   /** The command to query the value of a specific credential. */
   final val CommandGetCredential = "get"
 
+  /** The command to remove a credential from a file. */
+  final val CommandRemoveCredential = "remove"
+
   /** The option that defines the location of the credentials file. */
   final val CredentialsFileOption = "credentials-file"
 
@@ -95,6 +98,8 @@ object CredentialsParameterManager:
        |  file. This command can also be used to create a new file.
        |$CommandGetCredential:
        |  Allows querying the value of a credential identified by its key.
+       |$CommandRemoveCredential:
+       |  Removes a credential from the credentials file identified by its key.
        |Pass in a command name without any further options to see the parameters that are \\
        |supported by this specific command.""".stripMargin
 
@@ -158,6 +163,18 @@ object CredentialsParameterManager:
                                     key: String) extends CommandConfig
 
   /**
+    * A data class collecting the options supported by the command to remove
+    * the value of a specific credential.
+    *
+    * @param credentialsFilePath the path to the credentials file
+    * @param secret              the secret to encrypt the file
+    * @param key                 the key of the credential to add
+    */
+  final case class RemoveCommandConfig(override val credentialsFilePath: Path,
+                                       override val secret: Secret,
+                                       key: String) extends CommandConfig
+
+  /**
     * A [[CliExtractor]] for extracting the command passed in the
     * command line. The command determines the actions to be executed. There
     * must be exactly one command.
@@ -179,7 +196,8 @@ object CredentialsParameterManager:
     val groupMap = Map(
       CommandAddCredential -> addConfigExtractor,
       CommandGetCredential -> getConfigExtractor,
-      CommandListCredentials -> listConfigExtractor
+      CommandListCredentials -> listConfigExtractor,
+      CommandRemoveCredential -> removeConfigExtractor
     )
     val cmdConfExt = conditionalGroupValue(commandExtractor, groupMap)
 
@@ -267,6 +285,33 @@ object CredentialsParameterManager:
                               triedSecret: Try[Secret],
                               triedKey: Try[String]): Try[GetCommandConfig] =
     createRepresentation(triedCredentialsFile, triedSecret, triedKey)(GetCommandConfig.apply)
+
+  /**
+    * Returns the [[CliExtractor]] for the configuration of the "remove
+    * credential" command.
+    *
+    * @return the extractor for the config of the get command
+    */
+  private def removeConfigExtractor: CliExtractor[Try[RemoveCommandConfig]] =
+    for
+      path <- credentialsFileExtractor
+      secret <- secretExtractor
+      key <- keyExtractor
+    yield createRemoveConfig(path, secret, key)
+
+  /**
+    * Creates the configuration for the remove credential command based on the
+    * given components.
+    *
+    * @param triedCredentialsFile the credentials file component
+    * @param triedSecret          the secret component
+    * @param triedKey             the credential key component
+    * @return a [[Try]] with the constructed configuration
+    */
+  private def createRemoveConfig(triedCredentialsFile: Try[Path],
+                                 triedSecret: Try[Secret],
+                                 triedKey: Try[String]): Try[RemoveCommandConfig] =
+    createRepresentation(triedCredentialsFile, triedSecret, triedKey)(RemoveCommandConfig.apply)
 
   /**
     * Returns the [[CliExtractor]] for the path to the credentials file.
