@@ -144,3 +144,35 @@ class CredentialsCommandsImplSpec extends AsyncFlatSpec with Matchers with Mocki
       result should include(CredentialsFilePath.toString)
       result should include(s"'$CredentialKey' was replaced")
       result should include("contains 3 credential(s)")
+
+  it should "print the value of an existing credential" in :
+    val CredentialKey = "existingKey"
+    val CredentialValue = Secret("the-secret-value-of-interest")
+    val existingCredentials = List(
+      CredentialsServiceImpl.CredentialEntry("someKey", Secret("someSecret")),
+      CredentialsServiceImpl.CredentialEntry(CredentialKey, CredentialValue),
+      CredentialsServiceImpl.CredentialEntry("someOtherKey", Secret("someOtherSecret"))
+    )
+    val credentialsService = mock[CredentialsService[CredentialsServiceImpl.CredentialEntry]]
+    when(credentialsService.loadCredentials(CredentialsFilePath, TestSecret))
+      .thenReturn(Future.successful(existingCredentials))
+
+    val commands = new CredentialsCommandsImpl(credentialsService)
+    commands.getCredential(CredentialsFilePath, TestSecret, CredentialKey) map : result =>
+      result should include(CredentialKey)
+      result should include(CredentialValue.secret)
+
+  it should "print a message if the queried key cannot be found" in :
+    val CredentialKey = "nonExistingKey"
+    val existingCredentials = List(
+      CredentialsServiceImpl.CredentialEntry("someKey", Secret("someSecret")),
+      CredentialsServiceImpl.CredentialEntry("someOtherKey", Secret("someOtherSecret"))
+    )
+    val credentialsService = mock[CredentialsService[CredentialsServiceImpl.CredentialEntry]]
+    when(credentialsService.loadCredentials(CredentialsFilePath, TestSecret))
+      .thenReturn(Future.successful(existingCredentials))
+
+    val commands = new CredentialsCommandsImpl(credentialsService)
+    commands.getCredential(CredentialsFilePath, TestSecret, CredentialKey) map : result =>
+      result should include(s"'$CredentialKey' not found")
+      result should include(CredentialsFilePath.toString)
