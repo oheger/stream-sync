@@ -37,10 +37,39 @@ class CredentialsCommandsImpl(credentialsService: CredentialsService[Credentials
   override def listCredentials(credentialsFile: Path, secret: Secret)
                               (using ec: ExecutionContext, system: ActorSystem): Future[String] =
     credentialsService.loadCredentials(credentialsFile, secret).map: credentials =>
-      val out = new StringWriter
-      val writer = new PrintWriter(out)
-      writer.println(s"Credentials from file '$credentialsFile':")
-      writer.println()
-      credentials.map(_.key).sorted.foreach: key =>
-        writer.println(s"- $key")
-      out.toString
+      generateOutput: writer =>
+        writer.println(s"Credentials from file '$credentialsFile':")
+        writer.println()
+        credentials.map(_.key).sorted.foreach: key =>
+          writer.println(s"- $key")
+
+  override def addCredential(credentialsFile: Path,
+                             secret: Secret,
+                             key: String,
+                             value: Secret)
+                            (using ec: ExecutionContext, system: ActorSystem): Future[String] =
+    for
+      oldCredentials <- credentialsService.loadCredentialsOrEmpty(credentialsFile, secret)
+      newCredentials = CredentialsServiceImpl.CredentialEntry(key, value) :: oldCredentials.filterNot(_.key == key)
+      _ <- credentialsService.storeCredentials(credentialsFile, secret, newCredentials)
+    yield
+      generateOutput: writer =>
+        val message = oldCredentials.find(_.key == key) match
+          case Some(_) => s"The value of credential '$key' was replaced."
+          case None => s"Credential '$key' was added."
+        writer.println(message)
+        writer.println(s"File '$credentialsFile' now contains ${newCredentials.size} credential(s).")
+
+  /**
+    * A helper function to generate the output of a command based on a function
+    * that writes to a [[PrintWriter]]. This function captures the text printed
+    * to the writer and returns it.
+    *
+    * @param f the function to generate the output
+    * @return the generated text
+    */
+  private def generateOutput(f: PrintWriter => Unit): String =
+    val out = new StringWriter
+    val writer = new PrintWriter(out)
+    f(writer)
+    out.toString
