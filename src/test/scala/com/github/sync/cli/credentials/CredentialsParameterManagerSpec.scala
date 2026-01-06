@@ -162,3 +162,16 @@ class CredentialsParameterManagerSpec extends AsyncFlatSpec with Matchers with M
         case c: CredentialsParameterManager.AddCommandConfig =>
           c.value.secret should be(CredentialsValue)
         case c => fail("Unexpected configuration: " + c)
+
+  it should "extract a valid configuration for the get command" in :
+    val CredentialKey = "theOneIamInterestedIn"
+    val params = createBasicParametersMap(CredentialsParameterManager.CommandGetCredential) +
+      (CredentialsParameterManager.KeyOption -> CredentialKey)
+
+    extractCommandConfig(params) map : (config, _) =>
+      config match
+        case c: CredentialsParameterManager.GetCommandConfig =>
+          c.credentialsFilePath.toString should be(CredentialsFilePath)
+          c.secret.secret should be(TestSecret)
+          c.key should be(CredentialKey)
+        case c => fail("Unexpected configuration: " + c)
