@@ -175,3 +175,16 @@ class CredentialsParameterManagerSpec extends AsyncFlatSpec with Matchers with M
           c.secret.secret should be(TestSecret)
           c.key should be(CredentialKey)
         case c => fail("Unexpected configuration: " + c)
+
+  it should "extract a valid configuration for the remove command" in :
+    val CredentialKey = "theOneToRemove"
+    val params = createBasicParametersMap(CredentialsParameterManager.CommandRemoveCredential) +
+      (CredentialsParameterManager.KeyOption -> CredentialKey)
+
+    extractCommandConfig(params) map : (config, _) =>
+      config match
+        case c: CredentialsParameterManager.RemoveCommandConfig =>
+          c.credentialsFilePath.toString should be(CredentialsFilePath)
+          c.secret.secret should be(TestSecret)
+          c.key should be(CredentialKey)
+        case c => fail("Unexpected configuration: " + c)
