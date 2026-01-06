@@ -60,6 +60,15 @@ class CredentialsCommandsImpl(credentialsService: CredentialsService[Credentials
         writer.println(message)
         writer.println(s"File '$credentialsFile' now contains ${newCredentials.size} credential(s).")
 
+  override def getCredential(credentialsFile: Path, secret: Secret, key: String)
+                            (using ec: ExecutionContext, system: ActorSystem): Future[String] =
+    credentialsService.loadCredentials(credentialsFile, secret) map : credentials =>
+      generateOutput: writer =>
+        val message = credentials.find(_.key == key).map: entry =>
+          s"$key = ${entry.value.secret}"
+        .getOrElse(s"Key '$key' not found in file '$credentialsFile'.")
+        writer.println(message)
+
   /**
     * A helper function to generate the output of a command based on a function
     * that writes to a [[PrintWriter]]. This function captures the text printed
