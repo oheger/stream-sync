@@ -176,3 +176,39 @@ class CredentialsCommandsImplSpec extends AsyncFlatSpec with Matchers with Mocki
     commands.getCredential(CredentialsFilePath, TestSecret, CredentialKey) map : result =>
       result should include(s"'$CredentialKey' not found")
       result should include(CredentialsFilePath.toString)
+
+  it should "remove an existing credential" in :
+    val CredentialKey = "existingKey"
+    val existingCredentials = List(
+      CredentialsServiceImpl.CredentialEntry("someKey", Secret("someSecret")),
+      CredentialsServiceImpl.CredentialEntry(CredentialKey, Secret("oldValue")),
+      CredentialsServiceImpl.CredentialEntry("someOtherKey", Secret("someOtherSecret"))
+    )
+    val credentialsService = mock[CredentialsService[CredentialsServiceImpl.CredentialEntry]]
+    when(credentialsService.loadCredentials(CredentialsFilePath, TestSecret))
+      .thenReturn(Future.successful(existingCredentials))
+    expectUpdatedCredentials(credentialsService)
+
+    val commands = new CredentialsCommandsImpl(credentialsService)
+    commands.removeCredential(CredentialsFilePath, TestSecret, CredentialKey) map : result =>
+      val updatedCredentials = fetchUpdatedCredentials(credentialsService)
+      updatedCredentials.keySet should contain only("someKey", "someOtherKey")
+      updatedCredentials("someKey") should be("someSecret")
+      result should include(CredentialsFilePath.toString)
+      result should include(s"'$CredentialKey' was removed")
+      result should include("contains 2 credential(s)")
+
+  it should "handle a remove operation for a non-existing credential" in :
+    val CredentialKey = "nonExistingKey"
+    val existingCredentials = List(
+      CredentialsServiceImpl.CredentialEntry("someKey", Secret("someSecret"))
+    )
+    val credentialsService = mock[CredentialsService[CredentialsServiceImpl.CredentialEntry]]
+    when(credentialsService.loadCredentials(CredentialsFilePath, TestSecret))
+      .thenReturn(Future.successful(existingCredentials))
+
+    val commands = new CredentialsCommandsImpl(credentialsService)
+    commands.removeCredential(CredentialsFilePath, TestSecret, CredentialKey) map : result =>
+      result should include(CredentialsFilePath.toString)
+      result should include("contains 1 credential(s)")
+      result should include(s"'$CredentialKey' not found")
