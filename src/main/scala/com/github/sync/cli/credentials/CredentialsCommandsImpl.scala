@@ -69,6 +69,44 @@ class CredentialsCommandsImpl(credentialsService: CredentialsService[Credentials
         .getOrElse(s"Key '$key' not found in file '$credentialsFile'.")
         writer.println(message)
 
+  override def removeCredential(credentialsFile: Path, secret: Secret, key: String)
+                               (using ec: ExecutionContext, system: ActorSystem): Future[String] =
+    for
+      oldCredentials <- credentialsService.loadCredentials(credentialsFile, secret)
+      removed <- removeKeyAndUpdateCredentialFile(credentialsFile, secret, key, oldCredentials)
+    yield
+      generateOutput: writer =>
+        val (message, size) = if removed then
+          (s"Credential '$key' was removed.", oldCredentials.size - 1)
+        else
+          (s"Credential '$key' not found.", oldCredentials.size)
+        writer.println(message)
+        writer.println(s"File '$credentialsFile' now contains $size credential(s).")
+
+  /**
+    * Removes a specific key from credentials data and writes the file again if
+    * the remove operation was successful. The resulting [[Future]] indicates
+    * whether the key was found and removed.
+    *
+    * @param credentialsFile the path to the credentials file
+    * @param secret          the secret to encrypt the file
+    * @param key             the key to be removed
+    * @param credentials     the existing credentials
+    * @param ec              the execution context
+    * @param system          the actor system
+    * @return a [[Future]] with a flag whether the key was removed
+    */
+  private def removeKeyAndUpdateCredentialFile(credentialsFile: Path,
+                                               secret: Secret,
+                                               key: String,
+                                               credentials: List[CredentialsServiceImpl.CredentialEntry])
+                                              (using ec: ExecutionContext, system: ActorSystem): Future[Boolean] =
+    val filteredCredentials = credentials.filterNot(_.key == key)
+    if filteredCredentials.size < credentials.size then
+      credentialsService.storeCredentials(credentialsFile, secret, filteredCredentials).map(_ => true)
+    else
+      Future.successful(false)
+
   /**
     * A helper function to generate the output of a command based on a function
     * that writes to a [[PrintWriter]]. This function captures the text printed
