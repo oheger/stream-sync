@@ -41,9 +41,8 @@ object CliActorSystemLifeCycle:
   final val HelpFileOption =
     """Allows specifying paths to text files that contain additional command line options. \
       |The files must contain one argument per line, empty lines are ignored. The option \
-      |can be repeated to include multiple parameter files. This is useful for instance if \
-      |there are standard arguments (e.g. to define servers) that need to be set for
-      |multiple sync processes.""".stripMargin
+      |can be repeated to include multiple parameter files. This is useful for instance, if \
+      |there are standard arguments that need to be set for typical invocations.""".stripMargin
 
   /**
     * An extractor for the option that references parameter files to be
@@ -52,6 +51,19 @@ object CliActorSystemLifeCycle:
     * help text.
     */
   final val FileExtractor = ParameterExtractor.optionValue(FileOption, Some(HelpFileOption))
+
+  /**
+    * The default help text for the switch to display help information (i.e.
+    * help about help). This text is rather generic, so that it is appropriate
+    * for many command line applications supporting different commands. If an
+    * application has specific requirements, it can provide a customized text.
+    */
+  private val HelpOptionHelp =
+    """Displays a help screen for this application. Note that the content of this help screen \
+      |depends on the parameters passed on the command line. If no command has been entered, \
+      |the usage message lists only the basic parameters that are supported by all commands. \
+      |If a specific command is available, the parameters supported by this command are listed \
+      |as well.""".stripMargin
 
   /**
     * Invokes the ''ParameterManager'' to parse and process the command line
@@ -80,6 +92,21 @@ object CliActorSystemLifeCycle:
       result <- ParameterManager.processCommandLineSpec(processedArgs, spec, parser = parseFunc)
     yield result
     ParameterManager.evaluate(result)
+
+  /**
+    * Returns a [[ParameterFilter]] that is suitable to filter the help options
+    * for a CLI application supporting multiple commands. The filter selects 
+    * the options supported by an entered command.
+    *
+    * @param context          the processing context
+    * @param commandExtractor the application-specific command extractor
+    * @return the [[ParameterFilter]] for filtering options on the help screen
+    */
+  def optionsGroupFilter(context: ProcessingContext, commandExtractor: CliExtractor[Try[String]]): ParameterFilter =
+    import HelpGenerator.*
+    val groupFilter = contextGroupFilterForExtractors(context.parameterContext, List(commandExtractor))
+    andFilter(groupFilter, negate(InputParamsFilterFunc))
+end CliActorSystemLifeCycle
 
 /**
   * A trait that supports managing an actor system and some related objects for
@@ -118,14 +145,20 @@ trait CliActorSystemLifeCycle[C]:
     *
     * @return the managed actor system
     */
-  implicit def actorSystem: ActorSystem = system
+  def actorSystem: ActorSystem = system
+
+  /** The actor system in implicit scope. */
+  given ActorSystem = actorSystem
 
   /**
     * Returns an execution context for concurrent operations.
     *
     * @return an execution context
     */
-  implicit def ec: ExecutionContext = system.dispatcher
+  def ec: ExecutionContext = actorSystem.dispatcher
+
+  /** The execution context in implicit scope. */
+  given ExecutionContext = ec
 
   /**
     * The main ''run()'' method. This method executes the whole logic of the
@@ -200,11 +233,12 @@ trait CliActorSystemLifeCycle[C]:
 
   /**
     * Returns the help text for the switch to request a usage message. So,
-    * this is help about the help option.
+    * this is help about the help option. This implementation returns a default
+    * help text. Applications with specific requirements can override it.
     *
     * @return the help text for the help command line switch
     */
-  protected def helpOptionHelp: String
+  protected def helpOptionHelp: String = HelpOptionHelp
 
   /**
     * Returns a filter function to be applied when generating the help for the
@@ -227,9 +261,8 @@ trait CliActorSystemLifeCycle[C]:
     *         handling
     */
   private def futureWithShutdown(resultFuture: Future[String]): Future[String] =
-    val fallback = resultFuture recover {
-      case ex => errorMessage(ex)
-    } // this is guaranteed to succeed
+    val fallback = resultFuture recover :
+      case ex => errorMessage(ex) // this is guaranteed to succeed
 
     for msg <- fallback
         _ <- Http().shutdownAllConnectionPools()
@@ -254,7 +287,7 @@ trait CliActorSystemLifeCycle[C]:
     * @return a ''StringBuilder'' optionally populated with an error report
     */
   private def generateCliErrorMessage(context: ProcessingContext): StringBuilder =
-    context.optFailureContext map { failureContext =>
+    context.optFailureContext.map: failureContext =>
       import HelpGenerator.*
       val colKey = parameterAliasColumnGenerator()
       val colErr = wrapColumnGenerator(attributeColumnGenerator(AttrErrCause), 70)
@@ -266,7 +299,7 @@ trait CliActorSystemLifeCycle[C]:
         .append(CR)
         .append(CR)
       buf
-    } getOrElse new StringBuilder(4096)
+    .getOrElse(new StringBuilder(4096))
 
   /**
     * Generates a help text with instructions how this application is used. If

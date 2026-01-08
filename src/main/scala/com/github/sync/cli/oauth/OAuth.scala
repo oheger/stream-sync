@@ -39,14 +39,6 @@ import scala.util.Try
   * command.
   */
 object OAuth:
-  /** The help text for the switch to display help information. */
-  private val HelpOptionHelp =
-    """Displays a help screen for the OAuth application. Note that the content of this help screen \
-      |depends on the parameters passed on the command line. If command has been entered, \
-      |the usage message lists only the basic parameters that are supported by all commands. \
-      |If a specific command is available, the parameters supported by this command are listed \
-      |as well.""".stripMargin
-
   /**
     * The main function of this CLI application. Processes the command line and
     * invokes the desired command. If parameter parsing fails, an error message
@@ -56,6 +48,7 @@ object OAuth:
     */
   def main(args: Array[String]): Unit =
     new OAuth(OAuthCommandsImpl).run(args.toIndexedSeq)
+end OAuth
 
 /**
   * The implementation class of the CLI extending [[CliActorSystemLifeCycle]].
@@ -103,10 +96,5 @@ class OAuth(commands: OAuthCommands) extends CliActorSystemLifeCycle[CommandConf
       HelpGenerator.generateInputParamsOverview(processingContext.parameterContext.modelContext).mkString(" ") +
       " [options]"
 
-  override protected def helpOptionHelp: String = OAuth.HelpOptionHelp
-
   override protected def optionsGroupFilter(context: ProcessingContext): ParameterFilter =
-    import HelpGenerator._
-    val groupFilter = contextGroupFilterForExtractors(context.parameterContext,
-      List(OAuthParameterManager.commandExtractor))
-    andFilter(groupFilter, negate(InputParamsFilterFunc))
+    CliActorSystemLifeCycle.optionsGroupFilter(context, OAuthParameterManager.commandExtractor)
