@@ -22,6 +22,7 @@ import com.github.sync.cli.ExtractorTestHelper.{toExtractionContext, toParameter
 import com.github.sync.cli.SyncCliStreamConfig.StreamConfig
 import com.github.sync.stream.Throttle
 import org.apache.pekko.util.Timeout
+import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -77,7 +78,7 @@ object SyncCliStreamConfigSpec:
 /**
   * Test class for ''SyncCliStreamConfig''.
   */
-class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers:
+class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers, OptionValues:
 
   import SyncCliStreamConfigSpec.*
 
@@ -257,3 +258,34 @@ class SyncCliStreamConfigSpec extends AnyFlatSpec, Matchers:
         config.stateImport shouldBe false
       case c => fail("Unexpected configuration class: " + c)
   }
+
+  it should "construct an undefined credentials config per default" in:
+    val config = extractConfig(Map.empty)
+
+    config.credentialsConfig shouldBe empty
+
+  it should "construct a fully defined credentials config" in:
+    val credentialsFile = Paths.get("path", "to", "credentials.crypt")
+    val credentialsSecret = "my-secret-encryption-key"
+    val credentialsPrefix = "c://"
+    val argsMap = Map(
+      SyncCliStreamConfig.CredentialsFileOption -> credentialsFile.toString,
+      SyncCliStreamConfig.CredentialsSecretOption -> credentialsSecret,
+      SyncCliStreamConfig.CredentialsPrefixOption -> credentialsPrefix
+    )
+
+    val credConfig = extractConfig(argsMap).credentialsConfig.value
+
+    credConfig.credentialsFile should be(credentialsFile)
+    credConfig.credentialsSecret.secret should be(credentialsSecret)
+    credConfig.credentialsPrefix should be(credentialsPrefix)
+
+  it should "set the default credentials prefix" in:
+    val argsMap = Map(
+      SyncCliStreamConfig.CredentialsFileOption -> "/some/credentials/file.xyz",
+      SyncCliStreamConfig.CredentialsSecretOption -> "secret"
+    )
+
+    val credConfig = extractConfig(argsMap).credentialsConfig.value
+
+    credConfig.credentialsPrefix should be(SyncCliStreamConfig.DefaultCredentialsPrefix)

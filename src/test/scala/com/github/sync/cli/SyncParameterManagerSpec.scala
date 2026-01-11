@@ -34,7 +34,7 @@ import org.apache.pekko.util.Timeout
 import org.mockito.Mockito.*
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
 import org.scalatestplus.mockito.MockitoSugar
 
 import java.nio.file.Paths
@@ -77,7 +77,7 @@ object SyncParameterManagerSpec:
   */
 class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSystem) with AnyFlatSpecLike
   with BeforeAndAfterAll with BeforeAndAfter with Matchers with FileTestHelper with MockitoSugar
-  with AsyncTestHelper:
+  with AsyncTestHelper with OptionValues:
   def this() = this(ActorSystem("SyncParameterManagerSpec"))
 
   override protected def afterAll(): Unit =
@@ -352,6 +352,20 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
       SyncParameterManager.CryptCacheSizeOption)
   }
 
+  it should "read the password for the credentials file from the console" in :
+    val CredentialsPwd = "cryptCredentials!"
+    val credArgs = Map(
+      SyncCliStreamConfig.CredentialsFileOption -> "/some/credentials.txt"
+    )
+    val argsMap = ArgsMap + (SyncCliStreamConfig.CredentialsFileOption -> List("/some/credentials.txt"))
+    val reader = mock[ConsoleReader]
+    when(reader.readOption(SyncCliStreamConfig.CredentialsSecretOption, password = true))
+      .thenReturn(CredentialsPwd)
+
+    val (config, _) = futureResult(extractSyncConfig(argsMap, consoleReader = reader))
+    val credConfig = config.streamConfig.credentialsConfig.value
+    credConfig.credentialsSecret.secret should be(CredentialsPwd)
+
   "SyncConfig" should "return a normalized instance if the switched flag is set" in {
     val orgCryptConfig = CryptConfig(srcPassword = Some("pwd-src"), srcCryptMode = CryptMode.FilesAndNames,
       dstPassword = Some("pwd-dst"), dstCryptMode = CryptMode.Files, cryptCacheSize = 55)
@@ -360,9 +374,15 @@ class SyncParameterManagerSpec(testSystem: ActorSystem) extends TestKit(testSyst
     val logConfig = LogConfig(logFilePath = Some(Paths.get("log")), errorLogFilePath = Some(Paths.get("err")),
       logLevel = Level.INFO)
     val orgMirrorStreamConfig = MirrorStreamConfig(Some(Paths.get("syncLog")), switched = true)
-    val streamConfig = StreamConfig(dryRun = false, timeout = 1.minute,
+    val streamConfig = StreamConfig(
+      dryRun = false,
+      timeout = 1.minute,
       ignoreTimeDelta = Some(IgnoreTimeDelta(100.seconds)),
-      opsPerUnit = Some(100), throttleUnit = Throttle.TimeUnit.Minute, orgMirrorStreamConfig)
+      opsPerUnit = Some(100),
+      throttleUnit = Throttle.TimeUnit.Minute,
+      modeConfig = orgMirrorStreamConfig,
+      credentialsConfig = None
+    )
     val expStreamConfig = streamConfig.copy(modeConfig = orgMirrorStreamConfig.copy(switched = false))
     val orgConfig = SyncConfig(srcUri = "/src", dstUri = "/dst", srcConfig = mock[StructureSyncConfig],
       dstConfig = mock[StructureSyncConfig], logConfig = logConfig, cryptConfig = orgCryptConfig,
