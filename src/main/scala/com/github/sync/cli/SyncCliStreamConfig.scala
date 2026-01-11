@@ -16,7 +16,8 @@
 
 package com.github.sync.cli
 
-import com.github.scli.ParameterExtractor.{CliExtractor, conditionalGroupValue, constantExtractor, createRepresentation, excludingSwitches, optionValue, switchValue}
+import com.github.cloudfiles.core.http.Secret
+import com.github.scli.ParameterExtractor.{CliExtractor, conditionalGroupValue, conditionalValue, consoleReaderValue, constantExtractor, createRepresentation, excludingSwitches, isDefinedExtractor, optionValue, switchValue}
 import com.github.sync.stream.{IgnoreTimeDelta, Throttle}
 import org.apache.pekko.util.Timeout
 
@@ -124,6 +125,55 @@ object SyncCliStreamConfig:
       |add this flag to the existing one and revert the sync direction.""".stripMargin
 
   /**
+    * Name of the option that defines the path to the file with credentials.
+    * Only if this option is defined, a [[CredentialsConfig]] is constructed,
+    * and credentials management is enabled.
+    */
+  final val CredentialsFileOption = "credentials-file"
+
+  /** Help text for the credentials file option. */
+  final val CredentialsFileOptionHelp =
+    """Defines a path (absolute or relative) to a file storing credentials. If this is specified, \
+      |credentials (such as passwords for accessing source or destination structures) can be obtained \
+      |from this file. All credentials whose value start with a prefix defined by the \
+      |`--credentials-prefix` option are looked up in this file.
+      |""".stripMargin
+
+  /**
+    * Name of the option that defines the secret to decrypt the file storing
+    * credentials. This option must be provided if [[CredentialsFileOption]] is
+    * specified.
+    */
+  final val CredentialsSecretOption = "credentials-secret"
+
+  /** Help text for the credentials secret option. */
+  final val CredentialsSecretOptionHelp =
+    """Specifies the secret to decrypt the file storing secrets as defined by the \
+      |`--credentials-file` option. If such a file is defined, a password must be set as well \
+      |since the file is expected to be encrypted.
+      |""".stripMargin
+
+  /**
+    * Name of the option defining the prefix for credentials. Only credentials
+    * whose values start with this prefix are looked up in the credentials
+    * file.
+    */
+  final val CredentialsPrefixOption = "credentials-prefix"
+
+  /** Help text for the credentials prefix option. */
+  final val CredentialsPrefixOptionHelp =
+    """Allows defining a prefix for credentials that are to be looked up in the credentials file. \
+      |If this kind of credentials management is enabled, options defining passwords can be provided \
+      |in the command line, since they just define the key of the corresponding credential in the \
+      |credentials file. The values need to start with the prefix defined here. This prefix is stripped, \
+      |and the remaining name is interpreted as key in the credentials file. Overriding the default \
+      |value defined for this option is only necessary if there are conflicts with secret values.
+      |""".stripMargin
+
+  /** The default value of the credentials prefix option. */
+  final val DefaultCredentialsPrefix = "credential:"
+
+  /**
     * Name of the option that defines the path where to store local state data
     * for sync streams.
     */
@@ -187,6 +237,26 @@ object SyncCliStreamConfig:
   private val NameHashAlgorithm = "SHA-1"
 
   /**
+    * A configuration class collecting the options related to credentials
+    * management.
+    *
+    * The Sync CLI supports an encrypted credentials storage. It is possible to
+    * obtain the credentials required by the sync process from this storage.
+    * This has the advantage that only the password to decrypt the storage has
+    * to be provided. To fetch a credential from the storage, the value of the
+    * corresponding parameter needs to start with a specific prefix. This can
+    * be a predefined default prefix or a custom one.
+    *
+    * @param credentialsFile   the path to the file storing credentials
+    * @param credentialsSecret the secret to decrypt the credentials file
+    * @param credentialsPrefix the prefix indicating that a secret should be
+    *                          resolved from the credentials file
+    */
+  final case class CredentialsConfig(credentialsFile: Path,
+                                     credentialsSecret: Secret,
+                                     credentialsPrefix: String)
+
+  /**
     * A trait defining a sub-configuration for a stream that depends on the 
     * type of the stream. Concrete subclasses declare options specific to
     * concrete stream types.
@@ -205,7 +275,7 @@ object SyncCliStreamConfig:
                               stateImport: Boolean) extends StreamModeConfig
 
   /**
-    * An data class defining specific parameters for mirror streams.
+    * A data class defining specific parameters for mirror streams.
     *
     * @param syncLogPath an option with the path to a file containing sync
     *                    operations to be executed
@@ -219,21 +289,24 @@ object SyncCliStreamConfig:
     * A configuration class that combines all the properties of the sync
     * stream that are not related to a specific category.
     *
-    * @param dryRun          flag whether only a dry-run should be done
-    * @param timeout         a timeout for sync operations
-    * @param ignoreTimeDelta optional threshold for a time difference between
-    *                        two files that should be ignored
-    * @param opsPerUnit      optional restriction for the number of sync
-    *                        operations per time unit
-    * @param throttleUnit    defines the time unit for throttling
-    * @param modeConfig      the mode-specific config                        
+    * @param dryRun            flag whether only a dry-run should be done
+    * @param timeout           a timeout for sync operations
+    * @param ignoreTimeDelta   optional threshold for a time difference between
+    *                          two files that should be ignored
+    * @param opsPerUnit        optional restriction for the number of sync
+    *                          operations per time unit
+    * @param throttleUnit      defines the time unit for throttling
+    * @param modeConfig        the mode-specific config
+    * @param credentialsConfig an optional configuration to enable credentials
+    *                          management via a credentials storage
     */
   case class StreamConfig(dryRun: Boolean,
                           timeout: Timeout,
                           ignoreTimeDelta: Option[IgnoreTimeDelta],
                           opsPerUnit: Option[Int],
                           throttleUnit: Throttle.TimeUnit,
-                          modeConfig: StreamModeConfig)
+                          modeConfig: StreamModeConfig,
+                          credentialsConfig: Option[CredentialsConfig])
 
   /**
     * Returns an extractor that extracts the parameters related to the stream.
@@ -250,7 +323,8 @@ object SyncCliStreamConfig:
       opsPerUnit <- opsPerUnitExtractor()
       throttleUnit <- throttleTimeUnitExtractor()
       modeConfig <- modeConfigExtractor(defaultStreamName)
-    yield createStreamConfig(dryRun, timeout, timeDelta, opsPerUnit, throttleUnit, modeConfig)
+      credConfig <- credentialsConfigExtractor
+    yield createStreamConfig(dryRun, timeout, timeDelta, opsPerUnit, throttleUnit, modeConfig, credConfig)
 
   /**
     * Generates a (not readable) name for a sync stream based on the URIs for
@@ -344,6 +418,44 @@ object SyncCliStreamConfig:
     conditionalGroupValue(extMode, extMap)
 
   /**
+    * Returns an extractor for an optional [[CredentialsConfig]]. The config is
+    * defined if and only if the option with the path to the credentials file 
+    * is provided.
+    *
+    * @return the extractor for the optional [[CredentialsConfig]]
+    */
+  private def credentialsConfigExtractor: CliExtractor[Try[Option[CredentialsConfig]]] =
+    val extFileDefined = isDefinedExtractor(CredentialsFileOption)
+    val extDefinedConfig = definedCredentialsConfigExtractor.map(_.map(config => Some(config)))
+    val extUndefinedConfig = constantExtractor[Try[Option[CredentialsConfig]]](Success(None))
+    conditionalValue(condExt = extFileDefined, ifExt = extDefinedConfig, elseExt = extUndefinedConfig)
+
+  /**
+    * Returns an extractor that constructs a [[CredentialsConfig]] if the path
+    * to the credentials file is defined. In this case, all mandatory 
+    * properties must be specified.
+    *
+    * @return the extractor for the defined [[CredentialsConfig]]
+    */
+  private def definedCredentialsConfigExtractor: CliExtractor[Try[CredentialsConfig]] =
+    val extCredentialsFile = optionValue(CredentialsFileOption, help = Some(CredentialsFileOptionHelp))
+      .toPath
+      .mandatory
+    val extCredentialSecret = optionValue(CredentialsSecretOption, help = Some(CredentialsSecretOptionHelp))
+      .fallback(consoleReaderValue(CredentialsSecretOption, password = true))
+      .mandatory
+      .map(_.map(Secret.apply))
+    val extCredentialsPrefix = optionValue(CredentialsPrefixOption, help = Some(CredentialsPrefixOptionHelp))
+      .fallbackValue(DefaultCredentialsPrefix)
+      .mandatory
+
+    for
+      file <- extCredentialsFile
+      secret <- extCredentialSecret
+      prefix <- extCredentialsPrefix
+    yield createCredentialsConfig(file, secret, prefix)
+
+  /**
     * Returns an extractor that extracts the configuration of a mirror stream.
     *
     * @return the extractor for the [[MirrorStreamConfig]]
@@ -379,12 +491,13 @@ object SyncCliStreamConfig:
   /**
     * Tries to construct a ''StreamConfig'' object from the passed in components.
     *
-    * @param triedDryRun       the dry-run component
-    * @param triedTimeout      the timeout component
-    * @param triedTimeDelta    the ignore file time delta component
-    * @param triedOpsPerUnit   the ops per unit component
-    * @param triedThrottleUnit the throttle unit component
-    * @param triedModeConfig   the mode config component
+    * @param triedDryRun            the dry-run component
+    * @param triedTimeout           the timeout component
+    * @param triedTimeDelta         the ignore file time delta component
+    * @param triedOpsPerUnit        the ops per unit component
+    * @param triedThrottleUnit      the throttle unit component
+    * @param triedModeConfig        the mode config component
+    * @param triedCredentialsConfig the credentials config component
     * @return a ''Try'' with the ''StreamConfig''
     */
   private def createStreamConfig(triedDryRun: Try[Boolean],
@@ -392,9 +505,16 @@ object SyncCliStreamConfig:
                                  triedTimeDelta: Try[Option[IgnoreTimeDelta]],
                                  triedOpsPerUnit: Try[Option[Int]],
                                  triedThrottleUnit: Try[Throttle.TimeUnit],
-                                 triedModeConfig: Try[StreamModeConfig]): Try[StreamConfig] =
-    createRepresentation(triedDryRun, triedTimeout, triedTimeDelta, triedOpsPerUnit,
-      triedThrottleUnit, triedModeConfig)(StreamConfig.apply)
+                                 triedModeConfig: Try[StreamModeConfig],
+                                 triedCredentialsConfig: Try[Option[CredentialsConfig]]): Try[StreamConfig] =
+    createRepresentation(
+      triedDryRun,
+      triedTimeout,
+      triedTimeDelta,
+      triedOpsPerUnit,
+      triedThrottleUnit,
+      triedModeConfig,
+      triedCredentialsConfig)(StreamConfig.apply)
 
   /**
     * Tries to construct a [[SyncStreamConfig]] object from the passed in
@@ -421,3 +541,17 @@ object SyncCliStreamConfig:
   private def createMirrorStreamConfig(triedSyncLogPath: Try[Option[Path]],
                                        triedSwitched: Try[Boolean]): Try[MirrorStreamConfig] =
     createRepresentation(triedSyncLogPath, triedSwitched)(MirrorStreamConfig.apply)
+
+  /**
+    * Tries to construct a [[CredentialsConfig]] object from the passed in
+    * components.
+    *
+    * @param triedCredentialsFile   the credentials file path component
+    * @param triedCredentialsSecret the credentials secret component
+    * @param triedCredentialsPrefix the credentials prefix component
+    * @return a [[Try]] with the credentials configuration
+    */
+  private def createCredentialsConfig(triedCredentialsFile: Try[Path],
+                                      triedCredentialsSecret: Try[Secret],
+                                      triedCredentialsPrefix: Try[String]): Try[CredentialsConfig] =
+    createRepresentation(triedCredentialsFile, triedCredentialsSecret, triedCredentialsPrefix)(CredentialsConfig.apply)
