@@ -37,7 +37,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 /**
-  * A module providing functions to setup important components required for a
+  * A module providing functions to set up important components required for a
   * sync process.
   *
   * The functions defined here are used to process configuration objects
@@ -72,12 +72,13 @@ object SyncSetup:
     *
     * @param storageService the service to access the OAuth configuration
     * @param system         the actor system
-    * @return the function to setup authentication
+    * @return the function to set up authentication
     */
   def defaultAuthSetupFunc(storageService: SyncOAuthStorageService = OAuthStorageServiceImpl)
-                          (implicit system: ActorSystem[?]): AuthSetupFunc =
-    implicit val classicSystem: classic.ActorSystem = system.toClassic
-    implicit val executionContext: ExecutionContext = system.executionContext
+                          (using system: ActorSystem[?]): AuthSetupFunc =
+    given classic.ActorSystem = system.toClassic
+
+    given ExecutionContext = system.executionContext
 
     (authConfig, killSwitch) =>
       authConfig match
@@ -106,7 +107,7 @@ object SyncSetup:
   private def createTokenRefreshNotificationFunc(storageService: SyncOAuthStorageService,
                                                  storageConfig: SyncOAuthStorageConfig,
                                                  killSwitch: KillSwitch)
-                                                (implicit system: classic.ActorSystem, ec: ExecutionContext):
+                                                (using system: classic.ActorSystem, ec: ExecutionContext):
   TokenRefreshNotificationFunc =
     val refreshFunc: TokenRefreshNotificationFunc =
       case Success(tokens) =>
@@ -123,10 +124,10 @@ object SyncSetup:
     *
     * @param system the actor system
     * @param ec     the execution context
-    * @return the function to setup a protocol factory
+    * @return the function to set up a protocol factory
     */
-  def defaultProtocolFactorySetupFunc(implicit system: ActorSystem[?], ec: ExecutionContext):
-  ProtocolFactorySetupFunc = (structConfig, syncConfig, senderConfig, spawner) => {
+  def defaultProtocolFactorySetupFunc(using system: ActorSystem[?], ec: ExecutionContext):
+  ProtocolFactorySetupFunc = (structConfig, syncConfig, senderConfig, spawner) =>
     val syncTimeout = syncConfig.streamConfig.timeout
     structConfig match
       case fsConfig: FsStructureConfig =>
@@ -137,4 +138,3 @@ object SyncSetup:
         new OneDriveProtocolFactory(oneConfig, senderConfig, syncTimeout, spawner)
       case googleConfig: GoogleDriveStructureConfig =>
         new GoogleDriveProtocolFactory(googleConfig, senderConfig, syncTimeout, spawner)
-  }

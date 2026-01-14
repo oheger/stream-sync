@@ -75,19 +75,15 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     * interactions with the storage service.
     *
     * @param system the typed actor system
-    * @return the classic actor system
     */
-  private implicit def classicActorSystem(implicit system: ActorSystem[?]): classic.ActorSystem =
-    system.toClassic
+  private given classicActorSystem(using system: ActorSystem[?]): classic.ActorSystem = system.toClassic
 
   /**
     * Returns the execution context in implicit scope.
     *
     * @param system the actor system
-    * @return the execution context
     */
-  private implicit def executionContext(implicit system: ActorSystem[?]): ExecutionContext =
-    system.executionContext
+  private given executionContext(using system: ActorSystem[?]): ExecutionContext = system.executionContext
 
   /**
     * Convenience function to create a mock storage service.
@@ -97,15 +93,14 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
   private def createStorageService(): OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] =
     mock[OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
 
-  "AuthFactory" should "convert a SyncNoAuth config" in {
+  "AuthFactory" should "convert a SyncNoAuth config" in:
     val storageService = createStorageService()
     val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
 
     futureResult(authFunc(SyncNoAuth, mock[KillSwitch])) should be(NoAuthConfig)
     verifyNoInteractions(storageService)
-  }
 
-  it should "convert a SyncBasicAuth config" in {
+  it should "convert a SyncBasicAuth config" in:
     val storageService = createStorageService()
     val syncConfig = SyncBasicAuthConfig("test-user", Secret("theSecretPassword"))
     val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
@@ -113,7 +108,6 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     val authConfig = futureResult(authFunc(syncConfig, mock[KillSwitch]))
     authConfig should be(BasicAuthConfig(syncConfig.user, syncConfig.password))
     verifyNoInteractions(storageService)
-  }
 
   /**
     * Creates a test IDP configuration.
@@ -138,7 +132,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
       case authConfig: OAuthConfig => authConfig
       case c => fail("Unexpected result: " + c)
 
-  it should "convert a SyncOAuth config" in {
+  it should "convert a SyncOAuth config" in:
     val storageService = createStorageService()
     val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", None)
     val idpConfig = createIDPConfig()
@@ -148,9 +142,8 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     val authConfig = expectOAuthConfig(authFunc(storageConfig, mock[KillSwitch]))
     authConfig.copy(refreshNotificationFunc =
       idpConfig.oauthConfig.refreshNotificationFunc) should be(idpConfig.oauthConfig)
-  }
 
-  it should "provide an OAuth refresh notification func that saves updated tokens" in {
+  it should "provide an OAuth refresh notification func that saves updated tokens" in:
     val storageService = createStorageService()
     val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", Some(Secret("crypt")))
     val idpConfig = createIDPConfig()
@@ -163,9 +156,8 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     authConfig.refreshNotificationFunc(Success(newTokens))
     verify(storageService).saveTokens(storageConfig, newTokens)
     verifyNoInteractions(killSwitch)
-  }
 
-  it should "provide an OAuth refresh notification func that triggers the kill switch on errors" in {
+  it should "provide an OAuth refresh notification func that triggers the kill switch on errors" in:
     val storageService = createStorageService()
     val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", Some(Secret("crypt")))
     val idpConfig = createIDPConfig()
@@ -178,9 +170,8 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     authConfig.refreshNotificationFunc(Failure(exception))
     verify(storageService, never()).saveTokens(any(), any())(using any(), any())
     verify(killSwitch).abort(exception)
-  }
 
-  it should "provide a setup function that creates a local sync protocol" in {
+  it should "provide a setup function that creates a local sync protocol" in:
     val structConfig = FsStructureConfig(Some(ZoneId.of("Z")))
     val spawner = mock[Spawner]
 
@@ -190,9 +181,8 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
         f.timeout should be(SyncTimeout)
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
-  }
 
-  it should "provide a setup function that creates a WebDav sync protocol" in {
+  it should "provide a setup function that creates a WebDav sync protocol" in:
     val structConfig = DavStructureConfig(optLastModifiedProperty = Some("changed"),
       optLastModifiedNamespace = Some("my-ns"), deleteBeforeOverride = false)
     val spawner = mock[Spawner]
@@ -203,9 +193,8 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
         f.timeout should be(SyncTimeout)
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
-  }
 
-  it should "provide a setup function that creates a OneDrive sync protocol" in {
+  it should "provide a setup function that creates a OneDrive sync protocol" in:
     val structConfig = OneDriveStructureConfig(syncPath = "/my/data", optUploadChunkSizeMB = None,
       optServerUri = None)
     val spawner = mock[Spawner]
@@ -216,9 +205,8 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
         f.timeout should be(SyncTimeout)
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
-  }
 
-  it should "provide a setup function that creates a GoogleDrive sync protocol" in {
+  it should "provide a setup function that creates a GoogleDrive sync protocol" in:
     val structConfig = GoogleDriveStructureConfig(optServerUri = Some("https://google-drive.example.org"))
     val spawner = mock[Spawner]
 
@@ -228,4 +216,3 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
         f.timeout should be(SyncTimeout)
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
-  }
