@@ -139,3 +139,16 @@ class CredentialsResolverSpec(testSystem: ActorSystem) extends TestKit(testSyste
       resolverFunc(TestCredentialWithPrefix)
     .map: exception =>
       exception should be(loaderException)
+
+  "toSecretResolver" should "resolve secrets" in :
+    val secretResolverFunc = CredentialsResolver.toSecretResolver(fetchInitializedResolverFunc())
+
+    secretResolverFunc(Secret(TestCredentialWithPrefix)) map : resolved =>
+      resolved.secret should be(TestCredentialValue)
+
+  it should "return the original secret if the prefix is not matching" in :
+    val secretToResolve = Secret(TestCredential)
+    val secretResolverFunc = CredentialsResolver.toSecretResolver(fetchInitializedResolverFunc())
+
+    secretResolverFunc(secretToResolve) map : resolved =>
+      resolved should be(secretToResolve)
