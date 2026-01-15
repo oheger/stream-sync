@@ -16,6 +16,7 @@
 
 package com.github.sync.cli
 
+import com.github.cloudfiles.core.http.Secret
 import com.github.sync.auth.{CredentialsService, CredentialsServiceImpl}
 import com.github.sync.cli.SyncCliStreamConfig.CredentialsConfig
 import org.apache.pekko.actor.ActorSystem
@@ -53,6 +54,13 @@ object CredentialsResolver:
   type ResolverFunc = String => Future[String]
 
   /**
+    * A function type that is similar to [[ResolverFunc]], but operates on
+    * [[Secret]] objects. This can be more convenient for some use cases that
+    * already deal with secrets.
+    */
+  type SecretResolverFunc = Secret => Future[Secret]
+
+  /**
     * A special exception class to report a credential that cannot be resolved
     * via the current credential storage.
     *
@@ -76,6 +84,21 @@ object CredentialsResolver:
                      credentialsService: => CredentialsLoader = CredentialsServiceImpl)
                     (using ec: ExecutionContext, system: ActorSystem): ResolverFunc =
     credentialsConfig.map(credentialStorageResolver(_, credentialsService)).getOrElse(dummyResolver)
+
+  /**
+    * Returns a [[SecretResolverFunc]] that is implemented on top of the given
+    * [[ResolverFunc]]. This function handles the conversion between [[Secret]]
+    * objects and plain strings transparently.
+    *
+    * @param resolverFunc the underlying [[ResolverFunc]]
+    * @param ec           the execution context
+    * @return the [[SecretResolverFunc]] on top of this function
+    */
+  def toSecretResolver(resolverFunc: ResolverFunc)(using ec: ExecutionContext): SecretResolverFunc =
+    secret =>
+      resolverFunc(secret.secret).map: resolvedValue =>
+        if resolvedValue == secret.secret then secret
+        else Secret(resolvedValue)
 
   /**
     * A dummy resolver function that returns the passed in credential
