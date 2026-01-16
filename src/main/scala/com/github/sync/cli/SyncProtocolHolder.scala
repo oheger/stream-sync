@@ -37,20 +37,23 @@ object SyncProtocolHolder:
   /**
     * A factory function for creating a [[SyncProtocolHolder]] instance with
     * the protocols to use for the current sync process. This function
-    * evaluates the configuration objects provided an creates suitable protocol
+    * evaluates the configuration objects provided and creates suitable protocol
     * objects for them. With these, a new holder instance is created.
     *
     * @param syncConfig        the config for the sync process
     * @param spawner           the spawner
+    * @param resolverFunc      the function to resolve credentials
     * @param authSetupFunc     the function to set up authentication
     * @param protocolSetupFunc the function to set up the protocol factory
     * @param system            the actor system
+    * @param ec                the execution context
     * @return a ''Future'' with the resulting ''SyncProtocolHolder''
     */
-  def apply(syncConfig: SyncConfig, spawner: Spawner)(authSetupFunc: AuthSetupFunc)
+  def apply(syncConfig: SyncConfig, spawner: Spawner)
+           (resolverFunc: CredentialsResolver.ResolverFunc)
+           (authSetupFunc: AuthSetupFunc)
            (protocolSetupFunc: ProtocolFactorySetupFunc)
-           (implicit system: ActorSystem[?]): Future[SyncProtocolHolder] =
-    implicit val ec: ExecutionContext = system.executionContext
+           (using system: ActorSystem[?], ec: ExecutionContext): Future[SyncProtocolHolder] =
     val killSwitch = KillSwitches.shared("oauth-token-refresh")
     val futSenderConfigSrc = createHttpSenderConfig(authSetupFunc, syncConfig.srcConfig, killSwitch)
     val futSenderConfigDst = createHttpSenderConfig(authSetupFunc, syncConfig.dstConfig, killSwitch)

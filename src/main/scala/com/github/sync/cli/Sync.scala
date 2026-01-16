@@ -89,17 +89,22 @@ object Sync:
     * number of successful sync operations.
     *
     * @param config            the sync configuration
-    * @param authSetupFunc     the function to setup authentication
-    * @param protocolSetupFunc the function to setup the protocol factories
+    * @param resolverFunc      the function to resolve credentials
+    * @param authSetupFunc     the function to set up authentication
+    * @param protocolSetupFunc the function to set up the protocol factories
     * @param system            the actor system
     * @param ec                the execution context
     * @return a future with information about the result of the process
     */
-  def syncProcess(config: SyncConfig)(authSetupFunc: AuthSetupFunc)(protocolSetupFunc: ProtocolFactorySetupFunc)
-                 (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] =
+  def syncProcess(config: SyncConfig)
+                 (resolverFunc: CredentialsResolver.ResolverFunc)
+                 (authSetupFunc: AuthSetupFunc)
+                 (protocolSetupFunc: ProtocolFactorySetupFunc)
+                 (using system: ActorSystem, ec: ExecutionContext): Future[SyncResult] =
     val spawner: Spawner = system
     for
-      holder <- SyncProtocolHolder(config, spawner)(authSetupFunc)(protocolSetupFunc)(using system.toTyped)
+      holder <- SyncProtocolHolder(config,
+        spawner)(resolverFunc)(authSetupFunc)(protocolSetupFunc)(using system.toTyped)
       result <- runSync(config, spawner, holder)
     yield result
 
@@ -418,16 +423,19 @@ object Sync:
     * with a corresponding error message.
     *
     * @param config            the sync configuration
-    * @param authSetupFunc     the function to setup authentication
-    * @param protocolSetupFunc the function to setup protocol factories
+    * @param resolverFunc      the function to resolve credentials
+    * @param authSetupFunc     the function to set up authentication
+    * @param protocolSetupFunc the function to set up protocol factories
     * @param system            the actor system
     * @param ec                the execution context
     * @return a ''Future'' with a result message
     */
-  private def syncWithResultMessage(config: SyncConfig)(authSetupFunc: AuthSetupFunc)
+  private def syncWithResultMessage(config: SyncConfig)
+                                   (resolverFunc: CredentialsResolver.ResolverFunc)
+                                   (authSetupFunc: AuthSetupFunc)
                                    (protocolSetupFunc: ProtocolFactorySetupFunc)
-                                   (implicit system: ActorSystem, ec: ExecutionContext): Future[String] =
-    syncProcess(config)(authSetupFunc)(protocolSetupFunc)
+                                   (using system: ActorSystem, ec: ExecutionContext): Future[String] =
+    syncProcess(config)(resolverFunc)(authSetupFunc)(protocolSetupFunc)
       .map(res => processedMessage(res.totalOperations, res.successfulOperations))
 
 /**
@@ -462,5 +470,5 @@ class Sync extends CliActorSystemLifeCycle[SyncConfig]:
     */
   override protected[cli] def runApp(config: SyncConfig): Future[String] =
     implicit val typedActorSystem: typed.ActorSystem[?] = actorSystem.toTyped
-    // TODO: Set a correct resolver function.
-    Sync.syncWithResultMessage(config)(SyncSetup.defaultAuthSetupFunc(null))(SyncSetup.defaultProtocolFactorySetupFunc)
+    // TODO: Set correct resolver functions.
+    Sync.syncWithResultMessage(config)(null)(SyncSetup.defaultAuthSetupFunc(null))(SyncSetup.defaultProtocolFactorySetupFunc)
