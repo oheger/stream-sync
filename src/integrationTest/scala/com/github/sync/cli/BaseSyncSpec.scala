@@ -187,7 +187,8 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
         Future.failed(new AssertionError("Could not parse command line."))
       case Right(value) =>
         implicit val typedActorSystem: typed.ActorSystem[Nothing] = system.toTyped
-        val authSetupFunc = SyncSetup.defaultAuthSetupFunc()
+        val resolverFunc: CredentialsResolver.SecretResolverFunc = c => Future.successful(c)
+        val authSetupFunc = SyncSetup.defaultAuthSetupFunc(resolverFunc)
         val protocolSetupFunc = optProtocolSetupFunc getOrElse SyncSetup.defaultProtocolFactorySetupFunc
         Sync.syncProcess(value)(authSetupFunc)(protocolSetupFunc)
 

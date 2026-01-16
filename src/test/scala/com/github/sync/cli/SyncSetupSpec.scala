@@ -19,8 +19,7 @@ package com.github.sync.cli
 import com.github.cloudfiles.core.http.Secret
 import com.github.cloudfiles.core.http.auth.*
 import com.github.cloudfiles.core.http.factory.{HttpRequestSenderConfig, Spawner}
-import com.github.sync.AsyncTestHelper
-import com.github.sync.auth.oauth.{IDPConfig, OAuthStorageService, SyncBasicAuthConfig, SyncNoAuth, SyncOAuthStorageConfig}
+import com.github.sync.auth.oauth.*
 import com.github.sync.cli.SyncCliStreamConfig.{MirrorStreamConfig, StreamConfig}
 import com.github.sync.cli.SyncParameterManager.{LogConfig, SyncConfig}
 import com.github.sync.protocol.config.{DavStructureConfig, FsStructureConfig, GoogleDriveStructureConfig, OneDriveStructureConfig}
@@ -38,7 +37,7 @@ import org.apache.pekko.stream.KillSwitch
 import org.apache.pekko.util.Timeout
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{never, verify, verifyNoInteractions, when}
-import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.flatspec.AsyncFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
@@ -54,19 +53,48 @@ object SyncSetupSpec:
   private val SyncTimeout = Timeout(2.minutes)
 
   /** A test sync configuration. */
-  private val TestSyncConfig = SyncConfig(srcUri = "someSrcUri", dstUri = "someDstUri", srcConfig = null,
-    dstConfig = null, logConfig = LogConfig(None, None, Level.DEBUG), cryptConfig = null,
-    streamConfig = StreamConfig(false, SyncTimeout, None, None, Throttle.TimeUnit.Second,
-      MirrorStreamConfig(None, switched = false), None), filterData = null)
+  private val TestSyncConfig = SyncConfig(
+    srcUri = "someSrcUri",
+    dstUri = "someDstUri",
+    srcConfig = null,
+    dstConfig = null,
+    logConfig = LogConfig(None, None, Level.DEBUG),
+    cryptConfig = null,
+    streamConfig = StreamConfig(
+      dryRun = false,
+      timeout = SyncTimeout,
+      ignoreTimeDelta = None,
+      opsPerUnit = None,
+      throttleUnit = Throttle.TimeUnit.Second,
+      modeConfig = MirrorStreamConfig(None, switched = false),
+      credentialsConfig = None
+    ),
+    filterData = null
+  )
 
   /** A test configuration for HTTP actors. */
   private val TestSenderConfig = HttpRequestSenderConfig(actorName = Some("testActor"))
 
+  /**
+    * Returns a function to resolve credentials that obtains its data from the
+    * passed in map. If the passed in credential is found in the map, the
+    * associated value is returned; otherwise, result is the credential without
+    * any changes.
+    *
+    * @param credentials the map with credentials
+    * @return the test credentials resolver function
+    */
+  private def credentialsResolverFunc(credentials: Map[Secret, Secret] = Map.empty):
+  CredentialsResolver.SecretResolverFunc =
+    credential =>
+      val resolved = credentials.getOrElse(credential, credential)
+      Future.successful(resolved)
+end SyncSetupSpec
+
 /**
   * Test class for ''SyncSetup''.
   */
-class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with Matchers with MockitoSugar
-  with AsyncTestHelper:
+class SyncSetupSpec extends ScalaTestWithActorTestKit with AsyncFlatSpecLike with Matchers with MockitoSugar:
 
   import SyncSetupSpec.*
 
@@ -93,21 +121,34 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
   private def createStorageService(): OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData] =
     mock[OAuthStorageService[SyncOAuthStorageConfig, IDPConfig, Secret, OAuthTokenData]]
 
-  "AuthFactory" should "convert a SyncNoAuth config" in:
+  "SyncSetup" should "convert a SyncNoAuth config" in :
     val storageService = createStorageService()
-    val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
+    val authFunc = SyncSetup.defaultAuthSetupFunc(credentialsResolverFunc(), storageService)
 
-    futureResult(authFunc(SyncNoAuth, mock[KillSwitch])) should be(NoAuthConfig)
-    verifyNoInteractions(storageService)
+    authFunc(SyncNoAuth, mock[KillSwitch]) map: authConfig =>
+      verifyNoInteractions(storageService)
+      authConfig should be(NoAuthConfig)
 
-  it should "convert a SyncBasicAuth config" in:
+  it should "convert a SyncBasicAuth config" in :
     val storageService = createStorageService()
     val syncConfig = SyncBasicAuthConfig("test-user", Secret("theSecretPassword"))
-    val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
+    val authFunc = SyncSetup.defaultAuthSetupFunc(credentialsResolverFunc(), storageService)
 
-    val authConfig = futureResult(authFunc(syncConfig, mock[KillSwitch]))
-    authConfig should be(BasicAuthConfig(syncConfig.user, syncConfig.password))
-    verifyNoInteractions(storageService)
+    authFunc(syncConfig, mock[KillSwitch]) map: authConfig =>
+      verifyNoInteractions(storageService)
+      authConfig should be(BasicAuthConfig(syncConfig.user, syncConfig.password))
+
+  it should "resolve the password credential for a SyncBasicAuth config" in :
+    val PasswordCredential = Secret("mySpecialPassword")
+    val PasswordSecret = Secret("YouCan'tGuessIt!")
+    val credentials = Map(PasswordCredential -> PasswordSecret)
+    val storageService = createStorageService()
+    val syncConfig = SyncBasicAuthConfig("test-user", PasswordCredential)
+
+    val authFunc = SyncSetup.defaultAuthSetupFunc(credentialsResolverFunc(credentials), storageService)
+    authFunc(syncConfig, mock[KillSwitch]) map: authConfig =>
+      verifyNoInteractions(storageService)
+      authConfig should be(BasicAuthConfig(syncConfig.user, PasswordSecret))
 
   /**
     * Creates a test IDP configuration.
@@ -115,9 +156,13 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     * @return the test configuration
     */
   private def createIDPConfig(): IDPConfig =
-    val oauthConfig = OAuthConfig(tokenEndpoint = "someTokenEndpoint", clientID = "someClientID",
-      redirectUri = "someRedirectURI", clientSecret = Secret("someSecret"),
-      initTokenData = OAuthTokenData("someAccessToken", "someRefreshToken"))
+    val oauthConfig = OAuthConfig(
+      tokenEndpoint = "someTokenEndpoint",
+      clientID = "someClientID",
+      redirectUri = "someRedirectURI",
+      clientSecret = Secret("someSecret"),
+      initTokenData = OAuthTokenData("someAccessToken", "someRefreshToken")
+    )
     val idpConfig = IDPConfig(oauthConfig, "someAuthorizationEndpoint", "someScope")
     idpConfig
 
@@ -127,51 +172,74 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
     * @param factoryResult the factory result
     * @return the extracted OAuth configuration
     */
-  private def expectOAuthConfig(factoryResult: Future[AuthConfig]): OAuthConfig =
-    futureResult(factoryResult) match
+  private def expectOAuthConfig(factoryResult: Future[AuthConfig]): Future[OAuthConfig] =
+    factoryResult map:
       case authConfig: OAuthConfig => authConfig
       case c => fail("Unexpected result: " + c)
 
-  it should "convert a SyncOAuth config" in:
+  it should "convert a SyncOAuth config" in :
     val storageService = createStorageService()
     val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", None)
     val idpConfig = createIDPConfig()
     when(storageService.loadIdpConfig(storageConfig)).thenReturn(Future.successful(idpConfig))
-    val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
+    val authFunc = SyncSetup.defaultAuthSetupFunc(credentialsResolverFunc(), storageService)
 
-    val authConfig = expectOAuthConfig(authFunc(storageConfig, mock[KillSwitch]))
-    authConfig.copy(refreshNotificationFunc =
-      idpConfig.oauthConfig.refreshNotificationFunc) should be(idpConfig.oauthConfig)
+    expectOAuthConfig(authFunc(storageConfig, mock[KillSwitch])) map: authConfig =>
+      authConfig.copy(refreshNotificationFunc =
+        idpConfig.oauthConfig.refreshNotificationFunc) should be(idpConfig.oauthConfig)
 
-  it should "provide an OAuth refresh notification func that saves updated tokens" in:
+  it should "provide an OAuth refresh notification func that saves updated tokens" in :
+    val idpSecret = Secret("crypt")
+    val credentialsMap = Map(idpSecret -> idpSecret)
     val storageService = createStorageService()
-    val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", Some(Secret("crypt")))
+    val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", Some(idpSecret))
     val idpConfig = createIDPConfig()
     val killSwitch = mock[KillSwitch]
     when(storageService.loadIdpConfig(storageConfig)).thenReturn(Future.successful(idpConfig))
-    val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
+    val authFunc = SyncSetup.defaultAuthSetupFunc(credentialsResolverFunc(credentialsMap), storageService)
 
-    val authConfig = expectOAuthConfig(authFunc(storageConfig, killSwitch))
-    val newTokens = OAuthTokenData("refreshedAccessToken", "refreshToken")
-    authConfig.refreshNotificationFunc(Success(newTokens))
-    verify(storageService).saveTokens(storageConfig, newTokens)
-    verifyNoInteractions(killSwitch)
+    expectOAuthConfig(authFunc(storageConfig, killSwitch)) map: authConfig =>
+      val newTokens = OAuthTokenData("refreshedAccessToken", "refreshToken")
+      authConfig.refreshNotificationFunc(Success(newTokens))
+      verify(storageService).saveTokens(storageConfig, newTokens)
+      verifyNoInteractions(killSwitch)
+      succeed
 
-  it should "provide an OAuth refresh notification func that triggers the kill switch on errors" in:
+  it should "provide an OAuth refresh notification func that triggers the kill switch on errors" in :
     val storageService = createStorageService()
-    val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", Some(Secret("crypt")))
+    val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", None)
     val idpConfig = createIDPConfig()
     val killSwitch = mock[KillSwitch]
     when(storageService.loadIdpConfig(storageConfig)).thenReturn(Future.successful(idpConfig))
     val exception = new IOException("Test Exception: No tokens.")
-    val authFunc = SyncSetup.defaultAuthSetupFunc(storageService)
+    val authFunc = SyncSetup.defaultAuthSetupFunc(credentialsResolverFunc(), storageService)
 
-    val authConfig = expectOAuthConfig(authFunc(storageConfig, killSwitch))
-    authConfig.refreshNotificationFunc(Failure(exception))
-    verify(storageService, never()).saveTokens(any(), any())(using any(), any())
-    verify(killSwitch).abort(exception)
+    expectOAuthConfig(authFunc(storageConfig, killSwitch)) map: authConfig =>
+      authConfig.refreshNotificationFunc(Failure(exception))
+      verify(storageService, never()).saveTokens(any(), any())(using any(), any())
+      verify(killSwitch).abort(exception)
+      succeed
 
-  it should "provide a setup function that creates a local sync protocol" in:
+  it should "resolve the secret of the OAuth storage config" in :
+    val idpSecret = Secret("crypt")
+    val resolvedIdpSecret = Secret("crypt_resolved")
+    val credentialsMap = Map(idpSecret -> resolvedIdpSecret)
+    val storageService = createStorageService()
+    val storageConfig = SyncOAuthStorageConfig(Paths.get("/etc/oauth"), "my-idp", Some(idpSecret))
+    val resolvedStorageConfig = storageConfig.copy(optPassword = Some(resolvedIdpSecret))
+    val idpConfig = createIDPConfig()
+    val killSwitch = mock[KillSwitch]
+    when(storageService.loadIdpConfig(resolvedStorageConfig)).thenReturn(Future.successful(idpConfig))
+    val authFunc = SyncSetup.defaultAuthSetupFunc(credentialsResolverFunc(credentialsMap), storageService)
+
+    expectOAuthConfig(authFunc(storageConfig, killSwitch)) map: authConfig =>
+      val newTokens = OAuthTokenData("refreshedAccessToken", "refreshToken")
+      authConfig.refreshNotificationFunc(Success(newTokens))
+      verify(storageService).saveTokens(resolvedStorageConfig, newTokens)
+      verifyNoInteractions(killSwitch)
+      succeed
+
+  it should "provide a setup function that creates a local sync protocol" in :
     val structConfig = FsStructureConfig(Some(ZoneId.of("Z")))
     val spawner = mock[Spawner]
 
@@ -182,7 +250,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
 
-  it should "provide a setup function that creates a WebDav sync protocol" in:
+  it should "provide a setup function that creates a WebDav sync protocol" in :
     val structConfig = DavStructureConfig(optLastModifiedProperty = Some("changed"),
       optLastModifiedNamespace = Some("my-ns"), deleteBeforeOverride = false)
     val spawner = mock[Spawner]
@@ -194,7 +262,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
 
-  it should "provide a setup function that creates a OneDrive sync protocol" in:
+  it should "provide a setup function that creates a OneDrive sync protocol" in :
     val structConfig = OneDriveStructureConfig(syncPath = "/my/data", optUploadChunkSizeMB = None,
       optServerUri = None)
     val spawner = mock[Spawner]
@@ -206,7 +274,7 @@ class SyncSetupSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike with 
         f.httpSenderConfig should be(TestSenderConfig)
       case o => fail("Unexpected protocol factory: " + o)
 
-  it should "provide a setup function that creates a GoogleDrive sync protocol" in:
+  it should "provide a setup function that creates a GoogleDrive sync protocol" in :
     val structConfig = GoogleDriveStructureConfig(optServerUri = Some("https://google-drive.example.org"))
     val spawner = mock[Spawner]
 
