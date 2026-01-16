@@ -70,11 +70,13 @@ object SyncSetup:
     * uses a [[SyncOAuthStorageService]] to load OAuth-related configuration if
     * necessary.
     *
+    * @param resolverFunc   the function to resolve credentials
     * @param storageService the service to access the OAuth configuration
     * @param system         the actor system
     * @return the function to set up authentication
     */
-  def defaultAuthSetupFunc(storageService: SyncOAuthStorageService = OAuthStorageServiceImpl)
+  def defaultAuthSetupFunc(resolverFunc: CredentialsResolver.SecretResolverFunc,
+                           storageService: SyncOAuthStorageService = OAuthStorageServiceImpl)
                           (using system: ActorSystem[?]): AuthSetupFunc =
     given classic.ActorSystem = system.toClassic
 
@@ -83,10 +85,16 @@ object SyncSetup:
     (authConfig, killSwitch) =>
       authConfig match
         case SyncBasicAuthConfig(user, password) =>
-          Future.successful(BasicAuthConfig(user, password))
+          resolverFunc(password) map : pwdCredential =>
+            BasicAuthConfig(user, pwdCredential)
         case storageConfig: SyncOAuthStorageConfig =>
-          val refreshFunc = createTokenRefreshNotificationFunc(storageService, storageConfig, killSwitch)
-          storageService.loadIdpConfig(storageConfig) map (_.oauthConfig.copy(refreshNotificationFunc = refreshFunc))
+          val futResolvedStorageConfig = storageConfig.optPassword.fold(Future.successful(storageConfig)): pwd =>
+            resolverFunc(pwd).map(sec => storageConfig.copy(optPassword = Some(sec)))
+          for
+            resolvedStorageConfig <- futResolvedStorageConfig
+            refreshFunc = createTokenRefreshNotificationFunc(storageService, resolvedStorageConfig, killSwitch)
+            idpConfig <- storageService.loadIdpConfig(resolvedStorageConfig)
+          yield idpConfig.oauthConfig.copy(refreshNotificationFunc = refreshFunc)
 
         case _ =>
           Future.successful(NoAuthConfig)
