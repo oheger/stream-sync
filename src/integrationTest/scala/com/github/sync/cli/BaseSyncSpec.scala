@@ -175,22 +175,23 @@ abstract class BaseSyncSpec(testSystem: ActorSystem) extends TestKit(testSystem)
     * Executes a sync process with the given command line options.
     *
     * @param args                 the sequence with command line options
-    * @param optProtocolSetupFunc optional function to setup protocol factories
+    * @param optProtocolSetupFunc optional function to set up protocol factories
     * @return the future result of the sync process
     */
   protected def runSync(args: Seq[String],
                         optProtocolSetupFunc: Option[SyncSetup.ProtocolFactorySetupFunc] = None):
   Future[SyncResult] =
-    CliActorSystemLifeCycle.processCommandLine(args, SyncParameterManager.syncConfigExtractor(),
-      "HelpHelp") match
+    CliActorSystemLifeCycle.processCommandLine(args, SyncParameterManager.syncConfigExtractor(), "HelpHelp") match
       case Left(_) =>
         Future.failed(new AssertionError("Could not parse command line."))
       case Right(value) =>
-        implicit val typedActorSystem: typed.ActorSystem[Nothing] = system.toTyped
-        val resolverFunc: CredentialsResolver.SecretResolverFunc = c => Future.successful(c)
-        val authSetupFunc = SyncSetup.defaultAuthSetupFunc(resolverFunc)
+        given typed.ActorSystem[Nothing] = system.toTyped
+
+        val resolverFunc: CredentialsResolver.ResolverFunc = c => Future.successful(c)
+        val secretResolverFunc = CredentialsResolver.toSecretResolver(resolverFunc)
+        val authSetupFunc = SyncSetup.defaultAuthSetupFunc(secretResolverFunc)
         val protocolSetupFunc = optProtocolSetupFunc getOrElse SyncSetup.defaultProtocolFactorySetupFunc
-        Sync.syncProcess(value)(authSetupFunc)(protocolSetupFunc)
+        Sync.syncProcess(value)(resolverFunc)(authSetupFunc)(protocolSetupFunc)
 
   /**
     * Executes a sync process with the given command line options and installs
