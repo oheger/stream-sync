@@ -119,7 +119,7 @@ object Sync:
     * @return a future with information about the result of the process
     */
   private def runSync(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
-                     (implicit system: ActorSystem, ec: ExecutionContext): Future[SyncResult] =
+                     (using system: ActorSystem, ec: ExecutionContext): Future[SyncResult] =
     Configurator.setRootLevel(config.logConfig.logLevel)
 
     protocolHolder.registerCloseHandler(for
@@ -141,9 +141,10 @@ object Sync:
     * @param system         the actor system
     * @return the source for the sync process
     */
-  private def createMirrorSource(config: SyncConfig, mirrorConfig: SyncCliStreamConfig.MirrorStreamConfig,
+  private def createMirrorSource(config: SyncConfig,
+                                 mirrorConfig: SyncCliStreamConfig.MirrorStreamConfig,
                                  protocolHolder: SyncProtocolHolder)
-                                (implicit ec: ExecutionContext, system: ActorSystem):
+                                (using ec: ExecutionContext, system: ActorSystem):
   Future[Source[SyncOperation, Any]] = mirrorConfig.syncLogPath match
     case Some(path) =>
       createMirrorSourceFromLog(config, path)
@@ -171,7 +172,7 @@ object Sync:
     * @return the source to read from a sync log file
     */
   private def createMirrorSourceFromLog(config: SyncConfig, syncLogPath: Path)
-                                       (implicit ec: ExecutionContext, system: ActorSystem):
+                                       (using ec: ExecutionContext, system: ActorSystem):
   Future[Source[SyncOperation, Any]] = config.logConfig.logFilePath match
     case Some(processedLog) =>
       SerializerStreamHelper.createSyncOperationSourceWithProcessedLog(syncLogPath, processedLog)
@@ -191,15 +192,13 @@ object Sync:
     * @return a future with the flow to apply sync operations
     */
   private def createApplyStage(config: SyncConfig, spawner: Spawner, protocolHolder: SyncProtocolHolder)
-                              (implicit ec: ExecutionContext, system: ActorSystem):
-  Future[Flow[SyncOperation, SyncOperationResult, Any]] = Future {
+                              (using ec: ExecutionContext, system: ActorSystem):
+  Future[Flow[SyncOperation, SyncOperationResult, Any]] = Future:
     if config.streamConfig.dryRun then Flow[SyncOperation].map(op => SyncOperationResult(op, None))
     else
       val applyStage = protocolHolder.createApplyStage(config, spawner)
-      config.streamConfig.opsPerUnit.fold(applyStage) { limit =>
+      config.streamConfig.opsPerUnit.fold(applyStage): limit =>
         Throttle(applyStage, limit, config.streamConfig.throttleUnit)
-      }
-  }
 
   /**
     * Creates a ''RunnableGraph'' representing the stream to be executed for
@@ -221,7 +220,7 @@ object Sync:
   private def createStream(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
                            config: SyncConfig,
                            protocolHolder: SyncProtocolHolder)
-                          (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
+                          (using ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     config.streamConfig.modeConfig match
       case syncConfig: SyncCliStreamConfig.SyncStreamConfig =>
         createSyncStream(flowProc, config, syncConfig, protocolHolder)
@@ -243,7 +242,7 @@ object Sync:
                                  config: SyncConfig,
                                  mirrorConfig: SyncCliStreamConfig.MirrorStreamConfig,
                                  protocolHolder: SyncProtocolHolder)
-                                (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
+                                (using ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     for
       source <- createMirrorSource(config, mirrorConfig, protocolHolder)
       stream <- createMirrorStreamForSource(source, flowProc, config, protocolHolder)
@@ -263,7 +262,7 @@ object Sync:
                                           flowProc: Flow[SyncOperation, SyncOperationResult, Any],
                                           config: SyncConfig,
                                           protocolHolder: SyncProtocolHolder)
-                                         (implicit ec: ExecutionContext): FutureSyncGraph =
+                                         (using ec: ExecutionContext): FutureSyncGraph =
     val baseParams = createBaseStreamParams(flowProc, config, protocolHolder)
     val params = SyncStream.MirrorStreamParams(baseParams, source)
     SyncStream.createMirrorStream(params)
@@ -283,7 +282,7 @@ object Sync:
                                config: SyncConfig,
                                syncStreamConfig: SyncCliStreamConfig.SyncStreamConfig,
                                protocolHolder: SyncProtocolHolder)
-                              (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
+                              (using ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     val baseParams = createBaseStreamParams(flowProc, config, protocolHolder)
     val futLocalSource = protocolHolder.createSourceElementSource()
     val futRemoteSource = protocolHolder.createDestinationElementSource()
@@ -314,7 +313,7 @@ object Sync:
     */
   private def createSyncStreamWithParams(syncStreamConfig: SyncCliStreamConfig.SyncStreamConfig,
                                          syncParams: SyncStream.SyncStreamParams[Int, Int])
-                                        (implicit ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
+                                        (using ec: ExecutionContext, system: ActorSystem): FutureSyncGraph =
     if syncStreamConfig.stateImport then SyncStream.createStateImportStream(syncParams)
     else SyncStream.createSyncStream(syncParams)
 
@@ -325,11 +324,10 @@ object Sync:
     * @param ec        the execution context
     * @return a mapped ''Future'' with the stream with added supervision
     */
-  private def enableSupervision(futStream: FutureSyncGraph)(implicit ec: ExecutionContext): FutureSyncGraph =
-    val decider: Decider = ex => {
+  private def enableSupervision(futStream: FutureSyncGraph)(using ec: ExecutionContext): FutureSyncGraph =
+    val decider: Decider = ex =>
       ex.printStackTrace()
       Supervision.Resume
-    }
     futStream map (_.withAttributes(ActorAttributes.supervisionStrategy(decider)))
 
   /**
@@ -345,12 +343,12 @@ object Sync:
     */
   private def createBaseStreamParams(flowProc: Flow[SyncOperation, SyncOperationResult, Any],
                                      config: SyncConfig, protocolHolder: SyncProtocolHolder)
-                                    (implicit ec: ExecutionContext): SyncStream.BaseStreamParams[Int, Int] =
+                                    (using ec: ExecutionContext): SyncStream.BaseStreamParams[Int, Int] =
     val sinkTotal = createCountSinkWithOptionalLogging(config.logConfig.logFilePath, errorLog = false)
     val sinkError = createErrorSink(config.logConfig.errorLogFilePath)
-    val sinkSuccess = Flow[SyncOperationResult].filterNot { result =>
+    val sinkSuccess = Flow[SyncOperationResult].filterNot: result =>
       result.optFailure.isDefined || result.op.action == ActionNoop
-    }.toMat(sinkTotal)(Keep.right)
+    .toMat(sinkTotal)(Keep.right)
 
     SyncStream.BaseStreamParams(processFlow = flowProc, sinkTotal = sinkSuccess,
       sinkError = sinkError, operationFilter = createSyncFilter(config.filterData),
@@ -367,13 +365,12 @@ object Sync:
     * @param ec           the execution context
     * @return the ''Sink'' for failed operations
     */
-  private def createErrorSink(errorLogFile: Option[Path])(implicit ec: ExecutionContext):
-  Sink[SyncOperationResult, Future[Int]] =
+  private def createErrorSink(errorLogFile: Option[Path])
+                             (using ec: ExecutionContext): Sink[SyncOperationResult, Future[Int]] =
     val countSink = createCountSinkWithOptionalLogging(errorLogFile, errorLog = true)
     val logger = LoggerFactory.getLogger(classOf[Sync])
-    val consoleLogSink = Sink.foreach[SyncOperationResult] { result =>
+    val consoleLogSink = Sink.foreach[SyncOperationResult]: result =>
       logger.error(s"Failed to apply operation '${result.op}'.", result.optFailure.get)
-    }
 
     SyncStream.combinedSink(countSink, consoleLogSink)
 
@@ -388,7 +385,7 @@ object Sync:
     * @return the resulting sink
     */
   private def createCountSinkWithOptionalLogging(logFile: Option[Path], errorLog: Boolean)
-                                                (implicit ec: ExecutionContext):
+                                                (using ec: ExecutionContext):
   Sink[SyncOperationResult, Future[Int]] =
     val sinkCount = SyncStream.createCountSink()
     logFile.fold(sinkCount)(path => SyncStream.sinkWithLogging(sinkCount, path, errorLog))
