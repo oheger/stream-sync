@@ -57,20 +57,28 @@ object SyncProtocolHolder:
     val killSwitch = KillSwitches.shared("oauth-token-refresh")
     val futSenderConfigSrc = createHttpSenderConfig(authSetupFunc, syncConfig.srcConfig, killSwitch)
     val futSenderConfigDst = createHttpSenderConfig(authSetupFunc, syncConfig.dstConfig, killSwitch)
+    val futSrcCryptConfig = createStructureCryptConfig(
+      syncConfig.cryptConfig,
+      syncConfig.cryptConfig.srcPassword,
+      syncConfig.cryptConfig.srcCryptMode
+    )(resolverFunc)
+    val futDstCryptConfig = createStructureCryptConfig(
+      syncConfig.cryptConfig,
+      syncConfig.cryptConfig.dstPassword,
+      syncConfig.cryptConfig.dstCryptMode
+    )(resolverFunc)
 
     for
       senderConfigSrc <- futSenderConfigSrc
       senderConfigDst <- futSenderConfigDst
+      srcCryptConfig <- futSrcCryptConfig
+      dstCryptConfig <- futDstCryptConfig
     yield
       val srcProtocolFactory =
         protocolSetupFunc(syncConfig.srcConfig.structureConfig, syncConfig, senderConfigSrc, spawner)
-      val srcCryptConfig = createStructureCryptConfig(syncConfig.cryptConfig, syncConfig.cryptConfig.srcPassword,
-        syncConfig.cryptConfig.srcCryptMode)
       val srcProtocol = srcProtocolFactory.createProtocol(syncConfig.srcUri, srcCryptConfig)
       val dstProtocolFactory =
         protocolSetupFunc(syncConfig.dstConfig.structureConfig, syncConfig, senderConfigDst, spawner)
-      val dstCryptConfig = createStructureCryptConfig(syncConfig.cryptConfig, syncConfig.cryptConfig.dstPassword,
-        syncConfig.cryptConfig.dstCryptMode)
       val dstProtocol = dstProtocolFactory.createProtocol(syncConfig.dstUri, dstCryptConfig)
       new SyncProtocolHolder(srcProtocol, dstProtocol, killSwitch)
 
@@ -87,15 +95,13 @@ object SyncProtocolHolder:
   private[cli] def createHttpSenderConfig(authSetupFunc: AuthSetupFunc,
                                           structureConfig: SyncCliStructureConfig.StructureSyncConfig,
                                           killSwitch: KillSwitch)
-                                         (implicit ec: ExecutionContext): Future[HttpRequestSenderConfig] =
+                                         (using ec: ExecutionContext): Future[HttpRequestSenderConfig] =
     authSetupFunc(structureConfig.authConfig, killSwitch) map { authConfig =>
-      val optRetryAfterConfig = structureConfig.optRetryConfig.map { retry =>
+      val optRetryAfterConfig = structureConfig.optRetryConfig.map: retry =>
         RetryAfterExtension.RetryAfterConfig(retry.minDelay)
-      }
-      val optRetryConfig = structureConfig.optRetryConfig.map { retry =>
+      val optRetryConfig = structureConfig.optRetryConfig.map: retry =>
         val backoffConfig = RetryExtension.BackoffConfig(retry.minDelay, retry.maxDelay)
         RetryExtension.RetryConfig(optMaxTimes = Some(retry.maxRetries), optBackoff = Some(backoffConfig))
-      }
 
       HttpRequestSenderConfig(
         authConfig = authConfig,
@@ -105,16 +111,30 @@ object SyncProtocolHolder:
     }
 
   /**
-    * Create a ''StructureCryptConfig'' from the passed in parameters.
+    * Creates a [[StructureCryptConfig]] from the passed in parameters. The
+    * provided password is resolved using the resolver function if it is 
+    * present.
     *
     * @param cryptConfig the original ''CryptConfig''
     * @param password    the optional password
     * @param cryptMode   the ''CryptMode''
-    * @return the resulting ''StructureCryptConfig''
+    * @param ec          the execution context
+    * @return a [[Future]] the resulting [[StructureCryptConfig]]
     */
-  private def createStructureCryptConfig(cryptConfig: CryptConfig, password: Option[String],
-                                         cryptMode: CryptMode.Value): StructureCryptConfig =
-    StructureCryptConfig(password, cryptMode == CryptMode.FilesAndNames, cryptConfig.cryptCacheSize)
+  private def createStructureCryptConfig(cryptConfig: CryptConfig,
+                                         password: Option[String],
+                                         cryptMode: CryptMode.Value)
+                                        (resolverFunc: CredentialsResolver.ResolverFunc)
+                                        (using ec: ExecutionContext): Future[StructureCryptConfig] =
+    val futResolvedPwd = password match
+      case Some(pwd) =>
+        resolverFunc(pwd).map(resolved => Some(resolved))
+      case None =>
+        Future.successful(None)
+
+    futResolvedPwd.map: optPwd =>
+      StructureCryptConfig(optPwd, cryptMode == CryptMode.FilesAndNames, cryptConfig.cryptCacheSize)
+end SyncProtocolHolder
 
 /**
   * A class that holds the [[SyncProtocol]] objects used by the current sync
@@ -138,8 +158,10 @@ object SyncProtocolHolder:
   *                               token refresh operations
   * @param system                 the actor system
   */
-class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
-                         val oAuthRefreshKillSwitch: SharedKillSwitch)(implicit system: ActorSystem[?]):
+class SyncProtocolHolder(srcProtocol: SyncProtocol,
+                         dstProtocol: SyncProtocol,
+                         val oAuthRefreshKillSwitch: SharedKillSwitch)
+                        (using system: ActorSystem[?]):
   /**
     * Creates a source for iterating over the elements of the source structure.
     *
@@ -181,15 +203,10 @@ class SyncProtocolHolder(srcProtocol: SyncProtocol, dstProtocol: SyncProtocol,
     * @return the ''Future'' with the handler registered
     */
   def registerCloseHandler[A](future: Future[A]): Future[A] =
-    future.andThen {
+    future.andThen:
       case _ =>
         srcProtocol.close()
         dstProtocol.close()
-    }
 
-  /**
-    * Returns the execution context from the actor system in implicit scope.
-    *
-    * @return the execution context
-    */
-  private implicit def executionContext: ExecutionContext = system.executionContext
+  /** The execution context from the actor system in implicit scope. */
+  private given executionContext: ExecutionContext = system.executionContext

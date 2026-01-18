@@ -16,12 +16,14 @@
 
 package com.github.sync.cli
 
-import com.github.cloudfiles.core.http.{HttpRequestSender, UriEncodingHelper}
+import com.github.cloudfiles.core.http.{HttpRequestSender, Secret, UriEncodingHelper}
 import com.github.sync.WireMockSupport.*
+import com.github.sync.auth.oauth.SyncBasicAuthConfig
 import com.github.sync.cli.SyncSetup.ProtocolFactorySetupFunc
 import com.github.sync.cli.oauth.OAuthParameterManager
+import com.github.sync.protocol.config.DavStructureConfig
 import com.github.sync.protocol.{SyncProtocol, SyncProtocolFactory}
-import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
+import com.github.sync.{CredentialsSupport, FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock.*
 import com.github.tomakehurst.wiremock.http.RequestMethod
 import org.apache.pekko.http.scaladsl.model.StatusCodes
@@ -40,11 +42,19 @@ object DavSyncSpec:
   /** A test path to be requested from the server. */
   private val WebDavPath = "/test%20data/folder%20(2)/folder%20(3)"
 
+  /** A default configuration for the WebDav structure. */
+  private val TestDavStructureConfig = DavStructureConfig(
+    optLastModifiedProperty = None,
+    optLastModifiedNamespace = None,
+    deleteBeforeOverride = false
+  )
+end DavSyncSpec
+
 /**
   * Integration test class for sync processes that contains tests related to
   * WebDav servers. The tests typically make use of a WireMock server.
   */
-class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport with OAuthMockSupport:
+class DavSyncSpec extends BaseSyncSpec, MockitoSugar, WireMockSupport, OAuthMockSupport, CredentialsSupport:
 
   import DavSyncSpec.*
   import OAuthMockSupport.*
@@ -103,6 +113,27 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     lines.size() should be(1)
     lines.get(0) should be(expLine)
   }
+
+  it should "resolve the source password via a credentials storage" in :
+    val davPasswordKey = "my-dav-password"
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val davConfig = SyncCliStructureConfig.StructureSyncConfig(
+      structureConfig = TestDavStructureConfig,
+      optRetryConfig = None,
+      authConfig = SyncBasicAuthConfig(UserId, CredentialsSupport.credentialsRef(davPasswordKey))
+    )
+    val streamConfig = futureResult(setUpCredentialStore(Map(davPasswordKey -> Password), dryRun = true))
+    val syncConfig = CredentialsSupport.testSyncConfig(
+      srcUri = "dav:" + serverUri(WebDavPath),
+      dstUri = dstFolder.toAbsolutePath.toString,
+      srcConfig = davConfig,
+      dstConfig = CredentialsSupport.DefaultLocalStructConfig,
+      streamConfig = streamConfig
+    )
+
+    val result = futureResult(runSync(syncConfig))
+
+    result should include("Successfully completed all")
 
   it should "support a WebDav URI for the source structure with an OAuth IDP" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -404,6 +435,47 @@ class DavSyncSpec extends BaseSyncSpec with MockitoSugar with WireMockSupport wi
     val bodyPlain = decrypt(CryptPassword, ByteString(putRequest.getBody))
     bodyPlain.utf8String should be(Content)
   }
+
+  it should "resolve the destination encryption password via a credentials storage" in :
+    val CryptKey = "encryptionPassword"
+    val CryptPassword = "secretServer"
+    val WebDavPath = "/secretFromCredentials"
+    stubSuccess()
+    stubFolderRequest(WebDavPath, "empty_folder.xml")
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val FileName = "plainCredentialFile.txt"
+    val Content = "This is the content of the test file, encrypted with a referenced credential ;-)"
+    createTestFile(srcFolder, FileName, content = Some(Content))
+    val davConfig = SyncCliStructureConfig.StructureSyncConfig(
+      structureConfig = TestDavStructureConfig,
+      optRetryConfig = None,
+      authConfig = SyncBasicAuthConfig(UserId, Secret(Password))
+    )
+    val cryptConfig = CredentialsSupport.DisabledCryptConfig.copy(
+      dstPassword = Some(CredentialsSupport.credentialsRef(CryptKey).secret),
+      dstCryptMode = SyncParameterManager.CryptMode.FilesAndNames
+    )
+    val streamConfig = futureResult(setUpCredentialStore(Map(CryptKey -> CryptPassword)))
+    val syncConfig = CredentialsSupport.testSyncConfig(
+      srcUri = srcFolder.toAbsolutePath.toString,
+      dstUri = "dav:" + serverUri(WebDavPath),
+      srcConfig = CredentialsSupport.DefaultLocalStructConfig,
+      dstConfig = davConfig,
+      streamConfig = streamConfig,
+      cryptConfig = cryptConfig
+    )
+
+    val result = futureResult(runSync(syncConfig))
+
+    result should include("Successfully completed all")
+    import scala.jdk.CollectionConverters.*
+    val events = getAllServeEvents.asScala
+    val putRequest = events.find(event => event.getRequest.getMethod == RequestMethod.PUT).get.getRequest
+    val (parent, fileUri) = UriEncodingHelper.splitParent(putRequest.getUrl)
+    parent should be(WebDavPath)
+    decryptName(CryptPassword, fileUri) should be(FileName)
+    val bodyPlain = decrypt(CryptPassword, ByteString(putRequest.getBody))
+    bodyPlain.utf8String should be(Content)
 
   it should "support a WebDav destination with encrypted file names together with the switch parameter" in {
     val CryptPassword = Password
