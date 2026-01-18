@@ -16,10 +16,13 @@
 
 package com.github.sync.cli
 
-import com.github.sync.OAuthMockSupport.{CurrentTokenData, RefreshedTokenData}
+import com.github.cloudfiles.core.http.Secret
+import com.github.sync.OAuthMockSupport.{CurrentTokenData, PwdIdpData, RefreshedTokenData}
 import com.github.sync.WireMockSupport.*
+import com.github.sync.auth.oauth.SyncBasicAuthConfig
 import com.github.sync.cli.oauth.OAuthParameterManager
-import com.github.sync.{FileTestHelper, OAuthMockSupport, WireMockSupport}
+import com.github.sync.protocol.config.OneDriveStructureConfig
+import com.github.sync.{CredentialsSupport, FileTestHelper, OAuthMockSupport, WireMockSupport}
 import com.github.tomakehurst.wiremock.client.WireMock.*
 import org.apache.pekko.http.scaladsl.model.{StatusCodes, Uri}
 
@@ -58,12 +61,13 @@ object OneDriveSyncSpec:
     * @return the path of this URI as string
     */
   private def path(uri: Uri): String = uri.path.toString()
+end OneDriveSyncSpec
 
 /**
   * Integration test class for sync processes that contains tests related to
   * OneDrive servers. The tests typically make use of a WireMock server.
   */
-class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockSupport:
+class OneDriveSyncSpec extends BaseSyncSpec, WireMockSupport, OAuthMockSupport, CredentialsSupport:
   override implicit val ec: ExecutionContext = system.dispatcher
 
   import OneDriveSyncSpec.*
@@ -119,7 +123,15 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
                                         authFunc: AuthFunc = WireMockSupport.NoAuthFunc): String =
     stubOneDriveFolderRequestContent(id, status, authFunc)(bodyFile(responseFile))
 
-  private def stubDownloadRequest(id: String, authFunc: AuthFunc,
+  /**
+    * Adds a stubbing declaration for a request to download a file.
+    *
+    * @param id          the ID of the file
+    * @param authFunc    the authentication function
+    * @param contentFunc the function to generate the file content
+    */
+  private def stubDownloadRequest(id: String,
+                                  authFunc: AuthFunc,
                                   contentFunc: ResponseFunc = bodyString(FileTestHelper.TestData)): Unit =
     val downloadPath = "/" + UUID.randomUUID()
     stubFor(authFunc(get(urlEqualTo(itemUri(id, "/content"))))
@@ -127,6 +139,18 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
         .withHeader("Location", serverUri(downloadPath))))
     stubFor(get(urlPathEqualTo(downloadPath))
       .willReturn(contentFunc(aResponse().withStatus(StatusCodes.OK.intValue))))
+
+  /**
+    * Returns a OneDrive structure configuration that can be used by tests.
+    *
+    * @return the test OneDrive structure config
+    */
+  private def testOneDriveConfig(): OneDriveStructureConfig =
+    OneDriveStructureConfig(
+      syncPath = ServerPath,
+      optUploadChunkSizeMB = None,
+      optServerUri = Some(serverUri("/"))
+    )
 
   "Sync" should "support a OneDrive URI for the source structure with OAuth" in {
     val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
@@ -190,6 +214,39 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
     verify(deleteRequestedFor(urlEqualTo(itemUri(FileID))))
   }
 
+  it should "resolve the destination password via the credential storage" in :
+    val srcFolder = Files.createDirectory(createPathInDirectory("source"))
+    val FolderID = "theFolderID"
+    val FileID = "xxxyyyzzz1234567!26990"
+    val IdpCryptKey = "oneDriveIDP"
+    val storageConfig = prepareIdpConfig()
+      .copy(optPassword = Some(CredentialsSupport.credentialsRef(IdpCryptKey)))
+    val oldTokenAuth = TokenAuthFunc(CurrentTokenData.accessToken)
+    val newTokenAuth = TokenAuthFunc(RefreshedTokenData.accessToken)
+    stubResolvePathRequest(FolderID, status = StatusCodes.Unauthorized.intValue, authFunc = oldTokenAuth)
+    stubResolvePathRequest(FolderID, authFunc = newTokenAuth)
+    stubOneDriveFolderRequest(FolderID, "folder3.json", authFunc = newTokenAuth)
+    stubTokenRefresh()
+    stubFor(oldTokenAuth(delete(anyUrl())).willReturn(aResponse().withStatus(StatusCodes.Unauthorized.intValue)))
+    stubFor(newTokenAuth(delete(anyUrl())).willReturn(aResponse().withStatus(StatusCodes.OK.intValue)))
+    val oneDriveConfig = SyncCliStructureConfig.StructureSyncConfig(
+      structureConfig = testOneDriveConfig(),
+      optRetryConfig = None,
+      authConfig = storageConfig
+    )
+    val streamConfig = futureResult(setUpCredentialStore(Map(IdpCryptKey -> PwdIdpData.secret)))
+    val syncConfig = CredentialsSupport.testSyncConfig(
+      srcUri = srcFolder.toAbsolutePath.toString,
+      dstUri = "onedrive:" + DriveID,
+      srcConfig = CredentialsSupport.DefaultLocalStructConfig,
+      dstConfig = oneDriveConfig,
+      streamConfig = streamConfig
+    )
+
+    val result = futureResult(runSync(syncConfig))
+
+    result should include("Successfully completed all")
+
   it should "not support short alias names for storage configuration options" in {
     val options = IndexedSeq("-n", "someIDP", "-D", testDirectory.toAbsolutePath.toString, "-U", "some/src/path",
       "onedrive:" + DriveID, "--dst-path", "ServerPath", "--dst-server-uri", serverUri("/"))
@@ -244,6 +301,44 @@ class OneDriveSyncSpec extends BaseSyncSpec with WireMockSupport with OAuthMockS
     checkFile(subFolder, "subFile.txt")
     checkFile(subFolder, "anotherSubFile.dat")
   }
+
+  it should "resolve the source encryption password via a credentials storage" in :
+    val CryptKey = "oneDriveEncryptionKey"
+    val dstFolder = Files.createDirectory(createPathInDirectory("dest"))
+    val FolderID = "theEncryptedFolder"
+    stubResolvePathRequest(FolderID, authFunc = BasicAuthFunc)
+    stubOneDriveFolderRequest(FolderID, "root_encrypted.json", authFunc = BasicAuthFunc)
+    stubOneDriveFolderRequest("xxxyyyzzz1234567!7193", "folder_encrypted.json", authFunc = BasicAuthFunc)
+    stubDownloadRequest("xxxyyyzzz1234567!26990", BasicAuthFunc, bodyFile("encrypted1.dat"))
+    stubDownloadRequest("xxxyyyzzz1234567!26988", BasicAuthFunc,
+      bodyFile("encrypted2.dat"))
+    stubDownloadRequest("xxxyyyzzz1234567!27123", BasicAuthFunc, bodyFile("encrypted3.dat"))
+    stubDownloadRequest("xxxyyyzzz1234567!27222", BasicAuthFunc, bodyFile("encrypted4.dat"))
+    val oneDriveConfig = SyncCliStructureConfig.StructureSyncConfig(
+      structureConfig = testOneDriveConfig(),
+      optRetryConfig = None,
+      authConfig = SyncBasicAuthConfig(UserId, Secret(Password))
+    )
+    val cryptConfig = CredentialsSupport.DisabledCryptConfig.copy(
+      srcPassword = Some(CredentialsSupport.credentialsRef(CryptKey).secret),
+      srcCryptMode = SyncParameterManager.CryptMode.FilesAndNames
+    )
+    val streamConfig = futureResult(setUpCredentialStore(Map(CryptKey -> Password)))
+    val syncConfig = CredentialsSupport.testSyncConfig(
+      srcUri = "onedrive:" + DriveID,
+      dstUri = dstFolder.toAbsolutePath.toString,
+      srcConfig = oneDriveConfig,
+      dstConfig = CredentialsSupport.DefaultLocalStructConfig,
+      streamConfig = streamConfig,
+      cryptConfig = cryptConfig
+    )
+
+    val result = futureResult(runSync(syncConfig))
+
+    result should include("Successfully completed all")
+    val rootFiles = dstFolder.toFile.listFiles()
+    rootFiles.map(_.getName) should contain only("foo.txt", "bar.txt", "sub")
+    checkFile(dstFolder, "foo.txt")
 
   it should "generate a usage message if invalid parameters are passed in" in {
     val options = IndexedSeq("onedrive:" + DriveID, "/some/path")

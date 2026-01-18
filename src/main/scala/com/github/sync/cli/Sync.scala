@@ -469,6 +469,9 @@ class Sync extends CliActorSystemLifeCycle[SyncConfig]:
     *             system in implicit scope.
     */
   override protected[cli] def runApp(config: SyncConfig): Future[String] =
-    implicit val typedActorSystem: typed.ActorSystem[?] = actorSystem.toTyped
-    // TODO: Set correct resolver functions.
-    Sync.syncWithResultMessage(config)(null)(SyncSetup.defaultAuthSetupFunc(null))(SyncSetup.defaultProtocolFactorySetupFunc)
+    given typed.ActorSystem[?] = actorSystem.toTyped
+
+    val resolverFunc = CredentialsResolver.createResolver(config.streamConfig.credentialsConfig)
+    val secretResolverFunc = CredentialsResolver.toSecretResolver(resolverFunc)
+    Sync.syncWithResultMessage(config)(resolverFunc)(SyncSetup
+      .defaultAuthSetupFunc(secretResolverFunc))(SyncSetup.defaultProtocolFactorySetupFunc)
