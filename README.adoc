@@ -660,6 +660,7 @@ Examples how to use these options can be found in the
 <<Examples and use cases,Examples section>>, for instance under
 <<Sync from a local directory to a WebDav directory>>.
 
+[#sec_authentication_oauth]
 ==== OAuth 2
 https://oauth.net/2/[OAuth 2] is another popular way for authentication.
 Stream Sync supports the https://oauth.net/2/grant-types/authorization-code/[Authorization code flow].
@@ -962,8 +963,8 @@ how to set the timeout to 10 minutes to deal with larger uploads:
 
  Sync C:\data\work dav:https://sd2dav.1und1.de/backup/work --timeout 600
 
+[#sec_reading_passwords_from_the_console]
 === Reading passwords from the console
-
 For some use cases, e.g. connecting to a WebDav server or encrypting files,
 StreamSync needs passwords. Per default, such passwords can be specified as
 command line arguments, like any other arguments processed by the program.
@@ -984,6 +985,75 @@ process. An example could be a process that syncs from the local file system to
 an encrypted WebDav server. Then a password is needed to connect to the server,
 and another one for the encryption. Either of them can be omitted from the
 command line; the user is prompted for all missing passwords.
+
+=== Credentials Management
+As has been pointed out in section <<sec_reading_passwords_from_the_console>>, to improve security, passwords should typically not be passed as command line arguments, but manually entered in the console. Especially, if multiple passwords are required (for instance, credentials for the source and destination structures plus passwords for data encryption), this becomes rather inconvenient.
+
+With _credentials management_, StreamSync offers a mechanism that simplifies the handling of passwords without relaxing security. This is provided by a small command line application that manages a file-based credentials store, similar to well-known password safe applications. The file can store an arbitrary number of passwords and is encrypted using the https://github.com/oheger/cloud-files/tree/main/crypt#aes[AES] algorithm from the https://github.com/oheger/cloud-files[CloudFiles] library using a master password. StreamSync checks all passwords provided by the user (no matter whether they are passed on the command line or entered via the console) whether they start with a specific prefix. If this is the case, and if command line arguments for the credential storage are provided, it looks up the concrete values from this storage. So, ideally, the user only has to remember the master password. With this setup, "passwords" can even be specified on the command line, since they are just references into the encrypted storage file. The following paragraphs give a step-by-step example how to make use of this functionality.
+
+The first step is to create and populate an encrypted file to store passwords. For this purpose, StreamSync offers a command line interface (CLI) application, analogously to the one for <<sec_authentication_oauth,managing OAuth configurations>>. The main class of this application is xref:src/main/scala/com/github/sync/cli/credentials/Credentials.scala[Credentials]. It can be invoked with the StreamSync Jar archive in the classpath in the following way:
+
+ $  java -cp stream-sync-assembly-<version>.jar com.github.sync.cli.credentials.Credentials <command>
+
+where `<command>` is one of the supported commands. Running the application without a command or by specifying the `--help` switch, prints a help text listing the available commands. As usual, further help information about a specific command can be requested by passing the desired command, followed by the `--help` switch. For instance, to see all the options supported by the `list` command, type
+
+ $ java -cp stream-sync-assembly-<version>.jar com.github.sync.cli.credentials.Credentials list --help
+
+The application supports commands for typical CRUD operations on credentials. There are commands, to add, read, and remove credentials from a file. Also, the keys contained in the file can be listed. All commands have the following options in common:
+
+.Common options of the Credentials CLI
+[cols="1,3",options="header"]
+|====
+| Option | Description
+| --credentials-file
+| Defines the path to the encrypted file storing the credentials. This can be an absolute or a relative path.
+| --secret
+| This is the secret or _master password_ used to encrypt and decrypt the file. If it is not specified on the command line (which is recommended), the user is prompted to enter it on the console.
+|====
+
+Back to the example for managing credentials. To create a new encrypted file with credentials, the `add` command is the one of choice. It is rather flexible in the way it operates:
+
+* If the specified file does not exist, it is newly created at the configured location with the provided credential key and value.
+* If it exists, the credential key and value are added to this file.
+* If the file exists and already contains the key, the credential is overridden, so that it is assigned the new value.
+
+Let's assume that the password to a WebDav server should be stored in a file under the path `~/secrets/sync.crypt`. This is achieved using the following command:
+
+[source,bash]
+----
+$  java -cp stream-sync-assembly-<version>.jar \
+     com.github.sync.cli.credentials.Credentials \
+     add \
+     --credentials-file ~/secrets/sync.crypt \
+     --key "davPassword"
+----
+
+After executing this command, the application asks the user for the following inputs:
+
+* the secret to encrypt the file
+* the value of the credential/password to store
+
+It then stores the entered value under the key _davPassword_ to the file. The key can later be used to reference this specific password. In the same way, the user can add other required passwords to this storage file.
+
+After these actions, an encrypted file exists that contains a secret password value under the key _davPassword_. The next step is to put this into use when triggering a sync process targeting this WebDav server. This is achieved in the following way:
+
+* When calling StreamSync pass the additional `--credentials-file` parameter and specify the path to the encrypted file. This makes the application aware that credentials management is in place.
+* The parameter for the password of the WebDav server, `--dst-password`, can now securely be placed on the command line. But instead of the actual password value, it consists of the prefix `credential:` followed by the key _davPassword_ used in the command from above.
+
+So, the command to sync a local file structure to the WebDav server may look as follows:
+
+[source]
+----
+Sync C:\data\work dav:https://my.webdav.com/backup/work \
+--credentials-file ~/secrets/sync.crypt \
+--dst-user my.account \
+--dst-password credential:davPassword \
+--filter exclude:*.bak
+----
+
+When running this command, it prompts the user for the password of the credentials storage file. The password of the WebDav server is looked up in this file under the key _davPassword_.
+
+NOTE: The prefix `credential:` is used by default to create a reference to the credentials store. It is possible to change this using the `--credentials-prefix` option. This can be used, for instance, if a shorter prefix is preferred or if there is actually a conflict with a password starting with the text `credential:`.
 
 === Dry-run mode
 
